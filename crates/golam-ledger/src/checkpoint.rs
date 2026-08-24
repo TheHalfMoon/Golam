@@ -253,13 +253,12 @@ impl CheckpointManager {
     ) -> Result<LoadedProjection, CheckpointError> {
         if let Some(receipt) =
             self.load_verified_checkpoint_receipt(checkpoint_id, session_id, through_session_seq)?
+            && let Ok(bytes) = self.artifacts.read_verified(&receipt)
         {
-            if let Ok(bytes) = self.artifacts.read_verified(&receipt) {
-                return Ok(LoadedProjection {
-                    bytes,
-                    source: ProjectionSource::Checkpoint,
-                });
-            }
+            return Ok(LoadedProjection {
+                bytes,
+                source: ProjectionSource::Checkpoint,
+            });
         }
 
         Ok(LoadedProjection {
