@@ -35,7 +35,10 @@ impl fmt::Display for StorageError {
         match self {
             Self::Sqlite(error) => write!(f, "sqlite error: {error}"),
             Self::FutureSchema { found, supported } => {
-                write!(f, "authority schema {found} is newer than supported {supported}")
+                write!(
+                    f,
+                    "authority schema {found} is newer than supported {supported}"
+                )
             }
             Self::IntegrityCheckFailed(result) => {
                 write!(f, "authority database integrity check failed: {result}")
