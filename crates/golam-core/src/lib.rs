@@ -17,6 +17,12 @@ pub struct EventId(pub u128);
 pub struct CheckpointId(pub u128);
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct GoalId(pub u128);
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct GoalVersionId(pub u128);
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ClientId(pub u128);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
