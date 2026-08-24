@@ -5,35 +5,57 @@
 ```text
 CLEAN_REPOSITORY_BOOTSTRAP=PASS
 LAST_GAP_RESEARCH=COMPLETE
-SPEC_KIT_CONSTITUTION=COMPLETE
-SPECIFICATION=COMPLETE
+SPEC_KIT_CONSTITUTION=COMPLETE_V1_1_0
+SPECIFICATION=COMPLETE_RECONCILED
 CLARIFICATION_CLOSEOUT=COMPLETE
-RESEARCH=COMPLETE
-PLAN=COMPLETE
-DATA_MODEL=COMPLETE
-CONTRACTS=COMPLETE
-READINESS_CHECKLIST=COMPLETE
-TASKS_GENERATED=NO
-GLM_5_3_REVIEW=NOT_EXECUTED
-GLM_5_3_INTEGRATION_AVAILABLE_IN_CURRENT_SESSION=NO
-PLAN_FROZEN=NO
-IMPLEMENTATION_AUTHORIZED=NO
-NEXT_GATE=EXTERNAL_GLM_5_3_ARCHITECTURE_REVIEW
+RESEARCH=COMPLETE_RECONCILED
+PLAN=FROZEN
+DATA_MODEL=COMPLETE_RECONCILED
+CONTRACTS=COMPLETE_RECONCILED
+READINESS_CHECKLIST=PASS_FOR_PROGRAM_ARCHITECTURE
+GLM_5_3_REVIEW=RECEIVED_APPROVE_WITH_MANDATORY_CHANGES
+GLM_5_3_RAW_FINAL_CHECKLIST_TAIL=TRUNCATED_IN_FOUNDER_SUPPLIED_SOURCE
+GLM_BLOCKERS_TOTAL=2
+GLM_BLOCKERS_UNRESOLVED=0
+GLM_MAJORS_TOTAL=8
+GLM_MAJORS_UNRESOLVED=0
+GLM_FOUNDER_WAIVERS=0
+POST_GLM_CONSISTENCY_ANALYSIS=PASS
+PROGRAM_TASKS_GENERATED=YES
+PLAN_FROZEN=YES
+PRODUCT_IMPLEMENTATION_AUTHORIZED=NO
+PR_1_READY_STATE=DRAFT
+NEXT_GATE=FOUNDER_DECIDE_MERGE_PR_1_THEN_CREATE_SPEC_002_FROM_EXACT_MAIN
 ```
 
-## Why review is pending
+## GLM review closeout
 
-The founder explicitly requested a GLM 5.3 consultation before finalizing the plan. The current ChatGPT environment exposes no GLM/Z.ai model invocation connector, and plugin discovery returned no GLM/Zhipu/Z.ai integration. Pretending a review occurred would violate Golam's own verification principles.
+The external review recommendation was `APPROVE_WITH_MANDATORY_CHANGES`.
 
-## To close this gate
+The founder-supplied review artifact contains the full finding set and complete 11 mandatory changes, but ends during its final gate checklist after `CLEAN_ROOM_BOUNDARY`. Golam does not invent the missing tail. A normalized finding record and explicit truncation note are committed in `glm-5.3-review-result.md`.
 
-1. Run `glm-5.3-review-prompt.md` with an actual GLM-5.3 model that can read the repository artifacts.
-2. Save the complete GLM output as `review/glm-5.3-review-result.md` without silently editing it.
-3. Classify and resolve every BLOCKER.
-4. Incorporate accepted MAJOR/MINOR changes into the owning Spec Kit artifacts.
-5. Record founder waivers explicitly for any rejected MAJOR recommendation.
-6. Re-run cross-artifact consistency analysis.
-7. Change this status to `READY_FOR_TASK_GENERATION` only when no unresolved blocker remains.
-8. Generate `tasks.md` from the frozen plan.
+All explicit mandatory changes are now reconciled:
 
-Until then, implementation must not begin.
+1. enforceable privileged-kernel boundary distinct from Rust trusted path;
+2. authenticated local IPC and safe daemon binding;
+3. effect handler/executor/reconciler contract and no blind retry;
+4. protected kernel-owned authority resources;
+5. taint downgrade/algebra and artifact propagation;
+6. unbrokerable-secret fallback and accidental-secret redaction;
+7. governed memory operations/conflict/promotion/FORGET semantics;
+8. immutable forks, cross-session ordering, integrity chain and artifact lifecycle;
+9. provider-stable channel identifiers;
+10. approval classes/freshness/unattended irreversible preauthorization;
+11. mechanized strict-local egress choke point.
+
+No MAJOR finding was founder-waived.
+
+## Freeze meaning
+
+`PLAN_FROZEN=YES` means Spec 001 is the frozen program architecture and sequencing contract. It does NOT authorize direct implementation of the whole product.
+
+`tasks.md` is a program task graph. Its next unchecked task is founder review/merge decision for Draft PR #1. Product implementation begins only through a separately completed Spec 002 lifecycle and its own implementation tasks.
+
+## Next safe action
+
+Founder decides whether to merge Draft PR #1. If merged, re-read exact live `main`, create `spec/002-kernel-durable-session-spine`, and run Spec Kit from specification through analyze before writing Rust product code.
