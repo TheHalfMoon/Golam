@@ -67,10 +67,16 @@ impl fmt::Display for GoalError {
                 write!(f, "goal session not found: {}", session_id.0)
             }
             Self::StaleSessionHead { expected, actual } => {
-                write!(f, "stale goal session head: expected {expected}, actual {actual}")
+                write!(
+                    f,
+                    "stale goal session head: expected {expected}, actual {actual}"
+                )
             }
             Self::StaleGoalVersion { expected, actual } => {
-                write!(f, "stale goal version: expected {expected}, actual {actual}")
+                write!(
+                    f,
+                    "stale goal version: expected {expected}, actual {actual}"
+                )
             }
             Self::PayloadTooLarge { actual, maximum } => {
                 write!(f, "goal payload is {actual} bytes; maximum is {maximum}")
@@ -171,7 +177,8 @@ impl GoalManager {
         let version = current_version
             .checked_add(1)
             .ok_or(GoalError::SequenceOverflow)?;
-        let payload = encode_goal_payload(input.goal_id, input.session_id, version, input.document)?;
+        let payload =
+            encode_goal_payload(input.goal_id, input.session_id, version, input.document)?;
         if payload.len() > MAX_GOAL_PAYLOAD_BYTES {
             return Err(GoalError::PayloadTooLarge {
                 actual: payload.len(),
@@ -319,14 +326,21 @@ impl GoalManager {
                 .optional()?
                 .ok_or(GoalError::Verification("goal event is missing"))?;
             if seq_from_i64(event.0)? != created_global_seq {
-                return Err(GoalError::Verification("goal event global sequence mismatch"));
+                return Err(GoalError::Verification(
+                    "goal event global sequence mismatch",
+                ));
             }
-            let event_code = u8::try_from(event.1).map_err(|_| GoalError::Verification("invalid goal event type"))?;
+            let event_code = u8::try_from(event.1)
+                .map_err(|_| GoalError::Verification("invalid goal event type"))?;
             if EventKind::from_code(event_code) != Some(EventKind::GoalVersioned) {
-                return Err(GoalError::Verification("goal row is not linked to GoalVersioned event"));
+                return Err(GoalError::Verification(
+                    "goal row is not linked to GoalVersioned event",
+                ));
             }
             if event.2 != payload {
-                return Err(GoalError::Verification("goal row payload differs from canonical event"));
+                return Err(GoalError::Verification(
+                    "goal row payload differs from canonical event",
+                ));
             }
         }
         Ok(())
