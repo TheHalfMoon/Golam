@@ -80,10 +80,14 @@ pub fn verify(connection: &Connection) -> Result<(), IntegrityError> {
         let schema_version = u16::try_from(row.get::<_, i64>(5)?)
             .map_err(|_| IntegrityError::Violation("invalid event schema version"))?;
         if schema_version != SCHEMA_VERSION {
-            return Err(IntegrityError::Violation("unsupported event schema version"));
+            return Err(IntegrityError::Violation(
+                "unsupported event schema version",
+            ));
         }
         if global_seq != expected_global_seq {
-            return Err(IntegrityError::Violation("global event sequence is not contiguous"));
+            return Err(IntegrityError::Violation(
+                "global event sequence is not contiguous",
+            ));
         }
 
         let actor_principal: String = row.get(6)?;
@@ -107,15 +111,21 @@ pub fn verify(connection: &Connection) -> Result<(), IntegrityError> {
                     ));
                 }
                 if previous_session_event_hash != Some(head.event_hash) {
-                    return Err(IntegrityError::Violation("session hash-chain link mismatch"));
+                    return Err(IntegrityError::Violation(
+                        "session hash-chain link mismatch",
+                    ));
                 }
             }
             None => {
                 if session_seq != 1 || previous_session_event_hash.is_some() {
-                    return Err(IntegrityError::Violation("invalid first session event anchor"));
+                    return Err(IntegrityError::Violation(
+                        "invalid first session event anchor",
+                    ));
                 }
                 if !matches!(kind, EventKind::SessionCreated | EventKind::SessionForked) {
-                    return Err(IntegrityError::Violation("invalid first session event type"));
+                    return Err(IntegrityError::Violation(
+                        "invalid first session event type",
+                    ));
                 }
             }
         }
@@ -186,15 +196,19 @@ fn verify_session_heads(
         let session_id = SessionId(id_from_vec(row.get(0)?)?);
         let latest_session_seq = seq_from_i64(row.get(1)?)?;
         let latest_event_hash = hash_from_vec(row.get(2)?)?;
-        let computed = computed_heads
-            .remove(&session_id)
-            .ok_or(IntegrityError::Violation("session exists without canonical event"))?;
+        let computed = computed_heads.remove(&session_id).ok_or(IntegrityError::Violation(
+            "session exists without canonical event",
+        ))?;
         if computed.session_seq != latest_session_seq || computed.event_hash != latest_event_hash {
-            return Err(IntegrityError::Violation("session head does not match event chain"));
+            return Err(IntegrityError::Violation(
+                "session head does not match event chain",
+            ));
         }
     }
     if !computed_heads.is_empty() {
-        return Err(IntegrityError::Violation("event chain exists for unknown session"));
+        return Err(IntegrityError::Violation(
+            "event chain exists for unknown session",
+        ));
     }
     Ok(())
 }
