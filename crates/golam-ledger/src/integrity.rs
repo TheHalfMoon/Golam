@@ -226,9 +226,10 @@ fn verify_audit_head(
             |row| Ok((row.get::<_, i64>(0)?, row.get::<_, Vec<u8>>(1)?)),
         )
         .optional()?;
-    let stored = stored
-        .map(|(seq, hash)| Ok((seq_from_i64(seq)?, hash_from_vec(hash)?)))
-        .transpose()?;
+    let stored = match stored {
+        Some((seq, hash)) => Some((seq_from_i64(seq)?, hash_from_vec(hash)?)),
+        None => None,
+    };
     if stored != computed {
         return Err(IntegrityError::Violation("audit chain head mismatch"));
     }
