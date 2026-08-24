@@ -34,7 +34,10 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         Self { policy }
     }
 
-    pub fn authorize(&self, request: &AuthorizationRequest<'_>) -> Result<AuthorityToken, AuthorizationDecision> {
+    pub fn authorize(
+        &self,
+        request: &AuthorizationRequest<'_>,
+    ) -> Result<AuthorityToken, AuthorizationDecision> {
         match self.policy.authorize(request) {
             AuthorizationDecision::Allow => Ok(AuthorityToken { _private: () }),
             AuthorizationDecision::Deny => Err(AuthorizationDecision::Deny),
@@ -63,6 +66,9 @@ mod tests {
             resource: "session:1",
             context: "local",
         };
-        assert_eq!(kernel.authorize(&request).unwrap_err(), AuthorizationDecision::Deny);
+        assert_eq!(
+            kernel.authorize(&request).unwrap_err(),
+            AuthorizationDecision::Deny
+        );
     }
 }

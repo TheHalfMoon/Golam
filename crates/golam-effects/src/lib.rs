@@ -34,7 +34,10 @@ pub fn transition_allowed(from: EffectStatus, to: EffectStatus) -> bool {
 }
 
 pub fn blind_retry_allowed(semantics: EffectSemantics) -> bool {
-    matches!(semantics, EffectSemantics::ReadOnly | EffectSemantics::IdempotentAtLeastOnce)
+    matches!(
+        semantics,
+        EffectSemantics::ReadOnly | EffectSemantics::IdempotentAtLeastOnce
+    )
 }
 
 #[cfg(test)]

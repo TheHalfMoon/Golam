@@ -47,6 +47,9 @@ mod tests {
             request_id: None,
             payload_len: ResourceLimits::default().max_frame_bytes + 1,
         };
-        assert_eq!(frame.validate(ResourceLimits::default()), Err(CoreError::ResourceLimitExceeded));
+        assert_eq!(
+            frame.validate(ResourceLimits::default()),
+            Err(CoreError::ResourceLimitExceeded)
+        );
     }
 }
