@@ -2,6 +2,7 @@
 
 pub mod artifacts;
 pub mod checkpoint;
+pub mod fork;
 pub mod integrity;
 pub mod storage;
 
