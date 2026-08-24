@@ -136,6 +136,12 @@ impl ArtifactStore {
         verify_path(&self.root.join(&receipt.relative_path), receipt)
     }
 
+    pub fn read_verified(&self, receipt: &ArtifactReceipt) -> Result<Vec<u8>, ArtifactError> {
+        let path = self.root.join(&receipt.relative_path);
+        verify_path(&path, receipt)?;
+        Ok(fs::read(path)?)
+    }
+
     pub fn cleanup_temps(&self) -> Result<usize, ArtifactError> {
         let mut removed = 0_usize;
         for entry in fs::read_dir(&self.temp_dir)? {
