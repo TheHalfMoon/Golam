@@ -2,355 +2,302 @@
 
 **Branch**: `spec/001-golam-local-agent-os-foundation` | **Date**: 2026-08-24  
 **Spec**: `spec.md`  
-**Status**: `PENDING_EXTERNAL_GLM_5_3_REVIEW` — technically planned, not frozen for implementation
+**Status**: `GLM_RECONCILED_PENDING_FINAL_CONSISTENCY_FREEZE`
 
 ## Summary
 
-Build Golam as a clean Rust-first local Agent OS with a small privileged kernel, local canonical state, replaceable model/harness/tool adapters, semantic-first computer control, user-owned Markdown memory, and secure native remote control through GolamConnect.
+Build Golam as a clean Rust-first local Agent OS with a small authority-bearing privileged kernel, authenticated local clients, local canonical state, replaceable model/harness/tool adapters, semantic-first computer control, user-owned Markdown memory, and secure native remote control through GolamConnect.
 
-Spec 001 does not authorize implementing the entire product in one PR. It establishes the platform spine and decomposes implementation into bounded follow-on specifications.
+The GLM-5.3 review returned `APPROVE_WITH_MANDATORY_CHANGES`. All 2 BLOCKER and 8 MAJOR findings are accepted; no founder waiver is taken. The binding corrections are expressed in the reconciled spec/data model and dedicated contracts under `contracts/`.
+
+Spec 001 does not authorize implementing the entire product in one PR. It freezes the program architecture and decomposes implementation into bounded follow-on Spec Kit features.
 
 ## Technical Context
 
-**Language**: Rust stable for trusted/runtime code; TypeScript/React only for untrusted Tauri renderer; optional Python/Node adapters outside trusted path.  
-**Runtime**: Tokio-based local daemon; exact crate choices pinned only after donor/dependency qualification.  
+**Language**: Rust stable for trusted/runtime code; TypeScript/React only for untrusted Tauri renderer; optional Python/Node adapters outside trusted/privileged paths.  
+**Runtime**: Tokio-based local daemon; exact crates pinned only after donor/dependency qualification.  
 **Desktop**: Tauri 2 + React/TypeScript renderer, Rust backend.  
-**Local state**: SQLite (WAL where appropriate) for operational state; Markdown/files for canonical human knowledge; content-addressed artifacts where useful.  
-**Authorization**: Cedar candidate plus Golam capability/effect schema.  
-**Extension sandbox**: Wasmtime/WASI candidate for bounded untrusted extensions; OS/native sandbox backends for native execution.  
-**Local inference**: `mistral.rs` primary candidate; `llama.cpp` compatibility backend; other adapters optional.  
-**Networking**: Iroh/QUIC candidate for native GolamConnect; encrypted relay fallback.  
-**Protocols**: ACP stable v1 via current Rust SDK line; MCP 2026-07-28 semantics; Agent Skills-compatible packages; A2A later for external federation.  
-**Testing**: `cargo test --workspace`, property tests for state/policy/effects, fuzzing for protocol parsers/state machines, integration tests with synthetic/fake adapters, platform on-device tests, benchmark harness.  
-**Target platforms**: Windows 11, macOS current supported releases, major Linux desktop environments; explicit capability matrix.  
-**Project type**: local daemon + CLI/TUI + desktop app + protocol/adapters + optional relay/mobile clients.  
-**Performance goals**: local control loop responsive enough for interactive desktop use; compact semantic observations; bounded process output; measured prompt/cache efficiency; remote-control media target set per platform during implementation qualification.  
-**Constraints**: strict-local mode, no hidden cloud dependency, small trusted computing base, crash-safe state, reversible/attributable effects, user-interruptible control.  
-**Scale/scope**: single-user local-first P0 with multiple devices/workers/sessions; architecture must not require multi-tenant cloud infrastructure.
+**Local state**: SQLite for operational state; Markdown/files for canonical human knowledge; content-addressed large artifacts.  
+**Authorization**: Golam-owned capability/effect schema with Cedar as policy-engine candidate.  
+**Local IPC**: authenticated OS-native IPC; no unauthenticated localhost control surface.  
+**Sandbox**: explicit per-process/profile supervision; Wasmtime/WASI for bounded portable extensions, OS-native isolation for native tools.  
+**Local inference**: `mistral.rs` primary candidate; `llama.cpp` compatibility sidecar; optional adapters later.  
+**Networking**: kernel-authorized egress; Iroh/QUIC candidate for native GolamConnect.  
+**Protocols**: ACP stable v1, MCP 2026-07-28 semantics, Agent Skills-compatible packages; A2A later for external federation.  
+**Testing**: unit/property/fuzz/fault-injection/integration/on-device tests plus incremental GolamBench gates from Spec 002 onward.  
+**Target platforms**: Windows 11, supported macOS, and major Linux desktops with an explicit capability matrix rather than false parity.  
+**Constraints**: strict-local/no hidden fallback, small TCB, authenticated clients, crash-safe state, no blind duplicate effects, user-interruptible control.
 
 ## Constitution Check
 
-| Gate | Result | Plan evidence |
+| Gate | Result | Evidence |
 |---|---|---|
-| Local ownership/trust root | PASS | local daemon/state/model paths; cloud optional |
-| Rust trusted path | PASS | trusted components are Rust; TS only renderer |
-| Explicit authority | PASS | identity/capability/Cedar/effect model |
-| Gated durable effects | PASS | effect transaction contract + ledger |
-| User-owned governed memory | PASS | Markdown canonical, SQLite operational |
-| Replaceable model/harness | PASS | ExecutionProfile abstraction |
-| Semantic-first control | PASS | DesktopController hierarchy + takeover |
-| Open protocols/governed skills | PASS | ACP/MCP/Skills/A2A boundaries |
-| Clean-room donor governance | PASS | Source Foundry and no reconstructed imports |
-| Verification over claims | PASS | exact evidence and GolamBench required |
+| Local ownership/trust root | PASS | strict-local + mechanized egress contract |
+| Rust trusted path | PASS | constitution 1.1.0 |
+| Small privileged kernel | PASS_SPEC | kernel-boundary contract; runtime proof deferred to Spec 002 |
+| Authenticated local control | PASS_SPEC | local-IPC contract |
+| Explicit authority | PASS_SPEC | policy/protected-resource/approval contracts |
+| Gated durable effects | PASS_SPEC | effect FSM + handler/reconciler contract |
+| Secrets/taint | PASS_SPEC | broker + fallback + taint algebra contracts |
+| User-owned governed memory | PASS_SPEC | Markdown/SQLite + memory-governance contract |
+| Replaceable model/harness | PASS | expanded ExecutionProfile |
+| Semantic-first control | PASS | platform-aware computer-control contract |
+| GolamConnect security | PASS_SPEC | stable binding/per-message/reconnect rules |
+| Clean-room donor governance | PASS | Source Foundry; Golam-Research reference-only |
+| Verification over claims | PASS | incremental + release GolamBench |
 
-**External gate not yet passed**: GLM 5.3 architecture review.
+`PASS_SPEC` means the architecture contract is frozen but implementation evidence belongs to the owning follow-on spec.
 
-## Architecture
+## Enforceable Architecture
 
 ```text
-                    Desktop / CLI / IDE / Mobile / Channels
-                                   |
-                              Golam Gateway
-                                   |
+       Desktop / CLI / IDE                 Remote devices / Channels
+               |                                      |
+       Authenticated Local IPC                  GolamConnect transport
+               |                                      |
+               +------------------+-------------------+
+                                  |
                                 golamd
-                                   |
-              +--------------------+--------------------+
-              |                    |                    |
-        Session/Event         Goal Ledger           Scheduler
-              |                    |                    |
-              +--------------------+--------------------+
-                                   |
-                            Harness Runtime
-                                   |
-             +---------------------+----------------------+
-             |                     |                      |
-      Context Compiler        Memory Brain           Skills/Tools
-             |                     |                      |
-             +---------------------+----------------------+
-                                   |
-                            ExecutionProfile
-                     local inference / optional cloud
-                                   |
-                              Effect Intent
-                                   |
-                  +--------------------------------+
-                  |       TRUSTED RUST KERNEL      |
-                  | identity / policy / capability |
-                  | taint / effect tx / secrets    |
-                  | audit / receipts / authority   |
-                  +---------------+----------------+
                                   |
-              +-------------------+--------------------+
-              |                   |                    |
-          Sandbox            Computer Control      GolamConnect
-              |                   |                    |
-      WASI/native/remote     API/a11y/DOM/input      Iroh/QUIC
-              |                   |               screen/input/files
-              +-------------------+--------------------+
+               unprivileged/replacable runtime services
+          +-----------+-----------+-----------+-------------+
+          |           |           |           |             |
+       Harness      Context      Memory     Tools/Control  Scheduler
+          |           |           |           |             |
+          +-----------+-----------+-----------+-------------+
                                   |
-                          USER'S COMPUTERS
+                         typed kernel requests
+                                  |
+                    +---------------------------+
+                    | PRIVILEGED RUST KERNEL    |
+                    | identity + IPC auth       |
+                    | capability/lease minting  |
+                    | Cedar policy/protected DB |
+                    | approvals                |
+                    | effect journal/reconcile  |
+                    | secret broker/redaction   |
+                    | egress authorization      |
+                    | audit/receipt integrity   |
+                    | pairing/revocation        |
+                    +-------------+-------------+
+                                  |
+                   leases/decisions/secret handles
+                                  |
+          +-----------------------+------------------------+
+          |                        |                       |
+      Sandboxes                OS executors            Model sidecars
+   MCP/skills/helpers        browser/computer          local inference
 ```
+
+### Trusted path vs privileged kernel
+
+Rust trusted-path code may perform important local runtime work. Only the privileged kernel owns authority-bearing state/keys and may mint/validate capabilities, authorize effects/egress, broker secrets, authenticate clients, or commit/sign security-critical records. This distinction is binding.
+
+A single-process v1 is allowed only with sealed authority types, protected kernel state, explicit kernel APIs, isolated parser/adaptor surfaces, and a process-splittable interface. The security design MUST NOT rely on crate naming as an isolation mechanism.
 
 ## Core invariants
 
-- `MODEL_VISIBLE => LOGGED`
+- `MODEL_VISIBLE => LOGGED`, except secret-ingestion redaction/tombstone rules prevent accidental plaintext secret persistence.
 - `NO_EXTERNAL_EFFECT_WITHOUT_EFFECT_GATE`
+- `NO_GOLAM_MANAGED_EGRESS_WITHOUT_EGRESS_GATE`
 - `AGENT_CANNOT_EXPAND_OWN_AUTHORITY`
 - `CHANNEL != AUTHORITY`
+- `LOCALHOST != AUTHENTICATION`
 - `UNTRUSTED_DATA != INSTRUCTION_AUTHORITY`
 - `SAFETY_DENIAL_IS_MONOTONIC`
 - `MEMORY != TRUTH`
 - `FULL_CANONICAL_HISTORY_SURVIVES_COMPACTION`
 - `REAL_SECRETS_STAY_OUT_OF_MODEL_CONTEXT_WHEN_BROKERABLE`
+- `PROTECTED_AUTHORITY_STATE_IS_NOT_GENERIC_FILESYSTEM_STATE`
 - `EVERY_WRITE_IS_ATTRIBUTABLE`
 - `EVERY_LONG_RUN_IS_CRASH_RESUMABLE`
+- `UNKNOWN_EFFECT_OUTCOME_BLOCKS_DEPENDENT_EFFECTS`
 
-## Rust workspace target
+## Initial Rust workspace — binding simplification
 
-Start with a bounded spine; split only when ownership/testing boundaries are real.
+Do NOT start by creating the full target crate grid. Spec 002 begins with at most eight real crates/binaries, splitting only when ownership/testing boundaries are proven.
+
+Suggested initial spine:
 
 ```text
 crates/
   golam-kernel
-  golam-events
-  golam-session
-  golam-policy
+  golam-events-session
   golam-effects
+  golam-policy-identity
   golam-secrets
-
   golam-harness
   golam-models
-  golam-context
-  golam-memory
-  golam-skills
-  golam-workers
-
-  golam-tools
-  golam-browser
-  golam-control
-  golam-sandbox
-
-  golam-connect
-  golam-connect-protocol
-  golam-connect-transport
-
-  golam-acp
-  golam-mcp
-  golam-audit
-  golam-bench
-
 apps/
   golamd
   golam
-  golam-desktop
 ```
 
-OS-specific control/media/input crates SHOULD be split later when platform implementations become substantial, rather than creating empty abstractions up front.
+Later target decomposition may split memory/context/tools/control/connect/ACP/MCP/audit/bench and OS-specific crates. Empty architectural crates are forbidden as planning theater.
 
-## Component decisions
+## Component Decisions
 
-### 1. `golamd`
+### 1. `golamd` and local IPC
 
-Long-lived local authority. Owns canonical sessions, scheduler, policy, worker lifecycle, model/runtime registry, local IPC, Connect endpoints, and audit. Clients are replaceable projections.
+`golamd` is the long-lived local coordinator, not synonymous with the privileged kernel. Desktop/CLI/IDE clients authenticate over OS-native local IPC. Windows uses user-SID-restricted named pipes or stronger; Unix uses owner-only UDS + peer credentials or stronger. IDE/ACP delegated clients receive explicit scoped enrollment credentials.
 
-### 2. Session/Event Ledger
+No unauthenticated control HTTP/WS surface is permitted, even on loopback. Any loopback HTTP use requires authentication plus Origin/Host/CSRF/DNS-rebinding protections.
 
-Append-oriented typed events. Chat transcript, compacted context, UI timeline, and audit views are projections. Recovery replays canonical events and checkpoints. Event schemas are versioned.
+### 2. Session/Event and Goal Ledgers
 
-### 3. Goal Ledger
+Canonical events are append-oriented and versioned. Chat/context/UI are projections. Retry/rewind/model alternatives create immutable forks referencing parent prefixes; history is not rewritten. Cross-session causality is explicit. Security-critical families use mandatory integrity chaining. Large artifacts are content-addressed and governed by retention/GC. Checkpoints accelerate replay but never replace canonical history.
 
-High-priority durable goal state outside ordinary compaction:
-- goal;
-- acceptance criteria;
-- non-negotiable constraints;
-- scope;
-- proven facts;
-- authoritative current-state refs;
-- blockers;
-- completed work;
-- next safe action.
+Goal Ledger remains outside ordinary compaction and carries goal, criteria, non-negotiable constraints, scope, proven facts, authoritative refs, blockers, completed work, and next safe action.
 
-### 4. Effect Gateway
+### 3. Effect Gate + Handler/Reconciler
 
-Every consequential effect is proposed then authorized then executed then verified/receipted. Effect semantics include:
-- read-only;
-- idempotent at-least-once;
-- at-most-once;
-- compensatable;
-- irreversible.
+Every consequential effect is proposed, authorized, durably journaled, executed, reconciled when ambiguous, verified, and receipted.
 
-The ledger records intent before execution and completion/evidence after execution. Ambiguous crash windows are resolved through effect-specific reconciliation rather than blind retry.
+Semantics: READ_ONLY, IDEMPOTENT_AT_LEAST_ONCE, AT_MOST_ONCE, COMPENSATABLE, IRREVERSIBLE.
 
-### 5. Identity/Policy/Capabilities
+Each handler declares idempotency derivation, `execute`, read-only/safe `reconcile`, timeout/ambiguity policy, compensation, and evidence. The intent must be fsync-persistent before external dispatch. AT_MOST_ONCE/IRREVERSIBLE ambiguity never blind-retries; dependent effects wait on UNKNOWN_OUTCOME. MANUAL_REVIEW is first-class.
 
-Principals: User, Device, Worker, Skill, Channel, Service, MCPServer, ExternalAgent. Policy requests are `(principal, action, resource, context)`. Capability leases can expire and narrow, never widen parent authority. Risk-based step-up approvals are supported.
+### 4. Identity / Policy / Protected Resources / Approvals
 
-### 6. Secret Broker
+Policy input is `(principal, action, resource, context)`. Spec 002 defines the interface and a deny-by-default bootstrap evaluator; Spec 003 supplies Cedar integration without changing semantics.
 
-Secrets are references/handles. Where possible, credentials are injected at an egress/client boundary rather than exposed to model/tool process. OS keychain/keyring adapters are candidates. Logs and receipts record use metadata, never secret values.
+Capability leases narrow only. Protected kernel resources include policy/principals/leases/approvals/secrets/effect journal/audit/pairing/egress/skill lock/schedule authority and cannot be mutated by generic file tools.
 
-### 7. Information-flow labels
+Approval classes: ONCE, SESSION_SCOPED, TIME_BOXED, OPERATION_PATTERN, RUN_PREAUTHORIZATION. Approval freshness is checked at execution. Unattended IRREVERSIBLE effects require explicit bounded per-run preauthorization.
 
-Initial trust labels include user/local trusted, local unverified, web untrusted, channel untrusted, MCP/plugin untrusted, model generated, and secret-derived. Derived content inherits source taint unless independently verified under an explicit rule.
+### 5. Secrets and Taint
 
-### 8. Harness Runtime
+Secrets are handles. Broker at egress/client boundary when possible. Unbrokerable use requires explicit class approval, isolated process injection (not argv), no ambient inheritance, canary/value-aware redaction, and bounded retention. User-pasted secrets are redacted/tombstoned at ingestion; vault encrypted at rest.
 
-Provider/model-independent agent loop with explicit model-visible history, typed tools, bounded context, cancellation, retries, compaction/reset strategy, checkpointing and evaluator separation. DeepSeek Harness/Grok Build/Goose patterns are references, not semantic dependencies.
+Taint propagates through summaries, memory candidates, code/scripts/files/artifacts. Downgrade only by human approval or deterministic registered authoritative verification. Model self-assertion never downgrades. SECRET_DERIVED never enters long-term canonical memory.
 
-### 9. ExecutionProfile Router
+### 6. Strict-Local Egress
 
-An ExecutionProfile binds model + inference backend + quantization + harness + context/cache strategy + sampling + tool schema mode + resource policy. Hardware calibration produces candidate local profiles. Routing is observable and user-overridable.
+Network capability is denied by default in strict-local mode for every Golam-managed process: models, tools, MCP, skills, browser helpers, telemetry/update checks, adapters, and sidecars. Loopback is separately scoped. Components that need forbidden egress fail clearly. This is tested from outside Golam with sinkhole/network observation.
 
-### 10. Context Compiler
+### 7. Harness and ExecutionProfile
 
-Evidence pipeline:
+Harness semantics remain Golam-owned and model/provider independent. ExecutionProfile includes model+revision, tokenizer/chat template, backend, locality, quantization, hardware mapping, harness, reasoning, native/grammar/text-fallback tool-call mode, schema mode, context, prefix/KV cache strategy, warm residency, sampling, workload class, multimodal flags, resource/latency/quality budgets, privacy/network constraints, fallback behavior, and benchmark refs.
 
-`intent -> evidence requirements -> source routing -> retrieve -> authority/time/permission filter -> rank -> sufficiency check -> replan -> ContextCapsule`
+`mistral.rs` is the primary candidate behind an adapter. `llama.cpp` is preferred as an out-of-process compatibility sidecar to keep unsafe C FFI outside `golamd`.
 
-Coding evidence tiers:
-- L0: filesystem, ripgrep, git;
-- L1: Tree-sitter, LSP, structural graph;
-- L2: deep semantic/dataflow/runtime analysis when justified.
+### 8. Context Compiler
 
-Prompt-cache planner preserves stable prefixes/tool ordering when beneficial.
+`intent -> evidence requirements -> source routing -> retrieve -> authority/time/permission filter -> rank -> sufficiency -> replan -> ContextCapsule`.
 
-### 11. Memory Brain
+Coding tiers: L0 files/ripgrep/git; L1 Tree-sitter/LSP; L2 graph/dataflow/runtime only by justified need. Graphify/code-graph systems are not P0 requirements. Initial assistant/research/document/browser capsules may use budgeted sufficiency heuristics rather than a research-heavy universal planner.
 
-Canonical Markdown vault plus SQLite operational index/state. Memory assets include Working, Run, Project, User, and Verified Repository Knowledge. Every promoted memory has provenance/scope/time/authority metadata. Graph/vector/search indexes are rebuildable.
+### 9. Memory Brain
 
-### 12. Skills OS
+Markdown canonical durable knowledge; SQLite operational state; derivatives rebuildable. Memory service is the single Golam writer for managed vault mutations while user hand-edits remain supported through hash/version reconciliation.
 
-Agent Skills-compatible `SKILL.md` as interoperability surface. Lifecycle: discover -> provenance/license -> normalize -> infer capabilities -> scan -> sandbox -> test -> benchmark -> sign -> lock -> install -> upgrade/deprecate. Skill metadata cannot grant authority.
+Governed operations: ADD, UPDATE, SUPERSEDE, CONTRADICT, MERGE, EXPIRE, FORGET, REDACT. Project/user promotion requires provenance plus user approval or deterministic authoritative verification. Contradictions are surfaced. FORGET/REDACT rewrites active canonical content and rebuilds indexes; already-sent external artifacts are not falsely claimed revoked. Backup/restore and disk-full fail-closed behavior are mandatory.
 
-### 13. Browser
+### 10. Skills / MCP / ACP / Sandbox
 
-Prefer browser protocol/DOM/accessibility over vision. Maintain user-controlled browser profiles. No credential scraping. Downloads/uploads and external form submissions are effects with policy/evidence.
+SKILL.md and MCP/ACP are interoperability surfaces, never authority. Skills-as-instructions may ship before executable skill scripts. Executable skills and MCP servers require explicit sandbox profiles with cleared env, bounded FS/network/process/resource access and supervised cancellation. Results remain untrusted/plugin-tainted.
 
-### 14. Computer Control
+Wasmtime is optional for portable bounded extension code; it is not a universal native-tool sandbox.
 
-`Domain API -> Native OS API -> Accessibility -> Browser DOM -> Input Injection -> Vision`.
+### 11. Computer Control
 
-Observation returns compact state + stable refs when possible. Actions use before/expected/after/verification state. Platform adapters must fail explicitly on locked desktops/UAC/secure surfaces where injection is impossible.
+Hierarchy: `Domain/App API -> Native OS automation -> Accessibility/Semantic tree -> Browser DOM/protocol -> Input Injection -> Vision`.
 
-### 15. GolamConnect
+Actions close the loop: BeforeState -> Intent -> Authorization -> Act -> ObservedAfter -> Verify. Stale refs fail/reobserve.
 
-Native Connect is a protocol, not a Telegram bot. Devices pair cryptographically. Requests are signed and replay-protected. Host is authority. Transport uses Iroh/QUIC candidate with direct path and encrypted relay fallback. Remote control adds screen/media, input, clipboard/files, multi-monitor, reconnect, lease renewal, visible indicator, takeover and emergency stop.
+Windows: UIA first; input only on unlocked interactive desktop; UAC/secure desktop not bypassed. macOS: AX/TCC explicit. Linux: AT-SPI; X11/XTEST; pure Wayland only through supported portals/compositor capabilities; unsupported states fail closed.
 
-Telegram/WhatsApp/Slack/Discord normalize messages into untrusted or authenticated channel requests mapped to principals. They never bypass policy.
+Clipboard read is distinct. Camera/mic deny by default.
 
-### 16. Workers/Automations
+### 12. GolamConnect
 
-Worker definition includes version, behavior contract, capability manifest, memory loadout, harness profile, evaluation record and signature/provenance. Internal scheduling uses typed Rust state/DAGs. Bounded parallel workers get isolated workspaces/worktrees/sandboxes where needed.
+Native Connect is separate from messaging bridges. Pairing establishes cryptographic device identity. Every protected message is signed/replay-protected and checked against current short-lived lease, revocation, and generation. Newer control generation invalidates old input streams.
 
-### 17. Verification/Receipts
+Iroh/QUIC is the P0 transport candidate; do not build a custom relay. Relay payloads are E2E encrypted but endpoint/timing/IP metadata exposure is documented; relay selection/self-host config may be offered later without making custom relay infrastructure a P0 deliverable.
 
-Significant task receipt reports models, local/cloud calls, tools, files changed, network destinations, approvals, secret handles used, external effects, tests/verifications and trace ID. Content exposure is minimized.
+Screen/media, input, clipboard, file transfer, reconnect, multi-monitor, visible indicator, local emergency stop and human takeover are independently permissioned. Human takeover suspends agent/other-controller input at lease level. Reconnect fully reauthenticates/revalidates; it is not a new auth path.
 
-## Program decomposition into follow-on Spec Kit features
+Channel bindings use provider-stable IDs, never usernames/display names. Group/unbound participants have zero machine authority by default.
 
-Implementation should proceed as separately reviewable specs:
+### 13. Workers / Automations
 
-- **002 Kernel & Durable Session Spine** — Rust workspace, events/session, goal ledger, effect tx, audit.
-- **003 Identity, Policy, Secrets & Sandbox** — Cedar/capabilities, taint, credential broker, Wasmtime/native sandbox interfaces.
-- **004 Harness & Local Intelligence** — model adapters, mistral.rs/llama.cpp, hardware calibration, ExecutionProfile, context/cache base.
-- **005 Local Tools, Context & Memory** — filesystem/shell/git/browser, context compiler, Markdown brain, skills/MCP/ACP.
-- **006 Desktop & Computer Control** — Tauri app, semantic control adapters, app/window state, human takeover, vision fallback.
-- **007 GolamConnect** — pairing, Iroh transport, remote screen/control/files/clipboard/reconnect, Telegram and other channel bridges.
+Workers use typed Rust supervision, narrow child leases, explicit workspace/worktree isolation, spawn/join/cancel/crash-adopt semantics, and bounded budgets. Single-worker reliability precedes swarm/collaboration complexity. Groups and teach-by-demonstration are late Spec 008/009 work.
+
+### 14. Verification / Receipts
+
+Receipts minimize content while reporting profiles/models, locality, tools, files changed, network destinations, secret handles used, effects, approvals, verification, trace and integrity binding. No pass claim without exact-head evidence.
+
+## Program Decomposition
+
+Keep current order:
+
+- **002 Kernel & Durable Session Spine** — initial Rust workspace; kernel API boundary; authenticated local IPC; session/fork/goal ledger; effect tx + handler/reconcile; audit integrity; bootstrap deny-by-default `Authorize`; BS-1/BS-2/BS-10 foundations.
+- **003 Identity, Policy, Secrets & Sandbox** — Cedar/capabilities, protected resources, approvals, taint algebra, secret fallback/redaction, egress policy, sandbox profiles.
+- **004 Harness & Local Intelligence** — harness, mistral.rs/llama.cpp adapters, calibration, expanded ExecutionProfile, early model/harness separation benchmarks.
+- **005 Local Tools, Context & Memory** — filesystem/shell/git/browser, L0/L1 context, Markdown brain/governance, skills/MCP/ACP; injection/memory/no-egress gates. L2 graph intelligence justification-gated.
+- **006 Desktop & Computer Control** — Tauri, semantic OS adapters, platform matrix, human takeover, vision fallback.
+- **007 GolamConnect** — pairing, Iroh, screen/input/files/clipboard/reconnect/control generations, channel bridges.
 - **008 Workers & Automations** — scheduler, durable workers, triggers, worktrees, bounded parallelism.
-- **009 Grok Public Parity** — complete parity ledger, built-in skill equivalents, routines/teach-by-demonstration/groups/connectors/artifacts and remaining product behaviors.
-- **010 GolamBench & Release Qualification** — long-horizon, computer, memory, security, offline/privacy, recovery and parity qualification.
+- **009 Grok Public Parity** — complete evidence ledger and remaining independently implemented public domains/skills.
+- **010 GolamBench & Release Qualification** — full long-horizon, computer, memory, security, offline/privacy, recovery, remote-control and parity qualification.
 
-Each later spec must run clarify/plan/checklist/tasks/analyze independently and remain bounded.
+Specs 007/008 may swap if implementation evidence makes that useful. Voice, native mobile app, A2A federation, media generation, custom relay, and multi-device CRDT memory sync are deferred through 010 unless a later reviewed spec explicitly changes scope.
 
-## Grok Bot parity strategy
+## Grok Public Parity Domains
 
-Parity is black-box/public-behavior oriented:
+Initial ledger includes persistent agents/workers; persistent computer/workspace; files/terminal/browser/apps; parallel/background work; memory; approvals/security; local computer execution; desktop/channel continuity; skills/plugins/MCP/connectors; routines/schedules; teach-by-demonstration; groups/handoffs; rich artifacts; Documents/Presentations/Spreadsheets/PDFs/Skill Creator; multimodal document/image/PDF input; deep research with citations; search/web connectors; voice/media generation explicitly deferred or `NOT_APPLICABLE_WITH_RATIONALE` until a later spec.
 
-`public feature -> Golam scenario -> expected evidence -> status`.
+Parity evidence is public-behavior/scenario based. No Grok internals/assets/prompts/reconstruction enter Golam.
 
-Do not preserve Grok implementation details, trademarks, UI assets, private skill prompts, or reconstructed source. Equivalent capability may use a different local architecture.
+## Incremental GolamBench Gates
 
-Initial parity domains:
-- persistent named agents/workers;
-- persistent computer/workspace state;
-- files/terminal/browser/app use;
-- parallel agents and collaboration;
-- long-running/background work;
-- memory and continuity;
-- approvals/security controls;
-- local computer execution;
-- Desktop/mobile/channel continuity;
-- skills/plugins/MCP/connectors;
-- routines/schedules;
-- teach-by-demonstration;
-- groups/handoffs;
-- artifacts/files;
-- built-in Documents, Presentations, Spreadsheets, PDFs, Skill Creator equivalents.
+Do not defer safety evidence to Spec 010.
 
-## Testing strategy
+- **BS-1** crash/replay/fork/checkpoint/disk failure starts in 002.
+- **BS-2** duplicate-effect/UNKNOWN_OUTCOME starts in 002.
+- **BS-10** strict-local externally observed no-egress starts in 002/003 and remains a regression gate.
+- IPC compromise/kernel-boundary probes start in 002.
+- Taint/prompt-injection/secret canaries start in 003 and expand in 005.
+- Model/harness separation begins in 004.
+- Memory poisoning/FORGET starts in 005.
+- Computer-control safety starts in 006.
+- Connect replay/revocation/takeover/channel impersonation starts in 007.
+- Spec 010 aggregates full release qualification.
 
-- Unit tests for typed state and deterministic logic.
-- Property tests for event replay, policy monotonicity, capability narrowing, idempotency state machines and parsers.
-- Fuzz protocol/event/skill/package/parsing surfaces.
-- Synthetic adapters for deterministic CI.
-- On-device Windows/macOS/Linux control tests.
-- Two-machine GolamConnect tests including NAT/reconnect/relay conditions.
-- Fault injection at every durable-effect boundary.
-- Security adversarial tests for prompt injection, tool poisoning, stale refs, replay, capability escalation, confused deputy, SSRF and secret exfiltration.
-- Exact-head benchmark artifacts and machine metadata.
+## Donor Strategy After GLM Review
 
-## GolamBench dimensions
+Classifications are not code-admission approvals. Source Foundry exact qualification remains required.
 
-External suites are selected at implementation time based on availability/license and supplemented with Golam-native scenarios. Required dimensions:
+- Iroh: `DIRECT_DEPENDENCY` candidate for Connect transport.
+- RASystem: `SELECTIVE_PORT` candidate; independently qualify grants/control/audit/media and Windows/Linux behavior.
+- Cedar: `DIRECT_DEPENDENCY` candidate for policy evaluation; Golam owns semantics.
+- Wasmtime: `DIRECT_DEPENDENCY` candidate when executable portable extensions are introduced.
+- mistral.rs: `DIRECT_DEPENDENCY` candidate behind model adapter.
+- llama.cpp: `ADAPTER`, preferred sidecar.
+- grok-build/goose: `SELECTIVE_PORT` or reference after exact qualification.
+- DeepSeek Harness/OpenBot: `REFERENCE_ONLY` architecture/UX patterns.
+- winappCli: `REFERENCE_ONLY` behavioral spec unless a later admission justifies code use.
+- agent-desktop: `SELECTIVE_PORT` candidate for snapshot/ref concepts only after exact license/commit qualification.
+- RustDesk/OpenControl/other reciprocal sources: code `REJECT`/behavior `REFERENCE_ONLY` by default.
+- Graphify/code-graph-rag: optional adapters; no mandatory graph DB.
+- Restate/Temporal: durability pattern references only; no server dependency.
+- Golam-Research/Grok reconstruction: code `REJECT`, behavioral evidence only.
 
-- long-horizon coding and terminal work;
-- whole-repository implementation/refactoring;
-- computer-use workflows;
-- memory/state/workflow recall;
-- prompt injection/tool poisoning;
-- crash/reboot/resume;
-- effect idempotency;
-- stale memory resistance;
-- goal retention after compaction/reset;
-- remote-control reconnect/takeover/emergency-stop;
-- strict-local/no-egress proof;
-- context bytes, cache hit ratio, tokens, wall time, resource use, interventions and verified success.
+## Complexity Discipline
 
-## Source Foundry implementation rule
+Accepted: small privileged kernel, canonical event/effect model, platform-specific control, native Connect protocol.
 
-Do not start by forking all donors. For each candidate:
+Binding simplifications: <=8 initial crates; no custom relay; no mandatory L2 graph; no CRDT memory in P0; no huge swarm; no executable skill runtime before sandbox profile; no voice/mobile/A2A/media-generation scope creep through Spec 010; no wholesale donor forks.
 
-1. pin exact source state;
-2. qualify rights/dependencies/security;
-3. build adapter or benchmark first where practical;
-4. measure value;
-5. import/port only the smallest justified surface;
-6. preserve notices and modification records;
-7. own Golam-facing contracts so donors stay replaceable.
+## Phase Exit Criteria for Spec 001
 
-## Complexity tracking
+Spec 001 may be frozen and program `tasks.md` generated only when:
 
-Accepted complexity:
-- separate privileged kernel because pluggable-everything would weaken security;
-- canonical event/effect model because durable autonomy requires replay/reconciliation;
-- platform-specific computer-control implementations because OS semantics materially differ;
-- native Connect protocol because messaging bridges cannot safely represent full remote control.
-
-Rejected premature complexity:
-- mandatory graph database;
-- custom universal agent DSL;
-- A2A for internal workers;
-- cloud control plane required for local use;
-- huge swarm before single-worker reliability;
-- wholesale donor forks;
-- mandatory container/runtime for all tools.
-
-## Phase exit criteria for Spec 001
-
-Spec 001 may be frozen and `tasks.md` generated only when:
-
-1. founder accepts constitution/spec/research/plan/contracts;
-2. GLM 5.3 external review is completed with no unresolved BLOCKER finding;
-3. MAJOR findings are either incorporated or explicitly founder-waived with rationale;
-4. finalization status is changed to `READY_FOR_TASK_GENERATION`;
-5. repository live head is re-verified before any follow-up mutation.
+1. GLM review result/finding ledger is committed;
+2. BLK-001/BLK-002 are resolved in normative artifacts;
+3. MAJ-001..008 are incorporated or founder-waived (current decision: incorporated, no waivers);
+4. mandatory strict-local egress requirement is normative;
+5. constitution/spec/plan/data model/contracts/checklist are cross-artifact consistent;
+6. finalization status records the GLM source-tail truncation honestly;
+7. live branch head is reverified;
+8. `tasks.md` authorizes only bounded next Spec Kit work, not an unreviewed all-product implementation.
