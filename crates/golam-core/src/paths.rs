@@ -228,7 +228,11 @@ mod tests {
         let root = unique_root();
         let layout = RuntimeLayout::initialize(&root).unwrap();
         layout.require_authority_ready().unwrap();
-        let mode = fs::metadata(&layout.runtime_dir).unwrap().permissions().mode() & 0o777;
+        let mode = fs::metadata(&layout.runtime_dir)
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777;
         assert_eq!(mode, 0o700);
         fs::remove_dir_all(root).unwrap();
     }
