@@ -1,34 +1,58 @@
 # Contract: Computer Control
 
-## Control hierarchy
+## Action hierarchy
 
-Use the highest available deterministic semantic layer:
+Golam MUST prefer:
 
 1. domain/application API;
 2. native OS automation API;
 3. accessibility/semantic tree;
 4. browser DOM/protocol;
-5. deterministic keyboard/mouse/input injection;
-6. vision/coordinate fallback.
+5. deterministic keyboard/mouse input injection;
+6. vision/pixel fallback.
 
-## Observe-act-verify loop
+Vision is a fallback, not the default authority surface.
 
-Each action uses:
+## Closed-loop action
 
-`BeforeState -> ActionIntent -> Authorization -> Act -> ObservedAfterState -> Verification`
+Every protected UI action follows:
 
-## Element references
+`Observe -> ActionIntent -> Authorize -> Act -> ObserveAfter -> Verify`
 
-Semantic observations may assign stable refs scoped to a snapshot. A ref MUST include or imply a snapshot/staleness token. If the UI changes such that the ref cannot be proven to identify the same element, the action fails `STALE_REF` and requires re-observation.
+Semantic element refs are snapshot-bound and carry staleness tokens. `STALE_REF` MUST fail and trigger re-observation; it must never silently retarget a different element.
 
-## Platform contract
+## Platform capability matrix
 
-Each platform adapter reports capabilities and limitations. Input-injecting operations fail explicitly when the workstation is locked, secure desktop/UAC is active, permissions are missing, or the OS prevents injection.
+### Windows
+- UI Automation patterns first.
+- Input injection requires an unlocked interactive user desktop and fails clearly otherwise.
+- UAC/secure desktop is not bypassed.
+- Admin-context/credential-prompt bypass is out of scope.
+- The interactive control executor runs in the user's interactive session rather than pretending a service session can safely drive UI.
 
-## Human control
+### macOS
+- Accessibility/AX requires explicit TCC Accessibility permission.
+- Screen/vision capture requires Screen Recording permission.
+- Permission state is observable and failures are explicit/fail-closed.
+- Golam does not silently bypass TCC or secure input surfaces.
 
-`TAKEOVER` immediately blocks conflicting autonomous input. Background non-control reasoning may continue only if policy permits. `STOP` cancels current control action and revokes temporary control leases.
+### Linux
+- AT-SPI is the semantic path where available.
+- X11/XWayland input may use supported XTEST-class mechanisms.
+- Pure Wayland control/capture is limited to supported RemoteDesktop/screencast portals/compositor capabilities.
+- Unsupported compositor/portal combinations fail closed rather than claiming parity.
 
-## Privacy
+## Sensitive capabilities
 
-User-owned blocked apps/windows/resources must be redacted from agent observations and refused for control. The agent cannot modify the blocklist without a separately authorized user action.
+- Clipboard read and clipboard write are separate capabilities; clipboard read may expose secrets and is policy/taint aware.
+- Camera and microphone are distinct deny-by-default capabilities.
+- Browser use of real user profiles is explicit policy; uploads/downloads/form submissions are effects.
+- Protected/sensitive app observations may be redacted before screenshot/remote streaming where feasible.
+
+## Human takeover
+
+Human takeover revokes/suspends conflicting agent input authority at the lease layer. The agent may continue non-input reasoning only if policy permits. Returning input control to the agent requires explicit reauthorization.
+
+## Verification
+
+Platform release claims require on-device tests for supported semantic operations, locked/protected surfaces, stale refs, takeover latency, permission failures and fallback behavior.
