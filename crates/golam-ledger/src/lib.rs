@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+pub mod storage;
+
 use golam_core::{CanonicalEncoder, CoreError, SessionId};
 
 const EVENT_DOMAIN: &[u8] = b"golam:event:v1";
