@@ -196,9 +196,11 @@ fn verify_session_heads(
         let session_id = SessionId(id_from_vec(row.get(0)?)?);
         let latest_session_seq = seq_from_i64(row.get(1)?)?;
         let latest_event_hash = hash_from_vec(row.get(2)?)?;
-        let computed = computed_heads.remove(&session_id).ok_or(IntegrityError::Violation(
-            "session exists without canonical event",
-        ))?;
+        let computed = computed_heads
+            .remove(&session_id)
+            .ok_or(IntegrityError::Violation(
+                "session exists without canonical event",
+            ))?;
         if computed.session_seq != latest_session_seq || computed.event_hash != latest_event_hash {
             return Err(IntegrityError::Violation(
                 "session head does not match event chain",
