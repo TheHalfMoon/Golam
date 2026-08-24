@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+pub mod paths;
+
 use core::fmt;
 
 pub const PROTOCOL_VERSION: u16 = 1;

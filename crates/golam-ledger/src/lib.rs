@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod artifacts;
 pub mod integrity;
 pub mod storage;
 
