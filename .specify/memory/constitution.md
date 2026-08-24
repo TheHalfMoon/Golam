@@ -1,9 +1,9 @@
 <!--
 Sync Impact Report
-- Version: 1.1.0
+- Version: 1.2.0
 - Ratified: 2026-08-24
 - Last Amended: 2026-08-24
-- Amendment: incorporated GLM-5.3 mandatory architecture findings. Distinguished Rust trusted path from the smaller authority-bearing privileged kernel; added protected-state, authenticated IPC, mechanized egress, taint-downgrade, secret-fallback, and memory-governance requirements.
+- Amendment: incorporated founder-attested source permissions for all sources supplied by the founder and all sources identified during Spec 001 research. Such sources may become code donors after per-source Source Foundry admission records capture exact permission scope/evidence, source state, notices, dependency closure, and technical/security qualification. Golam-Research is upgraded from reference-only by default to high-value implementation evidence and an authorized-source candidate, while the immutable shipped Grok Bot 0.18 artifacts remain provenance anchors and proprietary branding/assets are not automatically admitted.
 -->
 
 # Golam Constitution
@@ -84,15 +84,19 @@ Golam MUST NOT implement stealth monitoring, hidden persistence, silent privileg
 
 Golam MUST prefer open interoperability boundaries: ACP for IDE/client agent interaction, MCP for tools/resources, Agent Skills-compatible `SKILL.md` packaging, and A2A only for external independent-agent federation when needed. Internal workers SHOULD use native typed Rust scheduling rather than network protocols.
 
-Skills, MCP servers, plugins, and adapters are supply-chain inputs. Discovery, provenance, license review, capability inference, security scanning, sandbox testing, version locking, and deprecation MUST be first-class lifecycle steps. Executable skill scripts and MCP processes MUST run under bounded sandbox supervision with explicit FS/network/environment limits. A skill is instruction/code; it is never authority.
+Skills, MCP servers, plugins, and adapters are supply-chain inputs. Discovery, provenance, permission/license review, capability inference, security scanning, sandbox testing, version locking, and deprecation MUST be first-class lifecycle steps. Executable skill scripts and MCP processes MUST run under bounded sandbox supervision with explicit FS/network/environment limits. A skill is instruction/code; it is never authority.
 
-## X. Clean-Room and Donor Governance
+## X. Source Permission, Provenance, and Donor Governance
 
-`Golam-Research` and reconstructed Grok Bot artifacts are evidence/reference material only unless a specific component is independently proven redistributable. Golam MUST NOT copy proprietary reconstructed source, shipped renderer assets, private skills, trademarks, or unlicensed code.
+The founder has attested that permission exists for all source projects supplied by the founder and all source projects identified during Spec 001 research. This attestation makes those sources eligible for Source Foundry admission; it does NOT by itself mean that every file, trademark, binary asset, dependency, model weight, service credential, or redistribution mode is automatically covered.
 
-Open-source donors MUST be qualified at an exact commit/tree before source admission. Qualification MUST record license/notices, vendored/generated code, dependency closure, network/telemetry/secrets behavior, unsafe/process boundaries, platform test posture, verification status, and an explicit reuse strategy: dependency, selective port, adapter, reference, or benchmark-only.
+Before any source code is copied, ported, vendored, forked, or made a direct dependency, the implementation spec MUST create a per-source admission record containing: source repository/artifact; exact commit/tree/version; permission/license evidence reference and scope; redistribution/modification obligations; notices; vendored/generated code boundaries; dependency closure; reciprocal-license closure where relevant; network/telemetry/secrets behavior; unsafe/FFI/process boundaries; platform test posture; selected files/crates; reuse strategy; and independent Golam verification.
 
-Unverified donor claims MUST be labeled unverified. Reciprocal-license sources remain reference-only by default unless the founder explicitly approves the bounded license obligations.
+`Golam-Research` and the reconstructed Grok Bot 0.18 codebase MUST be treated as high-value implementation evidence and an authorized-source candidate because the founder states permission has been obtained. Its pinned public release artifacts, hashes, reconstructed runtime boundaries, tests, protocol contracts, and working behavior SHOULD be mined seriously during donor qualification. However, the reconstruction itself records that it is not Anysphere's original monorepo and that historical upstream source licensing was not asserted in that repository; therefore Golam MUST record the founder's permission scope/evidence before admitting any bounded Grok reconstruction component. Shipped renderer assets, trademarks/branding, original installers, and other binary assets require their own explicit scope and MUST NOT be assumed admitted merely because runtime source use is permitted.
+
+Permission does not force reuse. Rust/local-first architecture, security boundaries, technical quality, dependency risk, and maintainability remain independent admission gates. A TypeScript/Python/Node donor may be ported into Rust, wrapped as an isolated adapter, or rejected even when permission exists.
+
+Unverified donor claims MUST be labeled unverified. A source may move through `REFERENCE -> VERIFIED -> PERMISSION_RECORDED -> TECHNICALLY_QUALIFIED -> ADMITTED`; code admission requires the final state.
 
 ## XI. Verification Beats Claims
 
@@ -114,4 +118,4 @@ This constitution supersedes ad-hoc conventions when they conflict.
 - Complexity that weakens a MUST requires an explicit constitutional amendment; it cannot be hidden in a plan exception.
 - Every implementation PR MUST state the relevant constitution gates and exact verification evidence.
 
-**Version**: 1.1.0 | **Ratified**: 2026-08-24 | **Last Amended**: 2026-08-24
+**Version**: 1.2.0 | **Ratified**: 2026-08-24 | **Last Amended**: 2026-08-24
