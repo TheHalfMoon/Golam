@@ -2,9 +2,10 @@
 
 pub mod storage;
 
-use golam_core::{CanonicalEncoder, CoreError, SessionId};
+use golam_core::{CanonicalEncoder, CoreError, EventId, SessionId};
 
 const EVENT_DOMAIN: &[u8] = b"golam:event:v1";
+const AUDIT_DOMAIN: &[u8] = b"golam:audit:v1";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum EventKind {
@@ -17,7 +18,7 @@ pub enum EventKind {
 }
 
 impl EventKind {
-    const fn code(self) -> u8 {
+    pub const fn code(self) -> u8 {
         match self {
             Self::SessionCreated => 1,
             Self::GoalVersioned => 2,
@@ -31,12 +32,18 @@ impl EventKind {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EventRecord {
+    pub event_id: EventId,
     pub session_id: SessionId,
     pub global_seq: u64,
     pub session_seq: u64,
     pub schema_version: u16,
     pub kind: EventKind,
-    pub previous_integrity: [u8; 32],
+    pub actor_principal: String,
+    pub recorded_at: String,
+    pub payload_hash: [u8; 32],
+    pub previous_session_event_hash: Option<[u8; 32]>,
+    pub security_critical: bool,
+    pub previous_audit_hash: Option<[u8; 32]>,
 }
 
 pub fn follows(previous: &EventRecord, next: &EventRecord) -> bool {
@@ -44,21 +51,56 @@ pub fn follows(previous: &EventRecord, next: &EventRecord) -> bool {
         && (next.session_id != previous.session_id || next.session_seq == previous.session_seq + 1)
 }
 
+pub fn payload_hash(payload: &[u8]) -> [u8; 32] {
+    *blake3::hash(payload).as_bytes()
+}
+
 pub fn canonical_event_bytes(record: &EventRecord) -> Result<Vec<u8>, CoreError> {
     let mut encoder = CanonicalEncoder::new();
     encoder.push_bytes(EVENT_DOMAIN)?;
     encoder.push_u16(record.schema_version);
+    encoder.push_u128(record.event_id.0);
     encoder.push_u128(record.session_id.0);
     encoder.push_u64(record.global_seq);
     encoder.push_u64(record.session_seq);
     encoder.push_u8(record.kind.code());
-    encoder.push_bytes(&record.previous_integrity)?;
+    encoder.push_bytes(record.actor_principal.as_bytes())?;
+    encoder.push_bytes(record.recorded_at.as_bytes())?;
+    encoder.push_bytes(&record.payload_hash)?;
+    encode_optional_hash(&mut encoder, record.previous_session_event_hash)?;
+    encoder.push_u8(u8::from(record.security_critical));
     Ok(encoder.finish())
 }
 
-pub fn integrity_hash(record: &EventRecord) -> Result<[u8; 32], CoreError> {
+pub fn event_integrity_hash(record: &EventRecord) -> Result<[u8; 32], CoreError> {
     let bytes = canonical_event_bytes(record)?;
     Ok(*blake3::hash(&bytes).as_bytes())
+}
+
+pub fn audit_integrity_hash(
+    record: &EventRecord,
+    event_hash: [u8; 32],
+) -> Result<[u8; 32], CoreError> {
+    let mut encoder = CanonicalEncoder::new();
+    encoder.push_bytes(AUDIT_DOMAIN)?;
+    encoder.push_u64(record.global_seq);
+    encoder.push_bytes(&event_hash)?;
+    encode_optional_hash(&mut encoder, record.previous_audit_hash)?;
+    Ok(*blake3::hash(&encoder.finish()).as_bytes())
+}
+
+fn encode_optional_hash(
+    encoder: &mut CanonicalEncoder,
+    value: Option<[u8; 32]>,
+) -> Result<(), CoreError> {
+    match value {
+        Some(hash) => {
+            encoder.push_u8(1);
+            encoder.push_bytes(&hash)?;
+        }
+        None => encoder.push_u8(0),
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -67,12 +109,18 @@ mod tests {
 
     fn event() -> EventRecord {
         EventRecord {
+            event_id: EventId(10),
             session_id: SessionId(1),
             global_seq: 4,
             session_seq: 2,
             schema_version: 1,
             kind: EventKind::SessionCreated,
-            previous_integrity: [0; 32],
+            actor_principal: "owner".to_owned(),
+            recorded_at: "2026-08-24T00:00:00Z".to_owned(),
+            payload_hash: payload_hash(b"payload"),
+            previous_session_event_hash: None,
+            security_critical: true,
+            previous_audit_hash: None,
         }
     }
 
@@ -86,13 +134,27 @@ mod tests {
     }
 
     #[test]
-    fn integrity_hash_is_deterministic_and_field_sensitive() {
+    fn event_hash_is_deterministic_and_payload_sensitive() {
         let first = event();
-        let first_hash = integrity_hash(&first).unwrap();
-        assert_eq!(first_hash, integrity_hash(&first).unwrap());
+        let first_hash = event_integrity_hash(&first).unwrap();
+        assert_eq!(first_hash, event_integrity_hash(&first).unwrap());
 
         let mut changed = first;
-        changed.global_seq += 1;
-        assert_ne!(first_hash, integrity_hash(&changed).unwrap());
+        changed.payload_hash = payload_hash(b"changed");
+        assert_ne!(first_hash, event_integrity_hash(&changed).unwrap());
+    }
+
+    #[test]
+    fn audit_hash_is_previous_head_sensitive() {
+        let first = event();
+        let event_hash = event_integrity_hash(&first).unwrap();
+        let first_audit = audit_integrity_hash(&first, event_hash).unwrap();
+
+        let mut changed = first;
+        changed.previous_audit_hash = Some([7; 32]);
+        assert_ne!(
+            first_audit,
+            audit_integrity_hash(&changed, event_hash).unwrap()
+        );
     }
 }

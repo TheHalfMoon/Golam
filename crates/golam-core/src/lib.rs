@@ -9,6 +9,9 @@ pub const SCHEMA_VERSION: u16 = 1;
 pub struct SessionId(pub u128);
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct EventId(pub u128);
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ClientId(pub u128);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
