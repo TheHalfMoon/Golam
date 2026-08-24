@@ -5,9 +5,9 @@ use std::path::{Path, PathBuf};
 use golam_core::{CanonicalEncoder, CheckpointId, EventId, SessionId};
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
+use crate::EventKind;
 use crate::artifacts::{ArtifactError, ArtifactReceipt, ArtifactStore};
 use crate::storage::{AppendEvent, AuthorityStore, StorageError};
-use crate::EventKind;
 
 const PROJECTION_DOMAIN: &[u8] = b"golam:checkpoint-projection:v1";
 const CHECKPOINT_EVENT_DOMAIN: &[u8] = b"golam:checkpoint-event:v1";
@@ -75,7 +75,9 @@ impl fmt::Display for CheckpointError {
                 session_id.0
             ),
             Self::InvalidStoredHash => f.write_str("checkpoint stored hash is not 32 bytes"),
-            Self::SequenceOverflow => f.write_str("checkpoint sequence exceeds SQLite integer range"),
+            Self::SequenceOverflow => {
+                f.write_str("checkpoint sequence exceeds SQLite integer range")
+            }
         }
     }
 }
@@ -87,9 +89,7 @@ impl Error for CheckpointError {
             Self::Storage(error) => Some(error),
             Self::Artifact(error) => Some(error),
             Self::Core(error) => Some(error),
-            Self::PrefixNotFound { .. }
-            | Self::InvalidStoredHash
-            | Self::SequenceOverflow => None,
+            Self::PrefixNotFound { .. } | Self::InvalidStoredHash | Self::SequenceOverflow => None,
         }
     }
 }
@@ -251,11 +251,9 @@ impl CheckpointManager {
         session_id: SessionId,
         through_session_seq: u64,
     ) -> Result<LoadedProjection, CheckpointError> {
-        if let Some(receipt) = self.load_verified_checkpoint_receipt(
-            checkpoint_id,
-            session_id,
-            through_session_seq,
-        )? {
+        if let Some(receipt) =
+            self.load_verified_checkpoint_receipt(checkpoint_id, session_id, through_session_seq)?
+        {
             if let Ok(bytes) = self.artifacts.read_verified(&receipt) {
                 return Ok(LoadedProjection {
                     bytes,
@@ -311,7 +309,8 @@ impl CheckpointManager {
         encoder.push_u16(CHECKPOINT_PROJECTION_SCHEMA_VERSION);
         encoder.push_u128(session_id.0);
         encoder.push_u64(through_session_seq);
-        encoder.push_u64(u64::try_from(events.len()).map_err(|_| CheckpointError::SequenceOverflow)?);
+        encoder
+            .push_u64(u64::try_from(events.len()).map_err(|_| CheckpointError::SequenceOverflow)?);
         for event in &events {
             encoder.push_u64(event.global_seq);
             encoder.push_u64(event.session_seq);
@@ -398,7 +397,10 @@ impl CheckpointManager {
             .connection
             .query_row(
                 "SELECT payload_bytes FROM session_events WHERE event_id = ?1 AND event_type = ?2",
-                params![id_blob(created_event_id), i64::from(EventKind::CheckpointCreated.code())],
+                params![
+                    id_blob(created_event_id),
+                    i64::from(EventKind::CheckpointCreated.code())
+                ],
                 |row| row.get::<_, Vec<u8>>(0),
             )
             .optional()?;
@@ -472,7 +474,7 @@ fn seq_from_i64(value: i64) -> Result<u64, CheckpointError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::storage::{CreateSession, AppendEvent};
+    use crate::storage::{AppendEvent, CreateSession};
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
