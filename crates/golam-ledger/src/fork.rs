@@ -5,9 +5,7 @@ use std::path::Path;
 use golam_core::{CanonicalEncoder, EventId, SCHEMA_VERSION, SessionId};
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
-use crate::{
-    EventKind, EventRecord, audit_integrity_hash, event_integrity_hash, payload_hash,
-};
+use crate::{EventKind, EventRecord, audit_integrity_hash, event_integrity_hash, payload_hash};
 
 const FORK_EVENT_DOMAIN: &[u8] = b"golam:session-fork:v1";
 const SECURITY_AUDIT_CHAIN: &str = "security";
@@ -251,7 +249,10 @@ impl ForkManager {
             .connection
             .query_row(
                 "SELECT global_seq FROM session_events WHERE session_id = ?1 AND session_seq = ?2",
-                params![id_blob(parent_session_id.0), seq_to_i64(parent_session_seq)?],
+                params![
+                    id_blob(parent_session_id.0),
+                    seq_to_i64(parent_session_seq)?
+                ],
                 |row| row.get::<_, i64>(0),
             )
             .optional()?
@@ -277,9 +278,9 @@ impl ForkManager {
         drop(statement);
 
         for child in children {
-            let anchor = self
-                .anchor(child)?
-                .ok_or(ForkError::AnchorViolation("child fork anchor is incomplete"))?;
+            let anchor = self.anchor(child)?.ok_or(ForkError::AnchorViolation(
+                "child fork anchor is incomplete",
+            ))?;
             let canonical_parent_hash = self
                 .connection
                 .query_row(
@@ -314,12 +315,17 @@ impl ForkManager {
                 .optional()?
                 .ok_or(ForkError::AnchorViolation("fork event is missing"))?;
             let _event_id = EventId(id_from_vec(stored.0)?);
-            let event_code = u8::try_from(stored.1).map_err(|_| ForkError::InvalidStoredEventKind)?;
+            let event_code =
+                u8::try_from(stored.1).map_err(|_| ForkError::InvalidStoredEventKind)?;
             if EventKind::from_code(event_code) != Some(EventKind::SessionForked) {
-                return Err(ForkError::AnchorViolation("first child event is not SessionForked"));
+                return Err(ForkError::AnchorViolation(
+                    "first child event is not SessionForked",
+                ));
             }
             if stored.2 != expected_payload {
-                return Err(ForkError::AnchorViolation("fork event payload does not match anchor"));
+                return Err(ForkError::AnchorViolation(
+                    "fork event payload does not match anchor",
+                ));
             }
         }
         Ok(())
@@ -417,9 +423,7 @@ fn id_from_vec(value: Vec<u8>) -> Result<u128, ForkError> {
 }
 
 fn hash_from_vec(value: Vec<u8>) -> Result<[u8; 32], ForkError> {
-    value
-        .try_into()
-        .map_err(|_| ForkError::InvalidStoredHash)
+    value.try_into().map_err(|_| ForkError::InvalidStoredHash)
 }
 
 fn seq_to_i64(value: u64) -> Result<i64, ForkError> {
