@@ -172,7 +172,11 @@ fn ensure_directory(path: &Path) -> Result<(), ArtifactError> {
                 return Err(ArtifactError::Symlink(path.to_path_buf()));
             }
             if !metadata.is_dir() {
-                return Err(io::Error::new(io::ErrorKind::NotADirectory, path.display().to_string()).into());
+                return Err(io::Error::new(
+                    io::ErrorKind::NotADirectory,
+                    path.display().to_string(),
+                )
+                .into());
             }
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound => fs::create_dir(path)?,
