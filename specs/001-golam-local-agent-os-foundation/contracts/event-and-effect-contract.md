@@ -2,22 +2,26 @@
 
 ## Canonical history
 
-`SessionEvent` is append-oriented and versioned. Projection state may be rebuilt from events plus validated checkpoints.
+`SessionEvent` is append-oriented and versioned. Projection state may be rebuilt from events plus validated checkpoints. Retry/rewind/model-alternative paths create immutable session forks rather than rewriting canonical history. Cross-session causality and security audit ordering follow `ledger-replay-contract.md`.
 
 Required event families include:
-- session lifecycle;
+- session lifecycle and forks;
 - goal/constraint changes;
 - context/evidence operations;
-- model requests/responses visible to the harness;
+- model requests/responses visible to the harness after secret-ingest redaction rules;
 - tool/effect proposals;
 - authorization/approval decisions;
-- tool/effect execution;
+- capability/lease/protected-resource changes;
+- tool/effect execution and reconciliation;
 - observations/verifications;
-- memory candidate/promotion;
+- memory candidate/promotion/governance;
 - checkpoint/compaction/reset;
-- worker spawn/join/cancel;
-- Connect/device events;
-- completion/failure.
+- worker spawn/join/cancel/adopt;
+- Connect/device/control events;
+- secret-use metadata;
+- completion/failure/receipts.
+
+Security-critical event families MUST use mandatory integrity chaining/authentication. Large artifacts are content-addressed rather than embedded unbounded in canonical event rows.
 
 ## Effect transaction state machine
 
@@ -37,15 +41,28 @@ PROPOSED
 ## Execution semantics
 
 - `READ_ONLY`: replay allowed subject to freshness/privacy rules.
-- `IDEMPOTENT_AT_LEAST_ONCE`: retry permitted with stable idempotency key.
-- `AT_MOST_ONCE`: do not blindly retry; reconcile first.
-- `COMPENSATABLE`: retry/rollback policy must define compensation.
-- `IRREVERSIBLE`: explicit approval/risk controls and strongest reconciliation evidence required.
+- `IDEMPOTENT_AT_LEAST_ONCE`: retry permitted only with stable idempotency semantics.
+- `AT_MOST_ONCE`: never blind-retry after ambiguity; reconcile first.
+- `COMPENSATABLE`: execution contract defines compensation and its own authorization/effects.
+- `IRREVERSIBLE`: strongest approval/preauthorization and reconciliation requirements.
+
+## Handler contract
+
+Every effect family implements `effect-handler-contract.md`: semantics declaration, idempotency derivation where applicable, durable intent-before-dispatch, `execute`, safe/read-only `reconcile`, timeout/ambiguity policy, compensation and evidence.
+
+The effect intent MUST be fsync-persistent before external execution. Dependent effects MUST remain blocked while a prerequisite is UNKNOWN_OUTCOME. MANUAL_REVIEW is a first-class user-visible/auditable state.
 
 ## Security invariants
 
 - authorization decision occurs before effect execution;
+- approval freshness is checked at execution;
 - denied effect cannot be reclassified downstream as allowed;
-- executors accept an authorized capability token/lease, not raw model assertion;
-- receipts reference the exact effect record and verification result;
-- secret values are excluded from events/receipts.
+- executors accept a current kernel-issued capability/authorization token, not raw model assertion;
+- effect authorization context carries relevant taint/provenance;
+- protected-resource mutations are effects, not generic file writes;
+- receipts reference the exact effect record, integrity chain and verification result;
+- secret values are excluded/redacted from events/receipts; secret use is represented by handle metadata only.
+
+## Required verification
+
+Spec 002 fault-injects crashes at every intent/dispatch/remote-accept/ack/journal boundary and proves replay/reconciliation behavior for every execution-semantics class.
