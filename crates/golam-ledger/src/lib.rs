@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod integrity;
 pub mod storage;
 
 use golam_core::{CanonicalEncoder, CoreError, EventId, SessionId};
@@ -26,6 +27,18 @@ impl EventKind {
             Self::EffectTransitioned => 4,
             Self::CheckpointCreated => 5,
             Self::SessionForked => 6,
+        }
+    }
+
+    pub const fn from_code(code: u8) -> Option<Self> {
+        match code {
+            1 => Some(Self::SessionCreated),
+            2 => Some(Self::GoalVersioned),
+            3 => Some(Self::EffectProposed),
+            4 => Some(Self::EffectTransitioned),
+            5 => Some(Self::CheckpointCreated),
+            6 => Some(Self::SessionForked),
+            _ => None,
         }
     }
 }

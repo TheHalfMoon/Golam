@@ -147,6 +147,7 @@ impl AuthorityStore {
         configure_connection(&connection)?;
         migrate(&connection)?;
         verify_quick_check(&connection)?;
+        verify_canonical_integrity(&connection)?;
         Ok(Self { connection })
     }
 
@@ -169,7 +170,8 @@ impl AuthorityStore {
     }
 
     pub fn verify_integrity(&self) -> Result<(), StorageError> {
-        verify_quick_check(&self.connection)
+        verify_quick_check(&self.connection)?;
+        verify_canonical_integrity(&self.connection)
     }
 
     pub fn create_session(
@@ -297,6 +299,11 @@ impl AuthorityStore {
         transaction.commit()?;
         Ok(stored)
     }
+}
+
+fn verify_canonical_integrity(connection: &Connection) -> Result<(), StorageError> {
+    crate::integrity::verify(connection)
+        .map_err(|error| StorageError::IntegrityCheckFailed(error.to_string()))
 }
 
 fn build_stored_event(record: EventRecord) -> Result<StoredEvent, StorageError> {
@@ -631,6 +638,7 @@ mod tests {
             Some(created.event_hash)
         );
         assert_eq!(appended.record.previous_audit_hash, created.audit_hash);
+        store.verify_integrity().unwrap();
     }
 
     #[test]
@@ -679,5 +687,32 @@ mod tests {
             })
             .unwrap();
         assert_eq!(appended.record.global_seq, 2);
+    }
+
+    #[test]
+    fn canonical_integrity_detects_payload_tampering() {
+        let mut store = AuthorityStore::open_in_memory().unwrap();
+        store
+            .create_session(CreateSession {
+                session_id: SessionId(3),
+                event_id: EventId(30),
+                owner_principal: "owner",
+                actor_principal: "owner",
+                recorded_at: "2026-08-24T00:00:00Z",
+                payload: b"original",
+                security_critical: true,
+            })
+            .unwrap();
+        store
+            .connection
+            .execute(
+                "UPDATE session_events SET payload_bytes = ?1 WHERE global_seq = 1",
+                params![b"tampered".as_slice()],
+            )
+            .unwrap();
+        assert!(matches!(
+            store.verify_integrity(),
+            Err(StorageError::IntegrityCheckFailed(_))
+        ));
     }
 }
