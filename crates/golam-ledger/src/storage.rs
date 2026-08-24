@@ -7,9 +7,7 @@ use std::path::Path;
 use golam_core::{EventId, SCHEMA_VERSION, SessionId};
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
-use crate::{
-    EventKind, EventRecord, audit_integrity_hash, event_integrity_hash, payload_hash,
-};
+use crate::{EventKind, EventRecord, audit_integrity_hash, event_integrity_hash, payload_hash};
 
 pub const AUTHORITY_SCHEMA_VERSION: i64 = 1;
 const SECURITY_AUDIT_CHAIN: &str = "security";
@@ -63,7 +61,10 @@ impl fmt::Display for StorageError {
                 write!(f, "session not found: {}", session_id.0)
             }
             Self::StaleSessionHead { expected, actual } => {
-                write!(f, "stale session head: expected {expected}, actual {actual}")
+                write!(
+                    f,
+                    "stale session head: expected {expected}, actual {actual}"
+                )
             }
             Self::SequenceOverflow => f.write_str("canonical sequence overflow"),
             Self::InvalidStoredHash => f.write_str("stored integrity hash is not 32 bytes"),
@@ -228,10 +229,7 @@ impl AuthorityStore {
         Ok(stored)
     }
 
-    pub fn append_event(
-        &mut self,
-        input: AppendEvent<'_>,
-    ) -> Result<StoredEvent, StorageError> {
+    pub fn append_event(&mut self, input: AppendEvent<'_>) -> Result<StoredEvent, StorageError> {
         let transaction = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
