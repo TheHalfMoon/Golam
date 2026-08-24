@@ -1,150 +1,152 @@
 # Research: Golam Local Agent OS Foundation
 
 **Research closeout date**: 2026-08-24  
-**Decision**: DISCOVERY_COMPLETE_FOR_PLANNING  
-**External architecture review**: PENDING_GLM_5_3
+**Decision**: `DISCOVERY_COMPLETE_FOR_IMPLEMENTATION_SPECS`  
+**External architecture review**: `GLM_5_3_REVIEWED_APPROVE_WITH_MANDATORY_CHANGES_RECONCILED`
 
-## 1. Research conclusion
+## 1. Final research conclusion
 
-Golam should not be built by porting the old Grok Bot reconstruction into Rust or by stacking multiple agent frameworks. The strongest architecture is a small Rust trusted core plus replaceable harness/model/tool/memory/control/connect adapters.
+Golam should not be built by porting the old Grok Bot reconstruction into Rust or by stacking agent frameworks. The final direction is a Rust-first local Agent OS with a small authority-bearing privileged kernel and replaceable harness/model/tool/memory/control/connect services.
 
-The donor set is now broad enough. Additional generic agent-framework discovery has diminishing value. Future research should be triggered by a concrete implementation gap, security question, or benchmark failure.
+Generic framework discovery is closed. Future research is triggered only by a concrete implementation choice, failed qualification, security gap, benchmark result, or material protocol/platform change.
 
-## 2. Final-gap findings from the last search
+The final GLM-5.3 architecture review validated the core direction and required enforceable kernel/IPC/effect/taint/secret/memory/ledger/channel/approval/egress contracts. Those findings are reconciled in the owning Spec 001 artifacts. See `review/glm-5.3-review-result.md` and `review/glm-5.3-reconciliation.md`.
 
-### 2.1 Spec Kit has matured
+## 2. Final-gap findings
 
-The current GitHub Spec Kit workflow is `constitution -> specify -> clarify -> plan -> checklist -> tasks -> analyze -> implement -> converge`. `converge` checks current implementation against spec/plan/tasks and appends traceable remaining work rather than rewriting intent. Golam should adopt this full loop.
+### 2.1 Spec Kit process
 
-Snapshot inspected:
+Golam uses the modern Spec Kit loop:
+
+`constitution -> specify -> clarify -> plan -> checklist -> tasks -> analyze -> implement -> converge`.
+
+Planning snapshot inspected during the research cycle:
 - `github/spec-kit`
-- main: `27f50f7e6b618ea14d74dd4037f9e7c60218b16c`
-- release line: 1.0.1 / 1.0.2.dev0
+- main `27f50f7e6b618ea14d74dd4037f9e7c60218b16c`
+- release line 1.0.1 / 1.0.2.dev0 at the time of inspection.
 
-### 2.2 Desktop control must be semantic-first
+### 2.2 Semantic-first computer control
 
-New/current sources reinforce semantic accessibility rather than vision-first control:
+The final control hierarchy is:
 
-- `microsoft/winappCli`: Microsoft CLI uses Windows UI Automation patterns for inspecting/acting on Windows apps; input injection is reserved for operations UIA cannot perform. License: MIT.
-- `lahfir/agent-desktop`: Rust-native agent desktop automation with compact snapshots, stable element refs, targeted traversal, JSON errors/recovery hints, and accessibility-first action semantics. Apache-2.0; macOS is the currently mature platform in the inspected release.
-- `agent-sh/computer-use-linux`: Rust Linux desktop control over accessibility/Wayland-oriented mechanisms and MCP; useful as Linux behavior/reference candidate.
-- `JoshuaALawrence/OpenControl`: strong Windows ideas (UIA + WGC + SendInput + compact observation + privacy blocklist) but AGPL-3.0; reference-only unless reciprocal obligations are explicitly approved.
+`Domain/App API -> Native OS automation -> Accessibility/Semantic tree -> Browser DOM/protocol -> Input injection -> Vision`.
 
-**Decision**: build Golam's own `DesktopController` contract in Rust. Mine MIT/Apache sources after exact qualification; use reciprocal sources as behavioral references only by default.
+Windows UIA sources such as `microsoft/winappCli` and semantic-ref desktop projects support the design direction. Golam owns the Rust `DesktopController` contract and platform truth matrix. Reciprocal-license remote-control sources remain behavior references only by default.
 
-### 2.3 Native remote-control substrate should reuse Rust networking/media work
+### 2.3 Remote-control substrate
 
-`CasualOffice/RASystem` is unusually aligned with GolamConnect: Rust core, Tauri, Iroh/QUIC transport, PASETO grants, per-message host-side capability checks, consent, emergency stop, tamper-evident audit, H.264 screen pipeline, input injection, clipboard/files/audio/multi-monitor/reconnect. Snapshot inspected earlier in this research cycle:
-- head `494a0883bf1ca6bd120069e8aec6052097051a3f`
-- tree `7031400a69064775ea13dbce8a215edcedf49fc2`
-- license reported by project: Apache-2.0
+`CasualOffice/RASystem` is strongly aligned with GolamConnect: Rust core, Iroh/QUIC, host-issued grants, per-message checks, consent/emergency stop, input/media, clipboard/files and audit. The inspected planning snapshot was head `494a0883bf1ca6bd120069e8aec6052097051a3f`, tree `7031400a69064775ea13dbce8a215edcedf49fc2`, project-reported Apache-2.0.
 
-`n0-computer/iroh` provides public-key dialing, QUIC, direct hole-punching and relay fallback, and is dual MIT/Apache-2.0.
+`n0-computer/iroh` provides Rust public-key dialing, QUIC, hole punching and relay fallback under MIT/Apache-2.0.
 
-**Decision**: qualify RASystem for selective reuse and Iroh as a core transport dependency candidate. Do not implement a custom NAT traversal stack in P0.
+Decision: Iroh is a direct-dependency candidate; RASystem is selective-port candidate. Golam does not build a custom NAT/relay stack in P0 and independently qualifies Windows/Linux remote-control behavior before release claims.
 
-### 2.4 Rust-native inference is now strong enough to be first-class
+### 2.4 Local inference
 
-`mistral.rs` provides a Rust SDK, hardware-aware tuning, local GGUF/UQFF/other formats, multimodality, tool calling, prefix caching, Metal/CUDA support and agentic primitives. It is a primary local inference candidate, but Golam owns the harness and authority model.
+`mistral.rs` is the primary Rust-native inference candidate behind Golam's `ExecutionProfile` adapter. `llama.cpp` is the broad compatibility backend and should default to an out-of-process sidecar to keep unsafe C FFI outside `golamd`.
 
-`llama.cpp` remains a broad compatibility fallback, especially for GGUF ecosystem coverage and platform portability.
+Golam owns harness semantics. Ollama/MLX/vLLM/SGLang remain optional adapters only.
 
-**Decision**: primary candidate `mistral.rs`; compatibility backend `llama.cpp`; adapters for Ollama/MLX/vLLM/SGLang as needed. Backend selection belongs to `ExecutionProfile`, not product semantics.
+### 2.5 Authorization and sandboxing
 
-### 2.5 Cedar now has agent-specific tooling
+Cedar remains the policy-engine candidate, but Golam owns capability schema, protected-resource classes, approval semantics and denial behavior.
 
-Beyond the main Rust `cedar-policy` engine, `cedar-policy/cedar-for-agents` contains Rust tooling around MCP tool descriptions/schema generation.
+Wasmtime/WASI is appropriate for bounded portable extension code but is not a universal sandbox for arbitrary native tools. Executable skills, MCP servers and optional adapters require explicit sandbox profiles.
 
-**Decision**: Cedar remains the preferred policy engine candidate; Golam still owns the capability/effect schema and denial semantics.
+### 2.6 Local security is mechanized
 
-### 2.6 Wasmtime is appropriate for untrusted portable extensions, with limits
+The GLM review identified that "Rust kernel" and "local daemon" were not enough as security claims. Final research therefore freezes:
 
-Wasmtime/WASI is capability-oriented and intended for untrusted-code sandboxing. Component Model support is enabled but not fully final across all standards/proposals.
+- smaller privileged kernel distinct from the broader Rust trusted path;
+- protected kernel-owned state;
+- authenticated local IPC;
+- process-splittable kernel API;
+- durable effect handlers/reconciliation;
+- explicit taint downgrade rules;
+- bounded secret fallback/redaction;
+- governed memory operations;
+- immutable forks/integrity/artifact lifecycle;
+- provider-stable channel binding;
+- approval classes/freshness;
+- kernel-authorized strict-local egress.
 
-**Decision**: use Wasmtime/WASI for bounded plugin/skill code where its capability model fits; do not mistake it for a complete OS sandbox for arbitrary native tools.
+## 3. Donor verification and classification
 
-### 2.7 GLM 5.3 is suitable as an external reviewer but not accessible here
+The canonical planning-status register is `donor-verification-register.md`. Its status is deliberately separate from code admission.
 
-Z.ai released GLM-5.3 on 2026-08-14 and positions it as improved on complex coding and long-horizon tasks. This makes it a useful independent architecture reviewer for this plan. No connected GLM/Z.ai invocation capability is available in this ChatGPT session, so review is a required external gate rather than a claimed completed action.
+Key current classifications:
 
-## 3. Donor/source map
+| Source | Planning classification |
+|---|---|
+| xAI Grok Bot | BENCHMARK_ONLY / REFERENCE_ONLY |
+| xai-org/grok-build | SELECTIVE_PORT candidate |
+| deepseek-ai/deepseek-harness | REFERENCE_ONLY — verified Node/TypeScript/Cordis, not Python |
+| aaif-goose/goose | SELECTIVE_PORT candidate |
+| CopilotKit/OpenBot | REFERENCE_ONLY patterns |
+| CasualOffice/RASystem | SELECTIVE_PORT candidate |
+| n0-computer/iroh | DIRECT_DEPENDENCY candidate |
+| cedar-policy/cedar | DIRECT_DEPENDENCY candidate |
+| bytecodealliance/wasmtime | DIRECT_DEPENDENCY candidate when executable extensions need it |
+| EricLBuehler/mistral.rs | DIRECT_DEPENDENCY candidate |
+| llama.cpp | ADAPTER / sidecar candidate |
+| microsoft/winappCli | REFERENCE_ONLY behavior |
+| Graphify/code-graph-rag | OPTIONAL ADAPTER only when L2 evidence justifies it |
+| Restate/Temporal | REFERENCE_ONLY durability patterns |
+| RustDesk/OpenControl/reciprocal sources | REJECT_CODE / REFERENCE_ONLY behavior by default |
+| Golam-Research reconstruction | REJECT_CODE / REFERENCE_ONLY behavioral evidence |
 
-Reuse labels:
-- **DEPENDENCY_CANDIDATE**: may become a direct dependency after exact qualification.
-- **SELECTIVE_DONOR**: mine or port bounded components/mechanisms after exact qualification.
-- **PATTERN_REFERENCE**: study behavior/architecture; do not import source by default.
-- **BENCHMARK_TARGET**: product/behavior target, not source donor.
-
-| Source | Role | Default decision |
-|---|---|---|
-| xAI Grok Bot | Product/feature benchmark | BENCHMARK_TARGET |
-| xai-org/grok-build | Rust harness, TUI, browser/tools, MCP/plugins/workflows/subagents | SELECTIVE_DONOR (Apache-2.0 snapshot must be re-qualified before import) |
-| deepseek-ai/deepseek-harness | Session/tool/plugin/harness architecture | PATTERN_REFERENCE / selective concepts |
-| aaif-goose/goose | Rust local general agent, Desktop+CLI+API, provider/MCP ecosystem | SELECTIVE_DONOR / reference |
-| RightNow-AI/openfang | Rust Agent OS, channels, WASM, audit, skills | PATTERN_REFERENCE / selective donor after verification |
-| bytedance/deer-flow | Goals, subagents, compaction, schedules, sandbox acquisition | PATTERN_REFERENCE; Python runtime not core |
-| NousResearch/hermes-agent | Memory learning loop, self-improving skills, channel gateway, cron | PATTERN_REFERENCE; Python runtime not core |
-| CopilotKit/OpenBot | watch/takeover UX, per-agent computer, action gateway, audit | SELECTIVE_DONOR / pattern (MIT) |
-| block/buzz | Signed identity/events, relay, ACP/MCP separation, agent presence | SELECTIVE_DONOR / pattern (Apache-2.0) |
-| CasualOffice/RASystem | Rust remote desktop/control/security over Iroh | SELECTIVE_DONOR (Apache-2.0 candidate) |
-| n0-computer/iroh | P2P QUIC/NAT traversal/relay | DEPENDENCY_CANDIDATE (MIT/Apache-2.0) |
-| Graphify-Labs/graphify | deterministic structural code graph | ADAPTER/SELECTIVE_DONOR after benchmark |
-| vitali87/code-graph-rag | AST/deep semantic/dataflow/runtime graph ideas | OPTIONAL_ADAPTER / PATTERN_REFERENCE |
-| TencentDB Agent Memory | governed memory assets/loadouts | PATTERN_REFERENCE |
-| OpenSandbox/OpenShell | stronger sandbox/credential patterns | OPTIONAL_BACKEND / PATTERN_REFERENCE |
-| cedar-policy/cedar | authorization | DEPENDENCY_CANDIDATE (Apache-2.0) |
-| bytecodealliance/wasmtime | WASM/WASI extension sandbox | DEPENDENCY_CANDIDATE |
-| EricLBuehler/mistral.rs | local Rust-native inference | DEPENDENCY_CANDIDATE |
-| llama.cpp | broad local inference compatibility | OPTIONAL_BACKEND/FFI/sidecar candidate |
-| github/spec-kit | project planning/governance | PROCESS_DEPENDENCY |
-| Agent Skills specification | skill package interoperability | PROTOCOL/FORMAT TARGET |
-| MCP | tools/resources/tasks protocol | PROTOCOL TARGET |
-| ACP | IDE/client agent protocol | PROTOCOL TARGET |
-| A2A | external agent federation | LATER PROTOCOL TARGET |
-| microsoft/winappCli | Windows semantic control behaviors | SELECTIVE_DONOR / reference (MIT) |
-| lahfir/agent-desktop | compact semantic observation/refs | SELECTIVE_DONOR candidate (Apache-2.0) |
-| RustDesk/OpenControl/NevoFlux | remote/control behavior | REFERENCE_ONLY by default due reciprocal licensing where applicable |
+No donor is admitted merely by appearing here.
 
 ## 4. Source Foundry admission record
 
-No donor is admitted merely because it appears above. Before code admission record:
+Before code admission, the implementation spec MUST record:
 
 - repository URL;
-- exact commit and tree;
-- license and NOTICE obligations;
-- generated/vendored code boundaries;
-- direct and relevant transitive dependencies;
+- exact commit/tree/version;
+- license/NOTICE obligations;
+- generated/vendored boundaries;
+- relevant transitive dependency closure;
 - reciprocal-license closure;
-- network and telemetry behavior;
-- credential handling;
-- unsafe Rust/FFI/subprocess boundaries;
-- platform support and test posture;
-- exact files/crates proposed for reuse;
-- reuse strategy;
-- independent Golam tests/benchmarks required before acceptance.
+- network/telemetry behavior;
+- credential/secret handling;
+- unsafe Rust/FFI/process boundaries;
+- platform support and on-device evidence;
+- exact files/crates/API proposed for reuse;
+- classification: DIRECT_DEPENDENCY | ADAPTER | SELECTIVE_PORT | REFERENCE_ONLY | REJECT;
+- independent Golam tests/benchmarks required for acceptance.
 
-## 5. Key architectural conclusions
+`VERIFIED_SNAPSHOT` in the research register still does not equal admission.
 
-1. Session, Harness, and Sandbox are separate abstractions.
-2. Canonical event history is append-oriented; context/summary is a projection.
-3. Goal Ledger is protected from ordinary context compaction.
-4. Effect transactions carry idempotency semantics and receipts.
-5. Model selection becomes `ExecutionProfile` selection.
-6. Context compilation is evidence planning, not vector retrieval alone.
-7. Memory is governed user-owned evidence.
-8. Computer control is semantic-first; vision is fallback.
-9. GolamConnect native transport is independent from Telegram/WhatsApp bridges.
-10. Security kernel is privileged and non-pluggable; providers/tools/skills are pluggable.
-11. Agent Skills/MCP/ACP compatibility matters more than inventing a new DSL.
-12. A2A is for later external federation, not internal worker scheduling.
-13. Prompt-prefix/cache stability is an explicit performance concern.
-14. Long-horizon evaluation must include crash/resume, verification, goal retention, and premature stopping.
+## 5. Frozen architectural conclusions
+
+1. Local-first/no hidden cloud fallback is non-negotiable and strict-local egress is mechanically enforced.
+2. Rust trusted path and authority-bearing privileged kernel are distinct.
+3. Local clients authenticate; localhost is not authority.
+4. Canonical event history is append-oriented; forks never rewrite history; context is a projection.
+5. Goal Ledger survives ordinary compaction.
+6. Effects have explicit execution semantics plus handler/reconciler contracts and UNKNOWN_OUTCOME behavior.
+7. Protected authority state is not generic filesystem state.
+8. Secret handles are preferred; fallback secret use is bounded/redacted.
+9. Taint survives derivation and can only downgrade through human or registered deterministic verification.
+10. Model routing means `ExecutionProfile`, not model name alone.
+11. Memory is governed user-owned evidence: Markdown canonical knowledge, SQLite operational state, derivatives rebuildable.
+12. Context is tiered evidence planning; no mandatory graph DB.
+13. Computer control is semantic-first and honest about OS limitations.
+14. GolamConnect native transport is separate from third-party messaging bridges and uses host-side per-message authority.
+15. Skills/MCP/ACP are interoperability surfaces, not authorities.
+16. Internal workers use typed Rust supervision rather than A2A.
+17. Long-horizon evaluation includes crash/resume, duplicate-effect prevention, secret isolation, taint survival, goal retention and premature stopping.
+18. Start implementation with <=8 real crates; split only on proven boundaries.
+19. Single-worker/local foundation precedes swarm/groups/teach-by-demonstration scope.
+20. Voice/native mobile/A2A/media generation/custom relay/CRDT memory sync are deferred through Spec 010 unless a later reviewed spec changes scope.
 
 ## 6. Research stop rule
 
-Generic source discovery is closed. New external research is authorized only when one of these is true:
+New external research is justified only when:
 - an implementation task has an unresolved technical choice;
-- security review identifies a threat without mitigation;
-- a donor qualification fails and needs a replacement;
-- a benchmark shows a specific capability gap;
-- a protocol/platform changed materially.
+- a security review identifies an unmitigated threat;
+- a dependency/donor qualification fails;
+- a benchmark reveals a specific capability gap;
+- an external protocol/platform changes materially.
+
+Otherwise proceed from the frozen Spec Kit artifacts rather than reopening generic discovery.
