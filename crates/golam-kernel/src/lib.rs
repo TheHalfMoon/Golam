@@ -124,10 +124,9 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        RuntimeLayout::initialize(std::env::temp_dir().join(format!(
-            "golam-kernel-api-{}-{t}-{n}",
-            std::process::id()
-        )))
+        RuntimeLayout::initialize(
+            std::env::temp_dir().join(format!("golam-kernel-api-{}-{t}-{n}", std::process::id())),
+        )
         .unwrap()
     }
 
