@@ -91,35 +91,17 @@ pub struct DecodedFrame<'a> {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum IpcError {
-    TruncatedHeader {
-        actual: usize,
-    },
+    TruncatedHeader { actual: usize },
     InvalidMagic,
-    UnsupportedProtocolVersion {
-        found: u16,
-    },
-    UnknownFrameKind {
-        code: u8,
-    },
-    UnknownFlags {
-        flags: u8,
-    },
+    UnsupportedProtocolVersion { found: u16 },
+    UnknownFrameKind { code: u8 },
+    UnknownFlags { flags: u8 },
     NonCanonicalRequestId,
-    MissingRequestId {
-        kind: FrameKind,
-    },
-    UnexpectedRequestId {
-        kind: FrameKind,
-    },
+    MissingRequestId { kind: FrameKind },
+    UnexpectedRequestId { kind: FrameKind },
     PayloadLengthOverflow,
-    FrameTooLarge {
-        declared: u64,
-        maximum: u32,
-    },
-    LengthMismatch {
-        expected: usize,
-        actual: usize,
-    },
+    FrameTooLarge { declared: u64, maximum: u32 },
+    LengthMismatch { expected: usize, actual: usize },
 }
 
 impl fmt::Display for IpcError {
@@ -207,7 +189,8 @@ pub fn decode_header(bytes: &[u8], limits: ResourceLimits) -> Result<FrameHeader
         });
     }
 
-    let kind = FrameKind::from_code(bytes[6]).ok_or(IpcError::UnknownFrameKind { code: bytes[6] })?;
+    let kind =
+        FrameKind::from_code(bytes[6]).ok_or(IpcError::UnknownFrameKind { code: bytes[6] })?;
     let flags = bytes[7];
     if flags & !KNOWN_FLAGS != 0 {
         return Err(IpcError::UnknownFlags { flags });
@@ -338,13 +321,8 @@ mod tests {
             Err(IpcError::TruncatedHeader { .. })
         ));
 
-        let encoded = encode_frame(
-            FrameKind::Hello,
-            None,
-            b"body",
-            ResourceLimits::default(),
-        )
-        .unwrap();
+        let encoded =
+            encode_frame(FrameKind::Hello, None, b"body", ResourceLimits::default()).unwrap();
         assert!(matches!(
             decode_exact(&encoded[..encoded.len() - 1], ResourceLimits::default()),
             Err(IpcError::LengthMismatch { .. })
@@ -353,13 +331,8 @@ mod tests {
 
     #[test]
     fn unknown_kind_version_flags_and_noncanonical_request_id_are_rejected() {
-        let mut encoded = encode_frame(
-            FrameKind::Hello,
-            None,
-            b"",
-            ResourceLimits::default(),
-        )
-        .unwrap();
+        let mut encoded =
+            encode_frame(FrameKind::Hello, None, b"", ResourceLimits::default()).unwrap();
 
         encoded[6] = 250;
         assert_eq!(
@@ -393,13 +366,8 @@ mod tests {
 
     #[test]
     fn trailing_bytes_are_rejected() {
-        let mut encoded = encode_frame(
-            FrameKind::Event,
-            None,
-            b"ok",
-            ResourceLimits::default(),
-        )
-        .unwrap();
+        let mut encoded =
+            encode_frame(FrameKind::Event, None, b"ok", ResourceLimits::default()).unwrap();
         encoded.push(0);
         assert!(matches!(
             decode_exact(&encoded, ResourceLimits::default()),
@@ -410,23 +378,13 @@ mod tests {
     #[test]
     fn request_id_presence_rules_are_enforced() {
         assert_eq!(
-            encode_frame(
-                FrameKind::Request,
-                None,
-                b"",
-                ResourceLimits::default()
-            ),
+            encode_frame(FrameKind::Request, None, b"", ResourceLimits::default()),
             Err(IpcError::MissingRequestId {
                 kind: FrameKind::Request
             })
         );
         assert_eq!(
-            encode_frame(
-                FrameKind::Hello,
-                Some(1),
-                b"",
-                ResourceLimits::default()
-            ),
+            encode_frame(FrameKind::Hello, Some(1), b"", ResourceLimits::default()),
             Err(IpcError::UnexpectedRequestId {
                 kind: FrameKind::Hello
             })
