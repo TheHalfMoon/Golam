@@ -18,7 +18,7 @@ use golam_ledger::protocol_audit::{
 };
 
 #[derive(Debug)]
-pub(crate) enum ClientAuthorityError {
+pub enum ClientAuthorityError {
     Registry(ClientRegistryError),
     Audit(ProtocolAuditError),
     InvalidPublicKey,
@@ -117,7 +117,8 @@ impl ClientAuthority {
         enrolled_at: &str,
         assurance_class: AssuranceClass,
     ) -> Result<ClientRecord, ClientAuthorityError> {
-        VerifyingKey::from_bytes(&public_key).map_err(|_| ClientAuthorityError::InvalidPublicKey)?;
+        VerifyingKey::from_bytes(&public_key)
+            .map_err(|_| ClientAuthorityError::InvalidPublicKey)?;
         if key_id_for_public_key(public_key) != key_id {
             return Err(ClientAuthorityError::KeyFingerprintMismatch);
         }
@@ -148,7 +149,10 @@ impl ClientAuthority {
         authenticate: Authenticate,
         authenticated_at: &str,
     ) -> Result<Ready, ClientAuthorityError> {
-        let record = match self.registry.resolve_active(client_id, authenticate.key_id.0) {
+        let record = match self
+            .registry
+            .resolve_active(client_id, authenticate.key_id.0)
+        {
             Ok(record) => record,
             Err(error) => {
                 close_for_authentication_failure(lifecycle);
@@ -300,9 +304,10 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let runtime = RuntimeLayout::initialize(
-            std::env::temp_dir().join(format!("golam-client-authority-{}-{t}-{n}", std::process::id())),
-        )
+        let runtime = RuntimeLayout::initialize(std::env::temp_dir().join(format!(
+            "golam-client-authority-{}-{t}-{n}",
+            std::process::id()
+        )))
         .unwrap();
         let authority = AuthorityLayout::initialize(&runtime).unwrap();
         (runtime, authority)
@@ -376,7 +381,9 @@ mod tests {
                 ),
                 "2026-08-25T02:01:00Z",
             ),
-            Err(ClientAuthorityError::Registry(ClientRegistryError::UnknownClient))
+            Err(ClientAuthorityError::Registry(
+                ClientRegistryError::UnknownClient
+            ))
         ));
         assert_eq!(unknown_server.phase(), LifecyclePhase::Closed);
 
@@ -404,7 +411,9 @@ mod tests {
                 ),
                 "2026-08-25T02:02:00Z",
             ),
-            Err(ClientAuthorityError::Registry(ClientRegistryError::ClientKeyMismatch))
+            Err(ClientAuthorityError::Registry(
+                ClientRegistryError::ClientKeyMismatch
+            ))
         ));
         assert_eq!(wrong_key.phase(), LifecyclePhase::Closed);
 
@@ -422,7 +431,8 @@ mod tests {
             52,
             limits,
         );
-        let mut valid = ServerLifecycle::new(52, [15; NONCE_LEN], limits, ConnectionId(302)).unwrap();
+        let mut valid =
+            ServerLifecycle::new(52, [15; NONCE_LEN], limits, ConnectionId(302)).unwrap();
         valid.receive_hello(captured_hello).unwrap();
         clients
             .authenticate_registered(
@@ -434,7 +444,8 @@ mod tests {
             )
             .unwrap();
 
-        let mut replay = ServerLifecycle::new(53, [16; NONCE_LEN], limits, ConnectionId(303)).unwrap();
+        let mut replay =
+            ServerLifecycle::new(53, [16; NONCE_LEN], limits, ConnectionId(303)).unwrap();
         replay.receive_hello(captured_hello).unwrap();
         assert!(matches!(
             clients.authenticate_registered(
@@ -444,7 +455,9 @@ mod tests {
                 captured,
                 "2026-08-25T02:04:00Z",
             ),
-            Err(ClientAuthorityError::Lifecycle(LifecycleError::AuthenticationFailed))
+            Err(ClientAuthorityError::Lifecycle(
+                LifecycleError::AuthenticationFailed
+            ))
         ));
         assert_eq!(replay.phase(), LifecyclePhase::Closed);
 
@@ -455,7 +468,8 @@ mod tests {
             client_nonce: [18; NONCE_LEN],
             ..captured_hello
         };
-        let mut revoked = ServerLifecycle::new(54, [17; NONCE_LEN], limits, ConnectionId(304)).unwrap();
+        let mut revoked =
+            ServerLifecycle::new(54, [17; NONCE_LEN], limits, ConnectionId(304)).unwrap();
         revoked.receive_hello(revoked_hello).unwrap();
         assert!(matches!(
             clients.authenticate_registered(
@@ -473,11 +487,14 @@ mod tests {
                 ),
                 "2026-08-25T02:06:00Z",
             ),
-            Err(ClientAuthorityError::Registry(ClientRegistryError::RevokedClient))
+            Err(ClientAuthorityError::Registry(
+                ClientRegistryError::RevokedClient
+            ))
         ));
         assert_eq!(revoked.phase(), LifecyclePhase::Closed);
 
-        let mut pre_ready = ServerLifecycle::new(55, [19; NONCE_LEN], limits, ConnectionId(305)).unwrap();
+        let mut pre_ready =
+            ServerLifecycle::new(55, [19; NONCE_LEN], limits, ConnectionId(305)).unwrap();
         pre_ready
             .receive_hello(Hello {
                 client_nonce: [20; NONCE_LEN],
