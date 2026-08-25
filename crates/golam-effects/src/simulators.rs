@@ -3,6 +3,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
+use crate::fault::{
+    FaultInjectableEffectHandler, FaultInjector, FaultPoint, InjectedCrash, NoFaults,
+    SimulatedRemoteBoundary,
+};
 use crate::{
     EffectHandler, EffectSemantics, HandlerIntent, HandlerMetadata, HandlerOutcome, PriorAttempt,
     ReconciliationClass,
@@ -32,9 +36,7 @@ impl EffectHandler for PureReadHandler {
     }
 
     fn execute(&mut self, intent: &HandlerIntent<'_>) -> HandlerOutcome {
-        HandlerOutcome::Succeeded {
-            receipt: receipt("read", &operation_key(intent)),
-        }
+        execute_without_faults(self, intent)
     }
 
     fn reconcile(
@@ -45,6 +47,18 @@ impl EffectHandler for PureReadHandler {
         HandlerOutcome::Succeeded {
             receipt: receipt("read", &operation_key(intent)),
         }
+    }
+}
+
+impl FaultInjectableEffectHandler for PureReadHandler {
+    fn execute_with_faults<I: FaultInjector>(
+        &mut self,
+        intent: &HandlerIntent<'_>,
+        _injector: &mut I,
+    ) -> Result<HandlerOutcome, InjectedCrash> {
+        Ok(HandlerOutcome::Succeeded {
+            receipt: receipt("read", &operation_key(intent)),
+        })
     }
 }
 
@@ -75,16 +89,7 @@ impl EffectHandler for IdempotentWriteHandler {
     }
 
     fn execute(&mut self, intent: &HandlerIntent<'_>) -> HandlerOutcome {
-        let key = self
-            .derive_idempotency_key(intent)
-            .expect("idempotent simulator always derives a stable key");
-        let stored = self
-            .receipts
-            .entry(key.clone())
-            .or_insert_with(|| receipt("idempotent-write", &key));
-        HandlerOutcome::Succeeded {
-            receipt: stored.clone(),
-        }
+        execute_without_faults(self, intent)
     }
 
     fn reconcile(
@@ -103,6 +108,29 @@ impl EffectHandler for IdempotentWriteHandler {
                 evidence: Some(receipt("idempotency-key-not-found", &key)),
             },
         }
+    }
+}
+
+impl FaultInjectableEffectHandler for IdempotentWriteHandler {
+    fn execute_with_faults<I: FaultInjector>(
+        &mut self,
+        intent: &HandlerIntent<'_>,
+        injector: &mut I,
+    ) -> Result<HandlerOutcome, InjectedCrash> {
+        remote(injector, SimulatedRemoteBoundary::BeforeAccept)?;
+        let key = self
+            .derive_idempotency_key(intent)
+            .expect("idempotent simulator always derives a stable key");
+        let stored = self
+            .receipts
+            .entry(key.clone())
+            .or_insert_with(|| receipt("idempotent-write", &key))
+            .clone();
+        remote(injector, SimulatedRemoteBoundary::AfterAccept)?;
+        remote(injector, SimulatedRemoteBoundary::BeforeAck)?;
+        let outcome = HandlerOutcome::Succeeded { receipt: stored };
+        remote(injector, SimulatedRemoteBoundary::AfterAck)?;
+        Ok(outcome)
     }
 }
 
@@ -128,16 +156,7 @@ impl EffectHandler for AtMostOnceWriteHandler {
     }
 
     fn execute(&mut self, intent: &HandlerIntent<'_>) -> HandlerOutcome {
-        let key = operation_key(intent);
-        if self.accepted.contains_key(&key) {
-            return HandlerOutcome::Failed {
-                reason_code: "at_most_once_redispatch_blocked".to_owned(),
-                receipt: self.accepted.get(&key).cloned(),
-            };
-        }
-        let stored = receipt("at-most-once-write", &key);
-        self.accepted.insert(key, stored.clone());
-        HandlerOutcome::Succeeded { receipt: stored }
+        execute_without_faults(self, intent)
     }
 
     fn reconcile(
@@ -154,6 +173,30 @@ impl EffectHandler for AtMostOnceWriteHandler {
                 evidence: Some(receipt("at-most-once-status-missing", &key)),
             },
         }
+    }
+}
+
+impl FaultInjectableEffectHandler for AtMostOnceWriteHandler {
+    fn execute_with_faults<I: FaultInjector>(
+        &mut self,
+        intent: &HandlerIntent<'_>,
+        injector: &mut I,
+    ) -> Result<HandlerOutcome, InjectedCrash> {
+        remote(injector, SimulatedRemoteBoundary::BeforeAccept)?;
+        let key = operation_key(intent);
+        if self.accepted.contains_key(&key) {
+            return Ok(HandlerOutcome::Failed {
+                reason_code: "at_most_once_redispatch_blocked".to_owned(),
+                receipt: self.accepted.get(&key).cloned(),
+            });
+        }
+        let stored = receipt("at-most-once-write", &key);
+        self.accepted.insert(key, stored.clone());
+        remote(injector, SimulatedRemoteBoundary::AfterAccept)?;
+        remote(injector, SimulatedRemoteBoundary::BeforeAck)?;
+        let outcome = HandlerOutcome::Succeeded { receipt: stored };
+        remote(injector, SimulatedRemoteBoundary::AfterAck)?;
+        Ok(outcome)
     }
 }
 
@@ -208,17 +251,7 @@ impl EffectHandler for CompensatableWriteHandler {
     }
 
     fn execute(&mut self, intent: &HandlerIntent<'_>) -> HandlerOutcome {
-        let key = operation_key(intent);
-        if self.records.contains_key(&key) {
-            return HandlerOutcome::Failed {
-                reason_code: "compensatable_redispatch_blocked".to_owned(),
-                receipt: None,
-            };
-        }
-        let stored = receipt("compensatable-write", &key);
-        self.records
-            .insert(key, CompensationState::Applied(stored.clone()));
-        HandlerOutcome::Succeeded { receipt: stored }
+        execute_without_faults(self, intent)
     }
 
     fn reconcile(
@@ -239,6 +272,31 @@ impl EffectHandler for CompensatableWriteHandler {
                 evidence: Some(receipt("compensation-record-missing", &key)),
             },
         }
+    }
+}
+
+impl FaultInjectableEffectHandler for CompensatableWriteHandler {
+    fn execute_with_faults<I: FaultInjector>(
+        &mut self,
+        intent: &HandlerIntent<'_>,
+        injector: &mut I,
+    ) -> Result<HandlerOutcome, InjectedCrash> {
+        remote(injector, SimulatedRemoteBoundary::BeforeAccept)?;
+        let key = operation_key(intent);
+        if self.records.contains_key(&key) {
+            return Ok(HandlerOutcome::Failed {
+                reason_code: "compensatable_redispatch_blocked".to_owned(),
+                receipt: None,
+            });
+        }
+        let stored = receipt("compensatable-write", &key);
+        self.records
+            .insert(key, CompensationState::Applied(stored.clone()));
+        remote(injector, SimulatedRemoteBoundary::AfterAccept)?;
+        remote(injector, SimulatedRemoteBoundary::BeforeAck)?;
+        let outcome = HandlerOutcome::Succeeded { receipt: stored };
+        remote(injector, SimulatedRemoteBoundary::AfterAck)?;
+        Ok(outcome)
     }
 }
 
@@ -264,16 +322,7 @@ impl EffectHandler for IrreversibleWriteHandler {
     }
 
     fn execute(&mut self, intent: &HandlerIntent<'_>) -> HandlerOutcome {
-        let key = operation_key(intent);
-        if !self.accepted.insert(key.clone()) {
-            return HandlerOutcome::Failed {
-                reason_code: "irreversible_redispatch_blocked".to_owned(),
-                receipt: None,
-            };
-        }
-        HandlerOutcome::Unknown {
-            evidence: Some(receipt("accepted-without-ack", &key)),
-        }
+        execute_without_faults(self, intent)
     }
 
     fn reconcile(
@@ -292,6 +341,49 @@ impl EffectHandler for IrreversibleWriteHandler {
             }
         }
     }
+}
+
+impl FaultInjectableEffectHandler for IrreversibleWriteHandler {
+    fn execute_with_faults<I: FaultInjector>(
+        &mut self,
+        intent: &HandlerIntent<'_>,
+        injector: &mut I,
+    ) -> Result<HandlerOutcome, InjectedCrash> {
+        remote(injector, SimulatedRemoteBoundary::BeforeAccept)?;
+        let key = operation_key(intent);
+        if !self.accepted.insert(key.clone()) {
+            return Ok(HandlerOutcome::Failed {
+                reason_code: "irreversible_redispatch_blocked".to_owned(),
+                receipt: None,
+            });
+        }
+        remote(injector, SimulatedRemoteBoundary::AfterAccept)?;
+        remote(injector, SimulatedRemoteBoundary::BeforeAck)?;
+        Ok(HandlerOutcome::Unknown {
+            evidence: Some(receipt("accepted-without-ack", &key)),
+        })
+    }
+}
+
+fn execute_without_faults<H: FaultInjectableEffectHandler>(
+    handler: &mut H,
+    intent: &HandlerIntent<'_>,
+) -> HandlerOutcome {
+    let mut injector = NoFaults;
+    match handler.execute_with_faults(intent, &mut injector) {
+        Ok(outcome) => outcome,
+        Err(_) => HandlerOutcome::Failed {
+            reason_code: "no_fault_injector_contract_breach".to_owned(),
+            receipt: None,
+        },
+    }
+}
+
+fn remote<I: FaultInjector>(
+    injector: &mut I,
+    boundary: SimulatedRemoteBoundary,
+) -> Result<(), InjectedCrash> {
+    injector.check(FaultPoint::SimulatedRemote(boundary))
 }
 
 fn metadata(
@@ -342,6 +434,7 @@ fn hex_hash(hash: [u8; 32]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fault::{CrashOnce, FaultPoint, SimulatedRemoteBoundary};
     use crate::HandlerAttemptOutcome;
 
     fn intent(semantics: EffectSemantics) -> HandlerIntent<'static> {
@@ -461,6 +554,70 @@ mod tests {
         assert!(matches!(
             handler.reconcile(&intent, &prior()),
             HandlerOutcome::Succeeded { .. }
+        ));
+    }
+
+    #[test]
+    fn remote_fault_before_accept_leaves_at_most_once_target_unmodified() {
+        let intent = intent(EffectSemantics::AtMostOnce);
+        let mut handler = AtMostOnceWriteHandler::default();
+        let target = FaultPoint::SimulatedRemote(SimulatedRemoteBoundary::BeforeAccept);
+        let mut faults = CrashOnce::new(target);
+        assert!(matches!(
+            handler.execute_with_faults(&intent, &mut faults),
+            Err(InjectedCrash { point }) if point == target
+        ));
+        assert!(matches!(
+            handler.reconcile(&intent, &prior()),
+            HandlerOutcome::Unknown { .. }
+        ));
+    }
+
+    #[test]
+    fn remote_faults_after_accept_are_reconcilable_without_redispatch() {
+        let intent = intent(EffectSemantics::AtMostOnce);
+        for boundary in [
+            SimulatedRemoteBoundary::AfterAccept,
+            SimulatedRemoteBoundary::BeforeAck,
+            SimulatedRemoteBoundary::AfterAck,
+        ] {
+            let mut handler = AtMostOnceWriteHandler::default();
+            let target = FaultPoint::SimulatedRemote(boundary);
+            let mut faults = CrashOnce::new(target);
+            assert!(matches!(
+                handler.execute_with_faults(&intent, &mut faults),
+                Err(InjectedCrash { point }) if point == target
+            ));
+            assert!(matches!(
+                handler.reconcile(&intent, &prior()),
+                HandlerOutcome::Succeeded { .. }
+            ));
+            assert!(matches!(
+                handler.execute(&intent),
+                HandlerOutcome::Failed { ref reason_code, .. }
+                    if reason_code == "at_most_once_redispatch_blocked"
+            ));
+        }
+    }
+
+    #[test]
+    fn irreversible_accept_then_crash_is_reconcilable() {
+        let intent = intent(EffectSemantics::Irreversible);
+        let mut handler = IrreversibleWriteHandler::default();
+        let target = FaultPoint::SimulatedRemote(SimulatedRemoteBoundary::AfterAccept);
+        let mut faults = CrashOnce::new(target);
+        assert!(matches!(
+            handler.execute_with_faults(&intent, &mut faults),
+            Err(InjectedCrash { point }) if point == target
+        ));
+        assert!(matches!(
+            handler.reconcile(&intent, &prior()),
+            HandlerOutcome::Succeeded { .. }
+        ));
+        assert!(matches!(
+            handler.execute(&intent),
+            HandlerOutcome::Failed { ref reason_code, .. }
+                if reason_code == "irreversible_redispatch_blocked"
         ));
     }
 }

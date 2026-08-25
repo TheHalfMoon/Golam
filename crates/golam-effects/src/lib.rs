@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod fault;
 pub mod simulators;
 
 use std::time::Duration;
