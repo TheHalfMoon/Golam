@@ -279,6 +279,7 @@ mod tests {
                 ClientRegistryError::RevokedClient
             ))
         ));
+        drop(enrollment);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 }
