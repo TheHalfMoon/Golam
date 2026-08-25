@@ -4,8 +4,8 @@
 **Implementation branch**: `impl/002-kernel-durable-session-spine`  
 **PR**: `#3` — OPEN / DRAFT  
 **Canonical implementation base**: `main@cfcc90f452e7115bfb104f886e09c309a5d57a1c`  
-**Last reconciled proven code head**: `13b222175eda9c760cd8581c879ccde1020af6f4`  
-**Exact-head CI evidence**: run `32798308181` / run number `32` — Windows, macOS, Linux `fmt + clippy -D warnings + test` PASS
+**Last reconciled proven code head**: `e5845cfaa9ec9aa240afc92a61e0728c071722c7`  
+**Exact-head CI evidence**: run `32799215791` / run number `36` — Windows, macOS, Linux `fmt + clippy -D warnings + test` PASS
 
 Legend:
 - `[x]` = task requirement is satisfied by current implementation/evidence.
@@ -17,7 +17,7 @@ Legend:
 
 - [x] **T002-001** Verify exact live `main` after planning PR merge; create implementation branch from that exact commit. — PASS from `main@cfcc90f452e7115bfb104f886e09c309a5d57a1c`.
 - [x] **T002-002** Create the Rust workspace with only `golam-core`, `golam-ledger`, `golam-effects`, `golam-ipc`, `golam-kernel`, `golamd`, `golam`; pin current stable toolchain and forbid unsafe Golam code. — PASS; Rust 1.98.0 and workspace `unsafe_code = forbid` are active.
-- [x] **T002-003** Add baseline CI for fmt/clippy/test on Windows/macOS/Linux; do not claim green until runs exist. — PASS; exact-head matrix runs exist, latest proven code run `32798308181`.
+- [x] **T002-003** Add baseline CI for fmt/clippy/test on Windows/macOS/Linux; do not claim green until runs exist. — PASS; exact-head matrix runs exist, latest proven code run `32799215791`.
 
 ## Phase B — Donor admission/evidence
 
@@ -41,7 +41,7 @@ Legend:
 
 - [x] **T002-030** Implement typed/versioned IPC frame codec and parser with size/depth/resource bounds. — PASS; deterministic bounded `GIPC` framing/parser.
 - [x] **T002-031** Implement lifecycle handshake `hello/challenge/authenticate/ready/shutdown`, transcript signature and server epoch. — PASS at `13b222175eda9c760cd8581c879ccde1020af6f4`, CI `32798308181`: fixed lifecycle payload codecs; fail-closed lifecycle state machine; Ed25519 strict transcript verification; transcript binds protocol/client/nonces/server epoch plus negotiated limits and client key ID; wrong signature, stale epoch, nonce/key mismatch, malformed payload and out-of-order/repeated lifecycle tests.
-- [ ] **T002-032** Implement Unix-domain-socket transport with private runtime dir/socket + peer credential checks.
+- [x] **T002-032** Implement Unix-domain-socket transport with private runtime dir/socket + peer credential checks. — PASS at `e5845cfaa9ec9aa240afc92a61e0728c071722c7`, CI `32799215791`: parent runtime dir `0700`, socket `0600`, no stale-path auto-unlink, explicit platform socket-path byte bound, Linux `SO_PEERCRED`, macOS `LOCAL_PEERCRED` + `LOCAL_PEERPID`, same-effective-UID enforcement, valid peer PID, safe Rust wrapper boundary via exact-pinned `nix`, and no TCP/HTTP listener.
 - [ ] **T002-033** Implement Windows named-pipe transport with user SID ACL + peer metadata where available. — This task must also close the Windows side of T002-021; no path-only substitute counts.
 - [ ] **T002-034** Implement explicit local client enrollment/revocation and qualified client-key storage backend/fallback.
 - [ ] **T002-035** Implement request/reply IDs, cancellation, bounded pending calls and protocol-breach settlement.
@@ -88,6 +88,6 @@ Legend:
 
 Continue in task order unless an earlier task is required to satisfy a later platform gate:
 
-`T002-032 -> T002-033 -> T002-034 -> T002-035 -> T002-036 -> Phase E -> Phase F -> Phase G -> Phase H`.
+`T002-033 -> T002-034 -> T002-035 -> T002-036 -> Phase E -> Phase F -> Phase G -> Phase H`.
 
 Do not start Spec 003, models, broad tools, Desktop, GolamConnect, real external effects, or external network behavior from Spec 002 authority.

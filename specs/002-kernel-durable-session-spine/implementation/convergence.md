@@ -1,29 +1,13 @@
 # Interim Spec Kit Convergence — Spec 002
 
-**Purpose**: keep the implementation branch self-contained so the plan, contracts, task state, exact evidence, open divergences and next execution order are recoverable from the repository without relying on chat history.  
-**Reconciled against proven code head**: `13b222175eda9c760cd8581c879ccde1020af6f4`  
-**Exact-head CI**: GitHub Actions `32798308181` / run `32` — Windows/macOS/Ubuntu PASS.  
+**Purpose**: keep the implementation branch self-contained so the plan, contracts, task state, exact evidence, review state, open divergences and next execution order are recoverable from the repository without relying on chat history.  
+**Reconciled against proven code head**: `e5845cfaa9ec9aa240afc92a61e0728c071722c7`  
+**Exact-head CI**: GitHub Actions `32799215791` / run `36` — Windows/macOS/Ubuntu PASS.  
 **This is an interim convergence record**: final T002-077 remains required after all implementation phases.
 
 ## 1. Canonical Spec Kit package
 
-The implementation must continue to reconcile against:
-
-1. `.specify/memory/constitution.md`
-2. `specs/002-kernel-durable-session-spine/spec.md`
-3. `specs/002-kernel-durable-session-spine/clarification-closeout.md`
-4. `specs/002-kernel-durable-session-spine/research.md`
-5. `specs/002-kernel-durable-session-spine/plan.md`
-6. `specs/002-kernel-durable-session-spine/data-model.md`
-7. all `contracts/*.md`
-8. `quickstart.md`
-9. `checklists/implementation-readiness.md`
-10. `donor-qualification.md`
-11. `tasks.md`
-12. `implementation/dependency-qualification.md`
-13. `implementation/source-foundry/golam-research-semantics-map.md`
-14. `implementation/status.md`
-15. this convergence record.
+Implementation continues to reconcile against `.specify/memory/constitution.md`, the full `specs/002-kernel-durable-session-spine/` specification/research/plan/data-model/contracts/quickstart/checklists/donor package, `tasks.md`, and all files under `implementation/`.
 
 Authority order:
 
@@ -36,16 +20,16 @@ Implementation evidence may reveal a needed plan amendment, but it must not sile
 | Plan/spec area | Current implementation | State |
 |---|---|---|
 | Seven-package Rust spine | `golam-core`, `golam-ledger`, `golam-effects`, `golam-ipc`, `golam-kernel`, `golamd`, `golam` | PASS |
-| Canonical explicit encoding | big-endian fixed-width ints + bounded length-prefixed bytes + domain separation | PASS |
+| Canonical explicit encoding | fixed-width/domain-separated Golam-owned bytes | PASS |
 | SQLite authority schema | sessions/events/goals/checkpoints/artifacts/effects/clients/authorization/audit/recovery tables | PASS |
 | Global/per-session sequencing | transactional assignment, stale-head rejection, hash-chain verification | PASS |
 | Content-addressed artifacts | BLAKE3, temp write/sync, verify, atomic install, cleanup | PASS |
 | Checkpoints | canonical prefix binding + verified artifact + replay fallback | PASS |
 | Session forks | immutable parent anchor + independent child suffix + verifier | PASS |
 | Goal ledger | append-versioned + atomic event link + append-only guard + verifier | PASS |
-| IPC frame codec | bounded deterministic `GIPC` binary framing/parser | PASS |
+| IPC frame codec | bounded deterministic `GIPC` framing/parser | PASS |
 | Authenticated IPC lifecycle | fixed wire payloads + canonical transcript + strict Ed25519 verification + fail-closed phase machine | PASS |
-| Unix/macOS local transport | not implemented yet | PENDING |
+| Unix/macOS local transport | private UDS + peer UID/PID verification + path-bound handling | PASS |
 | Windows named-pipe transport | not implemented yet | PENDING |
 | Persistent effect execution semantics | only initial vocabulary exists | PENDING |
 | Explicit recovery-only serving mode | integrity fail-close exists; mode/quarantine pending | PARTIAL |
@@ -54,19 +38,23 @@ Implementation evidence may reveal a needed plan amendment, but it must not sile
 
 ### Workspace path illustration
 
-The planning document illustrates `apps/golamd` and `apps/golam`. The actual seven-package workspace keeps both binaries under `crates/golamd` and `crates/golam`. This is a **non-material repository-layout divergence**: crate count, dependency direction and security boundaries are unchanged. Final T002-077 should either update the illustration or retain this record as the accepted path mapping.
+The planning document illustrates `apps/golamd` and `apps/golam`. The actual seven-package workspace keeps both binaries under `crates/golamd` and `crates/golam`. This is a non-material repository-layout divergence: crate count, dependency direction and security boundaries are unchanged.
 
 ### SQLite names and schema versioning
 
-Schema v1 uses concrete tables `clients`, `sessions`, `session_events`, `goal_versions`, `artifacts`, `checkpoints`, `effect_intents`, `effect_transitions`, `effect_attempts`, `authorization_decisions`, `audit_chain_heads`, `recovery_incidents`. Versioning currently uses SQLite `PRAGMA user_version` with forward-only migration/refusal rather than a dedicated migration journal. Reassess at final convergence if later migrations need a richer journal.
+Schema v1 uses concrete tables `clients`, `sessions`, `session_events`, `goal_versions`, `artifacts`, `checkpoints`, `effect_intents`, `effect_transitions`, `effect_attempts`, `authorization_decisions`, `audit_chain_heads`, `recovery_incidents`. Versioning uses SQLite `PRAGMA user_version` with forward-only migration/refusal rather than a dedicated migration journal. Reassess at final convergence if later migrations need a richer journal.
 
 ### Checkpoint authority
 
-Checkpoint projection bytes and metadata are accelerators, not alternate authority. The canonical `CheckpointCreated` event binds checkpoint id, session prefix, prefix hash and artifact hash. Missing/invalid accelerator state falls back to canonical replay.
+Checkpoint projection bytes and metadata are accelerators, not alternate authority. Missing/invalid accelerator state falls back to canonical replay.
 
 ### Authentication transcript
 
-T002-031 uses Golam-owned canonical bytes, not serializer output. The transcript domain is versioned and binds the local-IPC contract-required protocol/client/nonces/server epoch plus negotiated resource limits and key ID. `ed25519-dalek` performs strict signature verification only; key generation/enrollment/storage is not smuggled into T002-031 and remains T002-034.
+T002-031 uses Golam-owned canonical bytes, not serializer output. The transcript domain is versioned and binds the local-IPC contract-required protocol/client/nonces/server epoch plus negotiated resource limits and key ID. `ed25519-dalek` performs strict signature verification only; key generation/enrollment/storage remains T002-034.
+
+### Unix transport
+
+T002-032 keeps Unix transport synchronous and minimal: `std::os::unix::net` owns the listener/stream, while exact-pinned target-Unix `nix` is used only for safe kernel credential queries. The runtime directory is user-private (`0700`), the socket is `0600`, pre-existing paths fail closed without unlinking, and platform `sun_path` limits are checked explicitly before bind. Linux uses `SO_PEERCRED`; Apple uses `LOCAL_PEERCRED` plus `LOCAL_PEERPID`. Same-effective-UID is a transport identity input, not complete authorization; T002-031/T002-034 cryptographic client identity remains independently required.
 
 ## 4. Material open convergence items
 
@@ -82,7 +70,7 @@ Unix/macOS private directory enforcement is proven. Windows currently has path i
 **Related**: plan `Storage layout`, FR-004, T002-021/T002-042.  
 **State**: OPEN / MATERIAL.
 
-Current `RuntimeLayout` creates root/data/runtime/artifact paths while the SQLite authority path remains caller-selected. Before protected-resource APIs are considered complete, implementation must conform to the planned authority subtree or formally amend the plan with an equally strong non-generic boundary and tests.
+Current `RuntimeLayout` creates root/data/runtime/artifact paths while SQLite authority path remains caller-selected. Before protected-resource APIs are complete, implementation must conform to the planned authority subtree or formally amend the plan with an equally strong non-generic boundary and tests.
 
 ### C-003 — Explicit recovery-only/quarantine mode
 
@@ -91,14 +79,16 @@ Current `RuntimeLayout` creates root/data/runtime/artifact paths while the SQLit
 
 Current startup integrity checks return failure and never reset corrupt canonical state. Explicit recovery-only/quarantine operational state/report path remains pending T002-060.
 
-## 5. Source/provenance convergence
+## 5. Review/provenance convergence
 
-No source code from Golam-Research or another donor has been copied, ported or vendored into Spec 002. Current donor use is semantics/behavior mapping only. If donor source is later reused, exact Source Foundry admission is mandatory before reuse.
+No donor source code has been copied, ported or vendored into Spec 002. Current donor use remains semantics/behavior mapping only.
+
+Official GitHub Codex Code Review was requested on PR #3 using `@codex review` with explicit Rust IPC/security/platform guidance. The Codex connector returned `usage limits reached`, therefore there is **no Codex finding set and no Codex PASS** to record. CodeRabbit manual review was subsequently triggered as an additional independent reviewer. External review findings must be reconciled when they exist; absence caused by quota is never treated as approval.
 
 ## 6. Frozen remaining execution order
 
 ### Phase D
-`T002-032 -> T002-033 -> T002-034 -> T002-035 -> T002-036`
+`T002-033 -> T002-034 -> T002-035 -> T002-036`
 
 ### Phase E
 `T002-040 -> T002-041 -> T002-042 -> T002-043 -> T002-044`
@@ -120,4 +110,4 @@ Models/model weights/providers, broader harness/context intelligence, arbitrary 
 
 ## 8. Next safe action
 
-Proceed with **T002-032 only**: Unix-domain socket transport in the private runtime directory plus peer UID/PID identity checks where the supported OS exposes them through a qualified safe Rust boundary. Do not combine Windows named-pipe/SID work into the same slice; T002-033 must remain separately reviewable.
+Proceed with **T002-033 only**: Windows named-pipe transport with a current-user SID ACL and peer metadata where safely available. It must close the Windows half of T002-021 without introducing a localhost/TCP substitute or weakening the cryptographic client-authentication requirement.
