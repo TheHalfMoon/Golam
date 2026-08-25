@@ -162,11 +162,10 @@ pub fn decode_effect_dependencies(
 
     let mut dependencies = Vec::with_capacity(count);
     let mut previous = None;
-    for chunk in encoded[7..].chunks_exact(16) {
-        let bytes: [u8; 16] = chunk
-            .try_into()
-            .map_err(|_| EffectDispatchStoreError::InvalidDependencyEncoding)?;
-        let id = u128::from_be_bytes(bytes);
+    let (chunks, remainder) = encoded[7..].as_chunks::<16>();
+    debug_assert!(remainder.is_empty());
+    for chunk in chunks {
+        let id = u128::from_be_bytes(*chunk);
         if previous.is_some_and(|prior| prior >= id) {
             return Err(EffectDispatchStoreError::InvalidDependencyEncoding);
         }
