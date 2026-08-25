@@ -254,7 +254,9 @@ impl fmt::Display for LifecycleError {
                 f.write_str("IPC authenticate client nonce does not match hello")
             }
             Self::KeyIdMismatch => f.write_str("IPC client key id does not match enrolled key"),
-            Self::AuthenticationFailed => f.write_str("IPC transcript signature verification failed"),
+            Self::AuthenticationFailed => {
+                f.write_str("IPC transcript signature verification failed")
+            }
         }
     }
 }
@@ -487,11 +489,7 @@ fn encode_authenticate(message: Authenticate) -> Vec<u8> {
 }
 
 fn decode_authenticate(payload: &[u8]) -> Result<Authenticate, LifecycleError> {
-    expect_payload_len(
-        FrameKind::Authenticate,
-        payload,
-        AUTHENTICATE_PAYLOAD_LEN,
-    )?;
+    expect_payload_len(FrameKind::Authenticate, payload, AUTHENTICATE_PAYLOAD_LEN)?;
     Ok(Authenticate {
         key_id: ClientKeyId(read_array(&payload[0..32])),
         client_nonce: read_array(&payload[32..64]),
