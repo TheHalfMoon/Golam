@@ -41,7 +41,10 @@ pub enum EffectDispatchStoreError {
     DuplicateDependency(EffectId),
     SelfDependency(EffectId),
     EffectNotFound(EffectId),
-    NotAuthorized { effect_id: EffectId, actual: String },
+    NotAuthorized {
+        effect_id: EffectId,
+        actual: String,
+    },
     DependencyBlocked {
         dependency_id: EffectId,
         state: Option<String>,
@@ -120,15 +123,21 @@ pub fn encode_effect_dependencies(
         return Err(EffectDispatchStoreError::TooManyDependencies);
     }
 
-    let mut ids = dependencies.iter().map(|dependency| dependency.0).collect::<Vec<_>>();
+    let mut ids = dependencies
+        .iter()
+        .map(|dependency| dependency.0)
+        .collect::<Vec<_>>();
     ids.sort_unstable();
     for pair in ids.windows(2) {
         if pair[0] == pair[1] {
-            return Err(EffectDispatchStoreError::DuplicateDependency(EffectId(pair[0])));
+            return Err(EffectDispatchStoreError::DuplicateDependency(EffectId(
+                pair[0],
+            )));
         }
     }
 
-    let count = u16::try_from(ids.len()).map_err(|_| EffectDispatchStoreError::TooManyDependencies)?;
+    let count =
+        u16::try_from(ids.len()).map_err(|_| EffectDispatchStoreError::TooManyDependencies)?;
     let mut encoded = Vec::with_capacity(7 + ids.len() * 16);
     encoded.extend_from_slice(DEPENDENCY_MAGIC);
     encoded.push(DEPENDENCY_VERSION);
@@ -142,10 +151,7 @@ pub fn encode_effect_dependencies(
 pub fn decode_effect_dependencies(
     encoded: &[u8],
 ) -> Result<Vec<EffectId>, EffectDispatchStoreError> {
-    if encoded.len() < 7
-        || &encoded[..4] != DEPENDENCY_MAGIC
-        || encoded[4] != DEPENDENCY_VERSION
-    {
+    if encoded.len() < 7 || &encoded[..4] != DEPENDENCY_MAGIC || encoded[4] != DEPENDENCY_VERSION {
         return Err(EffectDispatchStoreError::InvalidDependencyEncoding);
     }
 
@@ -243,7 +249,9 @@ impl EffectDispatchStore {
             .optional()?
             .is_some()
         {
-            return Err(EffectDispatchStoreError::AttemptAlreadyExists(input.attempt_id));
+            return Err(EffectDispatchStoreError::AttemptAlreadyExists(
+                input.attempt_id,
+            ));
         }
 
         transaction.execute(
@@ -371,8 +379,8 @@ fn i64_to_seq(value: i64) -> Result<u64, EffectDispatchStoreError> {
 mod tests {
     use super::*;
     use crate::effects::{CompareAndSwapEffect, EffectStore, ProposeEffect};
-    use golam_core::paths::RuntimeLayout;
     use golam_core::SessionId;
+    use golam_core::paths::RuntimeLayout;
     use std::fs;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -385,9 +393,10 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let runtime = RuntimeLayout::initialize(
-            std::env::temp_dir().join(format!("golam-dispatch-store-{}-{t}-{n}", std::process::id())),
-        )
+        let runtime = RuntimeLayout::initialize(std::env::temp_dir().join(format!(
+            "golam-dispatch-store-{}-{t}-{n}",
+            std::process::id()
+        )))
         .unwrap();
         let authority = AuthorityLayout::initialize(&runtime).unwrap();
         (runtime, authority)
@@ -487,7 +496,10 @@ mod tests {
             })
             .unwrap();
         assert_eq!(prepared.attempt.started_global_seq, authorized_global_seq);
-        assert_eq!(prepared.transition.from_state.as_deref(), Some("authorized"));
+        assert_eq!(
+            prepared.transition.from_state.as_deref(),
+            Some("authorized")
+        );
         assert_eq!(prepared.transition.to_state, "executing");
         assert_eq!(prepared.transition.attempt_id, Some(attempt_id));
         drop(dispatch);
