@@ -6,6 +6,7 @@ rust-version.workspace = true
 
 [dependencies]
 golam-core = { path = "../golam-core" }
+golam-ledger = { path = "../golam-ledger" }
 
 [lints]
 workspace = true
