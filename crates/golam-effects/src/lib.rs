@@ -51,7 +51,7 @@ impl EffectStatus {
         }
     }
 
-    pub fn from_str(value: &str) -> Option<Self> {
+    pub fn parse(value: &str) -> Option<Self> {
         match value {
             "proposed" => Some(Self::Proposed),
             "denied" => Some(Self::Denied),
@@ -151,9 +151,9 @@ mod tests {
             EffectStatus::Reconciling,
             EffectStatus::ManualReview,
         ] {
-            assert_eq!(EffectStatus::from_str(status.as_str()), Some(status));
+            assert_eq!(EffectStatus::parse(status.as_str()), Some(status));
         }
-        assert_eq!(EffectStatus::from_str("bogus"), None);
+        assert_eq!(EffectStatus::parse("bogus"), None);
     }
 
     #[test]
