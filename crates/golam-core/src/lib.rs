@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod authority;
 pub mod paths;
 
 use core::fmt;
