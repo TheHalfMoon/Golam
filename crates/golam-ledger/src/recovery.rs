@@ -198,8 +198,8 @@ fn scan_effects(
                     blocking: true,
                 });
             }
-            "proposed" | "authorized" | "approval_required" | "executing"
-            | "unknown_outcome" | "reconciling" | "manual_review" => {
+            "proposed" | "authorized" | "approval_required" | "executing" | "unknown_outcome"
+            | "reconciling" | "manual_review" => {
                 issues.push(RecoveryIssue {
                     kind: RecoveryIssueKind::EffectNeedsRecovery,
                     reference,
@@ -298,7 +298,8 @@ fn scan_checkpoints(
             });
             continue;
         };
-        let expected_size = u64::try_from(size_bytes).map_err(|_| RecoveryError::InvalidStoredRecord)?;
+        let expected_size =
+            u64::try_from(size_bytes).map_err(|_| RecoveryError::InvalidStoredRecord)?;
         let expected_hash = blob_hash(&artifact_hash)?;
         let relative_path = PathBuf::from(relative_path);
         if !safe_relative_path(&relative_path) {
@@ -371,7 +372,9 @@ fn hash_file(path: &Path) -> io::Result<[u8; 32]> {
 
 fn safe_relative_path(path: &Path) -> bool {
     !path.as_os_str().is_empty()
-        && path.components().all(|component| matches!(component, Component::Normal(_)))
+        && path
+            .components()
+            .all(|component| matches!(component, Component::Normal(_)))
 }
 
 fn blob_u128(bytes: &[u8]) -> Result<u128, RecoveryError> {

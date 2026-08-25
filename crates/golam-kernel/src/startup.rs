@@ -20,9 +20,9 @@ pub enum KernelStartup<P> {
 impl<P> KernelStartup<P> {
     pub fn report(&self) -> &RecoveryReport {
         match self {
-            Self::Serving { report, .. } | Self::RecoveryOnly(report) | Self::Quarantined(report) => {
-                report
-            }
+            Self::Serving { report, .. }
+            | Self::RecoveryOnly(report)
+            | Self::Quarantined(report) => report,
         }
     }
 }
