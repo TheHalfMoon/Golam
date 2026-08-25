@@ -4,8 +4,8 @@
 **Implementation branch**: `impl/002-kernel-durable-session-spine`  
 **PR**: `#3` — OPEN / DRAFT  
 **Canonical implementation base**: `main@cfcc90f452e7115bfb104f886e09c309a5d57a1c`  
-**Last reconciled proven code head**: `ba1dc799099db59e3b4c85cc67ee446ecc568c98`  
-**Exact-head CI evidence**: run `32833294311` / run number `104` — Windows, macOS, Linux `fmt + clippy -D warnings + test` PASS
+**Last reconciled proven code head**: `376c8d7439c7b6661f5fcb9d58887006fc0241ef`  
+**Exact-head CI evidence**: run `32836135066` / run number `110` — Windows, macOS, Linux `fmt + clippy -D warnings + test` PASS
 
 Legend:
 - `[x]` = task requirement is satisfied by current implementation/evidence.
@@ -17,7 +17,7 @@ Legend:
 
 - [x] **T002-001** Verify exact live `main` after planning PR merge; create implementation branch from that exact commit. — PASS from `main@cfcc90f452e7115bfb104f886e09c309a5d57a1c`.
 - [x] **T002-002** Create the Rust workspace with only `golam-core`, `golam-ledger`, `golam-effects`, `golam-ipc`, `golam-kernel`, `golamd`, `golam`; pin current stable toolchain and forbid unsafe Golam code. — PASS; Rust 1.98.0 and workspace `unsafe_code = forbid` are active.
-- [x] **T002-003** Add baseline CI for fmt/clippy/test on Windows/macOS/Linux; do not claim green until runs exist. — PASS; exact-head matrix runs exist, latest proven code run `32833294311`.
+- [x] **T002-003** Add baseline CI for fmt/clippy/test on Windows/macOS/Linux; do not claim green until runs exist. — PASS; exact-head matrix runs exist, latest proven code run `32836135066`.
 
 ## Phase B — Donor admission/evidence
 
@@ -59,8 +59,8 @@ Legend:
 
 - [x] **T002-050** Implement effect FSM and compare-and-swap transitions. — PASS at `34e6b9b4922c2b6a92e18416d6a0bdb8b0425135`, CI `32832568236`: full planned state vocabulary includes DENIED and APPROVAL_REQUIRED; `golam-effects` validates declared/forbidden FSM edges and blind-retry semantics; `golam-ledger::effects` durably commits effect intent plus PROPOSED transition and applies expected-current-state CAS transitions under `BEGIN IMMEDIATE`; stale CAS does not consume canonical `global_seq`; reopen tests prove durable current state and transition history.
 - [x] **T002-051** Implement EffectHandler metadata/execute/reconcile interfaces and persistent attempt records. — PASS at `ba1dc799099db59e3b4c85cc67ee446ecc568c98`, CI `32833294311`: handler metadata covers supported actions/resources, execution semantics, idempotency support, reconciliation class, timeouts and manual-review capability; the trait exposes stable `derive_idempotency_key`, mutable `execute`, and read-only `reconcile`; durable attempts persist handler/version/dispatch token/start anchor and support write-once finish with success/failure/unknown outcomes, reopen verification, duplicate rejection and refinish rejection.
-- [ ] **T002-052** Implement deterministic simulator handlers for all five execution semantics.
-- [ ] **T002-053** Enforce durable intent-before-dispatch and dependent-effect blocking on UNKNOWN_OUTCOME.
+- [x] **T002-052** Implement deterministic simulator handlers for all five execution semantics. — PASS at `31cd4061b4d69bd77593f14f7f802ab37268b85a`, CI `32833866835`: deterministic in-memory simulators cover pure read, idempotent-at-least-once keyed write, at-most-once write with queryable status, compensatable write with compensation record, and irreversible write with an intentionally ambiguous acknowledgement path; tests prove stable receipts, idempotent key lookup, redispatch rejection, compensation replay safety and reconciliation behavior without external network/effects.
+- [x] **T002-053** Enforce durable intent-before-dispatch and dependent-effect blocking on UNKNOWN_OUTCOME. — PASS at `376c8d7439c7b6661f5fcb9d58887006fc0241ef`, CI `32836135066`: canonical bounded dependency encoding is fail-closed; `prepare_dispatch` requires the effect to be AUTHORIZED and every dependency to be definitively SUCCEEDED, so UNKNOWN_OUTCOME/missing/nonterminal dependencies block before any attempt exists; one `BEGIN IMMEDIATE` transaction writes the durable attempt and AUTHORIZED→EXECUTING transition before returning; `KernelApi` returns a sealed `PreparedEffectDispatch` proof rather than exposing a constructible dispatch authority token.
 - [ ] **T002-054** Build fault injector for every transition and simulated remote accept/ack boundary.
 - [ ] **T002-055** Prove at-most-once/irreversible handlers do not blind duplicate across daemon kill/restart.
 - [ ] **T002-056** Implement manual-review state/reporting for unreconcilable ambiguity.
