@@ -57,6 +57,8 @@ struct SessionHead {
 }
 
 pub fn verify(connection: &Connection) -> Result<(), IntegrityError> {
+    verify_global_sequence(connection)?;
+
     let mut statement = connection.prepare(
         "SELECT event_id, global_seq, session_id, session_seq, event_type, schema_version, \
          actor_principal, recorded_at, payload_bytes, payload_hash, previous_session_event_hash, \
@@ -64,7 +66,6 @@ pub fn verify(connection: &Connection) -> Result<(), IntegrityError> {
          FROM session_events ORDER BY global_seq ASC",
     )?;
     let mut rows = statement.query([])?;
-    let mut expected_global_seq = 1_u64;
     let mut session_heads: HashMap<SessionId, SessionHead> = HashMap::new();
     let mut audit_head: Option<(u64, [u8; 32])> = None;
 
@@ -82,11 +83,6 @@ pub fn verify(connection: &Connection) -> Result<(), IntegrityError> {
         if schema_version != SCHEMA_VERSION {
             return Err(IntegrityError::Violation(
                 "unsupported event schema version",
-            ));
-        }
-        if global_seq != expected_global_seq {
-            return Err(IntegrityError::Violation(
-                "global event sequence is not contiguous",
             ));
         }
 
@@ -172,15 +168,36 @@ pub fn verify(connection: &Connection) -> Result<(), IntegrityError> {
                 event_hash: computed_event_hash,
             },
         );
-        expected_global_seq = expected_global_seq
-            .checked_add(1)
-            .ok_or(IntegrityError::Violation("global event sequence overflow"))?;
     }
     drop(rows);
     drop(statement);
 
     verify_session_heads(connection, &mut session_heads)?;
     verify_audit_head(connection, audit_head)?;
+    Ok(())
+}
+
+fn verify_global_sequence(connection: &Connection) -> Result<(), IntegrityError> {
+    let mut statement = connection.prepare(
+        "SELECT global_seq FROM (\
+           SELECT global_seq FROM session_events \
+           UNION ALL SELECT global_seq FROM effect_transitions \
+           UNION ALL SELECT global_seq FROM authorization_decisions\
+         ) ORDER BY global_seq ASC",
+    )?;
+    let mut rows = statement.query([])?;
+    let mut expected = 1_u64;
+    while let Some(row) = rows.next()? {
+        let actual = seq_from_i64(row.get(0)?)?;
+        if actual != expected {
+            return Err(IntegrityError::Violation(
+                "canonical global sequence is not contiguous",
+            ));
+        }
+        expected = expected
+            .checked_add(1)
+            .ok_or(IntegrityError::Violation("canonical global sequence overflow"))?;
+    }
     Ok(())
 }
 
