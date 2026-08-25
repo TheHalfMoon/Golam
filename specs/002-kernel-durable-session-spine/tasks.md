@@ -4,8 +4,8 @@
 **Implementation branch**: `impl/002-kernel-durable-session-spine`  
 **PR**: `#3` — OPEN / DRAFT  
 **Canonical implementation base**: `main@cfcc90f452e7115bfb104f886e09c309a5d57a1c`  
-**Last reconciled proven code head**: `e5845cfaa9ec9aa240afc92a61e0728c071722c7`  
-**Exact-head CI evidence**: run `32799215791` / run number `36` — Windows, macOS, Linux `fmt + clippy -D warnings + test` PASS
+**Last reconciled proven code head**: `29be235de00d853a205ae2f46add1d08b91c1796`  
+**Exact-head CI evidence**: run `32800522051` / run number `40` — Windows, macOS, Linux `fmt + clippy -D warnings + test` PASS
 
 Legend:
 - `[x]` = task requirement is satisfied by current implementation/evidence.
@@ -17,7 +17,7 @@ Legend:
 
 - [x] **T002-001** Verify exact live `main` after planning PR merge; create implementation branch from that exact commit. — PASS from `main@cfcc90f452e7115bfb104f886e09c309a5d57a1c`.
 - [x] **T002-002** Create the Rust workspace with only `golam-core`, `golam-ledger`, `golam-effects`, `golam-ipc`, `golam-kernel`, `golamd`, `golam`; pin current stable toolchain and forbid unsafe Golam code. — PASS; Rust 1.98.0 and workspace `unsafe_code = forbid` are active.
-- [x] **T002-003** Add baseline CI for fmt/clippy/test on Windows/macOS/Linux; do not claim green until runs exist. — PASS; exact-head matrix runs exist, latest proven code run `32799215791`.
+- [x] **T002-003** Add baseline CI for fmt/clippy/test on Windows/macOS/Linux; do not claim green until runs exist. — PASS; exact-head matrix runs exist, latest proven code run `32800522051`.
 
 ## Phase B — Donor admission/evidence
 
@@ -28,7 +28,7 @@ Legend:
 ## Phase C — Core types + protected storage
 
 - [x] **T002-020** Implement IDs, protocol/schema versions, bounded errors and canonical byte-encoding primitives in `golam-core`. — PASS.
-- [ ] **T002-021** Implement protected Golam data/runtime directory creation and permission checks per platform. — **PARTIAL**: Unix/macOS user-only `0700` path protection is verified; Windows authority readiness deliberately fails closed until current-user SID ACL verification is implemented with T002-033. Planned authority-directory separation also remains an explicit convergence item.
+- [ ] **T002-021** Implement protected Golam data/runtime directory creation and permission checks per platform. — **PARTIAL — AUTHORITY SUBDIRECTORY CONVERGENCE ONLY**: Unix/macOS `0700` privacy is proven. Windows current-user protected DACL application and re-verification are proven by T002-033 exact-head Windows CI; Windows no longer uses `AuthorityProtectionUnverified`. The remaining material gap is the plan's explicit protected authority-state subtree / generic-tool exclusion boundary, to converge with T002-042 or a formal plan amendment.
 - [x] **T002-022** Implement SQLite migrations/tables for sessions/events/goals/forks/checkpoints/effects/transitions/clients/audit/recovery. — PASS for schema v1 tables and forward-version refusal.
 - [x] **T002-023** Implement transactional global/per-session sequence assignment and deterministic event/hash-chain vectors. — PASS.
 - [ ] **T002-024** Implement authority DB startup integrity checks and fail-closed recovery-only mode; never silently reset. — **PARTIAL**: startup quick-check + canonical event/audit integrity verification fail closed; explicit recovery-only/quarantine serving mode remains for T002-060.
@@ -42,7 +42,7 @@ Legend:
 - [x] **T002-030** Implement typed/versioned IPC frame codec and parser with size/depth/resource bounds. — PASS; deterministic bounded `GIPC` framing/parser.
 - [x] **T002-031** Implement lifecycle handshake `hello/challenge/authenticate/ready/shutdown`, transcript signature and server epoch. — PASS at `13b222175eda9c760cd8581c879ccde1020af6f4`, CI `32798308181`: fixed lifecycle payload codecs; fail-closed lifecycle state machine; Ed25519 strict transcript verification; transcript binds protocol/client/nonces/server epoch plus negotiated limits and client key ID; wrong signature, stale epoch, nonce/key mismatch, malformed payload and out-of-order/repeated lifecycle tests.
 - [x] **T002-032** Implement Unix-domain-socket transport with private runtime dir/socket + peer credential checks. — PASS at `e5845cfaa9ec9aa240afc92a61e0728c071722c7`, CI `32799215791`: parent runtime dir `0700`, socket `0600`, no stale-path auto-unlink, explicit platform socket-path byte bound, Linux `SO_PEERCRED`, macOS `LOCAL_PEERCRED` + `LOCAL_PEERPID`, same-effective-UID enforcement, valid peer PID, safe Rust wrapper boundary via exact-pinned `nix`, and no TCP/HTTP listener.
-- [ ] **T002-033** Implement Windows named-pipe transport with user SID ACL + peer metadata where available. — This task must also close the Windows side of T002-021; no path-only substitute counts.
+- [x] **T002-033** Implement Windows named-pipe transport with user SID ACL + peer metadata where available. — PASS at `29be235de00d853a205ae2f46add1d08b91c1796`, tree `4915eb0ee62324ff5faf25184d33c5a13680e9b4`, CI `32800522051`: protected current-user DACLs are applied and re-read/verified for Golam runtime/data/artifact directories; named pipe uses a protected current-user DACL, `accept_remote=false`, non-inheritable handles, bounded instance count, kernel-reported client PID/session metadata, and synchronous local transport. Windows CI performs the real ACL + pipe connect + peer metadata tests. SID in the pipe name is discovery only and is not treated as authority; T002-031 cryptographic client authentication remains independently required.
 - [ ] **T002-034** Implement explicit local client enrollment/revocation and qualified client-key storage backend/fallback.
 - [ ] **T002-035** Implement request/reply IDs, cancellation, bounded pending calls and protocol-breach settlement.
 - [ ] **T002-036** Add adversarial tests for unauthenticated client, wrong key, replay, stale epoch, malformed/repeated lifecycle, oversized frame, request-before-ready and resource exhaustion.
@@ -51,7 +51,7 @@ Legend:
 
 - [ ] **T002-040** Implement sealed/process-splittable KernelApi and prevent external construction of authority-bearing tokens. — Bootstrap boundary exists, but full task remains pending adversarial/process-split qualification.
 - [ ] **T002-041** Implement bootstrap `Authorize(principal, action, resource, context)` deny-by-default engine with auditable decisions.
-- [ ] **T002-042** Implement protected-resource checks so generic file/storage helpers cannot target kernel state.
+- [ ] **T002-042** Implement protected-resource checks so generic file/storage helpers cannot target kernel state. — Must close or formally reconcile the remaining authority-subdirectory side of T002-021.
 - [ ] **T002-043** Implement strict-local egress authorization interface as deny-by-default; Spec 002 itself has no production egress client.
 - [ ] **T002-044** Add hostile-adapter boundary test: cannot mint authority, modify policy-reserved state, append canonical audit or enroll/revoke clients without KernelApi.
 
@@ -88,6 +88,6 @@ Legend:
 
 Continue in task order unless an earlier task is required to satisfy a later platform gate:
 
-`T002-033 -> T002-034 -> T002-035 -> T002-036 -> Phase E -> Phase F -> Phase G -> Phase H`.
+`T002-034 -> T002-035 -> T002-036 -> Phase E -> Phase F -> Phase G -> Phase H`.
 
 Do not start Spec 003, models, broad tools, Desktop, GolamConnect, real external effects, or external network behavior from Spec 002 authority.
