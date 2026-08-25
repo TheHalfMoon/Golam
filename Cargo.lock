@@ -234,7 +234,6 @@ dependencies = [
  "ed25519-dalek",
  "getrandom",
  "golam-core",
- "golam-ledger",
  "interprocess",
  "nix",
  "widestring",
@@ -244,7 +243,9 @@ dependencies = [
 name = "golam-kernel"
 version = "0.1.0"
 dependencies = [
+ "ed25519-dalek",
  "golam-core",
+ "golam-ipc",
  "golam-ledger",
 ]
 
