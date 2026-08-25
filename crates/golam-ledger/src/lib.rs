@@ -5,6 +5,8 @@ pub mod authorization;
 pub mod checkpoint;
 pub mod clients;
 pub mod dispatch;
+pub mod effect_completion;
+pub mod effect_read;
 pub mod effects;
 pub mod fork;
 pub mod goal;
