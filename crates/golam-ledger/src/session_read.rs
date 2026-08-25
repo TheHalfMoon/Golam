@@ -158,11 +158,7 @@ fn parse_session(raw: RawSession) -> Result<SessionSummary, SessionReadError> {
         parent_session_id: parent.0,
         parent_session_seq: parent.1,
         parent_event_hash: parent.2,
-        latest_checkpoint_id: raw
-            .8
-            .map(id_from_blob)
-            .transpose()?
-            .map(CheckpointId),
+        latest_checkpoint_id: raw.8.map(id_from_blob).transpose()?.map(CheckpointId),
     })
 }
 
@@ -188,8 +184,8 @@ mod tests {
     use super::*;
     use crate::fork::{CreateFork, ForkManager};
     use crate::storage::CreateSession;
-    use golam_core::paths::RuntimeLayout;
     use golam_core::EventId;
+    use golam_core::paths::RuntimeLayout;
     use std::fs;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};

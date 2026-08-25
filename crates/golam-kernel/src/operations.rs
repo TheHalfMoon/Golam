@@ -8,7 +8,9 @@ use golam_ledger::checkpoint::{
     CheckpointError, CheckpointManager, CheckpointRecord, CreateCheckpoint, LoadedProjection,
 };
 use golam_ledger::fork::{CreateFork, ForkError, ForkManager, ForkRecord};
-use golam_ledger::goal::{CreateGoalVersion, GoalDocument, GoalError, GoalManager, StoredGoalVersion};
+use golam_ledger::goal::{
+    CreateGoalVersion, GoalDocument, GoalError, GoalManager, StoredGoalVersion,
+};
 use golam_ledger::session_read::{SessionReadError, SessionReader, SessionSummary};
 use golam_ledger::storage::{AuthorityStore, CreateSession, StorageError, StoredEvent};
 
@@ -64,7 +66,9 @@ pub enum KernelOperationError {
 impl fmt::Display for KernelOperationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Kernel(error) => write!(f, "kernel operation authorization/runtime error: {error}"),
+            Self::Kernel(error) => {
+                write!(f, "kernel operation authorization/runtime error: {error}")
+            }
             Self::Storage(error) => write!(f, "kernel session operation error: {error}"),
             Self::SessionRead(error) => write!(f, "kernel session read error: {error}"),
             Self::Fork(error) => write!(f, "kernel fork operation error: {error}"),
@@ -244,8 +248,10 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             context: AuthorizationContext::local(scope),
         })?;
         let mut authority = AuthorityStore::open(self.authority.authority_db_path())?;
-        let mut manager =
-            CheckpointManager::open(self.authority.authority_db_path(), &self.runtime.artifact_dir)?;
+        let mut manager = CheckpointManager::open(
+            self.authority.authority_db_path(),
+            &self.runtime.artifact_dir,
+        )?;
         Ok(manager.create(
             &mut authority,
             CreateCheckpoint {
@@ -274,8 +280,10 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             resource: &resource,
             context: AuthorizationContext::local(scope),
         })?;
-        let manager =
-            CheckpointManager::open(self.authority.authority_db_path(), &self.runtime.artifact_dir)?;
+        let manager = CheckpointManager::open(
+            self.authority.authority_db_path(),
+            &self.runtime.artifact_dir,
+        )?;
         Ok(manager.load_or_replay(checkpoint_id, session_id, through_session_seq)?)
     }
 
@@ -293,8 +301,10 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             resource: &resource,
             context: AuthorizationContext::local(scope),
         })?;
-        let manager =
-            CheckpointManager::open(self.authority.authority_db_path(), &self.runtime.artifact_dir)?;
+        let manager = CheckpointManager::open(
+            self.authority.authority_db_path(),
+            &self.runtime.artifact_dir,
+        )?;
         Ok(manager.replay_projection(session_id, through_session_seq)?)
     }
 
@@ -360,7 +370,13 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(root.owner_principal, "owner");
-        assert_eq!(kernel.list_sessions(principal, "local-owner").unwrap().len(), 1);
+        assert_eq!(
+            kernel
+                .list_sessions(principal, "local-owner")
+                .unwrap()
+                .len(),
+            1
+        );
 
         kernel
             .fork_session(
@@ -416,13 +432,7 @@ mod tests {
             )
             .unwrap();
         let loaded = kernel
-            .verify_checkpoint(
-                principal,
-                CheckpointId(12),
-                SessionId(10),
-                1,
-                "local-owner",
-            )
+            .verify_checkpoint(principal, CheckpointId(12), SessionId(10), 1, "local-owner")
             .unwrap();
         assert_eq!(loaded.source, ProjectionSource::Checkpoint);
         let replay = kernel
