@@ -3,6 +3,7 @@
 pub mod credentials;
 pub mod enrollment;
 pub mod lifecycle;
+pub mod request;
 #[cfg(unix)]
 pub mod unix_transport;
 #[cfg(windows)]
