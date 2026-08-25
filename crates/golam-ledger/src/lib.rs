@@ -12,6 +12,7 @@ pub mod integrity;
 pub mod manual_review;
 pub mod protocol_audit;
 pub mod recovery;
+pub mod session_read;
 pub mod storage;
 
 use golam_core::{CanonicalEncoder, CoreError, EventId, SessionId};

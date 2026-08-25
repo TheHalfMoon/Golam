@@ -3,6 +3,7 @@
 mod authorization;
 mod client_auth;
 mod effect_execution;
+mod operations;
 mod resource;
 mod startup;
 
@@ -23,13 +24,20 @@ pub use client_auth::ClientAuthorityError;
 pub use effect_execution::PreparedEffectDispatch;
 pub use golam_ipc::credentials::GeneratedClientCredential;
 pub use golam_ipc::lifecycle::{Authenticate, ClientKeyId, ConnectionId, Ready, ServerLifecycle};
+pub use golam_ledger::checkpoint::{LoadedProjection, ProjectionSource};
 pub use golam_ledger::clients::{ClientKind, ClientRecord};
 pub use golam_ledger::dispatch::{
     EffectDispatchStoreError as EffectDispatchError, PrepareEffectDispatch,
     encode_effect_dependencies,
 };
+pub use golam_ledger::goal::GoalDocument;
 pub use golam_ledger::recovery::{
     RecoveryError, RecoveryIssue, RecoveryIssueKind, RecoveryMode, RecoveryReport, RecoveryScanner,
+};
+pub use golam_ledger::session_read::SessionSummary;
+pub use operations::{
+    KernelAppendGoal, KernelCreateCheckpoint, KernelCreateFork, KernelCreateSession,
+    KernelOperationError,
 };
 pub use resource::{ProtectedResourceError, UnprivilegedPath};
 pub use startup::{KernelStartup, KernelStartupError, start_kernel};
