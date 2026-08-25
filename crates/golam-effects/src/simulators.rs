@@ -434,8 +434,8 @@ fn hex_hash(hash: [u8; 32]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fault::{CrashOnce, FaultPoint, SimulatedRemoteBoundary};
     use crate::HandlerAttemptOutcome;
+    use crate::fault::{CrashOnce, FaultPoint, SimulatedRemoteBoundary};
 
     fn intent(semantics: EffectSemantics) -> HandlerIntent<'static> {
         HandlerIntent {
