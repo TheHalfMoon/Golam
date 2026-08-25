@@ -3,10 +3,8 @@ use std::fmt;
 use std::io;
 use std::num::NonZeroU8;
 
-use golam_core::paths::{
-    ProtectedPathError, RuntimeLayout, windows_current_process_sid_string,
-};
 use golam_core::ResourceLimits;
+use golam_core::paths::{ProtectedPathError, RuntimeLayout, windows_current_process_sid_string};
 use interprocess::os::windows::named_pipe::{
     PipeListener, PipeListenerOptions, PipeStream, pipe_mode,
 };
@@ -28,9 +26,15 @@ pub enum WindowsTransportError {
     ProtectedPath(ProtectedPathError),
     InvalidInstanceLimit(u16),
     InvalidPipePath,
-    PipePathTooLong { utf16_units: usize, maximum: usize },
+    PipePathTooLong {
+        utf16_units: usize,
+        maximum: usize,
+    },
     InvalidPeerProcessId,
-    PeerMetadataMismatch { client_pid: u32, peer_pid: u32 },
+    PeerMetadataMismatch {
+        client_pid: u32,
+        peer_pid: u32,
+    },
 }
 
 impl fmt::Display for WindowsTransportError {
@@ -109,7 +113,8 @@ impl WindowsPipeListener {
         let instance_limit = instance_limit(limits.max_concurrent_clients)?;
 
         let sddl = format!("D:P(A;;GA;;;{owner_sid})");
-        let wide_sddl = U16CString::from_str(&sddl).map_err(|_| WindowsTransportError::InvalidPipePath)?;
+        let wide_sddl =
+            U16CString::from_str(&sddl).map_err(|_| WindowsTransportError::InvalidPipePath)?;
         let descriptor = SecurityDescriptor::deserialize(wide_sddl.as_ucstr())?;
         let listener = PipeListenerOptions::new()
             .path(pipe_path.as_str())
@@ -213,13 +218,17 @@ mod tests {
 
         let path = listener.pipe_path().to_string();
         let client = thread::spawn(move || {
-            PipeStream::<pipe_mode::Bytes, pipe_mode::Bytes>::connect_by_path(path.as_str()).unwrap()
+            PipeStream::<pipe_mode::Bytes, pipe_mode::Bytes>::connect_by_path(path.as_str())
+                .unwrap()
         });
         let accepted = listener.accept().unwrap();
         let client_stream = client.join().unwrap();
 
         assert_eq!(accepted.identity.process_id, std::process::id());
-        assert_eq!(accepted.stream.peer_process_id().unwrap(), std::process::id());
+        assert_eq!(
+            accepted.stream.peer_process_id().unwrap(),
+            std::process::id()
+        );
         assert_eq!(client_stream.peer_process_id().unwrap(), std::process::id());
         assert_eq!(
             accepted.identity.session_id,

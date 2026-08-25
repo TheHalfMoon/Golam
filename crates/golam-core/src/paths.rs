@@ -47,7 +47,11 @@ impl fmt::Display for ProtectedPathError {
                 path.display()
             ),
             Self::WindowsAclMissing(path) => {
-                write!(f, "protected Windows directory has no DACL: {}", path.display())
+                write!(
+                    f,
+                    "protected Windows directory has no DACL: {}",
+                    path.display()
+                )
             }
             Self::WindowsAclMismatch(path) => write!(
                 f,
@@ -199,8 +203,7 @@ fn apply_platform_permissions(path: &Path) -> Result<(), ProtectedPathError> {
     use windows_permissions::{LocalBox, SecurityDescriptor};
 
     let sid = windows_current_process_sid_string()?;
-    let descriptor: LocalBox<SecurityDescriptor> =
-        format!("D:P(A;OICI;FA;;;{sid})").parse()?;
+    let descriptor: LocalBox<SecurityDescriptor> = format!("D:P(A;OICI;FA;;;{sid})").parse()?;
     let dacl = descriptor
         .dacl()
         .ok_or_else(|| ProtectedPathError::WindowsAclMissing(path.to_path_buf()))?;
@@ -221,7 +224,9 @@ fn verify_platform_permissions(
     path: &Path,
     _metadata: &fs::Metadata,
 ) -> Result<(), ProtectedPathError> {
-    use windows_permissions::constants::{AccessRights, AceType, SeObjectType, SecurityInformation};
+    use windows_permissions::constants::{
+        AccessRights, AceType, SeObjectType, SecurityInformation,
+    };
 
     let expected_sid = windows_permissions::utilities::current_process_sid()?;
     let descriptor = windows_permissions::wrappers::GetNamedSecurityInfo(
@@ -344,9 +349,11 @@ mod tests {
             let metadata = fs::symlink_metadata(path).unwrap();
             verify_platform_permissions(path, &metadata).unwrap();
         }
-        assert!(windows_current_process_sid_string()
-            .unwrap()
-            .starts_with("S-1-"));
+        assert!(
+            windows_current_process_sid_string()
+                .unwrap()
+                .starts_with("S-1-")
+        );
         fs::remove_dir_all(root).unwrap();
     }
 }
