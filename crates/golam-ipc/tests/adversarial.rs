@@ -96,10 +96,8 @@ fn request_tracker_rejects_resource_direction_length_and_race_attacks() {
     };
     let mut oversized = ServerRequestTracker::new(LifecyclePhase::Ready, tight).unwrap();
     assert!(matches!(
-        oversized.receive_client_frame(
-            header(FrameKind::Request, Some(1), payload.len()),
-            &payload
-        ),
+        oversized
+            .receive_client_frame(header(FrameKind::Request, Some(1), payload.len()), &payload),
         Err(RequestProtocolError::Ipc(IpcError::FrameTooLarge { .. }))
     ));
     assert!(oversized.is_closed());
@@ -110,32 +108,22 @@ fn request_tracker_rejects_resource_direction_length_and_race_attacks() {
     };
     let mut exhausted = ServerRequestTracker::new(LifecyclePhase::Ready, single).unwrap();
     exhausted
-        .receive_client_frame(
-            header(FrameKind::Request, Some(1), payload.len()),
-            &payload,
-        )
+        .receive_client_frame(header(FrameKind::Request, Some(1), payload.len()), &payload)
         .unwrap();
     assert!(matches!(
-        exhausted.receive_client_frame(
-            header(FrameKind::Request, Some(2), payload.len()),
-            &payload
-        ),
+        exhausted
+            .receive_client_frame(header(FrameKind::Request, Some(2), payload.len()), &payload),
         Err(RequestProtocolError::PendingLimitExceeded { maximum: 1 })
     ));
     assert!(exhausted.is_closed());
 
     let mut duplicate = ServerRequestTracker::new(LifecyclePhase::Ready, single).unwrap();
     duplicate
-        .receive_client_frame(
-            header(FrameKind::Request, Some(7), payload.len()),
-            &payload,
-        )
+        .receive_client_frame(header(FrameKind::Request, Some(7), payload.len()), &payload)
         .unwrap();
     assert!(matches!(
-        duplicate.receive_client_frame(
-            header(FrameKind::Request, Some(7), payload.len()),
-            &payload
-        ),
+        duplicate
+            .receive_client_frame(header(FrameKind::Request, Some(7), payload.len()), &payload),
         Err(RequestProtocolError::DuplicateRequestId { .. })
     ));
 
@@ -161,10 +149,8 @@ fn request_tracker_rejects_resource_direction_length_and_race_attacks() {
     let mut server_direction =
         ServerRequestTracker::new(LifecyclePhase::Ready, ResourceLimits::default()).unwrap();
     assert!(matches!(
-        server_direction.settle_server_frame(
-            header(FrameKind::Request, Some(5), payload.len()),
-            &payload
-        ),
+        server_direction
+            .settle_server_frame(header(FrameKind::Request, Some(5), payload.len()), &payload),
         Err(RequestProtocolError::ImpossibleServerDirection {
             kind: FrameKind::Request
         })
@@ -173,11 +159,8 @@ fn request_tracker_rejects_resource_direction_length_and_race_attacks() {
     let mut race =
         ServerRequestTracker::new(LifecyclePhase::Ready, ResourceLimits::default()).unwrap();
     assert_eq!(
-        race.receive_client_frame(
-            header(FrameKind::Request, Some(9), payload.len()),
-            &payload
-        )
-        .unwrap(),
+        race.receive_client_frame(header(FrameKind::Request, Some(9), payload.len()), &payload)
+            .unwrap(),
         ClientAction::Begin {
             request_id: golam_ipc::request::RequestId(9),
             method: MethodId(1),
@@ -225,8 +208,7 @@ fn lifecycle_rejects_malformed_repeated_and_nonce_mismatch_probes() {
         client_id: ClientId(600),
         client_nonce: [1; NONCE_LEN],
     };
-    let mut repeated =
-        ServerLifecycle::new(40, [2; NONCE_LEN], limits, ConnectionId(200)).unwrap();
+    let mut repeated = ServerLifecycle::new(40, [2; NONCE_LEN], limits, ConnectionId(200)).unwrap();
     repeated.receive_hello(hello).unwrap();
     assert!(matches!(
         repeated.receive_hello(hello),
@@ -270,12 +252,7 @@ fn unknown_wrong_revoked_replay_and_pre_ready_probes_are_audited() {
     let unknown_signing = store.load(unknown.client_id, unknown.key_id).unwrap();
     let mut enrollment = LocalClientEnrollment::open(&authority).unwrap();
     enrollment
-        .enroll_generated(
-            &enrolled,
-            ClientKind::Test,
-            "owner",
-            "2026-08-25T02:00:00Z",
-        )
+        .enroll_generated(&enrolled, ClientKind::Test, "owner", "2026-08-25T02:00:00Z")
         .unwrap();
     let limits = ResourceLimits::default();
 
@@ -353,8 +330,7 @@ fn unknown_wrong_revoked_replay_and_pre_ready_probes_are_audited() {
         52,
         limits,
     );
-    let mut valid =
-        ServerLifecycle::new(52, [15; NONCE_LEN], limits, ConnectionId(302)).unwrap();
+    let mut valid = ServerLifecycle::new(52, [15; NONCE_LEN], limits, ConnectionId(302)).unwrap();
     valid.receive_hello(captured_hello).unwrap();
     enrollment
         .authenticate_registered(
@@ -366,8 +342,7 @@ fn unknown_wrong_revoked_replay_and_pre_ready_probes_are_audited() {
         )
         .unwrap();
 
-    let mut replay =
-        ServerLifecycle::new(53, [16; NONCE_LEN], limits, ConnectionId(303)).unwrap();
+    let mut replay = ServerLifecycle::new(53, [16; NONCE_LEN], limits, ConnectionId(303)).unwrap();
     replay.receive_hello(captured_hello).unwrap();
     assert!(matches!(
         enrollment.authenticate_registered(
@@ -386,8 +361,7 @@ fn unknown_wrong_revoked_replay_and_pre_ready_probes_are_audited() {
     enrollment
         .revoke(enrolled.client_id, "2026-08-25T02:05:00Z")
         .unwrap();
-    let mut revoked =
-        ServerLifecycle::new(54, [17; NONCE_LEN], limits, ConnectionId(304)).unwrap();
+    let mut revoked = ServerLifecycle::new(54, [17; NONCE_LEN], limits, ConnectionId(304)).unwrap();
     let revoked_hello = Hello {
         client_nonce: [18; NONCE_LEN],
         ..captured_hello
