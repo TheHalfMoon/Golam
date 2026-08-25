@@ -163,7 +163,9 @@ impl Drop for UnixTransportListener {
 fn verify_runtime_directory(path: &Path) -> Result<(), UnixTransportError> {
     let metadata = fs::symlink_metadata(path)?;
     if !metadata.is_dir() {
-        return Err(io::Error::new(io::ErrorKind::NotADirectory, path.display().to_string()).into());
+        return Err(
+            io::Error::new(io::ErrorKind::NotADirectory, path.display().to_string()).into(),
+        );
     }
     let mode = metadata.permissions().mode() & 0o777;
     if mode & 0o077 != 0 {
@@ -259,7 +261,11 @@ mod tests {
         assert!(metadata.file_type().is_socket());
         assert_eq!(metadata.permissions().mode() & 0o777, 0o600);
         assert_eq!(
-            fs::metadata(&layout.runtime_dir).unwrap().permissions().mode() & 0o777,
+            fs::metadata(&layout.runtime_dir)
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
             0o700
         );
 
