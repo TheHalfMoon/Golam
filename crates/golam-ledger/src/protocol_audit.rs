@@ -143,7 +143,8 @@ impl ProtocolAuditLog {
             return Err(ProtocolAuditError::InvalidMetadata);
         }
         let incident_id = protocol_incident_id(input.connection_id);
-        let affected_refs = encode_affected_refs(input.connection_id, input.client_id, input.key_id);
+        let affected_refs =
+            encode_affected_refs(input.connection_id, input.client_id, input.key_id);
         self.connection.execute(
             "INSERT INTO recovery_incidents \
              (incident_id, detected_at, kind, severity, affected_refs, recovery_mode, resolution) \
@@ -198,11 +199,7 @@ fn protocol_incident_id(connection_id: u128) -> [u8; 16] {
     incident_id
 }
 
-fn encode_affected_refs(
-    connection_id: u128,
-    client_id: ClientId,
-    key_id: [u8; 32],
-) -> Vec<u8> {
+fn encode_affected_refs(connection_id: u128, client_id: ClientId, key_id: [u8; 32]) -> Vec<u8> {
     let mut bytes = Vec::with_capacity(AFFECTED_REFS_LEN);
     bytes.push(AFFECTED_REFS_VERSION);
     bytes.extend_from_slice(&connection_id.to_be_bytes());
