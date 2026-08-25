@@ -17,13 +17,14 @@ pub use authorization::{
     AuthorizationPolicy, AuthorizationRequest, BootstrapPolicy, DecisionId, DenyByDefault,
     PolicyDecision, Principal, PrincipalKind,
 };
+pub use client_auth::ClientAuthorityError;
 pub use golam_ipc::credentials::GeneratedClientCredential;
 pub use golam_ipc::lifecycle::{Authenticate, ClientKeyId, ConnectionId, Ready, ServerLifecycle};
 pub use golam_ledger::clients::{ClientKind, ClientRecord};
 pub use resource::{ProtectedResourceError, UnprivilegedPath};
 
 use authorization::AuthorizationEngine;
-use client_auth::{ClientAuthority, ClientAuthorityError};
+use client_auth::ClientAuthority;
 
 #[derive(Debug)]
 pub enum KernelError {
@@ -216,10 +217,7 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         Ok(self.authorization.records()?.len())
     }
 
-    fn require_authority(
-        &mut self,
-        request: &AuthorizationRequest<'_>,
-    ) -> Result<(), KernelError> {
+    fn require_authority(&mut self, request: &AuthorizationRequest<'_>) -> Result<(), KernelError> {
         let (outcome, grant) = self.authorization.authorize(request)?;
         match grant {
             Some(grant) => {
