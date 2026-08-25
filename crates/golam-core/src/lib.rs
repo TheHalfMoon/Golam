@@ -26,6 +26,15 @@ pub struct GoalVersionId(pub u128);
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct ClientId(pub u128);
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct EffectId(pub u128);
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct EffectTransitionId(pub u128);
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct EffectAttemptId(pub u128);
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ResourceLimits {
     pub max_frame_bytes: u32,
