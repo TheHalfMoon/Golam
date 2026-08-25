@@ -212,10 +212,7 @@ pub(crate) struct AuthorizationEngine<P> {
 }
 
 impl<P: AuthorizationPolicy> AuthorizationEngine<P> {
-    pub(crate) fn open(
-        authority: &AuthorityLayout,
-        policy: P,
-    ) -> Result<Self, AuthorizationError> {
+    pub(crate) fn open(authority: &AuthorityLayout, policy: P) -> Result<Self, AuthorizationError> {
         Ok(Self {
             policy,
             audit: AuthorizationAuditLog::open(authority)?,
@@ -269,9 +266,7 @@ impl<P: AuthorizationPolicy> AuthorizationEngine<P> {
         Ok((outcome, grant))
     }
 
-    pub(crate) fn records(
-        &self,
-    ) -> Result<Vec<StoredAuthorizationDecision>, AuthorizationError> {
+    pub(crate) fn records(&self) -> Result<Vec<StoredAuthorizationDecision>, AuthorizationError> {
         Ok(self.audit.records()?)
     }
 }
@@ -393,10 +388,9 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let runtime = RuntimeLayout::initialize(std::env::temp_dir().join(format!(
-            "golam-kernel-auth-{}-{t}-{n}",
-            std::process::id()
-        )))
+        let runtime = RuntimeLayout::initialize(
+            std::env::temp_dir().join(format!("golam-kernel-auth-{}-{t}-{n}", std::process::id())),
+        )
         .unwrap();
         let authority = AuthorityLayout::initialize(&runtime).unwrap();
         (runtime, authority)
