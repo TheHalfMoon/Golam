@@ -6,6 +6,7 @@ mod effect_execution;
 mod operations;
 mod resource;
 mod startup;
+mod synthetic_effect;
 
 use std::error::Error;
 use std::fmt;
@@ -41,6 +42,10 @@ pub use operations::{
 };
 pub use resource::{ProtectedResourceError, UnprivilegedPath};
 pub use startup::{KernelStartup, KernelStartupError, start_kernel};
+pub use synthetic_effect::{
+    CompleteSyntheticEffect, PrepareSyntheticEffect, SyntheticEffectError, SyntheticEffectOutcome,
+    SyntheticExecutionCompletion, SyntheticReconciliationContext, SyntheticReconciliationResult,
+};
 
 use authorization::AuthorizationEngine;
 use client_auth::ClientAuthority;
