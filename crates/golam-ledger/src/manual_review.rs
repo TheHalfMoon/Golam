@@ -74,7 +74,10 @@ pub enum ManualReviewError {
     InvalidMetadata,
     EvidenceTooLarge,
     EffectNotFound(EffectId),
-    InvalidSourceState { effect_id: EffectId, actual: String },
+    InvalidSourceState {
+        effect_id: EffectId,
+        actual: String,
+    },
     AttemptNotFound(EffectAttemptId),
     AttemptEffectMismatch {
         attempt_id: EffectAttemptId,
@@ -90,7 +93,9 @@ impl fmt::Display for ManualReviewError {
             Self::Storage(error) => write!(f, "manual review authority error: {error}"),
             Self::Sqlite(error) => write!(f, "manual review sqlite error: {error}"),
             Self::InvalidMetadata => f.write_str("manual review detected-at metadata is required"),
-            Self::EvidenceTooLarge => f.write_str("manual review evidence exceeds the bounded limit"),
+            Self::EvidenceTooLarge => {
+                f.write_str("manual review evidence exceeds the bounded limit")
+            }
             Self::EffectNotFound(effect_id) => write!(f, "effect not found: {}", effect_id.0),
             Self::InvalidSourceState { effect_id, actual } => write!(
                 f,
@@ -192,11 +197,8 @@ impl ManualReviewStore {
         insert_transition(&transaction, &transition)?;
 
         let incident_id = manual_review_incident_id(input.effect_id, input.transition_id);
-        let affected_refs = encode_affected_refs(
-            input.effect_id,
-            input.transition_id,
-            input.attempt_id,
-        );
+        let affected_refs =
+            encode_affected_refs(input.effect_id, input.transition_id, input.attempt_id);
         transaction.execute(
             "INSERT INTO recovery_incidents \
              (incident_id, detected_at, kind, severity, affected_refs, recovery_mode, resolution) \
@@ -361,10 +363,7 @@ fn next_global_seq(transaction: &Transaction<'_>) -> Result<u64, ManualReviewErr
         .ok_or(ManualReviewError::SequenceOverflow)
 }
 
-fn manual_review_incident_id(
-    effect_id: EffectId,
-    transition_id: EffectTransitionId,
-) -> [u8; 16] {
+fn manual_review_incident_id(effect_id: EffectId, transition_id: EffectTransitionId) -> [u8; 16] {
     let mut hasher = blake3::Hasher::new();
     hasher.update(MANUAL_REVIEW_DOMAIN);
     hasher.update(&effect_id.0.to_be_bytes());
@@ -501,23 +500,11 @@ mod tests {
         if through_state == "executing" {
             return;
         }
-        transition(
-            store,
-            effect_id,
-            "executing",
-            "unknown_outcome",
-            seed + 6,
-        );
+        transition(store, effect_id, "executing", "unknown_outcome", seed + 6);
         if through_state == "unknown_outcome" {
             return;
         }
-        transition(
-            store,
-            effect_id,
-            "unknown_outcome",
-            "reconciling",
-            seed + 7,
-        );
+        transition(store, effect_id, "unknown_outcome", "reconciling", seed + 7);
     }
 
     fn transition(
