@@ -319,7 +319,7 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             resource: "recovery:status",
             context: AuthorizationContext::local(scope),
         })?;
-        Ok(RecoveryScanner::scan(&self.runtime)?)
+        Ok(RecoveryScanner::scan(&self.runtime).map_err(KernelError::from)?)
     }
 }
 
