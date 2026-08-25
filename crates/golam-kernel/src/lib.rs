@@ -4,6 +4,7 @@ mod authorization;
 mod client_auth;
 mod effect_execution;
 mod resource;
+mod startup;
 
 use std::error::Error;
 use std::fmt;
@@ -27,7 +28,11 @@ pub use golam_ledger::dispatch::{
     EffectDispatchStoreError as EffectDispatchError, PrepareEffectDispatch,
     encode_effect_dependencies,
 };
+pub use golam_ledger::recovery::{
+    RecoveryError, RecoveryIssue, RecoveryIssueKind, RecoveryMode, RecoveryReport, RecoveryScanner,
+};
 pub use resource::{ProtectedResourceError, UnprivilegedPath};
+pub use startup::{KernelStartup, KernelStartupError, start_kernel};
 
 use authorization::AuthorizationEngine;
 use client_auth::ClientAuthority;
@@ -40,6 +45,8 @@ pub enum KernelError {
     AuthorizationDenied(AuthorizationOutcome),
     ClientAuthority(ClientAuthorityError),
     EffectDispatch(EffectDispatchError),
+    Recovery(RecoveryError),
+    RecoveryRequired(RecoveryReport),
 }
 
 impl fmt::Display for KernelError {
@@ -55,6 +62,12 @@ impl fmt::Display for KernelError {
             ),
             Self::ClientAuthority(error) => write!(f, "kernel client authority error: {error}"),
             Self::EffectDispatch(error) => write!(f, "kernel effect dispatch error: {error}"),
+            Self::Recovery(error) => write!(f, "kernel recovery scan error: {error}"),
+            Self::RecoveryRequired(report) => write!(
+                f,
+                "kernel privileged service blocked by recovery mode {:?}",
+                report.mode
+            ),
         }
     }
 }
@@ -66,7 +79,8 @@ impl Error for KernelError {
             Self::Authorization(error) => Some(error),
             Self::ClientAuthority(error) => Some(error),
             Self::EffectDispatch(error) => Some(error),
-            Self::AuthorizationDenied(_) => None,
+            Self::Recovery(error) => Some(error),
+            Self::AuthorizationDenied(_) | Self::RecoveryRequired(_) => None,
         }
     }
 }
@@ -95,6 +109,12 @@ impl From<EffectDispatchError> for KernelError {
     }
 }
 
+impl From<RecoveryError> for KernelError {
+    fn from(value: RecoveryError) -> Self {
+        Self::Recovery(value)
+    }
+}
+
 /// Privileged mutations are available only through this API. The authority
 /// implementation modules and authority-bearing grants are intentionally not
 /// part of the public crate surface.
@@ -116,6 +136,17 @@ pub struct KernelApi<P> {
 
 impl<P: AuthorizationPolicy> KernelApi<P> {
     pub fn open(runtime: &RuntimeLayout, policy: P) -> Result<Self, KernelError> {
+        let report = RecoveryScanner::scan(runtime)?;
+        if !report.privileged_service_allowed() {
+            return Err(KernelError::RecoveryRequired(report));
+        }
+        Self::open_after_recovery(runtime, policy)
+    }
+
+    pub(crate) fn open_after_recovery(
+        runtime: &RuntimeLayout,
+        policy: P,
+    ) -> Result<Self, KernelError> {
         let authority = AuthorityLayout::initialize(runtime)?;
         let authorization = AuthorizationEngine::open(&authority, policy)?;
         let clients = ClientAuthority::open(&authority)?;
