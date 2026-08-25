@@ -5,7 +5,7 @@ use std::fmt;
 use golam_core::ResourceLimits;
 
 use crate::lifecycle::LifecyclePhase;
-use crate::{FrameHeader, FrameKind};
+use crate::{FrameHeader, FrameKind, IpcError};
 
 pub const REQUEST_METHOD_BYTES: usize = 2;
 pub const REPLY_STATUS_BYTES: usize = 2;
@@ -87,12 +87,25 @@ pub struct Settlement {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ServerAction {
+    Reply {
+        settlement: Settlement,
+        message: ReplyMessage,
+    },
+    Event,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RequestProtocolError {
+    Ipc(IpcError),
     NotReady { phase: LifecyclePhase },
     Closed,
+    InvalidPendingLimit,
     InvalidRequestId,
     InvalidMethodId,
+    PayloadLengthMismatch { declared: u32, actual: usize },
     RequestPayloadTooShort { actual: usize },
+    UnexpectedCancelPayload { actual: usize },
     ReplyPayloadTooShort { actual: usize },
     UnknownReplyStatus { code: u16 },
     UnexpectedRequestId { kind: FrameKind },
@@ -107,17 +120,27 @@ pub enum RequestProtocolError {
 impl fmt::Display for RequestProtocolError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Ipc(error) => write!(f, "IPC application frame failed wire validation: {error}"),
             Self::NotReady { phase } => {
                 write!(f, "IPC application request arrived before READY: {phase:?}")
             }
             Self::Closed => f.write_str("IPC application protocol is closed"),
+            Self::InvalidPendingLimit => f.write_str("IPC pending-request limit must be non-zero"),
             Self::InvalidRequestId => f.write_str("IPC request id zero is reserved and invalid"),
             Self::InvalidMethodId => {
                 f.write_str("IPC request method id zero is reserved and invalid")
             }
+            Self::PayloadLengthMismatch { declared, actual } => write!(
+                f,
+                "IPC frame declared {declared} payload bytes but received {actual}"
+            ),
             Self::RequestPayloadTooShort { actual } => write!(
                 f,
                 "IPC request payload has {actual} bytes; expected at least {REQUEST_METHOD_BYTES}"
+            ),
+            Self::UnexpectedCancelPayload { actual } => write!(
+                f,
+                "IPC cancel payload must be empty; got {actual} bytes"
             ),
             Self::ReplyPayloadTooShort { actual } => write!(
                 f,
@@ -151,7 +174,14 @@ impl fmt::Display for RequestProtocolError {
     }
 }
 
-impl Error for RequestProtocolError {}
+impl Error for RequestProtocolError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Ipc(error) => Some(error),
+            _ => None,
+        }
+    }
+}
 
 pub fn encode_request(message: &RequestMessage) -> Result<Vec<u8>, RequestProtocolError> {
     if message.method.0 == 0 {
@@ -203,7 +233,7 @@ pub fn decode_reply(payload: &[u8]) -> Result<ReplyMessage, RequestProtocolError
 
 pub struct ServerRequestTracker {
     pending: BTreeMap<RequestId, PendingState>,
-    max_pending: u32,
+    limits: ResourceLimits,
     closed: bool,
 }
 
@@ -215,9 +245,12 @@ impl ServerRequestTracker {
         if phase != LifecyclePhase::Ready {
             return Err(RequestProtocolError::NotReady { phase });
         }
+        if limits.max_pending_requests == 0 {
+            return Err(RequestProtocolError::InvalidPendingLimit);
+        }
         Ok(Self {
             pending: BTreeMap::new(),
-            max_pending: limits.max_pending_requests,
+            limits,
             closed: false,
         })
     }
@@ -242,6 +275,7 @@ impl ServerRequestTracker {
         if self.closed {
             return Err(RequestProtocolError::Closed);
         }
+        self.validate_frame_payload(header, payload)?;
         match header.kind {
             FrameKind::Request => self.receive_request(header, payload),
             FrameKind::Cancel => self.receive_cancel(header, payload),
@@ -249,42 +283,37 @@ impl ServerRequestTracker {
         }
     }
 
-    pub fn settle(&mut self, request_id: RequestId) -> Result<Settlement, RequestProtocolError> {
-        if self.closed {
-            return Err(RequestProtocolError::Closed);
-        }
-        validate_request_id(request_id)?;
-        let state = self
-            .pending
-            .remove(&request_id)
-            .ok_or(RequestProtocolError::UnknownRequestId { request_id })?;
-        Ok(Settlement { request_id, state })
-    }
-
-    pub fn validate_server_frame(
+    pub fn settle_server_frame(
         &mut self,
         header: FrameHeader,
-    ) -> Result<(), RequestProtocolError> {
+        payload: &[u8],
+    ) -> Result<ServerAction, RequestProtocolError> {
         if self.closed {
             return Err(RequestProtocolError::Closed);
         }
+        self.validate_frame_payload(header, payload)?;
         match header.kind {
             FrameKind::Reply => {
                 let request_id = request_id_from_header(header)?;
-                validate_request_id(request_id)?;
-                if !self.pending.contains_key(&request_id) {
-                    return self.breach(RequestProtocolError::UnknownRequestId { request_id });
+                if let Err(error) = validate_request_id(request_id) {
+                    return self.breach(error);
                 }
-                Ok(())
+                let message = match decode_reply(payload) {
+                    Ok(message) => message,
+                    Err(error) => return self.breach(error),
+                };
+                let state = match self.pending.remove(&request_id) {
+                    Some(state) => state,
+                    None => {
+                        return self.breach(RequestProtocolError::UnknownRequestId { request_id });
+                    }
+                };
+                Ok(ServerAction::Reply {
+                    settlement: Settlement { request_id, state },
+                    message,
+                })
             }
-            FrameKind::Event => {
-                if header.request_id.is_some() {
-                    return self.breach(RequestProtocolError::UnexpectedRequestId {
-                        kind: FrameKind::Event,
-                    });
-                }
-                Ok(())
-            }
+            FrameKind::Event => Ok(ServerAction::Event),
             kind => self.breach(RequestProtocolError::ImpossibleServerDirection { kind }),
         }
     }
@@ -310,9 +339,9 @@ impl ServerRequestTracker {
         if self.pending.contains_key(&request_id) {
             return self.breach(RequestProtocolError::DuplicateRequestId { request_id });
         }
-        if self.pending.len() >= self.max_pending as usize {
+        if self.pending.len() >= self.limits.max_pending_requests as usize {
             return self.breach(RequestProtocolError::PendingLimitExceeded {
-                maximum: self.max_pending,
+                maximum: self.limits.max_pending_requests,
             });
         }
         self.pending.insert(request_id, PendingState::Active);
@@ -328,7 +357,7 @@ impl ServerRequestTracker {
         payload: &[u8],
     ) -> Result<ClientAction, RequestProtocolError> {
         if !payload.is_empty() {
-            return self.breach(RequestProtocolError::RequestPayloadTooShort {
+            return self.breach(RequestProtocolError::UnexpectedCancelPayload {
                 actual: payload.len(),
             });
         }
@@ -347,6 +376,27 @@ impl ServerRequestTracker {
             }
             PendingState::Cancelled => Ok(ClientAction::CancelAlreadyRequested { request_id }),
         }
+    }
+
+    fn validate_frame_payload(
+        &mut self,
+        header: FrameHeader,
+        payload: &[u8],
+    ) -> Result<(), RequestProtocolError> {
+        if let Err(error) = header.validate(self.limits) {
+            return self.breach(RequestProtocolError::Ipc(error));
+        }
+        let actual = payload.len();
+        if usize::try_from(header.payload_len)
+            .expect("u32 payload length fits usize on supported platforms")
+            != actual
+        {
+            return self.breach(RequestProtocolError::PayloadLengthMismatch {
+                declared: header.payload_len,
+                actual,
+            });
+        }
+        Ok(())
     }
 
     fn breach<T>(&mut self, error: RequestProtocolError) -> Result<T, RequestProtocolError> {
@@ -449,9 +499,24 @@ mod tests {
             tracker.pending_state(RequestId(9)),
             Some(PendingState::Cancelled)
         );
+        let reply = encode_reply(&ReplyMessage {
+            status: ReplyStatus::Cancelled,
+            body: Vec::new(),
+        });
         assert_eq!(
-            tracker.settle(RequestId(9)).unwrap().state,
-            PendingState::Cancelled
+            tracker
+                .settle_server_frame(header(FrameKind::Reply, Some(9), reply.len()), &reply)
+                .unwrap(),
+            ServerAction::Reply {
+                settlement: Settlement {
+                    request_id: RequestId(9),
+                    state: PendingState::Cancelled,
+                },
+                message: ReplyMessage {
+                    status: ReplyStatus::Cancelled,
+                    body: Vec::new(),
+                },
+            }
         );
         assert_eq!(tracker.pending_len(), 0);
     }
@@ -529,11 +594,50 @@ mod tests {
     }
 
     #[test]
+    fn frame_payload_mismatch_and_nonempty_cancel_are_protocol_breaches() {
+        let mut tracker =
+            ServerRequestTracker::new(LifecyclePhase::Ready, ResourceLimits::default()).unwrap();
+        let payload = request(1, b"");
+        assert!(matches!(
+            tracker.receive_client_frame(
+                header(FrameKind::Request, Some(1), payload.len() + 1),
+                &payload,
+            ),
+            Err(RequestProtocolError::PayloadLengthMismatch { .. })
+        ));
+        assert!(tracker.is_closed());
+
+        let mut tracker =
+            ServerRequestTracker::new(LifecyclePhase::Ready, ResourceLimits::default()).unwrap();
+        let payload = request(1, b"");
+        tracker
+            .receive_client_frame(header(FrameKind::Request, Some(1), payload.len()), &payload)
+            .unwrap();
+        assert!(matches!(
+            tracker.receive_client_frame(header(FrameKind::Cancel, Some(1), 1), &[1]),
+            Err(RequestProtocolError::UnexpectedCancelPayload { actual: 1 })
+        ));
+        assert!(tracker.is_closed());
+    }
+
+    #[test]
+    fn zero_pending_limit_is_rejected() {
+        let limits = ResourceLimits {
+            max_pending_requests: 0,
+            ..ResourceLimits::default()
+        };
+        assert!(matches!(
+            ServerRequestTracker::new(LifecyclePhase::Ready, limits),
+            Err(RequestProtocolError::InvalidPendingLimit)
+        ));
+    }
+
+    #[test]
     fn server_reply_must_reference_pending_request() {
         let mut tracker =
             ServerRequestTracker::new(LifecyclePhase::Ready, ResourceLimits::default()).unwrap();
         assert!(matches!(
-            tracker.validate_server_frame(header(FrameKind::Reply, Some(9), 2)),
+            tracker.settle_server_frame(header(FrameKind::Reply, Some(9), 2), &[0, 0]),
             Err(RequestProtocolError::UnknownRequestId { .. })
         ));
         assert!(tracker.is_closed());
