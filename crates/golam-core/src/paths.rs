@@ -26,6 +26,10 @@ pub enum ProtectedPathError {
     Symlink(PathBuf),
     NotDirectory(PathBuf),
     PermissionsTooBroad { path: PathBuf, mode: u32 },
+    WindowsAclMissing(PathBuf),
+    WindowsAclMismatch(PathBuf),
+    WindowsAclNotProtected(PathBuf),
+    InvalidWindowsSid,
     AuthorityProtectionUnverified,
 }
 
@@ -42,6 +46,20 @@ impl fmt::Display for ProtectedPathError {
                 "protected directory permissions are too broad: {} mode {mode:o}",
                 path.display()
             ),
+            Self::WindowsAclMissing(path) => {
+                write!(f, "protected Windows directory has no DACL: {}", path.display())
+            }
+            Self::WindowsAclMismatch(path) => write!(
+                f,
+                "protected Windows directory DACL is not current-user-only: {}",
+                path.display()
+            ),
+            Self::WindowsAclNotProtected(path) => write!(
+                f,
+                "protected Windows directory DACL still permits inheritance: {}",
+                path.display()
+            ),
+            Self::InvalidWindowsSid => f.write_str("current Windows process SID is invalid"),
             Self::AuthorityProtectionUnverified => {
                 f.write_str("authority directory protection is not verified on this platform")
             }
@@ -56,6 +74,10 @@ impl Error for ProtectedPathError {
             Self::Symlink(_)
             | Self::NotDirectory(_)
             | Self::PermissionsTooBroad { .. }
+            | Self::WindowsAclMissing(_)
+            | Self::WindowsAclMismatch(_)
+            | Self::WindowsAclNotProtected(_)
+            | Self::InvalidWindowsSid
             | Self::AuthorityProtectionUnverified => None,
         }
     }
@@ -161,21 +183,83 @@ const fn platform_protection_level() -> ProtectionLevel {
 }
 
 #[cfg(windows)]
-fn apply_platform_permissions(_path: &Path) -> Result<(), ProtectedPathError> {
+pub fn windows_current_process_sid_string() -> Result<String, ProtectedPathError> {
+    let sid = windows_permissions::utilities::current_process_sid()?;
+    let sid_string = windows_permissions::wrappers::ConvertSidToStringSid(&sid)?;
+    let sid_string = sid_string.to_string_lossy().into_owned();
+    if !sid_string.starts_with("S-1-") || sid_string.contains([';', '(', ')']) {
+        return Err(ProtectedPathError::InvalidWindowsSid);
+    }
+    Ok(sid_string)
+}
+
+#[cfg(windows)]
+fn apply_platform_permissions(path: &Path) -> Result<(), ProtectedPathError> {
+    use windows_permissions::constants::{SeObjectType, SecurityInformation};
+    use windows_permissions::{LocalBox, SecurityDescriptor};
+
+    let sid = windows_current_process_sid_string()?;
+    let descriptor: LocalBox<SecurityDescriptor> =
+        format!("D:P(A;OICI;FA;;;{sid})").parse()?;
+    let dacl = descriptor
+        .dacl()
+        .ok_or_else(|| ProtectedPathError::WindowsAclMissing(path.to_path_buf()))?;
+    windows_permissions::wrappers::SetNamedSecurityInfo(
+        path.as_os_str(),
+        SeObjectType::SE_FILE_OBJECT,
+        SecurityInformation::Dacl | SecurityInformation::ProtectedDacl,
+        None,
+        None,
+        Some(dacl),
+        None,
+    )?;
     Ok(())
 }
 
 #[cfg(windows)]
 fn verify_platform_permissions(
-    _path: &Path,
+    path: &Path,
     _metadata: &fs::Metadata,
 ) -> Result<(), ProtectedPathError> {
+    use windows_permissions::constants::{AccessRights, AceType, SeObjectType, SecurityInformation};
+
+    let expected_sid = windows_permissions::utilities::current_process_sid()?;
+    let descriptor = windows_permissions::wrappers::GetNamedSecurityInfo(
+        path.as_os_str(),
+        SeObjectType::SE_FILE_OBJECT,
+        SecurityInformation::Dacl,
+    )?;
+    let dacl = descriptor
+        .dacl()
+        .ok_or_else(|| ProtectedPathError::WindowsAclMissing(path.to_path_buf()))?;
+    if dacl.len() != 1 {
+        return Err(ProtectedPathError::WindowsAclMismatch(path.to_path_buf()));
+    }
+    let ace = dacl
+        .get_ace(0)
+        .ok_or_else(|| ProtectedPathError::WindowsAclMismatch(path.to_path_buf()))?;
+    if ace.ace_type() != AceType::ACCESS_ALLOWED_ACE_TYPE
+        || ace.mask() != AccessRights::FileAllAccess
+        || ace.sid() != Some(&*expected_sid)
+    {
+        return Err(ProtectedPathError::WindowsAclMismatch(path.to_path_buf()));
+    }
+
+    let sddl = windows_permissions::wrappers::ConvertSecurityDescriptorToStringSecurityDescriptor(
+        &descriptor,
+        SecurityInformation::Dacl,
+    )?;
+    if !sddl.to_string_lossy().starts_with("D:P") {
+        return Err(ProtectedPathError::WindowsAclNotProtected(
+            path.to_path_buf(),
+        ));
+    }
     Ok(())
 }
 
 #[cfg(windows)]
 const fn platform_protection_level() -> ProtectionLevel {
-    ProtectionLevel::PathIsolationOnly
+    ProtectionLevel::UserOnlyVerified
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -246,13 +330,23 @@ mod tests {
 
     #[cfg(windows)]
     #[test]
-    fn windows_authority_use_remains_fail_closed_until_acl_verification() {
+    fn windows_layout_is_current_user_only_and_authority_ready() {
         let root = unique_root();
         let layout = RuntimeLayout::initialize(&root).unwrap();
-        assert!(matches!(
-            layout.require_authority_ready(),
-            Err(ProtectedPathError::AuthorityProtectionUnverified)
-        ));
+        layout.require_authority_ready().unwrap();
+        for path in [
+            &layout.root,
+            &layout.data_dir,
+            &layout.runtime_dir,
+            &layout.artifact_dir,
+            &layout.artifact_tmp_dir,
+        ] {
+            let metadata = fs::symlink_metadata(path).unwrap();
+            verify_platform_permissions(path, &metadata).unwrap();
+        }
+        assert!(windows_current_process_sid_string()
+            .unwrap()
+            .starts_with("S-1-"));
         fs::remove_dir_all(root).unwrap();
     }
 }

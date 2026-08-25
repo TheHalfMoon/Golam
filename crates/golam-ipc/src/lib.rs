@@ -3,6 +3,8 @@
 pub mod lifecycle;
 #[cfg(unix)]
 pub mod unix_transport;
+#[cfg(windows)]
+pub mod windows_transport;
 
 use std::error::Error;
 use std::fmt;
