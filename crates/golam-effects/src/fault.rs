@@ -161,10 +161,7 @@ pub const PLANNED_DURABLE_TRANSITIONS: &[(Option<EffectStatus>, EffectStatus)] =
     (Some(EffectStatus::ApprovalRequired), EffectStatus::Denied),
     (Some(EffectStatus::Executing), EffectStatus::Succeeded),
     (Some(EffectStatus::Executing), EffectStatus::Failed),
-    (
-        Some(EffectStatus::Executing),
-        EffectStatus::UnknownOutcome,
-    ),
+    (Some(EffectStatus::Executing), EffectStatus::UnknownOutcome),
     (
         Some(EffectStatus::UnknownOutcome),
         EffectStatus::Reconciling,
@@ -175,10 +172,7 @@ pub const PLANNED_DURABLE_TRANSITIONS: &[(Option<EffectStatus>, EffectStatus)] =
     ),
     (Some(EffectStatus::Reconciling), EffectStatus::Succeeded),
     (Some(EffectStatus::Reconciling), EffectStatus::Failed),
-    (
-        Some(EffectStatus::Reconciling),
-        EffectStatus::ManualReview,
-    ),
+    (Some(EffectStatus::Reconciling), EffectStatus::ManualReview),
 ];
 
 #[cfg(test)]
