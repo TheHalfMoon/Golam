@@ -12,11 +12,11 @@ use golam_ipc::lifecycle::{
 use golam_ledger::clients::{
     AssuranceClass, ClientKind, ClientRecord, ClientRegistry, ClientRegistryError, EnrollClient,
 };
+#[cfg(test)]
+use golam_ledger::protocol_audit::ProtocolAuditRecord;
 use golam_ledger::protocol_audit::{
     AppendProtocolRejection, ProtocolAuditError, ProtocolAuditLog, ProtocolRejectionReason,
 };
-#[cfg(test)]
-use golam_ledger::protocol_audit::ProtocolAuditRecord;
 
 #[derive(Debug)]
 pub enum ClientAuthorityError {
