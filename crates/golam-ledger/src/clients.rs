@@ -394,6 +394,7 @@ mod tests {
             reg.resolve_active(ClientId(1), [7; 32]),
             Err(ClientRegistryError::RevokedClient)
         ));
+        drop(reg);
         fs::remove_dir_all(r.root).unwrap();
     }
     #[test]
@@ -413,6 +414,7 @@ mod tests {
             reg.resolve_active(ClientId(1), [8; 32]),
             Err(ClientRegistryError::ClientKeyMismatch)
         ));
+        drop(reg);
         fs::remove_dir_all(r.root).unwrap();
     }
 }
