@@ -64,7 +64,10 @@ pub enum EffectCompletionError {
     ReceiptTooLarge,
     EvidenceTooLarge,
     EffectNotFound(EffectId),
-    InvalidSourceState { effect_id: EffectId, actual: String },
+    InvalidSourceState {
+        effect_id: EffectId,
+        actual: String,
+    },
     AttemptNotFound(EffectAttemptId),
     AttemptEffectMismatch {
         attempt_id: EffectAttemptId,
@@ -80,9 +83,15 @@ impl fmt::Display for EffectCompletionError {
         match self {
             Self::Storage(error) => write!(f, "effect completion authority error: {error}"),
             Self::Sqlite(error) => write!(f, "effect completion sqlite error: {error}"),
-            Self::InvalidMetadata => f.write_str("effect completion finished-at metadata is required"),
-            Self::ReceiptTooLarge => f.write_str("effect completion receipt exceeds the bounded limit"),
-            Self::EvidenceTooLarge => f.write_str("effect completion evidence exceeds the bounded limit"),
+            Self::InvalidMetadata => {
+                f.write_str("effect completion finished-at metadata is required")
+            }
+            Self::ReceiptTooLarge => {
+                f.write_str("effect completion receipt exceeds the bounded limit")
+            }
+            Self::EvidenceTooLarge => {
+                f.write_str("effect completion evidence exceeds the bounded limit")
+            }
             Self::EffectNotFound(effect_id) => write!(f, "effect not found: {}", effect_id.0),
             Self::InvalidSourceState { effect_id, actual } => write!(
                 f,
@@ -104,7 +113,9 @@ impl fmt::Display for EffectCompletionError {
                 write!(f, "effect attempt already finished: {}", attempt_id.0)
             }
             Self::SequenceOverflow => f.write_str("effect completion global sequence overflow"),
-            Self::InvalidStoredRecord => f.write_str("stored effect completion record is malformed"),
+            Self::InvalidStoredRecord => {
+                f.write_str("stored effect completion record is malformed")
+            }
         }
     }
 }
@@ -200,7 +211,9 @@ impl EffectCompletionStore {
             });
         }
         if attempt.6.is_some() {
-            return Err(EffectCompletionError::AttemptAlreadyFinished(input.attempt_id));
+            return Err(EffectCompletionError::AttemptAlreadyFinished(
+                input.attempt_id,
+            ));
         }
 
         transaction.execute(
@@ -250,7 +263,10 @@ fn validate_input(input: &CompleteEffectExecution<'_>) -> Result<(), EffectCompl
     if input.finished_at.is_empty() {
         return Err(EffectCompletionError::InvalidMetadata);
     }
-    if input.receipt.is_some_and(|value| value.len() > MAX_RECEIPT_BYTES) {
+    if input
+        .receipt
+        .is_some_and(|value| value.len() > MAX_RECEIPT_BYTES)
+    {
         return Err(EffectCompletionError::ReceiptTooLarge);
     }
     if input
@@ -323,8 +339,8 @@ mod tests {
     use super::*;
     use crate::dispatch::{EffectDispatchStore, PrepareEffectDispatch, encode_effect_dependencies};
     use crate::effects::{CompareAndSwapEffect, EffectStore, ProposeEffect};
-    use golam_core::paths::RuntimeLayout;
     use golam_core::SessionId;
+    use golam_core::paths::RuntimeLayout;
     use std::fs;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -416,13 +432,24 @@ mod tests {
             })
             .unwrap();
         assert_eq!(completed.attempt.outcome, "success");
-        assert_eq!(completed.transition.from_state.as_deref(), Some("executing"));
+        assert_eq!(
+            completed.transition.from_state.as_deref(),
+            Some("executing")
+        );
         assert_eq!(completed.transition.to_state, "succeeded");
 
         let effects = EffectStore::open(&authority).unwrap();
-        assert_eq!(effects.current_state(effect_id).unwrap().as_deref(), Some("succeeded"));
         assert_eq!(
-            effects.attempt(attempt_id).unwrap().unwrap().finished_at.as_deref(),
+            effects.current_state(effect_id).unwrap().as_deref(),
+            Some("succeeded")
+        );
+        assert_eq!(
+            effects
+                .attempt(attempt_id)
+                .unwrap()
+                .unwrap()
+                .finished_at
+                .as_deref(),
             Some("2026-08-25T13:01:00Z")
         );
         drop(effects);
@@ -456,7 +483,10 @@ mod tests {
         let effects = EffectStore::open(&authority).unwrap();
         let attempt = effects.attempt(attempt_id).unwrap().unwrap();
         assert!(attempt.finished_at.is_none());
-        assert_eq!(effects.current_state(effect_id).unwrap().as_deref(), Some("executing"));
+        assert_eq!(
+            effects.current_state(effect_id).unwrap().as_deref(),
+            Some("executing")
+        );
         drop(effects);
         drop(completion);
         fs::remove_dir_all(runtime.root).unwrap();
