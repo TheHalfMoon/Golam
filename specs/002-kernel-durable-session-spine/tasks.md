@@ -4,8 +4,8 @@
 **Implementation branch**: `impl/002-kernel-durable-session-spine`  
 **PR**: `#3` — OPEN / DRAFT  
 **Canonical implementation base**: `main@cfcc90f452e7115bfb104f886e09c309a5d57a1c`  
-**Last reconciled proven code head**: `3573b8a5de33abdc9c028b730ab49bb9a40d6854`  
-**Exact-head CI evidence**: run `32824677555` / run number `96` — Windows, macOS, Linux `fmt + clippy -D warnings + test` PASS
+**Last reconciled proven code head**: `34e6b9b4922c2b6a92e18416d6a0bdb8b0425135`  
+**Exact-head CI evidence**: run `32832568236` / run number `101` — Windows, macOS, Linux `fmt + clippy -D warnings + test` PASS
 
 Legend:
 - `[x]` = task requirement is satisfied by current implementation/evidence.
@@ -17,7 +17,7 @@ Legend:
 
 - [x] **T002-001** Verify exact live `main` after planning PR merge; create implementation branch from that exact commit. — PASS from `main@cfcc90f452e7115bfb104f886e09c309a5d57a1c`.
 - [x] **T002-002** Create the Rust workspace with only `golam-core`, `golam-ledger`, `golam-effects`, `golam-ipc`, `golam-kernel`, `golamd`, `golam`; pin current stable toolchain and forbid unsafe Golam code. — PASS; Rust 1.98.0 and workspace `unsafe_code = forbid` are active.
-- [x] **T002-003** Add baseline CI for fmt/clippy/test on Windows/macOS/Linux; do not claim green until runs exist. — PASS; exact-head matrix runs exist, latest proven code run `32824677555`.
+- [x] **T002-003** Add baseline CI for fmt/clippy/test on Windows/macOS/Linux; do not claim green until runs exist. — PASS; exact-head matrix runs exist, latest proven code run `32832568236`.
 
 ## Phase B — Donor admission/evidence
 
@@ -57,7 +57,7 @@ Legend:
 
 ## Phase F — Effect engine
 
-- [ ] **T002-050** Implement effect FSM and compare-and-swap transitions. — Initial effect vocabulary exists; persistent CAS engine is not yet complete.
+- [x] **T002-050** Implement effect FSM and compare-and-swap transitions. — PASS at `34e6b9b4922c2b6a92e18416d6a0bdb8b0425135`, CI `32832568236`: full planned state vocabulary includes DENIED and APPROVAL_REQUIRED; `golam-effects` validates declared/forbidden FSM edges and blind-retry semantics; `golam-ledger::effects` durably commits effect intent plus PROPOSED transition and applies expected-current-state CAS transitions under `BEGIN IMMEDIATE`; stale CAS does not consume canonical `global_seq`; reopen tests prove durable current state and transition history.
 - [ ] **T002-051** Implement EffectHandler metadata/execute/reconcile interfaces and persistent attempt records.
 - [ ] **T002-052** Implement deterministic simulator handlers for all five execution semantics.
 - [ ] **T002-053** Enforce durable intent-before-dispatch and dependent-effect blocking on UNKNOWN_OUTCOME.
