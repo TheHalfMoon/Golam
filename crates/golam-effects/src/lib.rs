@@ -51,7 +51,7 @@ impl EffectStatus {
         }
     }
 
-    pub const fn from_str(value: &str) -> Option<Self> {
+    pub fn from_str(value: &str) -> Option<Self> {
         match value {
             "proposed" => Some(Self::Proposed),
             "denied" => Some(Self::Denied),
