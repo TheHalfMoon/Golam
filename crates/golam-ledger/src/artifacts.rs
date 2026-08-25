@@ -246,12 +246,18 @@ fn hash_hex(hash: [u8; 32]) -> String {
 mod tests {
     use super::*;
 
+    static TEST_ROOT_COUNTER: AtomicU64 = AtomicU64::new(0);
+
     fn unique_root() -> PathBuf {
-        let nonce = SystemTime::now()
+        let counter = TEST_ROOT_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        std::env::temp_dir().join(format!("golam-artifacts-{}-{nonce}", std::process::id()))
+        std::env::temp_dir().join(format!(
+            "golam-artifacts-{}-{nanos}-{counter}",
+            std::process::id()
+        ))
     }
 
     #[test]
