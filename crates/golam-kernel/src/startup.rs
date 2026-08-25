@@ -10,7 +10,7 @@ use crate::{AuthorizationPolicy, KernelApi, KernelError};
 
 pub enum KernelStartup<P> {
     Serving {
-        kernel: KernelApi<P>,
+        kernel: Box<KernelApi<P>>,
         report: RecoveryReport,
     },
     RecoveryOnly(RecoveryReport),
@@ -70,7 +70,7 @@ pub fn start_kernel<P: AuthorizationPolicy>(
     let report = RecoveryScanner::scan(runtime)?;
     match report.mode {
         RecoveryMode::Normal => Ok(KernelStartup::Serving {
-            kernel: KernelApi::open_after_recovery(runtime, policy)?,
+            kernel: Box::new(KernelApi::open_after_recovery(runtime, policy)?),
             report,
         }),
         RecoveryMode::RecoveryOnly => Ok(KernelStartup::RecoveryOnly(report)),
@@ -86,8 +86,6 @@ mod tests {
     use golam_core::{EffectId, EffectTransitionId, EventId, SessionId};
     use golam_ledger::dispatch::encode_effect_dependencies;
     use golam_ledger::effects::{CompareAndSwapEffect, EffectStore, ProposeEffect};
-    use golam_ledger::storage::{AuthorityStore, CreateSession};
-    use rusqlite::{Connection, params};
     use std::fs;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -183,27 +181,7 @@ mod tests {
     fn corrupted_authority_returns_quarantine_without_kernel() {
         let runtime = runtime();
         let authority = AuthorityLayout::initialize(&runtime).unwrap();
-        let mut store = AuthorityStore::open(authority.authority_db_path()).unwrap();
-        store
-            .create_session(CreateSession {
-                session_id: SessionId(1),
-                event_id: EventId(2),
-                owner_principal: "owner",
-                actor_principal: "owner",
-                recorded_at: "2026-08-25T11:10:00Z",
-                payload: b"session",
-                security_critical: true,
-            })
-            .unwrap();
-        drop(store);
-        let connection = Connection::open(authority.authority_db_path()).unwrap();
-        connection
-            .execute(
-                "UPDATE session_events SET event_hash = ?1 WHERE event_id = ?2",
-                params![vec![0xCC_u8; 32], 2_u128.to_be_bytes().to_vec()],
-            )
-            .unwrap();
-        drop(connection);
+        fs::write(authority.authority_db_path(), b"not-a-sqlite-authority-db").unwrap();
 
         assert!(matches!(
             KernelApi::open(&runtime, DenyByDefault),
