@@ -180,9 +180,9 @@ impl CompensatableWriteHandler {
                     receipt: compensation,
                 }
             }
-            Some(CompensationState::Compensated(existing)) => HandlerOutcome::Succeeded {
-                receipt: existing,
-            },
+            Some(CompensationState::Compensated(existing)) => {
+                HandlerOutcome::Succeeded { receipt: existing }
+            }
             None => HandlerOutcome::Failed {
                 reason_code: "nothing_to_compensate".to_owned(),
                 receipt: None,
