@@ -9,7 +9,6 @@ blake3.workspace = true
 ed25519-dalek.workspace = true
 getrandom.workspace = true
 golam-core = { path = "../golam-core" }
-golam-ledger = { path = "../golam-ledger" }
 
 [target.'cfg(unix)'.dependencies]
 nix.workspace = true

@@ -4,6 +4,11 @@ use std::fmt;
 use ed25519_dalek::VerifyingKey;
 use golam_core::ClientId;
 use golam_core::authority::AuthorityLayout;
+use golam_ipc::credentials::{GeneratedClientCredential, key_id_for_public_key};
+use golam_ipc::lifecycle::{
+    Authenticate, ClientKeyId, ConnectionId, EnrolledClientKey, LifecycleError, LifecyclePhase,
+    Ready, ServerLifecycle, ShutdownReason,
+};
 use golam_ledger::clients::{
     AssuranceClass, ClientKind, ClientRecord, ClientRegistry, ClientRegistryError, EnrollClient,
 };
@@ -12,14 +17,8 @@ use golam_ledger::protocol_audit::{
     ProtocolRejectionReason,
 };
 
-use crate::credentials::{GeneratedClientCredential, key_id_for_public_key};
-use crate::lifecycle::{
-    Authenticate, ClientKeyId, ConnectionId, EnrolledClientKey, LifecycleError, LifecyclePhase,
-    Ready, ServerLifecycle, ShutdownReason,
-};
-
 #[derive(Debug)]
-pub enum EnrollmentError {
+pub(crate) enum ClientAuthorityError {
     Registry(ClientRegistryError),
     Audit(ProtocolAuditError),
     InvalidPublicKey,
@@ -28,23 +27,24 @@ pub enum EnrollmentError {
     AuthenticatedClientMismatch,
 }
 
-impl fmt::Display for EnrollmentError {
+impl fmt::Display for ClientAuthorityError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Registry(error) => write!(f, "client enrollment registry error: {error}"),
-            Self::Audit(error) => write!(f, "client protocol audit error: {error}"),
+            Self::Registry(error) => write!(f, "client authority registry error: {error}"),
+            Self::Audit(error) => write!(f, "client authority protocol audit error: {error}"),
             Self::InvalidPublicKey => f.write_str("client public key is not a valid Ed25519 key"),
             Self::KeyFingerprintMismatch => {
-                f.write_str("client key id does not match the enrolled public key fingerprint")
+                f.write_str("client key id does not match the public key fingerprint")
             }
             Self::Lifecycle(error) => write!(f, "client lifecycle authentication error: {error}"),
             Self::AuthenticatedClientMismatch => {
-                f.write_str("authenticated lifecycle client does not match requested enrollment")
+                f.write_str("authenticated lifecycle client does not match requested client")
             }
         }
     }
 }
-impl Error for EnrollmentError {
+
+impl Error for ClientAuthorityError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Registry(error) => Some(error),
@@ -56,41 +56,45 @@ impl Error for EnrollmentError {
         }
     }
 }
-impl From<ClientRegistryError> for EnrollmentError {
+
+impl From<ClientRegistryError> for ClientAuthorityError {
     fn from(value: ClientRegistryError) -> Self {
         Self::Registry(value)
     }
 }
-impl From<ProtocolAuditError> for EnrollmentError {
+
+impl From<ProtocolAuditError> for ClientAuthorityError {
     fn from(value: ProtocolAuditError) -> Self {
         Self::Audit(value)
     }
 }
-impl From<LifecycleError> for EnrollmentError {
+
+impl From<LifecycleError> for ClientAuthorityError {
     fn from(value: LifecycleError) -> Self {
         Self::Lifecycle(value)
     }
 }
 
-pub struct LocalClientEnrollment {
+pub(crate) struct ClientAuthority {
     registry: ClientRegistry,
     audit: ProtocolAuditLog,
 }
-impl LocalClientEnrollment {
-    pub fn open(layout: &AuthorityLayout) -> Result<Self, EnrollmentError> {
+
+impl ClientAuthority {
+    pub(crate) fn open(layout: &AuthorityLayout) -> Result<Self, ClientAuthorityError> {
         Ok(Self {
             registry: ClientRegistry::open(layout)?,
             audit: ProtocolAuditLog::open(layout)?,
         })
     }
 
-    pub fn enroll_generated(
+    pub(crate) fn enroll_generated(
         &mut self,
         generated: &GeneratedClientCredential,
         kind: ClientKind,
         owner_principal: &str,
         enrolled_at: &str,
-    ) -> Result<ClientRecord, EnrollmentError> {
+    ) -> Result<ClientRecord, ClientAuthorityError> {
         self.enroll_public(
             generated.client_id,
             generated.key_id,
@@ -103,7 +107,7 @@ impl LocalClientEnrollment {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn enroll_public(
+    fn enroll_public(
         &mut self,
         client_id: ClientId,
         key_id: ClientKeyId,
@@ -112,10 +116,10 @@ impl LocalClientEnrollment {
         owner_principal: &str,
         enrolled_at: &str,
         assurance_class: AssuranceClass,
-    ) -> Result<ClientRecord, EnrollmentError> {
-        VerifyingKey::from_bytes(&public_key).map_err(|_| EnrollmentError::InvalidPublicKey)?;
+    ) -> Result<ClientRecord, ClientAuthorityError> {
+        VerifyingKey::from_bytes(&public_key).map_err(|_| ClientAuthorityError::InvalidPublicKey)?;
         if key_id_for_public_key(public_key) != key_id {
-            return Err(EnrollmentError::KeyFingerprintMismatch);
+            return Err(ClientAuthorityError::KeyFingerprintMismatch);
         }
         Ok(self.registry.enroll(EnrollClient {
             client_id,
@@ -128,56 +132,23 @@ impl LocalClientEnrollment {
         })?)
     }
 
-    pub fn revoke(
+    pub(crate) fn revoke(
         &mut self,
         client_id: ClientId,
         revoked_at: &str,
-    ) -> Result<ClientRecord, EnrollmentError> {
+    ) -> Result<ClientRecord, ClientAuthorityError> {
         Ok(self.registry.revoke(client_id, revoked_at)?)
     }
 
-    pub fn resolve_active(
-        &self,
-        client_id: ClientId,
-        key_id: ClientKeyId,
-    ) -> Result<ClientRecord, EnrollmentError> {
-        Ok(self.registry.resolve_active(client_id, key_id.0)?)
-    }
-
-    pub fn protocol_audit_records(&self) -> Result<Vec<ProtocolAuditRecord>, EnrollmentError> {
-        Ok(self.audit.records()?)
-    }
-
-    pub fn reject_unauthenticated_request(
-        &mut self,
-        lifecycle: &mut ServerLifecycle,
-        connection_id: ConnectionId,
-        client_id: ClientId,
-        key_id: Option<ClientKeyId>,
-        detected_at: &str,
-    ) -> Result<(), EnrollmentError> {
-        self.audit_rejection(
-            lifecycle,
-            connection_id,
-            client_id,
-            key_id.unwrap_or(ClientKeyId([0; 32])),
-            detected_at,
-            ProtocolRejectionReason::UnauthenticatedRequest,
-        )
-    }
-
-    pub fn authenticate_registered(
+    pub(crate) fn authenticate_registered(
         &mut self,
         lifecycle: &mut ServerLifecycle,
         connection_id: ConnectionId,
         client_id: ClientId,
         authenticate: Authenticate,
         authenticated_at: &str,
-    ) -> Result<Ready, EnrollmentError> {
-        let record = match self
-            .registry
-            .resolve_active(client_id, authenticate.key_id.0)
-        {
+    ) -> Result<Ready, ClientAuthorityError> {
+        let record = match self.registry.resolve_active(client_id, authenticate.key_id.0) {
             Ok(record) => record,
             Err(error) => {
                 close_for_authentication_failure(lifecycle);
@@ -190,14 +161,14 @@ impl LocalClientEnrollment {
                         reason,
                     })?;
                 }
-                return Err(EnrollmentError::Registry(error));
+                return Err(ClientAuthorityError::Registry(error));
             }
         };
         let verifying_key = match VerifyingKey::from_bytes(&record.public_key) {
             Ok(key) => key,
             Err(_) => {
                 close_for_authentication_failure(lifecycle);
-                return Err(EnrollmentError::InvalidPublicKey);
+                return Err(ClientAuthorityError::InvalidPublicKey);
             }
         };
         let enrolled_key = EnrolledClientKey {
@@ -214,7 +185,7 @@ impl LocalClientEnrollment {
                     detected_at: authenticated_at,
                     reason: lifecycle_rejection_reason(&error),
                 })?;
-                return Err(EnrollmentError::Lifecycle(error));
+                return Err(ClientAuthorityError::Lifecycle(error));
             }
         };
         if lifecycle.authenticated_client() != Some(client_id) {
@@ -226,16 +197,41 @@ impl LocalClientEnrollment {
                 authenticated_at,
                 ProtocolRejectionReason::ProtocolViolation,
             )?;
-            return Err(EnrollmentError::AuthenticatedClientMismatch);
+            return Err(ClientAuthorityError::AuthenticatedClientMismatch);
         }
         if let Err(error) =
             self.registry
                 .mark_authenticated(client_id, authenticate.key_id.0, authenticated_at)
         {
             close_for_authentication_failure(lifecycle);
-            return Err(EnrollmentError::Registry(error));
+            return Err(ClientAuthorityError::Registry(error));
         }
         Ok(ready)
+    }
+
+    pub(crate) fn reject_unauthenticated_request(
+        &mut self,
+        lifecycle: &mut ServerLifecycle,
+        connection_id: ConnectionId,
+        client_id: ClientId,
+        key_id: Option<ClientKeyId>,
+        detected_at: &str,
+    ) -> Result<(), ClientAuthorityError> {
+        self.audit_rejection(
+            lifecycle,
+            connection_id,
+            client_id,
+            key_id.unwrap_or(ClientKeyId([0; 32])),
+            detected_at,
+            ProtocolRejectionReason::UnauthenticatedRequest,
+        )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn protocol_audit_records(
+        &self,
+    ) -> Result<Vec<ProtocolAuditRecord>, ClientAuthorityError> {
+        Ok(self.audit.records()?)
     }
 
     fn audit_rejection(
@@ -246,7 +242,7 @@ impl LocalClientEnrollment {
         key_id: ClientKeyId,
         detected_at: &str,
         reason: ProtocolRejectionReason,
-    ) -> Result<(), EnrollmentError> {
+    ) -> Result<(), ClientAuthorityError> {
         close_for_authentication_failure(lifecycle);
         self.audit.append_rejection(AppendProtocolRejection {
             connection_id: connection_id.0,
@@ -287,11 +283,11 @@ fn lifecycle_rejection_reason(error: &LifecycleError) -> ProtocolRejectionReason
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::credentials::ClientCredentialStore;
-    use crate::lifecycle::{AuthTranscript, Challenge, Hello, NONCE_LEN};
     use ed25519_dalek::Signer;
     use golam_core::paths::RuntimeLayout;
     use golam_core::{PROTOCOL_VERSION, ResourceLimits};
+    use golam_ipc::credentials::ClientCredentialStore;
+    use golam_ipc::lifecycle::{AuthTranscript, Challenge, Hello, NONCE_LEN};
     use std::fs;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -305,7 +301,7 @@ mod tests {
             .unwrap()
             .as_nanos();
         let runtime = RuntimeLayout::initialize(
-            std::env::temp_dir().join(format!("golam-enrollment-{}-{t}-{n}", std::process::id())),
+            std::env::temp_dir().join(format!("golam-client-authority-{}-{t}-{n}", std::process::id())),
         )
         .unwrap();
         let authority = AuthorityLayout::initialize(&runtime).unwrap();
@@ -333,182 +329,189 @@ mod tests {
             limits,
         };
         let transcript = AuthTranscript::from_messages(hello, challenge).unwrap();
-        let signature = signing
-            .sign(&transcript.canonical_bytes(key_id).unwrap())
-            .to_bytes();
         Authenticate {
             key_id,
             client_nonce,
-            signature,
+            signature: signing
+                .sign(&transcript.canonical_bytes(key_id).unwrap())
+                .to_bytes(),
         }
     }
 
     #[test]
-    fn enrolled_client_authenticates_then_revocation_blocks_and_audits_new_session() {
+    fn authority_owns_enrollment_authentication_revocation_and_protocol_audit() {
         let (runtime, authority) = authority();
         let store = ClientCredentialStore::new(&authority);
-        let generated = store.generate(ClientId(41)).unwrap();
-        let signing = store.load(generated.client_id, generated.key_id).unwrap();
-        let mut enrollment = LocalClientEnrollment::open(&authority).unwrap();
-        enrollment
-            .enroll_generated(
-                &generated,
-                ClientKind::Test,
-                "owner",
-                "2026-08-25T00:00:00Z",
-            )
+        let enrolled = store.generate(ClientId(701)).unwrap();
+        let enrolled_signing = store.load(enrolled.client_id, enrolled.key_id).unwrap();
+        let unknown = store.generate(ClientId(702)).unwrap();
+        let unknown_signing = store.load(unknown.client_id, unknown.key_id).unwrap();
+        let mut clients = ClientAuthority::open(&authority).unwrap();
+        clients
+            .enroll_generated(&enrolled, ClientKind::Test, "owner", "2026-08-25T02:00:00Z")
             .unwrap();
         let limits = ResourceLimits::default();
-        let mut first = ServerLifecycle::new(9, [3; NONCE_LEN], limits, ConnectionId(77)).unwrap();
-        first
-            .receive_hello(Hello {
-                protocol_version: PROTOCOL_VERSION,
-                client_id: generated.client_id,
-                client_nonce: [2; NONCE_LEN],
-            })
-            .unwrap();
-        enrollment
-            .authenticate_registered(
-                &mut first,
-                ConnectionId(77),
-                generated.client_id,
+
+        let mut unknown_server =
+            ServerLifecycle::new(50, [10; NONCE_LEN], limits, ConnectionId(300)).unwrap();
+        let unknown_hello = Hello {
+            protocol_version: PROTOCOL_VERSION,
+            client_id: unknown.client_id,
+            client_nonce: [11; NONCE_LEN],
+        };
+        unknown_server.receive_hello(unknown_hello).unwrap();
+        assert!(matches!(
+            clients.authenticate_registered(
+                &mut unknown_server,
+                ConnectionId(300),
+                unknown.client_id,
                 auth(
-                    &signing,
-                    generated.client_id,
-                    generated.key_id,
-                    [2; NONCE_LEN],
-                    [3; NONCE_LEN],
-                    9,
+                    &unknown_signing,
+                    unknown.client_id,
+                    unknown.key_id,
+                    unknown_hello.client_nonce,
+                    [10; NONCE_LEN],
+                    50,
                     limits,
                 ),
-                "2026-08-25T00:01:00Z",
-            )
-            .unwrap();
-        enrollment
-            .revoke(generated.client_id, "2026-08-25T00:02:00Z")
-            .unwrap();
-        let mut second =
-            ServerLifecycle::new(10, [4; NONCE_LEN], limits, ConnectionId(78)).unwrap();
-        second
-            .receive_hello(Hello {
-                protocol_version: PROTOCOL_VERSION,
-                client_id: generated.client_id,
-                client_nonce: [5; NONCE_LEN],
-            })
-            .unwrap();
-        assert!(matches!(
-            enrollment.authenticate_registered(
-                &mut second,
-                ConnectionId(78),
-                generated.client_id,
-                auth(
-                    &signing,
-                    generated.client_id,
-                    generated.key_id,
-                    [5; NONCE_LEN],
-                    [4; NONCE_LEN],
-                    10,
-                    limits
-                ),
-                "2026-08-25T00:03:00Z"
+                "2026-08-25T02:01:00Z",
             ),
-            Err(EnrollmentError::Registry(
-                ClientRegistryError::RevokedClient
-            ))
+            Err(ClientAuthorityError::Registry(ClientRegistryError::UnknownClient))
         ));
-        assert_eq!(second.phase(), LifecyclePhase::Closed);
-        let audit = enrollment.protocol_audit_records().unwrap();
-        assert_eq!(audit.len(), 1);
-        assert_eq!(audit[0].connection_id, 78);
-        assert_eq!(audit[0].reason, ProtocolRejectionReason::RevokedClient);
-        drop(enrollment);
-        fs::remove_dir_all(runtime.root).unwrap();
-    }
+        assert_eq!(unknown_server.phase(), LifecyclePhase::Closed);
 
-    #[test]
-    fn replay_and_unauthenticated_request_are_closed_and_audited() {
-        let (runtime, authority) = authority();
-        let store = ClientCredentialStore::new(&authority);
-        let generated = store.generate(ClientId(51)).unwrap();
-        let signing = store.load(generated.client_id, generated.key_id).unwrap();
-        let mut enrollment = LocalClientEnrollment::open(&authority).unwrap();
-        enrollment
-            .enroll_generated(
-                &generated,
-                ClientKind::Test,
-                "owner",
-                "2026-08-25T01:00:00Z",
-            )
-            .unwrap();
-        let limits = ResourceLimits::default();
         let hello = Hello {
             protocol_version: PROTOCOL_VERSION,
-            client_id: generated.client_id,
-            client_nonce: [6; NONCE_LEN],
+            client_id: enrolled.client_id,
+            client_nonce: [13; NONCE_LEN],
+        };
+        let mut wrong_key =
+            ServerLifecycle::new(51, [12; NONCE_LEN], limits, ConnectionId(301)).unwrap();
+        wrong_key.receive_hello(hello).unwrap();
+        assert!(matches!(
+            clients.authenticate_registered(
+                &mut wrong_key,
+                ConnectionId(301),
+                enrolled.client_id,
+                auth(
+                    &unknown_signing,
+                    enrolled.client_id,
+                    unknown.key_id,
+                    hello.client_nonce,
+                    [12; NONCE_LEN],
+                    51,
+                    limits,
+                ),
+                "2026-08-25T02:02:00Z",
+            ),
+            Err(ClientAuthorityError::Registry(ClientRegistryError::ClientKeyMismatch))
+        ));
+        assert_eq!(wrong_key.phase(), LifecyclePhase::Closed);
+
+        let captured_hello = Hello {
+            protocol_version: PROTOCOL_VERSION,
+            client_id: enrolled.client_id,
+            client_nonce: [14; NONCE_LEN],
         };
         let captured = auth(
-            &signing,
-            generated.client_id,
-            generated.key_id,
-            hello.client_nonce,
-            [7; NONCE_LEN],
-            20,
+            &enrolled_signing,
+            enrolled.client_id,
+            enrolled.key_id,
+            captured_hello.client_nonce,
+            [15; NONCE_LEN],
+            52,
             limits,
         );
-        let mut first = ServerLifecycle::new(20, [7; NONCE_LEN], limits, ConnectionId(90)).unwrap();
-        first.receive_hello(hello).unwrap();
-        enrollment
+        let mut valid = ServerLifecycle::new(52, [15; NONCE_LEN], limits, ConnectionId(302)).unwrap();
+        valid.receive_hello(captured_hello).unwrap();
+        clients
             .authenticate_registered(
-                &mut first,
-                ConnectionId(90),
-                generated.client_id,
+                &mut valid,
+                ConnectionId(302),
+                enrolled.client_id,
                 captured,
-                "2026-08-25T01:01:00Z",
+                "2026-08-25T02:03:00Z",
             )
             .unwrap();
 
-        let mut replay =
-            ServerLifecycle::new(21, [8; NONCE_LEN], limits, ConnectionId(91)).unwrap();
-        replay.receive_hello(hello).unwrap();
+        let mut replay = ServerLifecycle::new(53, [16; NONCE_LEN], limits, ConnectionId(303)).unwrap();
+        replay.receive_hello(captured_hello).unwrap();
         assert!(matches!(
-            enrollment.authenticate_registered(
+            clients.authenticate_registered(
                 &mut replay,
-                ConnectionId(91),
-                generated.client_id,
+                ConnectionId(303),
+                enrolled.client_id,
                 captured,
-                "2026-08-25T01:02:00Z"
+                "2026-08-25T02:04:00Z",
             ),
-            Err(EnrollmentError::Lifecycle(
-                LifecycleError::AuthenticationFailed
-            ))
+            Err(ClientAuthorityError::Lifecycle(LifecycleError::AuthenticationFailed))
         ));
         assert_eq!(replay.phase(), LifecyclePhase::Closed);
 
-        let mut pre_ready =
-            ServerLifecycle::new(22, [9; NONCE_LEN], limits, ConnectionId(92)).unwrap();
-        pre_ready.receive_hello(hello).unwrap();
-        enrollment
+        clients
+            .revoke(enrolled.client_id, "2026-08-25T02:05:00Z")
+            .unwrap();
+        let revoked_hello = Hello {
+            client_nonce: [18; NONCE_LEN],
+            ..captured_hello
+        };
+        let mut revoked = ServerLifecycle::new(54, [17; NONCE_LEN], limits, ConnectionId(304)).unwrap();
+        revoked.receive_hello(revoked_hello).unwrap();
+        assert!(matches!(
+            clients.authenticate_registered(
+                &mut revoked,
+                ConnectionId(304),
+                enrolled.client_id,
+                auth(
+                    &enrolled_signing,
+                    enrolled.client_id,
+                    enrolled.key_id,
+                    revoked_hello.client_nonce,
+                    [17; NONCE_LEN],
+                    54,
+                    limits,
+                ),
+                "2026-08-25T02:06:00Z",
+            ),
+            Err(ClientAuthorityError::Registry(ClientRegistryError::RevokedClient))
+        ));
+        assert_eq!(revoked.phase(), LifecyclePhase::Closed);
+
+        let mut pre_ready = ServerLifecycle::new(55, [19; NONCE_LEN], limits, ConnectionId(305)).unwrap();
+        pre_ready
+            .receive_hello(Hello {
+                client_nonce: [20; NONCE_LEN],
+                ..captured_hello
+            })
+            .unwrap();
+        clients
             .reject_unauthenticated_request(
                 &mut pre_ready,
-                ConnectionId(92),
-                generated.client_id,
+                ConnectionId(305),
+                enrolled.client_id,
                 None,
-                "2026-08-25T01:03:00Z",
+                "2026-08-25T02:07:00Z",
             )
             .unwrap();
         assert_eq!(pre_ready.phase(), LifecyclePhase::Closed);
 
-        let audit = enrollment.protocol_audit_records().unwrap();
-        assert_eq!(audit.len(), 2);
+        let reasons: Vec<_> = clients
+            .protocol_audit_records()
+            .unwrap()
+            .iter()
+            .map(|record| record.reason)
+            .collect();
         assert_eq!(
-            audit[0].reason,
-            ProtocolRejectionReason::AuthenticationFailed
+            reasons,
+            vec![
+                ProtocolRejectionReason::UnknownClient,
+                ProtocolRejectionReason::ClientKeyMismatch,
+                ProtocolRejectionReason::AuthenticationFailed,
+                ProtocolRejectionReason::RevokedClient,
+                ProtocolRejectionReason::UnauthenticatedRequest,
+            ]
         );
-        assert_eq!(
-            audit[1].reason,
-            ProtocolRejectionReason::UnauthenticatedRequest
-        );
-        drop(enrollment);
+        drop(clients);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 }

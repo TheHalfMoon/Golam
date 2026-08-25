@@ -1,7 +1,6 @@
 #![forbid(unsafe_code)]
 
 pub mod credentials;
-pub mod enrollment;
 pub mod lifecycle;
 pub mod request;
 #[cfg(unix)]
