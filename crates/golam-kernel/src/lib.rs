@@ -43,8 +43,9 @@ pub use operations::{
 pub use resource::{ProtectedResourceError, UnprivilegedPath};
 pub use startup::{KernelStartup, KernelStartupError, start_kernel};
 pub use synthetic_effect::{
-    CompleteSyntheticEffect, PrepareSyntheticEffect, SyntheticEffectError, SyntheticEffectOutcome,
-    SyntheticExecutionCompletion, SyntheticReconciliationContext, SyntheticReconciliationResult,
+    CompleteSyntheticEffect, PrepareSyntheticEffect, ResolveSyntheticReconciliation,
+    SyntheticEffectError, SyntheticEffectOutcome, SyntheticExecutionCompletion,
+    SyntheticReconciliationContext, SyntheticReconciliationResult,
 };
 
 use authorization::AuthorizationEngine;
