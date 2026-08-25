@@ -6,6 +6,7 @@ pub mod clients;
 pub mod fork;
 pub mod goal;
 pub mod integrity;
+pub mod protocol_audit;
 pub mod storage;
 
 use golam_core::{CanonicalEncoder, CoreError, EventId, SessionId};
