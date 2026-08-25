@@ -357,7 +357,11 @@ fn insert_event(
 
 fn next_global_seq(transaction: &Transaction<'_>) -> Result<u64, StorageError> {
     let current: i64 = transaction.query_row(
-        "SELECT COALESCE(MAX(global_seq), 0) FROM session_events",
+        "SELECT COALESCE(MAX(global_seq), 0) FROM (\
+           SELECT global_seq FROM session_events \
+           UNION ALL SELECT global_seq FROM effect_transitions \
+           UNION ALL SELECT global_seq FROM authorization_decisions\
+         )",
         [],
         |row| row.get(0),
     )?;
@@ -639,6 +643,39 @@ mod tests {
         );
         assert_eq!(appended.record.previous_audit_hash, created.audit_hash);
         store.verify_integrity().unwrap();
+    }
+
+    #[test]
+    fn session_allocator_advances_past_authorization_decisions() {
+        let mut store = AuthorityStore::open_in_memory().unwrap();
+        store
+            .connection
+            .execute(
+                "INSERT INTO authorization_decisions \
+                 (decision_id, principal, action, resource, context_hash, decision, reason_code, global_seq) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, 'allow', 'test', 1)",
+                params![
+                    vec![1_u8; 16],
+                    "owner:owner",
+                    "session.create",
+                    "session:new",
+                    vec![0_u8; 32]
+                ],
+            )
+            .unwrap();
+
+        let created = store
+            .create_session(CreateSession {
+                session_id: SessionId(99),
+                event_id: EventId(990),
+                owner_principal: "owner",
+                actor_principal: "owner",
+                recorded_at: "2026-08-25T07:58:00Z",
+                payload: b"create-after-auth",
+                security_critical: true,
+            })
+            .unwrap();
+        assert_eq!(created.record.global_seq, 2);
     }
 
     #[test]
