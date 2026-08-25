@@ -281,7 +281,10 @@ mod tests {
         let snapshot = reader.snapshot(effect_id).unwrap().unwrap();
         assert_eq!(snapshot.session_id, SessionId(2));
         assert_eq!(snapshot.current_state, "executing");
-        assert_eq!(snapshot.latest_attempt.unwrap().attempt_id, EffectAttemptId(8));
+        assert_eq!(
+            snapshot.latest_attempt.unwrap().attempt_id,
+            EffectAttemptId(8)
+        );
         drop(reader);
         fs::remove_dir_all(runtime.root).unwrap();
     }
