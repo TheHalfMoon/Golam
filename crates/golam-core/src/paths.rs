@@ -205,10 +205,7 @@ mod tests {
 
     fn unique_root() -> PathBuf {
         let counter = TEST_ROOT_COUNTER.fetch_add(1, Ordering::Relaxed);
-        std::env::temp_dir().join(format!(
-            "golam-paths-{}-{counter}",
-            std::process::id()
-        ))
+        std::env::temp_dir().join(format!("golam-paths-{}-{counter}", std::process::id()))
     }
 
     #[test]
