@@ -13,9 +13,10 @@ use golam_ledger::clients::{
     AssuranceClass, ClientKind, ClientRecord, ClientRegistry, ClientRegistryError, EnrollClient,
 };
 use golam_ledger::protocol_audit::{
-    AppendProtocolRejection, ProtocolAuditError, ProtocolAuditLog, ProtocolAuditRecord,
-    ProtocolRejectionReason,
+    AppendProtocolRejection, ProtocolAuditError, ProtocolAuditLog, ProtocolRejectionReason,
 };
+#[cfg(test)]
+use golam_ledger::protocol_audit::ProtocolAuditRecord;
 
 #[derive(Debug)]
 pub enum ClientAuthorityError {
