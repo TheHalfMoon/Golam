@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod command;
 pub mod credentials;
 pub mod lifecycle;
 pub mod request;
