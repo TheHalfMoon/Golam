@@ -4,8 +4,8 @@
 **Implementation branch**: `impl/002-kernel-durable-session-spine`  
 **PR**: `#3` — OPEN / DRAFT  
 **Canonical implementation base**: `main@cfcc90f452e7115bfb104f886e09c309a5d57a1c`  
-**Last reconciled proven code head**: `13b8b002b3d5224301606ef445d20fcd1b356993`  
-**Exact-head CI evidence**: run `32837103014` / run number `116` — Windows, macOS, Linux `fmt + clippy -D warnings + test` PASS
+**Last reconciled proven code head**: `cb18dc7ec3944a43a8a6a754a7870ccf23c7c2ee`  
+**Exact-head CI evidence**: run `32839006104` / run number `122` — Windows, macOS, Linux `fmt + clippy -D warnings + test` PASS
 
 Legend:
 - `[x]` = task requirement is satisfied by current implementation/evidence.
@@ -17,7 +17,7 @@ Legend:
 
 - [x] **T002-001** Verify exact live `main` after planning PR merge; create implementation branch from that exact commit. — PASS from `main@cfcc90f452e7115bfb104f886e09c309a5d57a1c`.
 - [x] **T002-002** Create the Rust workspace with only `golam-core`, `golam-ledger`, `golam-effects`, `golam-ipc`, `golam-kernel`, `golamd`, `golam`; pin current stable toolchain and forbid unsafe Golam code. — PASS; Rust 1.98.0 and workspace `unsafe_code = forbid` are active.
-- [x] **T002-003** Add baseline CI for fmt/clippy/test on Windows/macOS/Linux; do not claim green until runs exist. — PASS; exact-head matrix runs exist, latest proven code run `32837103014`.
+- [x] **T002-003** Add baseline CI for fmt/clippy/test on Windows/macOS/Linux; do not claim green until runs exist. — PASS; exact-head matrix runs exist, latest proven code run `32839006104`.
 
 ## Phase B — Donor admission/evidence
 
@@ -31,7 +31,7 @@ Legend:
 - [x] **T002-021** Implement protected Golam data/runtime directory creation and permission checks per platform. — PASS: Unix/macOS private directory permissions and Windows current-user protected DACL application/re-verification are proven; authority state lives under an explicitly protected authority subtree; generic/unprivileged path admission rejects the authority root, DB, credential subtree, reserved audit/policy paths, traversal, and paths outside the runtime root. Exact-head cross-platform proof is run `32824677555`.
 - [x] **T002-022** Implement SQLite migrations/tables for sessions/events/goals/forks/checkpoints/effects/transitions/clients/audit/recovery. — PASS for schema v1 tables and forward-version refusal.
 - [x] **T002-023** Implement transactional global/per-session sequence assignment and deterministic event/hash-chain vectors. — PASS; canonical `global_seq` allocation is reconciled across session events, effect transitions, and authorization decisions, with a regression proving a session event advances past a prior authorization decision.
-- [ ] **T002-024** Implement authority DB startup integrity checks and fail-closed recovery-only mode; never silently reset. — **PARTIAL**: startup quick-check + canonical event/audit integrity verification fail closed; explicit recovery-only/quarantine serving mode remains for T002-060.
+- [x] **T002-024** Implement authority DB startup integrity checks and fail-closed recovery-only mode; never silently reset. — PASS at `cb18dc7ec3944a43a8a6a754a7870ccf23c7c2ee`, CI `32839006104`: startup runs the canonical AuthorityStore schema/quick-check/hash-chain verification, classifies valid-but-incoherent authority state as `RECOVERY_ONLY`, classifies canonical DB corruption as `QUARANTINE`, refuses privileged `KernelApi` construction in both blocking modes, and a corruption regression proves the damaged canonical bytes are not silently reset or replaced.
 - [x] **T002-025** Implement content-addressed artifact temp-write/hash/atomic-install/cleanup. — PASS.
 - [x] **T002-026** Implement checkpoint creation/verification/fallback and replay equivalence tests. — PASS.
 - [x] **T002-027** Implement immutable session fork anchors and property tests. — PASS for current bounded property coverage; final property-suite expansion remains T002-071.
@@ -63,11 +63,11 @@ Legend:
 - [x] **T002-053** Enforce durable intent-before-dispatch and dependent-effect blocking on UNKNOWN_OUTCOME. — PASS at `376c8d7439c7b6661f5fcb9d58887006fc0241ef`, CI `32836135066`: canonical bounded dependency encoding is fail-closed; `prepare_dispatch` requires the effect to be AUTHORIZED and every dependency to be definitively SUCCEEDED, so UNKNOWN_OUTCOME/missing/nonterminal dependencies block before any attempt exists; one `BEGIN IMMEDIATE` transaction writes the durable attempt and AUTHORIZED→EXECUTING transition before returning; `KernelApi` returns a sealed `PreparedEffectDispatch` proof rather than exposing a constructible dispatch authority token.
 - [x] **T002-054** Build fault injector for every transition and simulated remote accept/ack boundary. — PASS at `5f0e773297984e63c6e6cbb1d4d4b8e3ae89c766`, CI `32836752554`: deterministic `CrashOnce` targets exact fault points; the planned durable-transition table covers initial PROPOSED plus every declared FSM edge and tests distinguish crash-before-commit from crash-after-commit; fault-injectable simulators expose remote before/after-accept and before/after-ack boundaries at the actual mutation/ack points, proving pre-accept crashes leave no acceptance while post-accept crashes remain reconcilable without redispatch.
 - [x] **T002-055** Prove at-most-once/irreversible handlers do not blind duplicate across daemon kill/restart. — PASS at `13b8b002b3d5224301606ef445d20fcd1b356993`, CI `32837103014`: cross-platform restart integration proofs create durable first attempts for both `at_most_once` and `irreversible`, model a remote acceptance followed by daemon loss before acknowledgement/terminal state, reopen `KernelApi`, and prove a second prepared dispatch is rejected while the canonical effect remains EXECUTING with exactly one durable attempt and no second attempt row.
-- [ ] **T002-056** Implement manual-review state/reporting for unreconcilable ambiguity.
+- [x] **T002-056** Implement manual-review state/reporting for unreconcilable ambiguity. — PASS at `62cc7950814ffdcc0fb23b5c27a46ce51b51e2b3`, CI `32837976384`: only `UNKNOWN_OUTCOME` or `RECONCILING` may enter MANUAL_REVIEW; one `BEGIN IMMEDIATE` transaction durably records the MANUAL_REVIEW transition plus bounded recovery incident/report, validates any linked attempt belongs to the effect, preserves canonical global sequencing, and reopen tests prove the report persists while non-ambiguous states are rejected without a report.
 
 ## Phase G — Recovery + CLI
 
-- [ ] **T002-060** Implement startup recovery scan for incomplete effects/checkpoints/hash chains and explicit recovery-only/quarantine mode. — Must close the remaining T002-024 gap.
+- [x] **T002-060** Implement startup recovery scan for incomplete effects/checkpoints/hash chains and explicit recovery-only/quarantine mode. — PASS at `cb18dc7ec3944a43a8a6a754a7870ccf23c7c2ee`, CI `32839006104`: startup classifies clean/coherent authority as NORMAL, coherent unfinished effects as recovery attention without inventing completion, incoherent executing/unknown/reconciling effects without durable attempts and invalid checkpoint anchors/artifacts as RECOVERY_ONLY, and canonical authority corruption as QUARANTINE; checkpoint files are bounded to safe relative artifact paths and reverified by size/BLAKE3; direct `KernelApi::open` cannot bypass the gate, while `start_kernel` returns explicit `Serving`, `RecoveryOnly`, or `Quarantined` outcomes.
 - [ ] **T002-061** Evaluate/implement preallocated disk recovery reserve; prove or remove the guarantee based on tests.
 - [ ] **T002-062** Implement minimal CLI commands for client enroll, sessions, replay/fork/checkpoint, effect simulator/reconcile and doctor/recovery report.
 - [ ] **T002-063** Add process-kill/restart integration harness and disk-full/corruption simulations.
