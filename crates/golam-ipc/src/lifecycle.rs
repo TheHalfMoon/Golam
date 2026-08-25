@@ -583,7 +583,7 @@ mod tests {
         }
     }
 
-    fn server() -> ServerLifecycle {
+    fn fresh_server() -> ServerLifecycle {
         ServerLifecycle::new(
             7,
             [2_u8; NONCE_LEN],
@@ -656,7 +656,7 @@ mod tests {
     fn correct_transcript_signature_reaches_ready_and_shutdown() {
         let signing_key = signing_key();
         let hello = hello();
-        let mut server = server();
+        let mut server = fresh_server();
         let challenge = server.receive_hello(hello).unwrap();
         let authenticate = authenticate_message(&signing_key, hello, challenge);
         let ready = server
@@ -677,7 +677,7 @@ mod tests {
         let correct_key = signing_key();
         let wrong_key = SigningKey::from_bytes(&[8_u8; 32]);
         let hello = hello();
-        let mut server = server();
+        let mut server = fresh_server();
         let challenge = server.receive_hello(hello).unwrap();
         let authenticate = authenticate_message(&wrong_key, hello, challenge);
 
@@ -692,7 +692,7 @@ mod tests {
     fn stale_epoch_signature_fails_closed() {
         let signing_key = signing_key();
         let hello = hello();
-        let mut server = server();
+        let mut server = fresh_server();
         let challenge = server.receive_hello(hello).unwrap();
         let stale_challenge = Challenge {
             server_epoch: challenge.server_epoch - 1,
@@ -711,7 +711,7 @@ mod tests {
     fn changed_client_nonce_and_key_id_fail_closed() {
         let signing_key = signing_key();
         let hello = hello();
-        let mut server = server();
+        let mut server = fresh_server();
         let challenge = server.receive_hello(hello).unwrap();
         let mut authenticate = authenticate_message(&signing_key, hello, challenge);
         authenticate.client_nonce = [4_u8; NONCE_LEN];
@@ -720,7 +720,7 @@ mod tests {
             Err(LifecycleError::ClientNonceMismatch)
         );
 
-        let mut server = server();
+        let mut server = fresh_server();
         let challenge = server.receive_hello(hello).unwrap();
         let mut authenticate = authenticate_message(&signing_key, hello, challenge);
         authenticate.key_id = ClientKeyId([5_u8; CLIENT_KEY_ID_LEN]);
@@ -733,7 +733,7 @@ mod tests {
 
     #[test]
     fn repeated_or_out_of_order_lifecycle_fails_closed() {
-        let mut server = server();
+        let mut server = fresh_server();
         let hello = hello();
         server.receive_hello(hello).unwrap();
         assert!(matches!(
@@ -743,7 +743,7 @@ mod tests {
         assert_eq!(server.phase(), LifecyclePhase::Closed);
 
         let signing_key = signing_key();
-        let mut server = server();
+        let mut server = fresh_server();
         let authenticate = Authenticate {
             key_id: key_id(),
             client_nonce: hello.client_nonce,
