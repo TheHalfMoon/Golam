@@ -4,7 +4,9 @@ use std::error::Error;
 use std::fmt;
 
 use golam_core::{EffectAttemptId, EffectId, EffectTransitionId, EventId, SessionId};
-use golam_ledger::dispatch::{EffectDispatchStoreError, PrepareEffectDispatch, encode_effect_dependencies};
+use golam_ledger::dispatch::{
+    EffectDispatchStoreError, PrepareEffectDispatch, encode_effect_dependencies,
+};
 use golam_ledger::effect_completion::{
     CompleteEffectExecution, EffectCompletionError, EffectCompletionStore, ExecutionCompletion,
 };
@@ -145,7 +147,9 @@ impl fmt::Display for SyntheticEffectError {
             Self::Kernel(error) => write!(f, "synthetic effect kernel error: {error}"),
             Self::EffectDispatch(error) => write!(f, "synthetic effect dispatch error: {error}"),
             Self::EffectStore(error) => write!(f, "synthetic effect store error: {error}"),
-            Self::EffectCompletion(error) => write!(f, "synthetic effect completion error: {error}"),
+            Self::EffectCompletion(error) => {
+                write!(f, "synthetic effect completion error: {error}")
+            }
             Self::EffectRead(error) => write!(f, "synthetic effect read error: {error}"),
             Self::ManualReview(error) => write!(f, "synthetic effect manual-review error: {error}"),
             Self::InvalidMetadata => f.write_str("synthetic effect metadata must be non-empty"),
@@ -161,7 +165,11 @@ impl fmt::Display for SyntheticEffectError {
                 write!(f, "synthetic effect not found: {}", effect_id.0)
             }
             Self::MissingAttempt(effect_id) => {
-                write!(f, "synthetic effect has no durable attempt: {}", effect_id.0)
+                write!(
+                    f,
+                    "synthetic effect has no durable attempt: {}",
+                    effect_id.0
+                )
             }
             Self::AttemptMismatch { expected, actual } => write!(
                 f,
@@ -235,7 +243,9 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         scope: &str,
     ) -> Result<PreparedEffectDispatch, SyntheticEffectError> {
         validate_semantics(input.execution_semantics)?;
-        if input.handler_id.is_empty() || input.handler_version.is_empty() || input.started_at.is_empty()
+        if input.handler_id.is_empty()
+            || input.handler_version.is_empty()
+            || input.started_at.is_empty()
         {
             return Err(SyntheticEffectError::InvalidMetadata);
         }
@@ -366,10 +376,7 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
 
         let mut effects = EffectStore::open(&self.authority)?;
         effects.compare_and_swap(CompareAndSwapEffect {
-            transition_id: EffectTransitionId(stage_id(
-                effect_id,
-                STAGE_RECONCILING_TRANSITION,
-            )?),
+            transition_id: EffectTransitionId(stage_id(effect_id, STAGE_RECONCILING_TRANSITION)?),
             effect_id,
             expected_state: "unknown_outcome",
             next_state: "reconciling",
