@@ -61,11 +61,7 @@ fn hostile_adapter_cannot_cross_kernel_authority_boundary() {
     ));
 
     let egress = kernel
-        .network_egress_authorize(
-            hostile,
-            "https://example.invalid",
-            "local-client",
-        )
+        .network_egress_authorize(hostile, "https://example.invalid", "local-client")
         .unwrap();
     assert_eq!(egress.decision, AuthorizationDecision::Deny);
 
