@@ -1,0 +1,355 @@
+name: spec002-request-repair
+
+on:
+  push:
+    branches:
+      - impl/002-kernel-durable-session-spine
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/002-kernel-durable-session-spine
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt
+      - name: Harden request settlement state machine
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('crates/golam-ipc/src/request.rs')
+          s = p.read_text()
+
+          def one(old, new):
+              global s
+              count = s.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected exactly one match, found {count}: {old[:80]!r}')
+              s = s.replace(old, new)
+
+          one('use crate::{FrameHeader, FrameKind};', 'use crate::{FrameHeader, FrameKind, IpcError};')
+
+          one('''#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+          pub struct Settlement {
+              pub request_id: RequestId,
+              pub state: PendingState,
+          }
+
+          #[derive(Clone, Debug, Eq, PartialEq)]
+          pub enum RequestProtocolError {''', '''#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+          pub struct Settlement {
+              pub request_id: RequestId,
+              pub state: PendingState,
+          }
+
+          #[derive(Clone, Debug, Eq, PartialEq)]
+          pub enum ServerAction {
+              Reply {
+                  settlement: Settlement,
+                  message: ReplyMessage,
+              },
+              Event,
+          }
+
+          #[derive(Clone, Debug, Eq, PartialEq)]
+          pub enum RequestProtocolError {''')
+
+          one('''pub enum RequestProtocolError {
+              NotReady { phase: LifecyclePhase },
+              Closed,
+              InvalidRequestId,
+              InvalidMethodId,
+              RequestPayloadTooShort { actual: usize },''', '''pub enum RequestProtocolError {
+              Ipc(IpcError),
+              NotReady { phase: LifecyclePhase },
+              Closed,
+              InvalidPendingLimit,
+              InvalidRequestId,
+              InvalidMethodId,
+              PayloadLengthMismatch { declared: u32, actual: usize },
+              RequestPayloadTooShort { actual: usize },
+              UnexpectedCancelPayload { actual: usize },''')
+
+          one('''        match self {
+              Self::NotReady { phase } => {''', '''        match self {
+              Self::Ipc(error) => write!(f, "IPC application frame failed wire validation: {error}"),
+              Self::NotReady { phase } => {''')
+
+          one('''            Self::Closed => f.write_str("IPC application protocol is closed"),
+              Self::InvalidRequestId => f.write_str("IPC request id zero is reserved and invalid"),''', '''            Self::Closed => f.write_str("IPC application protocol is closed"),
+              Self::InvalidPendingLimit => f.write_str("IPC pending-request limit must be non-zero"),
+              Self::InvalidRequestId => f.write_str("IPC request id zero is reserved and invalid"),''')
+
+          one('''            Self::InvalidMethodId => {
+                  f.write_str("IPC request method id zero is reserved and invalid")
+              }
+              Self::RequestPayloadTooShort { actual } => write!(''', '''            Self::InvalidMethodId => {
+                  f.write_str("IPC request method id zero is reserved and invalid")
+              }
+              Self::PayloadLengthMismatch { declared, actual } => write!(
+                  f,
+                  "IPC frame declared {declared} payload bytes but received {actual}"
+              ),
+              Self::RequestPayloadTooShort { actual } => write!(''')
+
+          one('''            Self::ReplyPayloadTooShort { actual } => write!(
+                  f,
+                  "IPC reply payload has {actual} bytes; expected at least {REPLY_STATUS_BYTES}"
+              ),''', '''            Self::UnexpectedCancelPayload { actual } => write!(
+                  f,
+                  "IPC cancel payload must be empty; got {actual} bytes"
+              ),
+              Self::ReplyPayloadTooShort { actual } => write!(
+                  f,
+                  "IPC reply payload has {actual} bytes; expected at least {REPLY_STATUS_BYTES}"
+              ),''')
+
+          one('''impl Error for RequestProtocolError {}''', '''impl Error for RequestProtocolError {
+              fn source(&self) -> Option<&(dyn Error + 'static)> {
+                  match self {
+                      Self::Ipc(error) => Some(error),
+                      _ => None,
+                  }
+              }
+          }''')
+
+          one('''pub struct ServerRequestTracker {
+              pending: BTreeMap<RequestId, PendingState>,
+              max_pending: u32,
+              closed: bool,
+          }''', '''pub struct ServerRequestTracker {
+              pending: BTreeMap<RequestId, PendingState>,
+              limits: ResourceLimits,
+              closed: bool,
+          }''')
+
+          one('''        if phase != LifecyclePhase::Ready {
+                  return Err(RequestProtocolError::NotReady { phase });
+              }
+              Ok(Self {
+                  pending: BTreeMap::new(),
+                  max_pending: limits.max_pending_requests,
+                  closed: false,
+              })''', '''        if phase != LifecyclePhase::Ready {
+                  return Err(RequestProtocolError::NotReady { phase });
+              }
+              if limits.max_pending_requests == 0 {
+                  return Err(RequestProtocolError::InvalidPendingLimit);
+              }
+              Ok(Self {
+                  pending: BTreeMap::new(),
+                  limits,
+                  closed: false,
+              })''')
+
+          one('''        if self.closed {
+                  return Err(RequestProtocolError::Closed);
+              }
+              match header.kind {
+                  FrameKind::Request => self.receive_request(header, payload),''', '''        if self.closed {
+                  return Err(RequestProtocolError::Closed);
+              }
+              self.validate_frame_payload(header, payload)?;
+              match header.kind {
+                  FrameKind::Request => self.receive_request(header, payload),''')
+
+          start = s.index('    pub fn settle(&mut self, request_id: RequestId)')
+          end = s.index('    pub fn close(&mut self)', start)
+          replacement = '''    pub fn settle_server_frame(
+              &mut self,
+              header: FrameHeader,
+              payload: &[u8],
+          ) -> Result<ServerAction, RequestProtocolError> {
+              if self.closed {
+                  return Err(RequestProtocolError::Closed);
+              }
+              self.validate_frame_payload(header, payload)?;
+              match header.kind {
+                  FrameKind::Reply => {
+                      let request_id = request_id_from_header(header)?;
+                      if let Err(error) = validate_request_id(request_id) {
+                          return self.breach(error);
+                      }
+                      let message = match decode_reply(payload) {
+                          Ok(message) => message,
+                          Err(error) => return self.breach(error),
+                      };
+                      let state = match self.pending.remove(&request_id) {
+                          Some(state) => state,
+                          None => {
+                              return self.breach(RequestProtocolError::UnknownRequestId {
+                                  request_id,
+                              });
+                          }
+                      };
+                      Ok(ServerAction::Reply {
+                          settlement: Settlement { request_id, state },
+                          message,
+                      })
+                  }
+                  FrameKind::Event => Ok(ServerAction::Event),
+                  kind => self.breach(RequestProtocolError::ImpossibleServerDirection { kind }),
+              }
+          }
+
+'''
+          s = s[:start] + replacement + s[end:]
+
+          one('''        if self.pending.len() >= self.max_pending as usize {
+                  return self.breach(RequestProtocolError::PendingLimitExceeded {
+                      maximum: self.max_pending,
+                  });
+              }''', '''        if self.pending.len() >= self.limits.max_pending_requests as usize {
+                  return self.breach(RequestProtocolError::PendingLimitExceeded {
+                      maximum: self.limits.max_pending_requests,
+                  });
+              }''')
+
+          one('''        if !payload.is_empty() {
+                  return self.breach(RequestProtocolError::RequestPayloadTooShort {
+                      actual: payload.len(),
+                  });
+              }''', '''        if !payload.is_empty() {
+                  return self.breach(RequestProtocolError::UnexpectedCancelPayload {
+                      actual: payload.len(),
+                  });
+              }''')
+
+          one('''    fn breach<T>(&mut self, error: RequestProtocolError) -> Result<T, RequestProtocolError> {
+              self.closed = true;
+              self.pending.clear();
+              Err(error)
+          }
+          }''', '''    fn validate_frame_payload(
+              &mut self,
+              header: FrameHeader,
+              payload: &[u8],
+          ) -> Result<(), RequestProtocolError> {
+              if let Err(error) = header.validate(self.limits) {
+                  return self.breach(RequestProtocolError::Ipc(error));
+              }
+              let actual = payload.len();
+              if usize::try_from(header.payload_len)
+                  .expect("u32 payload length fits usize on supported platforms")
+                  != actual
+              {
+                  return self.breach(RequestProtocolError::PayloadLengthMismatch {
+                      declared: header.payload_len,
+                      actual,
+                  });
+              }
+              Ok(())
+          }
+
+              fn breach<T>(&mut self, error: RequestProtocolError) -> Result<T, RequestProtocolError> {
+              self.closed = true;
+              self.pending.clear();
+              Err(error)
+          }
+          }''')
+
+          one('''        assert_eq!(
+                  tracker.settle(RequestId(9)).unwrap().state,
+                  PendingState::Cancelled
+              );
+              assert_eq!(tracker.pending_len(), 0);''', '''        let reply = encode_reply(&ReplyMessage {
+                  status: ReplyStatus::Cancelled,
+                  body: Vec::new(),
+              });
+              assert_eq!(
+                  tracker
+                      .settle_server_frame(
+                          header(FrameKind::Reply, Some(9), reply.len()),
+                          &reply,
+                      )
+                      .unwrap(),
+                  ServerAction::Reply {
+                      settlement: Settlement {
+                          request_id: RequestId(9),
+                          state: PendingState::Cancelled,
+                      },
+                      message: ReplyMessage {
+                          status: ReplyStatus::Cancelled,
+                          body: Vec::new(),
+                      },
+                  }
+              );
+              assert_eq!(tracker.pending_len(), 0);''')
+
+          one('''            tracker.validate_server_frame(header(FrameKind::Reply, Some(9), 2)),
+                  Err(RequestProtocolError::UnknownRequestId { .. })''', '''            tracker.settle_server_frame(
+                      header(FrameKind::Reply, Some(9), 2),
+                      &[0, 0],
+                  ),
+                  Err(RequestProtocolError::UnknownRequestId { .. })''')
+
+          insert_before = '\n    #[test]\n    fn server_reply_must_reference_pending_request() {'
+          if insert_before not in s:
+              raise SystemExit('server reply test anchor missing')
+          extra = '''
+              #[test]
+              fn frame_payload_mismatch_and_nonempty_cancel_are_protocol_breaches() {
+                  let mut tracker =
+                      ServerRequestTracker::new(LifecyclePhase::Ready, ResourceLimits::default())
+                          .unwrap();
+                  let payload = request(1, b"");
+                  assert!(matches!(
+                      tracker.receive_client_frame(
+                          header(FrameKind::Request, Some(1), payload.len() + 1),
+                          &payload,
+                      ),
+                      Err(RequestProtocolError::PayloadLengthMismatch { .. })
+                  ));
+                  assert!(tracker.is_closed());
+
+                  let mut tracker =
+                      ServerRequestTracker::new(LifecyclePhase::Ready, ResourceLimits::default())
+                          .unwrap();
+                  let payload = request(1, b"");
+                  tracker
+                      .receive_client_frame(
+                          header(FrameKind::Request, Some(1), payload.len()),
+                          &payload,
+                      )
+                      .unwrap();
+                  assert!(matches!(
+                      tracker.receive_client_frame(
+                          header(FrameKind::Cancel, Some(1), 1),
+                          &[1],
+                      ),
+                      Err(RequestProtocolError::UnexpectedCancelPayload { actual: 1 })
+                  ));
+                  assert!(tracker.is_closed());
+              }
+
+              #[test]
+              fn zero_pending_limit_is_rejected() {
+                  let limits = ResourceLimits {
+                      max_pending_requests: 0,
+                      ..ResourceLimits::default()
+                  };
+                  assert!(matches!(
+                      ServerRequestTracker::new(LifecyclePhase::Ready, limits),
+                      Err(RequestProtocolError::InvalidPendingLimit)
+                  ));
+              }
+          '''
+          s = s.replace(insert_before, extra + insert_before, 1)
+
+          p.write_text(s)
+      - name: Format repaired Rust
+        run: cargo +1.98.0 fmt --all
+      - name: Commit request repair only
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/golam-ipc/src/request.rs
+          git diff --cached --check
+          git commit -m "fix: harden T002-035 request settlement"
+          git push origin HEAD:impl/002-kernel-durable-session-spine
