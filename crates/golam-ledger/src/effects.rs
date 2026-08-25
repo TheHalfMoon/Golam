@@ -22,6 +22,8 @@ const EFFECT_STATES: &[&str] = &[
     "manual_review",
 ];
 
+const ATTEMPT_OUTCOMES: &[&str] = &["success", "failure", "unknown"];
+
 pub struct ProposeEffect<'a> {
     pub effect_id: EffectId,
     pub session_id: SessionId,
@@ -49,6 +51,22 @@ pub struct CompareAndSwapEffect<'a> {
     pub event_id: EventId,
 }
 
+pub struct StartEffectAttempt<'a> {
+    pub attempt_id: EffectAttemptId,
+    pub effect_id: EffectId,
+    pub handler_id: &'a str,
+    pub handler_version: &'a str,
+    pub dispatch_token: &'a [u8],
+    pub started_at: &'a str,
+}
+
+pub struct FinishEffectAttempt<'a> {
+    pub attempt_id: EffectAttemptId,
+    pub finished_at: &'a str,
+    pub outcome: &'a str,
+    pub receipt: Option<&'a [u8]>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StoredEffectTransition {
     pub transition_id: EffectTransitionId,
@@ -62,16 +80,34 @@ pub struct StoredEffectTransition {
     pub event_id: EventId,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StoredEffectAttempt {
+    pub attempt_id: EffectAttemptId,
+    pub effect_id: EffectId,
+    pub started_global_seq: u64,
+    pub handler_id: String,
+    pub handler_version: String,
+    pub dispatch_token: Vec<u8>,
+    pub started_at: String,
+    pub finished_at: Option<String>,
+    pub outcome: String,
+    pub receipt: Option<Vec<u8>>,
+}
+
 #[derive(Debug)]
 pub enum EffectStoreError {
     Storage(StorageError),
     Sqlite(rusqlite::Error),
     InvalidMetadata,
     InvalidState(String),
+    InvalidAttemptOutcome(String),
     EffectAlreadyExists(EffectId),
     EffectNotFound(EffectId),
     MissingCurrentState(EffectId),
     StaleState { expected: String, actual: String },
+    AttemptAlreadyExists(EffectAttemptId),
+    AttemptNotFound(EffectAttemptId),
+    AttemptAlreadyFinished(EffectAttemptId),
     SequenceOverflow,
     InvalidStoredRecord,
 }
@@ -83,6 +119,9 @@ impl fmt::Display for EffectStoreError {
             Self::Sqlite(error) => write!(f, "effect store sqlite error: {error}"),
             Self::InvalidMetadata => f.write_str("effect request metadata must be non-empty"),
             Self::InvalidState(state) => write!(f, "invalid effect state: {state}"),
+            Self::InvalidAttemptOutcome(outcome) => {
+                write!(f, "invalid effect attempt outcome: {outcome}")
+            }
             Self::EffectAlreadyExists(effect_id) => {
                 write!(f, "effect already exists: {}", effect_id.0)
             }
@@ -96,8 +135,17 @@ impl fmt::Display for EffectStoreError {
                     "stale effect state: expected {expected}, actual {actual}"
                 )
             }
+            Self::AttemptAlreadyExists(attempt_id) => {
+                write!(f, "effect attempt already exists: {}", attempt_id.0)
+            }
+            Self::AttemptNotFound(attempt_id) => {
+                write!(f, "effect attempt not found: {}", attempt_id.0)
+            }
+            Self::AttemptAlreadyFinished(attempt_id) => {
+                write!(f, "effect attempt already finished: {}", attempt_id.0)
+            }
             Self::SequenceOverflow => f.write_str("effect global sequence overflow"),
-            Self::InvalidStoredRecord => f.write_str("stored effect transition is malformed"),
+            Self::InvalidStoredRecord => f.write_str("stored effect record is malformed"),
         }
     }
 }
@@ -251,6 +299,107 @@ impl EffectStore {
         Ok(stored)
     }
 
+    pub fn start_attempt(
+        &mut self,
+        input: StartEffectAttempt<'_>,
+    ) -> Result<StoredEffectAttempt, EffectStoreError> {
+        validate_start_attempt(&input)?;
+        let transaction = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let attempt_blob = id_blob(input.attempt_id.0);
+        if transaction
+            .query_row(
+                "SELECT 1 FROM effect_attempts WHERE attempt_id = ?1 LIMIT 1",
+                params![&attempt_blob],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()?
+            .is_some()
+        {
+            return Err(EffectStoreError::AttemptAlreadyExists(input.attempt_id));
+        }
+
+        let effect_blob = id_blob(input.effect_id.0);
+        let started_global_seq = transaction
+            .query_row(
+                "SELECT global_seq FROM effect_transitions WHERE effect_id = ?1 \
+                 ORDER BY global_seq DESC LIMIT 1",
+                params![&effect_blob],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()?
+            .ok_or(EffectStoreError::MissingCurrentState(input.effect_id))?;
+        let started_global_seq = i64_to_seq(started_global_seq)?;
+
+        transaction.execute(
+            "INSERT INTO effect_attempts (attempt_id, effect_id, started_global_seq, handler_id, \
+             handler_version, dispatch_token, started_at, finished_at, outcome, receipt) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, NULL, 'unknown', NULL)",
+            params![
+                &attempt_blob,
+                &effect_blob,
+                seq_to_i64(started_global_seq)?,
+                input.handler_id,
+                input.handler_version,
+                input.dispatch_token,
+                input.started_at,
+            ],
+        )?;
+        transaction.commit()?;
+
+        Ok(StoredEffectAttempt {
+            attempt_id: input.attempt_id,
+            effect_id: input.effect_id,
+            started_global_seq,
+            handler_id: input.handler_id.to_owned(),
+            handler_version: input.handler_version.to_owned(),
+            dispatch_token: input.dispatch_token.to_vec(),
+            started_at: input.started_at.to_owned(),
+            finished_at: None,
+            outcome: "unknown".to_owned(),
+            receipt: None,
+        })
+    }
+
+    pub fn finish_attempt(
+        &mut self,
+        input: FinishEffectAttempt<'_>,
+    ) -> Result<StoredEffectAttempt, EffectStoreError> {
+        validate_finish_attempt(&input)?;
+        let transaction = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let attempt_blob = id_blob(input.attempt_id.0);
+        let updated = transaction.execute(
+            "UPDATE effect_attempts SET finished_at = ?1, outcome = ?2, receipt = ?3 \
+             WHERE attempt_id = ?4 AND finished_at IS NULL",
+            params![
+                input.finished_at,
+                input.outcome,
+                input.receipt,
+                &attempt_blob,
+            ],
+        )?;
+        if updated != 1 {
+            let existing = transaction
+                .query_row(
+                    "SELECT finished_at FROM effect_attempts WHERE attempt_id = ?1",
+                    params![&attempt_blob],
+                    |row| row.get::<_, Option<String>>(0),
+                )
+                .optional()?;
+            return match existing {
+                None => Err(EffectStoreError::AttemptNotFound(input.attempt_id)),
+                Some(Some(_)) => Err(EffectStoreError::AttemptAlreadyFinished(input.attempt_id)),
+                Some(None) => Err(EffectStoreError::InvalidStoredRecord),
+            };
+        }
+        transaction.commit()?;
+        self.attempt(input.attempt_id)?
+            .ok_or(EffectStoreError::AttemptNotFound(input.attempt_id))
+    }
+
     pub fn current_state(&self, effect_id: EffectId) -> Result<Option<String>, EffectStoreError> {
         let state = self
             .connection
@@ -267,9 +416,73 @@ impl EffectStore {
         Ok(state)
     }
 
+    pub fn attempt(
+        &self,
+        attempt_id: EffectAttemptId,
+    ) -> Result<Option<StoredEffectAttempt>, EffectStoreError> {
+        let row = self
+            .connection
+            .query_row(
+                "SELECT effect_id, started_global_seq, handler_id, handler_version, dispatch_token, \
+                 started_at, finished_at, outcome, receipt FROM effect_attempts WHERE attempt_id = ?1",
+                params![id_blob(attempt_id.0)],
+                |row| {
+                    Ok((
+                        row.get::<_, Vec<u8>>(0)?,
+                        row.get::<_, i64>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, Vec<u8>>(4)?,
+                        row.get::<_, String>(5)?,
+                        row.get::<_, Option<String>>(6)?,
+                        row.get::<_, String>(7)?,
+                        row.get::<_, Option<Vec<u8>>>(8)?,
+                    ))
+                },
+            )
+            .optional()?;
+
+        let Some((
+            effect_id,
+            started_global_seq,
+            handler_id,
+            handler_version,
+            dispatch_token,
+            started_at,
+            finished_at,
+            outcome,
+            receipt,
+        )) = row
+        else {
+            return Ok(None);
+        };
+        validate_attempt_outcome(&outcome)?;
+        Ok(Some(StoredEffectAttempt {
+            attempt_id,
+            effect_id: EffectId(id_from_blob(effect_id)?),
+            started_global_seq: i64_to_seq(started_global_seq)?,
+            handler_id,
+            handler_version,
+            dispatch_token,
+            started_at,
+            finished_at,
+            outcome,
+            receipt,
+        }))
+    }
+
     pub fn transition_count(&self, effect_id: EffectId) -> Result<usize, EffectStoreError> {
         let count: i64 = self.connection.query_row(
             "SELECT COUNT(*) FROM effect_transitions WHERE effect_id = ?1",
+            params![id_blob(effect_id.0)],
+            |row| row.get(0),
+        )?;
+        usize::try_from(count).map_err(|_| EffectStoreError::InvalidStoredRecord)
+    }
+
+    pub fn attempt_count(&self, effect_id: EffectId) -> Result<usize, EffectStoreError> {
+        let count: i64 = self.connection.query_row(
+            "SELECT COUNT(*) FROM effect_attempts WHERE effect_id = ?1",
             params![id_blob(effect_id.0)],
             |row| row.get(0),
         )?;
@@ -289,11 +502,37 @@ fn validate_proposal(input: &ProposeEffect<'_>) -> Result<(), EffectStoreError> 
     Ok(())
 }
 
+fn validate_start_attempt(input: &StartEffectAttempt<'_>) -> Result<(), EffectStoreError> {
+    if input.handler_id.is_empty()
+        || input.handler_version.is_empty()
+        || input.dispatch_token.is_empty()
+        || input.started_at.is_empty()
+    {
+        return Err(EffectStoreError::InvalidMetadata);
+    }
+    Ok(())
+}
+
+fn validate_finish_attempt(input: &FinishEffectAttempt<'_>) -> Result<(), EffectStoreError> {
+    if input.finished_at.is_empty() {
+        return Err(EffectStoreError::InvalidMetadata);
+    }
+    validate_attempt_outcome(input.outcome)
+}
+
 fn validate_state(state: &str) -> Result<(), EffectStoreError> {
     if EFFECT_STATES.contains(&state) {
         Ok(())
     } else {
         Err(EffectStoreError::InvalidState(state.to_owned()))
+    }
+}
+
+fn validate_attempt_outcome(outcome: &str) -> Result<(), EffectStoreError> {
+    if ATTEMPT_OUTCOMES.contains(&outcome) {
+        Ok(())
+    } else {
+        Err(EffectStoreError::InvalidAttemptOutcome(outcome.to_owned()))
     }
 }
 
@@ -329,8 +568,7 @@ fn next_global_seq(transaction: &Transaction<'_>) -> Result<u64, EffectStoreErro
         [],
         |row| row.get(0),
     )?;
-    u64::try_from(current)
-        .map_err(|_| EffectStoreError::InvalidStoredRecord)?
+    i64_to_seq(current)?
         .checked_add(1)
         .ok_or(EffectStoreError::SequenceOverflow)
 }
@@ -339,8 +577,19 @@ fn id_blob(value: u128) -> Vec<u8> {
     value.to_be_bytes().to_vec()
 }
 
+fn id_from_blob(value: Vec<u8>) -> Result<u128, EffectStoreError> {
+    let bytes: [u8; 16] = value
+        .try_into()
+        .map_err(|_| EffectStoreError::InvalidStoredRecord)?;
+    Ok(u128::from_be_bytes(bytes))
+}
+
 fn seq_to_i64(value: u64) -> Result<i64, EffectStoreError> {
     i64::try_from(value).map_err(|_| EffectStoreError::SequenceOverflow)
+}
+
+fn i64_to_seq(value: i64) -> Result<u64, EffectStoreError> {
+    u64::try_from(value).map_err(|_| EffectStoreError::InvalidStoredRecord)
 }
 
 #[cfg(test)]
@@ -463,6 +712,133 @@ mod tests {
             })
             .unwrap();
         assert_eq!(executing.global_seq, 3);
+        drop(store);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn attempts_are_durable_and_anchor_to_latest_canonical_transition() {
+        let (runtime, authority) = authority();
+        let effect_id = EffectId(44);
+        let attempt_id = EffectAttemptId(720);
+        let mut store = EffectStore::open(&authority).unwrap();
+        store.propose(proposal(effect_id)).unwrap();
+        let authorized = store
+            .compare_and_swap(CompareAndSwapEffect {
+                transition_id: EffectTransitionId(920),
+                effect_id,
+                expected_state: "proposed",
+                next_state: "authorized",
+                attempt_id: None,
+                reason_code: Some("authorized"),
+                evidence_ref: None,
+                event_id: EventId(820),
+            })
+            .unwrap();
+        assert_eq!(authorized.global_seq, 2);
+
+        let started = store
+            .start_attempt(StartEffectAttempt {
+                attempt_id,
+                effect_id,
+                handler_id: "sim-at-most-once",
+                handler_version: "1",
+                dispatch_token: b"dispatch-720",
+                started_at: "2026-08-25T09:40:00Z",
+            })
+            .unwrap();
+        assert_eq!(started.started_global_seq, authorized.global_seq);
+        assert_eq!(started.outcome, "unknown");
+        assert_eq!(started.finished_at, None);
+
+        let executing = store
+            .compare_and_swap(CompareAndSwapEffect {
+                transition_id: EffectTransitionId(921),
+                effect_id,
+                expected_state: "authorized",
+                next_state: "executing",
+                attempt_id: Some(attempt_id),
+                reason_code: None,
+                evidence_ref: None,
+                event_id: EventId(821),
+            })
+            .unwrap();
+        assert_eq!(executing.global_seq, 3);
+
+        let finished = store
+            .finish_attempt(FinishEffectAttempt {
+                attempt_id,
+                finished_at: "2026-08-25T09:40:01Z",
+                outcome: "success",
+                receipt: Some(b"receipt-720"),
+            })
+            .unwrap();
+        assert_eq!(finished.started_global_seq, 2);
+        assert_eq!(finished.outcome, "success");
+        assert_eq!(finished.receipt.as_deref(), Some(b"receipt-720".as_slice()));
+        drop(store);
+
+        let reopened = EffectStore::open(&authority).unwrap();
+        assert_eq!(reopened.attempt_count(effect_id).unwrap(), 1);
+        assert_eq!(reopened.attempt(attempt_id).unwrap(), Some(finished));
+        drop(reopened);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn duplicate_or_refinished_attempts_fail_closed() {
+        let (runtime, authority) = authority();
+        let effect_id = EffectId(45);
+        let attempt_id = EffectAttemptId(730);
+        let mut store = EffectStore::open(&authority).unwrap();
+        store.propose(proposal(effect_id)).unwrap();
+        store
+            .start_attempt(StartEffectAttempt {
+                attempt_id,
+                effect_id,
+                handler_id: "sim-read",
+                handler_version: "1",
+                dispatch_token: b"dispatch-730",
+                started_at: "2026-08-25T09:41:00Z",
+            })
+            .unwrap();
+        assert!(matches!(
+            store.start_attempt(StartEffectAttempt {
+                attempt_id,
+                effect_id,
+                handler_id: "sim-read",
+                handler_version: "1",
+                dispatch_token: b"dispatch-730-duplicate",
+                started_at: "2026-08-25T09:41:01Z",
+            }),
+            Err(EffectStoreError::AttemptAlreadyExists(id)) if id == attempt_id
+        ));
+        store
+            .finish_attempt(FinishEffectAttempt {
+                attempt_id,
+                finished_at: "2026-08-25T09:41:02Z",
+                outcome: "unknown",
+                receipt: None,
+            })
+            .unwrap();
+        assert!(matches!(
+            store.finish_attempt(FinishEffectAttempt {
+                attempt_id,
+                finished_at: "2026-08-25T09:41:03Z",
+                outcome: "failure",
+                receipt: None,
+            }),
+            Err(EffectStoreError::AttemptAlreadyFinished(id)) if id == attempt_id
+        ));
+        assert!(matches!(
+            store.finish_attempt(FinishEffectAttempt {
+                attempt_id: EffectAttemptId(999),
+                finished_at: "2026-08-25T09:41:04Z",
+                outcome: "failure",
+                receipt: None,
+            }),
+            Err(EffectStoreError::AttemptNotFound(EffectAttemptId(999)))
+        ));
         drop(store);
         fs::remove_dir_all(runtime.root).unwrap();
     }
