@@ -138,10 +138,9 @@ impl fmt::Display for RequestProtocolError {
                 f,
                 "IPC request payload has {actual} bytes; expected at least {REQUEST_METHOD_BYTES}"
             ),
-            Self::UnexpectedCancelPayload { actual } => write!(
-                f,
-                "IPC cancel payload must be empty; got {actual} bytes"
-            ),
+            Self::UnexpectedCancelPayload { actual } => {
+                write!(f, "IPC cancel payload must be empty; got {actual} bytes")
+            }
             Self::ReplyPayloadTooShort { actual } => write!(
                 f,
                 "IPC reply payload has {actual} bytes; expected at least {REPLY_STATUS_BYTES}"
