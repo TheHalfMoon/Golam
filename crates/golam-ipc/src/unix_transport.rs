@@ -2,6 +2,7 @@ use std::error::Error;
 use std::fmt;
 use std::fs;
 use std::io;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{FileTypeExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
@@ -11,6 +12,15 @@ use nix::sys::socket::{getsockopt, sockopt};
 use nix::unistd::Uid;
 
 const SOCKET_NAME: &str = "golamd.sock";
+
+#[cfg(target_vendor = "apple")]
+const MAX_UNIX_SOCKET_PATH_BYTES: usize = 103;
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+const MAX_UNIX_SOCKET_PATH_BYTES: usize = 107;
+
+#[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]
+const MAX_UNIX_SOCKET_PATH_BYTES: usize = 103;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct PeerIdentity {
@@ -24,12 +34,26 @@ pub enum UnixTransportError {
     Io(io::Error),
     ProtectedPath(ProtectedPathError),
     SocketPathExists(PathBuf),
+    SocketPathTooLong {
+        path: PathBuf,
+        bytes: usize,
+        maximum: usize,
+    },
     SocketPathNotSocket(PathBuf),
-    SocketPermissionsTooBroad { path: PathBuf, mode: u32 },
-    RuntimePermissionsTooBroad { path: PathBuf, mode: u32 },
+    SocketPermissionsTooBroad {
+        path: PathBuf,
+        mode: u32,
+    },
+    RuntimePermissionsTooBroad {
+        path: PathBuf,
+        mode: u32,
+    },
     PeerCredentialsUnavailable,
     InvalidPeerPid(i32),
-    PeerUidMismatch { expected: u32, actual: u32 },
+    PeerUidMismatch {
+        expected: u32,
+        actual: u32,
+    },
 }
 
 impl fmt::Display for UnixTransportError {
@@ -40,6 +64,15 @@ impl fmt::Display for UnixTransportError {
             Self::SocketPathExists(path) => {
                 write!(f, "Unix IPC socket path already exists: {}", path.display())
             }
+            Self::SocketPathTooLong {
+                path,
+                bytes,
+                maximum,
+            } => write!(
+                f,
+                "Unix IPC socket path is too long at {}: {bytes} bytes; maximum is {maximum}",
+                path.display()
+            ),
             Self::SocketPathNotSocket(path) => {
                 write!(f, "Unix IPC path is not a socket: {}", path.display())
             }
@@ -104,6 +137,7 @@ impl UnixTransportListener {
         verify_runtime_directory(&layout.runtime_dir)?;
 
         let socket_path = layout.runtime_dir.join(SOCKET_NAME);
+        validate_socket_path_length(&socket_path)?;
         match fs::symlink_metadata(&socket_path) {
             Ok(_) => return Err(UnixTransportError::SocketPathExists(socket_path)),
             Err(error) if error.kind() == io::ErrorKind::NotFound => {}
@@ -177,6 +211,18 @@ fn verify_runtime_directory(path: &Path) -> Result<(), UnixTransportError> {
     Ok(())
 }
 
+fn validate_socket_path_length(path: &Path) -> Result<(), UnixTransportError> {
+    let bytes = path.as_os_str().as_bytes().len();
+    if bytes > MAX_UNIX_SOCKET_PATH_BYTES {
+        return Err(UnixTransportError::SocketPathTooLong {
+            path: path.to_path_buf(),
+            bytes,
+            maximum: MAX_UNIX_SOCKET_PATH_BYTES,
+        });
+    }
+    Ok(())
+}
+
 fn set_and_verify_socket_permissions(path: &Path) -> Result<(), UnixTransportError> {
     fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
     let metadata = fs::symlink_metadata(path)?;
@@ -241,7 +287,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let root = std::env::temp_dir().join(format!(
+        let root = PathBuf::from("/tmp").join(format!(
             "golam-uds-{}-{nanos}-{counter}",
             std::process::id()
         ));
@@ -294,5 +340,18 @@ mod tests {
         ));
         assert_eq!(fs::read(&path).unwrap(), b"do-not-delete");
         remove_layout(&layout);
+    }
+
+    #[test]
+    fn overlong_socket_path_fails_before_bind() {
+        let path = PathBuf::from("/tmp").join("x".repeat(MAX_UNIX_SOCKET_PATH_BYTES));
+        assert!(matches!(
+            validate_socket_path_length(&path),
+            Err(UnixTransportError::SocketPathTooLong {
+                bytes,
+                maximum,
+                ..
+            }) if bytes > maximum && maximum == MAX_UNIX_SOCKET_PATH_BYTES
+        ));
     }
 }
