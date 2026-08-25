@@ -194,9 +194,9 @@ fn verify_global_sequence(connection: &Connection) -> Result<(), IntegrityError>
                 "canonical global sequence is not contiguous",
             ));
         }
-        expected = expected
-            .checked_add(1)
-            .ok_or(IntegrityError::Violation("canonical global sequence overflow"))?;
+        expected = expected.checked_add(1).ok_or(IntegrityError::Violation(
+            "canonical global sequence overflow",
+        ))?;
     }
     Ok(())
 }
