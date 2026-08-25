@@ -8,5 +8,8 @@ rust-version.workspace = true
 ed25519-dalek.workspace = true
 golam-core = { path = "../golam-core" }
 
+[target.'cfg(unix)'.dependencies]
+nix.workspace = true
+
 [lints]
 workspace = true

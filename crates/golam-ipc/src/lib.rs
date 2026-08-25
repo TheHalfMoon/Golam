@@ -1,6 +1,8 @@
 #![forbid(unsafe_code)]
 
 pub mod lifecycle;
+#[cfg(unix)]
+pub mod unix_transport;
 
 use std::error::Error;
 use std::fmt;
