@@ -4,8 +4,8 @@
 **Implementation branch**: `impl/002-kernel-durable-session-spine`  
 **PR**: `#3` — OPEN / DRAFT  
 **Canonical implementation base**: `main@cfcc90f452e7115bfb104f886e09c309a5d57a1c`  
-**Last reconciled proven code head**: `4e189db48cd0d5d2ddd3ec2679ac72e6fb253a97`  
-**Exact-head CI evidence**: run `32797277680` / run number `26` — Windows, macOS, Linux `fmt + clippy -D warnings + test` PASS
+**Last reconciled proven code head**: `13b222175eda9c760cd8581c879ccde1020af6f4`  
+**Exact-head CI evidence**: run `32798308181` / run number `32` — Windows, macOS, Linux `fmt + clippy -D warnings + test` PASS
 
 Legend:
 - `[x]` = task requirement is satisfied by current implementation/evidence.
@@ -17,7 +17,7 @@ Legend:
 
 - [x] **T002-001** Verify exact live `main` after planning PR merge; create implementation branch from that exact commit. — PASS from `main@cfcc90f452e7115bfb104f886e09c309a5d57a1c`.
 - [x] **T002-002** Create the Rust workspace with only `golam-core`, `golam-ledger`, `golam-effects`, `golam-ipc`, `golam-kernel`, `golamd`, `golam`; pin current stable toolchain and forbid unsafe Golam code. — PASS; Rust 1.98.0 and workspace `unsafe_code = forbid` are active.
-- [x] **T002-003** Add baseline CI for fmt/clippy/test on Windows/macOS/Linux; do not claim green until runs exist. — PASS; multiple exact-head matrix runs exist, latest proven code run `32797277680`.
+- [x] **T002-003** Add baseline CI for fmt/clippy/test on Windows/macOS/Linux; do not claim green until runs exist. — PASS; exact-head matrix runs exist, latest proven code run `32798308181`.
 
 ## Phase B — Donor admission/evidence
 
@@ -32,15 +32,15 @@ Legend:
 - [x] **T002-022** Implement SQLite migrations/tables for sessions/events/goals/forks/checkpoints/effects/transitions/clients/audit/recovery. — PASS for schema v1 tables and forward-version refusal.
 - [x] **T002-023** Implement transactional global/per-session sequence assignment and deterministic event/hash-chain vectors. — PASS.
 - [ ] **T002-024** Implement authority DB startup integrity checks and fail-closed recovery-only mode; never silently reset. — **PARTIAL**: startup quick-check + canonical event/audit integrity verification fail closed; explicit recovery-only/quarantine serving mode remains for T002-060.
-- [x] **T002-025** Implement content-addressed artifact temp-write/hash/atomic-install/cleanup. — PASS; BLAKE3 content address, temp+sync, verified install, idempotent existing-artifact validation, cleanup.
-- [x] **T002-026** Implement checkpoint creation/verification/fallback and replay equivalence tests. — PASS; checkpoint is an accelerator only; invalid/missing artifact falls back to canonical replay.
-- [x] **T002-027** Implement immutable session fork anchors and property tests. — PASS for immutable parent anchor, child `SessionForked` event, parent continuation, verification, and DB trigger blocking raw anchor mutation. Final property-suite expansion remains T002-071.
-- [x] **T002-028** Implement append-versioned Goal Ledger + rebuildable current projection. — PASS; goal row + `GoalVersioned` event commit atomically, CAS stale-write rejection, append-only triggers, verifier.
+- [x] **T002-025** Implement content-addressed artifact temp-write/hash/atomic-install/cleanup. — PASS.
+- [x] **T002-026** Implement checkpoint creation/verification/fallback and replay equivalence tests. — PASS.
+- [x] **T002-027** Implement immutable session fork anchors and property tests. — PASS for current bounded property coverage; final property-suite expansion remains T002-071.
+- [x] **T002-028** Implement append-versioned Goal Ledger + rebuildable current projection. — PASS.
 
 ## Phase D — IPC authentication
 
-- [x] **T002-030** Implement typed/versioned IPC frame codec and parser with size/depth/resource bounds. — PASS at `4e189db48cd0d5d2ddd3ec2679ac72e6fb253a97`, CI `32797277680`: deterministic `GIPC` header, strict kind/version/flags/request-id rules, max-frame validation before body handling, borrowed decode payload, malformed/truncated/trailing/oversize tests.
-- [ ] **T002-031** Implement lifecycle handshake `hello/challenge/authenticate/ready/shutdown`, transcript signature and server epoch.
+- [x] **T002-030** Implement typed/versioned IPC frame codec and parser with size/depth/resource bounds. — PASS; deterministic bounded `GIPC` framing/parser.
+- [x] **T002-031** Implement lifecycle handshake `hello/challenge/authenticate/ready/shutdown`, transcript signature and server epoch. — PASS at `13b222175eda9c760cd8581c879ccde1020af6f4`, CI `32798308181`: fixed lifecycle payload codecs; fail-closed lifecycle state machine; Ed25519 strict transcript verification; transcript binds protocol/client/nonces/server epoch plus negotiated limits and client key ID; wrong signature, stale epoch, nonce/key mismatch, malformed payload and out-of-order/repeated lifecycle tests.
 - [ ] **T002-032** Implement Unix-domain-socket transport with private runtime dir/socket + peer credential checks.
 - [ ] **T002-033** Implement Windows named-pipe transport with user SID ACL + peer metadata where available. — This task must also close the Windows side of T002-021; no path-only substitute counts.
 - [ ] **T002-034** Implement explicit local client enrollment/revocation and qualified client-key storage backend/fallback.
@@ -86,8 +86,8 @@ Legend:
 
 ## Execution-order guardrail
 
-Continue in task order unless an earlier task is required to satisfy a later platform gate. In particular:
+Continue in task order unless an earlier task is required to satisfy a later platform gate:
 
-`T002-031 -> T002-032 -> T002-033 -> T002-034 -> T002-035 -> T002-036 -> Phase E -> Phase F -> Phase G -> Phase H`.
+`T002-032 -> T002-033 -> T002-034 -> T002-035 -> T002-036 -> Phase E -> Phase F -> Phase G -> Phase H`.
 
 Do not start Spec 003, models, broad tools, Desktop, GolamConnect, real external effects, or external network behavior from Spec 002 authority.

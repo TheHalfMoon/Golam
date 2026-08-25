@@ -5,9 +5,8 @@
 **Canonical base**: `main@cfcc90f452e7115bfb104f886e09c309a5d57a1c`  
 **Base tree**: `da65a0ae907a53212bbfc7afed1a25e7f4aa4636`  
 **Started**: 2026-08-24  
-**Last reconciled proven code head**: `4e189db48cd0d5d2ddd3ec2679ac72e6fb253a97`  
-**Proven code tree**: `b14910a276c0493e2e1acaaf80e3b9c46e89190b`  
-**Exact-head CI**: GitHub Actions run `32797277680` / run number `26` — SUCCESS on Windows, macOS, Ubuntu for `cargo fmt --check`, `clippy -D warnings`, and workspace tests.
+**Last reconciled proven code head**: `13b222175eda9c760cd8581c879ccde1020af6f4`  
+**Exact-head CI**: GitHub Actions run `32798308181` / run number `32` — SUCCESS on Windows, macOS, Ubuntu for `cargo fmt --check`, `clippy -D warnings`, and workspace tests.
 
 > This status document is versioned on the same implementation branch. The live GitHub PR head always overrides the snapshot above if the branch advances after this document is committed.
 
@@ -32,7 +31,7 @@ T002-027_IMMUTABLE_SESSION_FORKS=PASS
 T002-028_APPEND_VERSIONED_GOALS=PASS
 
 T002-030_IPC_FRAME_CODEC=PASS
-T002-031_AUTHENTICATED_LIFECYCLE=PENDING
+T002-031_AUTHENTICATED_LIFECYCLE=PASS
 T002-032_UNIX_SOCKET_PEER_AUTH=PENDING
 T002-033_WINDOWS_PIPE_SID_ACL=PENDING
 T002-034_CLIENT_ENROLLMENT=PENDING
@@ -54,15 +53,22 @@ SPEC_003_AUTHORIZED=NO
 - Transactional global/per-session sequencing and domain-separated deterministic BLAKE3 event/audit hashes.
 - Content-addressed artifact store with temp-write, sync, verify, atomic no-clobber install and cleanup.
 - Checkpoints anchored to a canonical prefix; checkpoint artifacts remain non-authority accelerators; missing/corrupt artifact falls back to canonical replay.
-- Immutable fork anchors `(parent_session_id, parent_session_seq, parent_event_hash)`; parent may continue independently; DB trigger prevents raw anchor mutation.
+- Immutable fork anchors `(parent_session_id, parent_session_seq, parent_event_hash)` with parent continuation and DB mutation guard.
 - Append-versioned Goal Ledger with stale-version/head rejection, atomic GoalVersion+canonical-event commit, append-only DB protection and canonical verification.
 
-### IPC framing
+### IPC framing and authenticated lifecycle
 
 - Fixed 20-byte `GIPC` header with explicit magic, protocol version, kind, flags, optional request id and payload length.
 - Unknown kind/version/flags, non-canonical request-id bytes, missing/unexpected request IDs, truncated frames, trailing bytes and oversized declared frames fail closed.
-- Declared maximum frame size is checked from the fixed header before transport code needs to allocate/read a body.
-- Decoding borrows the payload; T002-030 introduces no serializer/async/runtime dependency.
+- Fixed explicit lifecycle payload codecs for `HELLO`, `CHALLENGE`, `AUTHENTICATE`, `READY`, `SHUTDOWN`; no generic serializer defines the authentication bytes.
+- Server lifecycle is fail-closed: repeated/out-of-order lifecycle, wrong signature, stale epoch, wrong client nonce or key ID cannot reach READY.
+- Ed25519 transcript verification uses exact-pinned `ed25519-dalek 3.0.0` with `default-features = false`, `signature + zeroize`, and `verify_strict`.
+- Signed canonical transcript binds protocol version, client ID, client nonce, server nonce, server epoch, negotiated resource limits and key ID.
+- T002-031 accepts an already-enrolled verifying key; key generation/enrollment/storage remains T002-034.
+
+## Reliability finding resolved during Phase D
+
+macOS CI exposed test temp-directory collisions that could make otherwise-correct slices flaky. Test helpers in protected-path and artifact modules were hardened with PID + timestamp + atomic counter uniqueness. Exact-head run #29 proved the repair cross-platform before T002-031 was accepted. This is test isolation only; production path/artifact semantics were not weakened.
 
 ## Known open gaps — do not silently upgrade
 
@@ -82,16 +88,15 @@ No Golam-Research/donor source code has been copied or ported in Spec 002 so far
 
 ## Exact next execution order
 
-1. **T002-031** lifecycle handshake: `hello -> challenge -> authenticate -> ready -> shutdown`; transcript binding + server epoch.
-2. **T002-032** Unix-domain socket transport, private socket, peer UID/PID checks.
-3. **T002-033** Windows named pipe, current-user SID ACL and peer metadata; close the Windows half of T002-021 here.
-4. **T002-034** local client enrollment/revocation and qualified key storage/fallback.
-5. **T002-035** request/reply IDs, cancellation, bounded pending calls, protocol-breach settlement.
-6. **T002-036** adversarial authenticated-IPC suite.
-7. Phase E kernel/bootstrap authorization.
-8. Phase F persistent effect engine and crash semantics.
-9. Phase G recovery/CLI/process-kill/disk-full work.
-10. Phase H final qualification, Spec Kit convergence and closeout.
+1. **T002-032** Unix-domain socket transport, private socket, peer UID/PID checks.
+2. **T002-033** Windows named pipe, current-user SID ACL and peer metadata; close the Windows half of T002-021 here.
+3. **T002-034** local client enrollment/revocation and qualified key storage/fallback.
+4. **T002-035** request/reply IDs, cancellation, bounded pending calls, protocol-breach settlement.
+5. **T002-036** adversarial authenticated-IPC suite.
+6. Phase E kernel/bootstrap authorization.
+7. Phase F persistent effect engine and crash semantics.
+8. Phase G recovery/CLI/process-kill/disk-full work.
+9. Phase H final qualification, Spec Kit convergence and closeout.
 
 ## Hard scope boundary
 
