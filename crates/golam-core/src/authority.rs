@@ -97,7 +97,7 @@ impl AuthorityLayout {
         let credential_dir = root.join("client-credentials");
         ensure_private_directory(&root)?;
         ensure_private_directory(&credential_dir)?;
-        let db_path = root.join("authority.db");
+        let db_path = root.join("golam.db");
         Ok(Self {
             root,
             credential_dir,
@@ -352,7 +352,7 @@ mod tests {
         assert_eq!(authority.root(), runtime.data_dir.join("authority"));
         assert_eq!(
             authority.authority_db_path(),
-            runtime.data_dir.join("authority").join("authority.db")
+            runtime.data_dir.join("authority").join("golam.db")
         );
         assert!(authority.credential_dir().is_dir());
         fs::remove_dir_all(runtime.root).unwrap();
