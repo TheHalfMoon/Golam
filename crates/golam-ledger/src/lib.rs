@@ -9,6 +9,7 @@ pub mod effects;
 pub mod fork;
 pub mod goal;
 pub mod integrity;
+pub mod manual_review;
 pub mod protocol_audit;
 pub mod storage;
 
