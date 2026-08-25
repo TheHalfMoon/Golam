@@ -33,13 +33,37 @@ impl fmt::Display for AuthorityPathError {
             Self::ProtectedPath(error) => write!(f, "authority path protection error: {error}"),
             Self::Io(error) => write!(f, "authority path I/O error: {error}"),
             Self::Symlink(path) => write!(f, "authority path is a symlink: {}", path.display()),
-            Self::NotDirectory(path) => write!(f, "authority path is not a directory: {}", path.display()),
-            Self::NotRegularFile(path) => write!(f, "authority credential is not a regular file: {}", path.display()),
-            Self::PermissionsTooBroad { path, mode } => write!(f, "authority path permissions are too broad: {} mode {mode:o}", path.display()),
-            Self::WindowsAclMissing(path) => write!(f, "authority Windows path has no DACL: {}", path.display()),
-            Self::WindowsAclMismatch(path) => write!(f, "authority Windows path DACL is not current-user-only: {}", path.display()),
-            Self::WindowsAclNotProtected(path) => write!(f, "authority Windows path DACL is not protected: {}", path.display()),
-            Self::InvalidCredentialPath(path) => write!(f, "credential path escapes the canonical credential directory: {}", path.display()),
+            Self::NotDirectory(path) => {
+                write!(f, "authority path is not a directory: {}", path.display())
+            }
+            Self::NotRegularFile(path) => write!(
+                f,
+                "authority credential is not a regular file: {}",
+                path.display()
+            ),
+            Self::PermissionsTooBroad { path, mode } => write!(
+                f,
+                "authority path permissions are too broad: {} mode {mode:o}",
+                path.display()
+            ),
+            Self::WindowsAclMissing(path) => {
+                write!(f, "authority Windows path has no DACL: {}", path.display())
+            }
+            Self::WindowsAclMismatch(path) => write!(
+                f,
+                "authority Windows path DACL is not current-user-only: {}",
+                path.display()
+            ),
+            Self::WindowsAclNotProtected(path) => write!(
+                f,
+                "authority Windows path DACL is not protected: {}",
+                path.display()
+            ),
+            Self::InvalidCredentialPath(path) => write!(
+                f,
+                "credential path escapes the canonical credential directory: {}",
+                path.display()
+            ),
         }
     }
 }
@@ -55,11 +79,15 @@ impl Error for AuthorityPathError {
 }
 
 impl From<ProtectedPathError> for AuthorityPathError {
-    fn from(value: ProtectedPathError) -> Self { Self::ProtectedPath(value) }
+    fn from(value: ProtectedPathError) -> Self {
+        Self::ProtectedPath(value)
+    }
 }
 
 impl From<io::Error> for AuthorityPathError {
-    fn from(value: io::Error) -> Self { Self::Io(value) }
+    fn from(value: io::Error) -> Self {
+        Self::Io(value)
+    }
 }
 
 impl AuthorityLayout {
@@ -70,15 +98,31 @@ impl AuthorityLayout {
         ensure_private_directory(&root)?;
         ensure_private_directory(&credential_dir)?;
         let db_path = root.join("authority.db");
-        Ok(Self { root, credential_dir, db_path })
+        Ok(Self {
+            root,
+            credential_dir,
+            db_path,
+        })
     }
 
-    pub fn root(&self) -> &Path { &self.root }
-    pub fn credential_dir(&self) -> &Path { &self.credential_dir }
-    pub fn authority_db_path(&self) -> &Path { &self.db_path }
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+    pub fn credential_dir(&self) -> &Path {
+        &self.credential_dir
+    }
+    pub fn authority_db_path(&self) -> &Path {
+        &self.db_path
+    }
 
-    pub fn credential_path(&self, client_id: u128, key_id: &[u8; 32]) -> Result<PathBuf, AuthorityPathError> {
-        let path = self.credential_dir.join(format!("{client_id:032x}-{}.gkey", encode_hex(key_id)));
+    pub fn credential_path(
+        &self,
+        client_id: u128,
+        key_id: &[u8; 32],
+    ) -> Result<PathBuf, AuthorityPathError> {
+        let path = self
+            .credential_dir
+            .join(format!("{client_id:032x}-{}.gkey", encode_hex(key_id)));
         self.require_direct_credential_path(&path)?;
         Ok(path)
     }
@@ -101,8 +145,13 @@ impl AuthorityLayout {
     }
 
     fn require_direct_credential_path(&self, path: &Path) -> Result<(), AuthorityPathError> {
-        if path.parent() == Some(self.credential_dir.as_path()) { Ok(()) }
-        else { Err(AuthorityPathError::InvalidCredentialPath(path.to_path_buf())) }
+        if path.parent() == Some(self.credential_dir.as_path()) {
+            Ok(())
+        } else {
+            Err(AuthorityPathError::InvalidCredentialPath(
+                path.to_path_buf(),
+            ))
+        }
     }
 }
 
@@ -118,16 +167,24 @@ fn encode_hex(bytes: &[u8]) -> String {
 
 fn validate_regular_file(path: &Path) -> Result<(), AuthorityPathError> {
     let metadata = fs::symlink_metadata(path)?;
-    if metadata.file_type().is_symlink() { return Err(AuthorityPathError::Symlink(path.to_path_buf())); }
-    if !metadata.is_file() { return Err(AuthorityPathError::NotRegularFile(path.to_path_buf())); }
+    if metadata.file_type().is_symlink() {
+        return Err(AuthorityPathError::Symlink(path.to_path_buf()));
+    }
+    if !metadata.is_file() {
+        return Err(AuthorityPathError::NotRegularFile(path.to_path_buf()));
+    }
     Ok(())
 }
 
 fn ensure_private_directory(path: &Path) -> Result<(), AuthorityPathError> {
     match fs::symlink_metadata(path) {
         Ok(metadata) => {
-            if metadata.file_type().is_symlink() { return Err(AuthorityPathError::Symlink(path.to_path_buf())); }
-            if !metadata.is_dir() { return Err(AuthorityPathError::NotDirectory(path.to_path_buf())); }
+            if metadata.file_type().is_symlink() {
+                return Err(AuthorityPathError::Symlink(path.to_path_buf()));
+            }
+            if !metadata.is_dir() {
+                return Err(AuthorityPathError::NotDirectory(path.to_path_buf()));
+            }
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound => fs::create_dir(path)?,
         Err(error) => return Err(error.into()),
@@ -146,7 +203,12 @@ fn apply_private_directory_permissions(path: &Path) -> Result<(), AuthorityPathE
 fn verify_private_directory_permissions(path: &Path) -> Result<(), AuthorityPathError> {
     use std::os::unix::fs::PermissionsExt;
     let mode = fs::symlink_metadata(path)?.permissions().mode() & 0o777;
-    if mode != 0o700 { return Err(AuthorityPathError::PermissionsTooBroad { path: path.to_path_buf(), mode }); }
+    if mode != 0o700 {
+        return Err(AuthorityPathError::PermissionsTooBroad {
+            path: path.to_path_buf(),
+            mode,
+        });
+    }
     Ok(())
 }
 #[cfg(unix)]
@@ -159,18 +221,31 @@ fn apply_private_file_permissions(path: &Path) -> Result<(), AuthorityPathError>
 fn verify_private_file_permissions(path: &Path) -> Result<(), AuthorityPathError> {
     use std::os::unix::fs::PermissionsExt;
     let mode = fs::symlink_metadata(path)?.permissions().mode() & 0o777;
-    if mode != 0o600 { return Err(AuthorityPathError::PermissionsTooBroad { path: path.to_path_buf(), mode }); }
+    if mode != 0o600 {
+        return Err(AuthorityPathError::PermissionsTooBroad {
+            path: path.to_path_buf(),
+            mode,
+        });
+    }
     Ok(())
 }
 
 #[cfg(windows)]
-fn apply_private_directory_permissions(path: &Path) -> Result<(), AuthorityPathError> { apply_windows_user_only_acl(path, true) }
+fn apply_private_directory_permissions(path: &Path) -> Result<(), AuthorityPathError> {
+    apply_windows_user_only_acl(path, true)
+}
 #[cfg(windows)]
-fn verify_private_directory_permissions(path: &Path) -> Result<(), AuthorityPathError> { verify_windows_user_only_acl(path) }
+fn verify_private_directory_permissions(path: &Path) -> Result<(), AuthorityPathError> {
+    verify_windows_user_only_acl(path)
+}
 #[cfg(windows)]
-fn apply_private_file_permissions(path: &Path) -> Result<(), AuthorityPathError> { apply_windows_user_only_acl(path, false) }
+fn apply_private_file_permissions(path: &Path) -> Result<(), AuthorityPathError> {
+    apply_windows_user_only_acl(path, false)
+}
 #[cfg(windows)]
-fn verify_private_file_permissions(path: &Path) -> Result<(), AuthorityPathError> { verify_windows_user_only_acl(path) }
+fn verify_private_file_permissions(path: &Path) -> Result<(), AuthorityPathError> {
+    verify_windows_user_only_acl(path)
+}
 
 #[cfg(windows)]
 fn apply_windows_user_only_acl(path: &Path, inheritable: bool) -> Result<(), AuthorityPathError> {
@@ -179,39 +254,75 @@ fn apply_windows_user_only_acl(path: &Path, inheritable: bool) -> Result<(), Aut
     let sid = crate::paths::windows_current_process_sid_string()?;
     let flags = if inheritable { "OICI" } else { "" };
     let descriptor: LocalBox<SecurityDescriptor> = format!("D:P(A;{flags};FA;;;{sid})").parse()?;
-    let dacl = descriptor.dacl().ok_or_else(|| AuthorityPathError::WindowsAclMissing(path.to_path_buf()))?;
+    let dacl = descriptor
+        .dacl()
+        .ok_or_else(|| AuthorityPathError::WindowsAclMissing(path.to_path_buf()))?;
     windows_permissions::wrappers::SetNamedSecurityInfo(
-        path.as_os_str(), SeObjectType::SE_FILE_OBJECT,
+        path.as_os_str(),
+        SeObjectType::SE_FILE_OBJECT,
         SecurityInformation::Dacl | SecurityInformation::ProtectedDacl,
-        None, None, Some(dacl), None,
+        None,
+        None,
+        Some(dacl),
+        None,
     )?;
     Ok(())
 }
 
 #[cfg(windows)]
 fn verify_windows_user_only_acl(path: &Path) -> Result<(), AuthorityPathError> {
-    use windows_permissions::constants::{AccessRights, AceType, SeObjectType, SecurityInformation};
+    use windows_permissions::constants::{
+        AccessRights, AceType, SeObjectType, SecurityInformation,
+    };
     let expected_sid = windows_permissions::utilities::current_process_sid()?;
-    let descriptor = windows_permissions::wrappers::GetNamedSecurityInfo(path.as_os_str(), SeObjectType::SE_FILE_OBJECT, SecurityInformation::Dacl)?;
-    let dacl = descriptor.dacl().ok_or_else(|| AuthorityPathError::WindowsAclMissing(path.to_path_buf()))?;
-    if dacl.len() != 1 { return Err(AuthorityPathError::WindowsAclMismatch(path.to_path_buf())); }
-    let ace = dacl.get_ace(0).ok_or_else(|| AuthorityPathError::WindowsAclMismatch(path.to_path_buf()))?;
-    if ace.ace_type() != AceType::ACCESS_ALLOWED_ACE_TYPE || ace.mask() != AccessRights::FileAllAccess || ace.sid() != Some(&*expected_sid) {
+    let descriptor = windows_permissions::wrappers::GetNamedSecurityInfo(
+        path.as_os_str(),
+        SeObjectType::SE_FILE_OBJECT,
+        SecurityInformation::Dacl,
+    )?;
+    let dacl = descriptor
+        .dacl()
+        .ok_or_else(|| AuthorityPathError::WindowsAclMissing(path.to_path_buf()))?;
+    if dacl.len() != 1 {
         return Err(AuthorityPathError::WindowsAclMismatch(path.to_path_buf()));
     }
-    let sddl = windows_permissions::wrappers::ConvertSecurityDescriptorToStringSecurityDescriptor(&descriptor, SecurityInformation::Dacl)?;
-    if !sddl.to_string_lossy().starts_with("D:P") { return Err(AuthorityPathError::WindowsAclNotProtected(path.to_path_buf())); }
+    let ace = dacl
+        .get_ace(0)
+        .ok_or_else(|| AuthorityPathError::WindowsAclMismatch(path.to_path_buf()))?;
+    if ace.ace_type() != AceType::ACCESS_ALLOWED_ACE_TYPE
+        || ace.mask() != AccessRights::FileAllAccess
+        || ace.sid() != Some(&*expected_sid)
+    {
+        return Err(AuthorityPathError::WindowsAclMismatch(path.to_path_buf()));
+    }
+    let sddl = windows_permissions::wrappers::ConvertSecurityDescriptorToStringSecurityDescriptor(
+        &descriptor,
+        SecurityInformation::Dacl,
+    )?;
+    if !sddl.to_string_lossy().starts_with("D:P") {
+        return Err(AuthorityPathError::WindowsAclNotProtected(
+            path.to_path_buf(),
+        ));
+    }
     Ok(())
 }
 
 #[cfg(not(any(unix, windows)))]
-fn apply_private_directory_permissions(_path: &Path) -> Result<(), AuthorityPathError> { Err(ProtectedPathError::AuthorityProtectionUnverified.into()) }
+fn apply_private_directory_permissions(_path: &Path) -> Result<(), AuthorityPathError> {
+    Err(ProtectedPathError::AuthorityProtectionUnverified.into())
+}
 #[cfg(not(any(unix, windows)))]
-fn verify_private_directory_permissions(_path: &Path) -> Result<(), AuthorityPathError> { Err(ProtectedPathError::AuthorityProtectionUnverified.into()) }
+fn verify_private_directory_permissions(_path: &Path) -> Result<(), AuthorityPathError> {
+    Err(ProtectedPathError::AuthorityProtectionUnverified.into())
+}
 #[cfg(not(any(unix, windows)))]
-fn apply_private_file_permissions(_path: &Path) -> Result<(), AuthorityPathError> { Err(ProtectedPathError::AuthorityProtectionUnverified.into()) }
+fn apply_private_file_permissions(_path: &Path) -> Result<(), AuthorityPathError> {
+    Err(ProtectedPathError::AuthorityProtectionUnverified.into())
+}
 #[cfg(not(any(unix, windows)))]
-fn verify_private_file_permissions(_path: &Path) -> Result<(), AuthorityPathError> { Err(ProtectedPathError::AuthorityProtectionUnverified.into()) }
+fn verify_private_file_permissions(_path: &Path) -> Result<(), AuthorityPathError> {
+    Err(ProtectedPathError::AuthorityProtectionUnverified.into())
+}
 
 #[cfg(test)]
 mod tests {
@@ -224,8 +335,14 @@ mod tests {
 
     fn runtime() -> RuntimeLayout {
         let n = TEST_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let t = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-        RuntimeLayout::initialize(std::env::temp_dir().join(format!("golam-authority-{}-{t}-{n}", std::process::id()))).unwrap()
+        let t = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        RuntimeLayout::initialize(
+            std::env::temp_dir().join(format!("golam-authority-{}-{t}-{n}", std::process::id())),
+        )
+        .unwrap()
     }
 
     #[test]
@@ -233,7 +350,10 @@ mod tests {
         let runtime = runtime();
         let authority = AuthorityLayout::initialize(&runtime).unwrap();
         assert_eq!(authority.root(), runtime.data_dir.join("authority"));
-        assert_eq!(authority.authority_db_path(), runtime.data_dir.join("authority").join("authority.db"));
+        assert_eq!(
+            authority.authority_db_path(),
+            runtime.data_dir.join("authority").join("authority.db")
+        );
         assert!(authority.credential_dir().is_dir());
         fs::remove_dir_all(runtime.root).unwrap();
     }
@@ -243,10 +363,17 @@ mod tests {
         let runtime = runtime();
         let authority = AuthorityLayout::initialize(&runtime).unwrap();
         let path = authority.credential_path(7, &[9; 32]).unwrap();
-        OpenOptions::new().write(true).create_new(true).open(&path).unwrap();
+        OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .unwrap();
         authority.protect_credential_file(&path).unwrap();
         authority.verify_credential_file(&path).unwrap();
-        assert!(matches!(authority.protect_credential_file(&authority.root().join("escape.gkey")), Err(AuthorityPathError::InvalidCredentialPath(_))));
+        assert!(matches!(
+            authority.protect_credential_file(&authority.root().join("escape.gkey")),
+            Err(AuthorityPathError::InvalidCredentialPath(_))
+        ));
         fs::remove_dir_all(runtime.root).unwrap();
     }
 }

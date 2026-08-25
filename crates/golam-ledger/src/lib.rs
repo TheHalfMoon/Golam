@@ -95,7 +95,10 @@ pub fn event_integrity_hash(record: &EventRecord) -> Result<[u8; 32], CoreError>
     Ok(*blake3::hash(&bytes).as_bytes())
 }
 
-pub fn audit_integrity_hash(record: &EventRecord, event_hash: [u8; 32]) -> Result<[u8; 32], CoreError> {
+pub fn audit_integrity_hash(
+    record: &EventRecord,
+    event_hash: [u8; 32],
+) -> Result<[u8; 32], CoreError> {
     let mut encoder = CanonicalEncoder::new();
     encoder.push_bytes(AUDIT_DOMAIN)?;
     encoder.push_u64(record.global_seq);
@@ -104,9 +107,15 @@ pub fn audit_integrity_hash(record: &EventRecord, event_hash: [u8; 32]) -> Resul
     Ok(*blake3::hash(&encoder.finish()).as_bytes())
 }
 
-fn encode_optional_hash(encoder: &mut CanonicalEncoder, value: Option<[u8; 32]>) -> Result<(), CoreError> {
+fn encode_optional_hash(
+    encoder: &mut CanonicalEncoder,
+    value: Option<[u8; 32]>,
+) -> Result<(), CoreError> {
     match value {
-        Some(hash) => { encoder.push_u8(1); encoder.push_bytes(&hash)?; }
+        Some(hash) => {
+            encoder.push_u8(1);
+            encoder.push_bytes(&hash)?;
+        }
         None => encoder.push_u8(0),
     }
     Ok(())
@@ -117,15 +126,51 @@ mod tests {
     use super::*;
 
     fn event() -> EventRecord {
-        EventRecord { event_id: EventId(10), session_id: SessionId(1), global_seq: 4, session_seq: 2, schema_version: 1, kind: EventKind::SessionCreated, actor_principal: "owner".to_owned(), recorded_at: "2026-08-24T00:00:00Z".to_owned(), payload_hash: payload_hash(b"payload"), previous_session_event_hash: None, security_critical: true, previous_audit_hash: None }
+        EventRecord {
+            event_id: EventId(10),
+            session_id: SessionId(1),
+            global_seq: 4,
+            session_seq: 2,
+            schema_version: 1,
+            kind: EventKind::SessionCreated,
+            actor_principal: "owner".to_owned(),
+            recorded_at: "2026-08-24T00:00:00Z".to_owned(),
+            payload_hash: payload_hash(b"payload"),
+            previous_session_event_hash: None,
+            security_critical: true,
+            previous_audit_hash: None,
+        }
     }
 
     #[test]
-    fn sequence_validation_rejects_gaps() { let first = event(); let mut next = first.clone(); next.global_seq = 6; next.session_seq = 3; assert!(!follows(&first, &next)); }
+    fn sequence_validation_rejects_gaps() {
+        let first = event();
+        let mut next = first.clone();
+        next.global_seq = 6;
+        next.session_seq = 3;
+        assert!(!follows(&first, &next));
+    }
 
     #[test]
-    fn event_hash_is_deterministic_and_payload_sensitive() { let first = event(); let first_hash = event_integrity_hash(&first).unwrap(); assert_eq!(first_hash, event_integrity_hash(&first).unwrap()); let mut changed = first; changed.payload_hash = payload_hash(b"changed"); assert_ne!(first_hash, event_integrity_hash(&changed).unwrap()); }
+    fn event_hash_is_deterministic_and_payload_sensitive() {
+        let first = event();
+        let first_hash = event_integrity_hash(&first).unwrap();
+        assert_eq!(first_hash, event_integrity_hash(&first).unwrap());
+        let mut changed = first;
+        changed.payload_hash = payload_hash(b"changed");
+        assert_ne!(first_hash, event_integrity_hash(&changed).unwrap());
+    }
 
     #[test]
-    fn audit_hash_is_previous_head_sensitive() { let first = event(); let event_hash = event_integrity_hash(&first).unwrap(); let first_audit = audit_integrity_hash(&first, event_hash).unwrap(); let mut changed = first; changed.previous_audit_hash = Some([7;32]); assert_ne!(first_audit, audit_integrity_hash(&changed, event_hash).unwrap()); }
+    fn audit_hash_is_previous_head_sensitive() {
+        let first = event();
+        let event_hash = event_integrity_hash(&first).unwrap();
+        let first_audit = audit_integrity_hash(&first, event_hash).unwrap();
+        let mut changed = first;
+        changed.previous_audit_hash = Some([7; 32]);
+        assert_ne!(
+            first_audit,
+            audit_integrity_hash(&changed, event_hash).unwrap()
+        );
+    }
 }
