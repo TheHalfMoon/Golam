@@ -228,9 +228,9 @@ impl LocalClientEnrollment {
             )?;
             return Err(EnrollmentError::AuthenticatedClientMismatch);
         }
-        if let Err(error) = self
-            .registry
-            .mark_authenticated(client_id, authenticate.key_id.0, authenticated_at)
+        if let Err(error) =
+            self.registry
+                .mark_authenticated(client_id, authenticate.key_id.0, authenticated_at)
         {
             close_for_authentication_failure(lifecycle);
             return Err(EnrollmentError::Registry(error));
@@ -455,8 +455,7 @@ mod tests {
             20,
             limits,
         );
-        let mut first =
-            ServerLifecycle::new(20, [7; NONCE_LEN], limits, ConnectionId(90)).unwrap();
+        let mut first = ServerLifecycle::new(20, [7; NONCE_LEN], limits, ConnectionId(90)).unwrap();
         first.receive_hello(hello).unwrap();
         enrollment
             .authenticate_registered(
@@ -501,8 +500,14 @@ mod tests {
 
         let audit = enrollment.protocol_audit_records().unwrap();
         assert_eq!(audit.len(), 2);
-        assert_eq!(audit[0].reason, ProtocolRejectionReason::AuthenticationFailed);
-        assert_eq!(audit[1].reason, ProtocolRejectionReason::UnauthenticatedRequest);
+        assert_eq!(
+            audit[0].reason,
+            ProtocolRejectionReason::AuthenticationFailed
+        );
+        assert_eq!(
+            audit[1].reason,
+            ProtocolRejectionReason::UnauthenticatedRequest
+        );
         drop(enrollment);
         fs::remove_dir_all(runtime.root).unwrap();
     }
