@@ -2,6 +2,7 @@
 
 mod authorization;
 mod client_auth;
+mod effect_execution;
 mod resource;
 
 use std::error::Error;
@@ -18,13 +19,19 @@ pub use authorization::{
     PolicyDecision, Principal, PrincipalKind,
 };
 pub use client_auth::ClientAuthorityError;
+pub use effect_execution::PreparedEffectDispatch;
 pub use golam_ipc::credentials::GeneratedClientCredential;
 pub use golam_ipc::lifecycle::{Authenticate, ClientKeyId, ConnectionId, Ready, ServerLifecycle};
 pub use golam_ledger::clients::{ClientKind, ClientRecord};
+pub use golam_ledger::dispatch::{
+    EffectDispatchStoreError as EffectDispatchError, PrepareEffectDispatch,
+    encode_effect_dependencies,
+};
 pub use resource::{ProtectedResourceError, UnprivilegedPath};
 
 use authorization::AuthorizationEngine;
 use client_auth::ClientAuthority;
+use effect_execution::EffectExecutionAuthority;
 
 #[derive(Debug)]
 pub enum KernelError {
@@ -32,6 +39,7 @@ pub enum KernelError {
     Authorization(AuthorizationError),
     AuthorizationDenied(AuthorizationOutcome),
     ClientAuthority(ClientAuthorityError),
+    EffectDispatch(EffectDispatchError),
 }
 
 impl fmt::Display for KernelError {
@@ -46,6 +54,7 @@ impl fmt::Display for KernelError {
                 outcome.reason_code
             ),
             Self::ClientAuthority(error) => write!(f, "kernel client authority error: {error}"),
+            Self::EffectDispatch(error) => write!(f, "kernel effect dispatch error: {error}"),
         }
     }
 }
@@ -56,6 +65,7 @@ impl Error for KernelError {
             Self::AuthorityPath(error) => Some(error),
             Self::Authorization(error) => Some(error),
             Self::ClientAuthority(error) => Some(error),
+            Self::EffectDispatch(error) => Some(error),
             Self::AuthorizationDenied(_) => None,
         }
     }
@@ -79,6 +89,12 @@ impl From<ClientAuthorityError> for KernelError {
     }
 }
 
+impl From<EffectDispatchError> for KernelError {
+    fn from(value: EffectDispatchError) -> Self {
+        Self::EffectDispatch(value)
+    }
+}
+
 /// Privileged mutations are available only through this API. The authority
 /// implementation modules and authority-bearing grants are intentionally not
 /// part of the public crate surface.
@@ -95,6 +111,7 @@ pub struct KernelApi<P> {
     authority: AuthorityLayout,
     authorization: AuthorizationEngine<P>,
     clients: ClientAuthority,
+    effects: EffectExecutionAuthority,
 }
 
 impl<P: AuthorizationPolicy> KernelApi<P> {
@@ -102,11 +119,13 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         let authority = AuthorityLayout::initialize(runtime)?;
         let authorization = AuthorizationEngine::open(&authority, policy)?;
         let clients = ClientAuthority::open(&authority)?;
+        let effects = EffectExecutionAuthority::open(&authority)?;
         Ok(Self {
             runtime: runtime.clone(),
             authority,
             authorization,
             clients,
+            effects,
         })
     }
 
@@ -192,6 +211,13 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         )?)
     }
 
+    pub fn prepare_effect_dispatch(
+        &mut self,
+        input: PrepareEffectDispatch<'_>,
+    ) -> Result<PreparedEffectDispatch, KernelError> {
+        Ok(self.effects.prepare(input)?)
+    }
+
     pub fn network_egress_authorize(
         &mut self,
         principal: Principal<'_>,
@@ -243,7 +269,9 @@ fn hex_decision_id(id: DecisionId) -> String {
 mod tests {
     use super::*;
     use golam_core::authority::AuthorityLayout;
+    use golam_core::{EffectAttemptId, EffectId, EffectTransitionId, EventId, SessionId};
     use golam_ipc::credentials::ClientCredentialStore;
+    use golam_ledger::effects::{CompareAndSwapEffect, EffectStore, ProposeEffect};
     use std::fs;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -368,6 +396,74 @@ mod tests {
             )
             .unwrap();
         drop(kernel);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn prepared_effect_dispatch_is_kernel_minted_after_durable_attempt() {
+        let runtime = runtime();
+        let authority = AuthorityLayout::initialize(&runtime).unwrap();
+        let dependencies = encode_effect_dependencies(&[]).unwrap();
+        let effect_id = EffectId(900);
+        let attempt_id = EffectAttemptId(901);
+        let mut effects = EffectStore::open(&authority).unwrap();
+        effects
+            .propose(ProposeEffect {
+                effect_id,
+                session_id: SessionId(1),
+                requested_by: "owner",
+                action: "sim.write",
+                resource: "sim:item",
+                risk_class: "synthetic",
+                execution_semantics: "at_most_once",
+                idempotency_key: None,
+                preconditions: b"[]",
+                dependencies: &dependencies,
+                payload_hash: [7; 32],
+                proposed_event_id: EventId(902),
+                transition_id: EffectTransitionId(903),
+            })
+            .unwrap();
+        let authorized = effects
+            .compare_and_swap(CompareAndSwapEffect {
+                transition_id: EffectTransitionId(904),
+                effect_id,
+                expected_state: "proposed",
+                next_state: "authorized",
+                attempt_id: None,
+                reason_code: Some("test_authorized"),
+                evidence_ref: None,
+                event_id: EventId(905),
+            })
+            .unwrap();
+        drop(effects);
+
+        let mut kernel = KernelApi::open(&runtime, DenyByDefault).unwrap();
+        let prepared = kernel
+            .prepare_effect_dispatch(PrepareEffectDispatch {
+                effect_id,
+                attempt_id,
+                transition_id: EffectTransitionId(906),
+                handler_id: "sim-at-most-once-write",
+                handler_version: "1",
+                dispatch_token: b"dispatch-901",
+                started_at: "2026-08-25T10:10:00Z",
+                event_id: EventId(907),
+            })
+            .unwrap();
+        assert_eq!(prepared.effect_id(), effect_id);
+        assert_eq!(prepared.attempt_id(), attempt_id);
+        assert_eq!(prepared.started_global_seq(), authorized.global_seq);
+        assert!(prepared.executing_global_seq() > prepared.started_global_seq());
+        drop(kernel);
+
+        let effects = EffectStore::open(&authority).unwrap();
+        assert_eq!(effects.attempt_count(effect_id).unwrap(), 1);
+        assert_eq!(
+            effects.current_state(effect_id).unwrap().as_deref(),
+            Some("executing")
+        );
+        drop(effects);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 
