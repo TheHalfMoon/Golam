@@ -199,14 +199,16 @@ const fn platform_protection_level() -> ProtectionLevel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TEST_ROOT_COUNTER: AtomicU64 = AtomicU64::new(0);
 
     fn unique_root() -> PathBuf {
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        std::env::temp_dir().join(format!("golam-paths-{}-{nonce}", std::process::id()))
+        let counter = TEST_ROOT_COUNTER.fetch_add(1, Ordering::Relaxed);
+        std::env::temp_dir().join(format!(
+            "golam-paths-{}-{counter}",
+            std::process::id()
+        ))
     }
 
     #[test]
