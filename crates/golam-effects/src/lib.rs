@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+pub mod simulators;
+
 use std::time::Duration;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
