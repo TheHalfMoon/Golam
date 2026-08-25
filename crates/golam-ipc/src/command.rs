@@ -129,10 +129,16 @@ impl fmt::Display for CommandCodecError {
         match self {
             Self::UnknownMethod(method) => write!(f, "unknown Golam command method {method}"),
             Self::BodyTooLarge { actual, maximum } => {
-                write!(f, "Golam command body is {actual} bytes; maximum is {maximum}")
+                write!(
+                    f,
+                    "Golam command body is {actual} bytes; maximum is {maximum}"
+                )
             }
             Self::FieldTooLarge { actual, maximum } => {
-                write!(f, "Golam command field is {actual} bytes; maximum is {maximum}")
+                write!(
+                    f,
+                    "Golam command field is {actual} bytes; maximum is {maximum}"
+                )
             }
             Self::Truncated => f.write_str("Golam command body is truncated"),
             Self::TrailingBytes { actual } => {
