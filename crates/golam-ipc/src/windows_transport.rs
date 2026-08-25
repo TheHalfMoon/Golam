@@ -26,15 +26,9 @@ pub enum WindowsTransportError {
     ProtectedPath(ProtectedPathError),
     InvalidInstanceLimit(u16),
     InvalidPipePath,
-    PipePathTooLong {
-        utf16_units: usize,
-        maximum: usize,
-    },
+    PipePathTooLong { utf16_units: usize, maximum: usize },
     InvalidPeerProcessId,
-    PeerMetadataMismatch {
-        client_pid: u32,
-        peer_pid: u32,
-    },
+    PeerMetadataMismatch { client_pid: u32, peer_pid: u32 },
 }
 
 impl fmt::Display for WindowsTransportError {
