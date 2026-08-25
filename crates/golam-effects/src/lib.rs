@@ -120,12 +120,16 @@ pub struct PriorAttempt<'a> {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum HandlerOutcome {
-    Succeeded { receipt: Vec<u8> },
+    Succeeded {
+        receipt: Vec<u8>,
+    },
     Failed {
         reason_code: String,
         receipt: Option<Vec<u8>>,
     },
-    Unknown { evidence: Option<Vec<u8>> },
+    Unknown {
+        evidence: Option<Vec<u8>>,
+    },
 }
 
 pub trait EffectHandler {
