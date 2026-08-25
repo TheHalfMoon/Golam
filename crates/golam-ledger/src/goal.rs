@@ -417,7 +417,11 @@ fn insert_event(
 
 fn next_global_seq(transaction: &Transaction<'_>) -> Result<u64, GoalError> {
     let current: i64 = transaction.query_row(
-        "SELECT COALESCE(MAX(global_seq), 0) FROM session_events",
+        "SELECT COALESCE(MAX(global_seq), 0) FROM (\
+           SELECT global_seq FROM session_events \
+           UNION ALL SELECT global_seq FROM effect_transitions \
+           UNION ALL SELECT global_seq FROM authorization_decisions\
+         )",
         [],
         |row| row.get(0),
     )?;
