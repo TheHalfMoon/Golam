@@ -91,7 +91,10 @@ impl fmt::Display for EffectStoreError {
                 write!(f, "effect has no current transition: {}", effect_id.0)
             }
             Self::StaleState { expected, actual } => {
-                write!(f, "stale effect state: expected {expected}, actual {actual}")
+                write!(
+                    f,
+                    "stale effect state: expected {expected}, actual {actual}"
+                )
             }
             Self::SequenceOverflow => f.write_str("effect global sequence overflow"),
             Self::InvalidStoredRecord => f.write_str("stored effect transition is malformed"),
@@ -356,10 +359,9 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let runtime = RuntimeLayout::initialize(std::env::temp_dir().join(format!(
-            "golam-effect-store-{}-{t}-{n}",
-            std::process::id()
-        )))
+        let runtime = RuntimeLayout::initialize(
+            std::env::temp_dir().join(format!("golam-effect-store-{}-{t}-{n}", std::process::id())),
+        )
         .unwrap();
         let authority = AuthorityLayout::initialize(&runtime).unwrap();
         (runtime, authority)

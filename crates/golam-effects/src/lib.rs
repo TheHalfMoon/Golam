@@ -94,7 +94,10 @@ mod tests {
 
     #[test]
     fn planned_effect_fsm_accepts_only_declared_edges() {
-        assert!(transition_allowed(EffectStatus::Proposed, EffectStatus::Denied));
+        assert!(transition_allowed(
+            EffectStatus::Proposed,
+            EffectStatus::Denied
+        ));
         assert!(transition_allowed(
             EffectStatus::Proposed,
             EffectStatus::Authorized
