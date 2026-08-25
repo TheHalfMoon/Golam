@@ -84,6 +84,14 @@ pub struct CompleteSyntheticEffect<'a> {
     pub receipt: Option<&'a [u8]>,
 }
 
+pub struct ResolveSyntheticReconciliation<'a> {
+    pub effect_id: EffectId,
+    pub resolution: SyntheticExecutionCompletion,
+    pub reason_code: Option<&'a str>,
+    pub evidence_ref: Option<&'a [u8]>,
+    pub detected_at: &'a str,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SyntheticEffectOutcome {
     pub effect_id: EffectId,
@@ -407,14 +415,10 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
     pub fn resolve_synthetic_reconciliation(
         &mut self,
         principal: Principal<'_>,
-        effect_id: EffectId,
-        resolution: SyntheticExecutionCompletion,
-        reason_code: Option<&str>,
-        evidence_ref: Option<&[u8]>,
-        detected_at: &str,
+        input: ResolveSyntheticReconciliation<'_>,
         scope: &str,
     ) -> Result<SyntheticReconciliationResult, SyntheticEffectError> {
-        let resource = synthetic_resource(effect_id);
+        let resource = synthetic_resource(input.effect_id);
         self.require_authority(&AuthorizationRequest {
             principal,
             action: "effect.reconcile",
@@ -423,56 +427,56 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         })?;
         let reader = EffectReader::open(&self.authority)?;
         let snapshot = reader
-            .snapshot(effect_id)?
-            .ok_or(SyntheticEffectError::EffectNotFound(effect_id))?;
+            .snapshot(input.effect_id)?
+            .ok_or(SyntheticEffectError::EffectNotFound(input.effect_id))?;
         let attempt_id = snapshot
             .latest_attempt
             .as_ref()
             .map(|attempt| attempt.attempt_id)
-            .ok_or(SyntheticEffectError::MissingAttempt(effect_id))?;
+            .ok_or(SyntheticEffectError::MissingAttempt(input.effect_id))?;
         drop(reader);
 
-        match resolution {
+        match input.resolution {
             SyntheticExecutionCompletion::Succeeded | SyntheticExecutionCompletion::Failed => {
-                let target = resolution.state();
+                let target = input.resolution.state();
                 let mut effects = EffectStore::open(&self.authority)?;
                 effects.compare_and_swap(CompareAndSwapEffect {
                     transition_id: EffectTransitionId(stage_id(
-                        effect_id,
+                        input.effect_id,
                         STAGE_RESOLUTION_TRANSITION,
                     )?),
-                    effect_id,
+                    effect_id: input.effect_id,
                     expected_state: "reconciling",
                     next_state: target,
                     attempt_id: Some(attempt_id),
-                    reason_code,
-                    evidence_ref,
-                    event_id: EventId(stage_id(effect_id, STAGE_RESOLUTION_EVENT)?),
+                    reason_code: input.reason_code,
+                    evidence_ref: input.evidence_ref,
+                    event_id: EventId(stage_id(input.effect_id, STAGE_RESOLUTION_EVENT)?),
                 })?;
                 Ok(SyntheticReconciliationResult::Resolved {
-                    effect_id,
+                    effect_id: input.effect_id,
                     state: target.to_owned(),
                 })
             }
             SyntheticExecutionCompletion::UnknownOutcome => {
-                if detected_at.is_empty() {
+                if input.detected_at.is_empty() {
                     return Err(SyntheticEffectError::InvalidMetadata);
                 }
                 let mut manual = ManualReviewStore::open(&self.authority)?;
                 let report = manual.place(PlaceEffectInManualReview {
-                    effect_id,
+                    effect_id: input.effect_id,
                     transition_id: EffectTransitionId(stage_id(
-                        effect_id,
+                        input.effect_id,
                         STAGE_MANUAL_REVIEW_TRANSITION,
                     )?),
                     attempt_id: Some(attempt_id),
-                    detected_at,
+                    detected_at: input.detected_at,
                     reason: ManualReviewReason::UnreconcilableAmbiguity,
-                    evidence_ref,
-                    event_id: EventId(stage_id(effect_id, STAGE_MANUAL_REVIEW_EVENT)?),
+                    evidence_ref: input.evidence_ref,
+                    event_id: EventId(stage_id(input.effect_id, STAGE_MANUAL_REVIEW_EVENT)?),
                 })?;
                 Ok(SyntheticReconciliationResult::ManualReview {
-                    effect_id,
+                    effect_id: input.effect_id,
                     incident_id: report.incident_id,
                 })
             }
@@ -634,11 +638,13 @@ mod tests {
         let result = kernel
             .resolve_synthetic_reconciliation(
                 principal,
-                effect_id,
-                SyntheticExecutionCompletion::UnknownOutcome,
-                Some("still_ambiguous"),
-                Some(b"status-missing"),
-                "2026-08-25T13:46:02Z",
+                ResolveSyntheticReconciliation {
+                    effect_id,
+                    resolution: SyntheticExecutionCompletion::UnknownOutcome,
+                    reason_code: Some("still_ambiguous"),
+                    evidence_ref: Some(b"status-missing"),
+                    detected_at: "2026-08-25T13:46:02Z",
+                },
                 "local-owner",
             )
             .unwrap();
