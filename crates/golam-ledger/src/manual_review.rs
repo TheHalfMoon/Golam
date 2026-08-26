@@ -8,7 +8,9 @@ use golam_core::{EffectAttemptId, EffectId, EffectTransitionId, EventId};
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
 use crate::effects::StoredEffectTransition;
-use crate::security_audit::{self, EffectTransitionAuditInput};
+use crate::security_audit::{
+    self, EffectTransitionAuditInput, RecoveryIncidentAuditInput,
+};
 use crate::storage::{AuthorityStore, StorageError};
 
 const MANUAL_REVIEW_DOMAIN: &[u8] = b"golam:effect-manual-review:v1";
@@ -202,6 +204,7 @@ impl ManualReviewStore {
         let incident_id = manual_review_incident_id(input.effect_id, input.transition_id);
         let affected_refs =
             encode_affected_refs(input.effect_id, input.transition_id, input.attempt_id);
+        let resolution = input.reason.as_str().as_bytes();
         transaction.execute(
             "INSERT INTO recovery_incidents \
              (incident_id, detected_at, kind, severity, affected_refs, recovery_mode, resolution) \
@@ -211,11 +214,24 @@ impl ManualReviewStore {
                 input.detected_at,
                 INCIDENT_KIND,
                 INCIDENT_SEVERITY,
-                affected_refs,
+                &affected_refs,
                 RECOVERY_MODE,
-                input.reason.as_str().as_bytes(),
+                resolution,
             ],
         )?;
+        security_audit::append_recovery_incident(
+            &transaction,
+            RecoveryIncidentAuditInput {
+                incident_id: &incident_id,
+                detected_at: input.detected_at,
+                kind: INCIDENT_KIND,
+                severity: INCIDENT_SEVERITY,
+                affected_refs: &affected_refs,
+                recovery_mode: RECOVERY_MODE,
+                resolution: Some(resolution),
+            },
+        )
+        .map_err(|error| ManualReviewError::SecurityAudit(error.to_string()))?;
         transaction.commit()?;
 
         Ok(ManualReviewReport {
