@@ -177,7 +177,8 @@ pub fn verify(connection: &Connection) -> Result<(), IntegrityError> {
 
     verify_session_heads(connection, &mut session_heads)?;
     verify_audit_head(connection, audit_head)?;
-    security_audit::verify(connection).map_err(|error| IntegrityError::Security(error.to_string()))?;
+    security_audit::verify(connection)
+        .map_err(|error| IntegrityError::Security(error.to_string()))?;
     Ok(())
 }
 
