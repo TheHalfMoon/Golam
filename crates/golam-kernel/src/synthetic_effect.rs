@@ -10,8 +10,10 @@ use golam_ledger::dispatch::{
 use golam_ledger::effect_completion::{
     CompleteEffectExecution, EffectCompletionError, EffectCompletionStore, ExecutionCompletion,
 };
-use golam_ledger::effect_read::{EffectReadError, EffectReader};
-use golam_ledger::effects::{CompareAndSwapEffect, EffectStore, EffectStoreError, ProposeEffect};
+use golam_ledger::effect_read::{EffectReadError, EffectReader, EffectSnapshot};
+use golam_ledger::effects::{
+    CompareAndSwapEffect, EffectStore, EffectStoreError, ProposeEffect, StoredEffectAttempt,
+};
 use golam_ledger::manual_review::{
     ManualReviewError, ManualReviewReason, ManualReviewStore, PlaceEffectInManualReview,
 };
@@ -37,6 +39,8 @@ const STAGE_RESOLUTION_TRANSITION: u128 = 12;
 const STAGE_RESOLUTION_EVENT: u128 = 13;
 const STAGE_MANUAL_REVIEW_TRANSITION: u128 = 14;
 const STAGE_MANUAL_REVIEW_EVENT: u128 = 15;
+const STAGE_RECOVERY_UNKNOWN_TRANSITION: u128 = 16;
+const STAGE_RECOVERY_UNKNOWN_EVENT: u128 = 17;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SyntheticExecutionCompletion {
@@ -143,6 +147,7 @@ pub enum SyntheticEffectError {
     IdentifierOverflow(EffectId),
     EffectNotFound(EffectId),
     MissingAttempt(EffectId),
+    NotReconcilable { effect_id: EffectId, actual: String },
     AttemptMismatch {
         expected: EffectAttemptId,
         actual: EffectAttemptId,
@@ -172,13 +177,16 @@ impl fmt::Display for SyntheticEffectError {
             Self::EffectNotFound(effect_id) => {
                 write!(f, "synthetic effect not found: {}", effect_id.0)
             }
-            Self::MissingAttempt(effect_id) => {
-                write!(
-                    f,
-                    "synthetic effect has no durable attempt: {}",
-                    effect_id.0
-                )
-            }
+            Self::MissingAttempt(effect_id) => write!(
+                f,
+                "synthetic effect has no durable attempt: {}",
+                effect_id.0
+            ),
+            Self::NotReconcilable { effect_id, actual } => write!(
+                f,
+                "synthetic effect is not reconcilable: effect={} state={actual}",
+                effect_id.0
+            ),
             Self::AttemptMismatch { expected, actual } => write!(
                 f,
                 "synthetic effect attempt mismatch: expected={}, actual={}",
@@ -202,6 +210,7 @@ impl Error for SyntheticEffectError {
             | Self::IdentifierOverflow(_)
             | Self::EffectNotFound(_)
             | Self::MissingAttempt(_)
+            | Self::NotReconcilable { .. }
             | Self::AttemptMismatch { .. } => None,
         }
     }
@@ -363,8 +372,12 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         &mut self,
         principal: Principal<'_>,
         effect_id: EffectId,
+        detected_at: &str,
         scope: &str,
     ) -> Result<SyntheticReconciliationContext, SyntheticEffectError> {
+        if detected_at.is_empty() {
+            return Err(SyntheticEffectError::InvalidMetadata);
+        }
         let resource = synthetic_resource(effect_id);
         self.require_authority(&AuthorizationRequest {
             principal,
@@ -382,6 +395,34 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             .ok_or(SyntheticEffectError::MissingAttempt(effect_id))?;
         drop(reader);
 
+        match snapshot.current_state.as_str() {
+            "executing" => {
+                let mut completion = EffectCompletionStore::open(&self.authority)?;
+                completion.complete(CompleteEffectExecution {
+                    effect_id,
+                    attempt_id: attempt.attempt_id,
+                    transition_id: EffectTransitionId(stage_id(
+                        effect_id,
+                        STAGE_RECOVERY_UNKNOWN_TRANSITION,
+                    )?),
+                    event_id: EventId(stage_id(effect_id, STAGE_RECOVERY_UNKNOWN_EVENT)?),
+                    finished_at: detected_at,
+                    completion: ExecutionCompletion::UnknownOutcome,
+                    reason_code: Some("interrupted_dispatch_recovered_as_unknown_outcome"),
+                    evidence_ref: None,
+                    receipt: None,
+                })?;
+            }
+            "unknown_outcome" => {}
+            "reconciling" => return Ok(reconciliation_context(snapshot, attempt)),
+            actual => {
+                return Err(SyntheticEffectError::NotReconcilable {
+                    effect_id,
+                    actual: actual.to_owned(),
+                });
+            }
+        }
+
         let mut effects = EffectStore::open(&self.authority)?;
         effects.compare_and_swap(CompareAndSwapEffect {
             transition_id: EffectTransitionId(stage_id(effect_id, STAGE_RECONCILING_TRANSITION)?),
@@ -394,22 +435,7 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             event_id: EventId(stage_id(effect_id, STAGE_RECONCILING_EVENT)?),
         })?;
 
-        Ok(SyntheticReconciliationContext {
-            effect_id,
-            session_id: snapshot.session_id,
-            action: snapshot.action,
-            resource: snapshot.resource,
-            execution_semantics: snapshot.execution_semantics,
-            idempotency_key: snapshot.idempotency_key,
-            payload_hash: snapshot.payload_hash,
-            attempt_id: attempt.attempt_id,
-            started_global_seq: attempt.started_global_seq,
-            handler_id: attempt.handler_id,
-            handler_version: attempt.handler_version,
-            dispatch_token: attempt.dispatch_token,
-            attempt_outcome: attempt.outcome,
-            receipt: attempt.receipt,
-        })
+        Ok(reconciliation_context(snapshot, attempt))
     }
 
     pub fn resolve_synthetic_reconciliation(
@@ -484,6 +510,28 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
     }
 }
 
+fn reconciliation_context(
+    snapshot: EffectSnapshot,
+    attempt: StoredEffectAttempt,
+) -> SyntheticReconciliationContext {
+    SyntheticReconciliationContext {
+        effect_id: snapshot.effect_id,
+        session_id: snapshot.session_id,
+        action: snapshot.action,
+        resource: snapshot.resource,
+        execution_semantics: snapshot.execution_semantics,
+        idempotency_key: snapshot.idempotency_key,
+        payload_hash: snapshot.payload_hash,
+        attempt_id: attempt.attempt_id,
+        started_global_seq: attempt.started_global_seq,
+        handler_id: attempt.handler_id,
+        handler_version: attempt.handler_version,
+        dispatch_token: attempt.dispatch_token,
+        attempt_outcome: attempt.outcome,
+        receipt: attempt.receipt,
+    }
+}
+
 fn validate_semantics(value: &str) -> Result<(), SyntheticEffectError> {
     if matches!(
         value,
@@ -530,6 +578,7 @@ fn stage_id(effect_id: EffectId, stage: u128) -> Result<u128, SyntheticEffectErr
 mod tests {
     use super::*;
     use crate::BootstrapPolicy;
+    use golam_core::authority::AuthorityLayout;
     use golam_core::paths::RuntimeLayout;
     use std::fs;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -594,6 +643,114 @@ mod tests {
     }
 
     #[test]
+    fn interrupted_executing_effect_enters_reconciliation_without_redispatch() {
+        let runtime = runtime();
+        let mut kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
+        let principal = Principal::local_owner("owner");
+        let effect_id = EffectId(150);
+        let prepared = kernel
+            .prepare_synthetic_effect(
+                principal,
+                PrepareSyntheticEffect {
+                    effect_id,
+                    session_id: SessionId(9),
+                    execution_semantics: "at_most_once",
+                    handler_id: "sim-at-most-once-write",
+                    handler_version: "1",
+                    idempotency_key: None,
+                    payload_hash: [9; 32],
+                    started_at: "2026-08-25T13:45:30Z",
+                },
+                "local-owner",
+            )
+            .unwrap();
+        let context = kernel
+            .begin_synthetic_reconciliation(
+                principal,
+                effect_id,
+                "2026-08-25T13:45:31Z",
+                "local-owner",
+            )
+            .unwrap();
+        assert_eq!(context.attempt_id, prepared.attempt_id());
+        drop(kernel);
+
+        let authority = AuthorityLayout::initialize(&runtime).unwrap();
+        let effects = EffectStore::open(&authority).unwrap();
+        assert_eq!(effects.attempt_count(effect_id).unwrap(), 1);
+        assert_eq!(
+            effects.current_state(effect_id).unwrap().as_deref(),
+            Some("reconciling")
+        );
+        let attempt = effects.attempt(prepared.attempt_id()).unwrap().unwrap();
+        assert_eq!(attempt.outcome, "unknown");
+        assert_eq!(
+            attempt.finished_at.as_deref(),
+            Some("2026-08-25T13:45:31Z")
+        );
+        drop(effects);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn reconciliation_can_resume_after_durable_reconciling_transition() {
+        let runtime = runtime();
+        let mut kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
+        let principal = Principal::local_owner("owner");
+        let effect_id = EffectId(175);
+        let prepared = kernel
+            .prepare_synthetic_effect(
+                principal,
+                PrepareSyntheticEffect {
+                    effect_id,
+                    session_id: SessionId(10),
+                    execution_semantics: "irreversible",
+                    handler_id: "sim-irreversible-write",
+                    handler_version: "1",
+                    idempotency_key: None,
+                    payload_hash: [10; 32],
+                    started_at: "2026-08-25T13:45:40Z",
+                },
+                "local-owner",
+            )
+            .unwrap();
+        kernel
+            .complete_synthetic_effect(
+                principal,
+                CompleteSyntheticEffect {
+                    effect_id,
+                    attempt_id: prepared.attempt_id(),
+                    finished_at: "2026-08-25T13:45:41Z",
+                    completion: SyntheticExecutionCompletion::UnknownOutcome,
+                    reason_code: Some("ambiguous"),
+                    evidence_ref: None,
+                    receipt: None,
+                },
+                "local-owner",
+            )
+            .unwrap();
+        let first = kernel
+            .begin_synthetic_reconciliation(
+                principal,
+                effect_id,
+                "2026-08-25T13:45:42Z",
+                "local-owner",
+            )
+            .unwrap();
+        let resumed = kernel
+            .begin_synthetic_reconciliation(
+                principal,
+                effect_id,
+                "2026-08-25T13:45:43Z",
+                "local-owner",
+            )
+            .unwrap();
+        assert_eq!(resumed, first);
+        drop(kernel);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
     fn unknown_synthetic_effect_enters_manual_review_when_reconciliation_stays_ambiguous() {
         let runtime = runtime();
         let mut kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
@@ -631,7 +788,12 @@ mod tests {
             )
             .unwrap();
         let context = kernel
-            .begin_synthetic_reconciliation(principal, effect_id, "local-owner")
+            .begin_synthetic_reconciliation(
+                principal,
+                effect_id,
+                "2026-08-25T13:46:02Z",
+                "local-owner",
+            )
             .unwrap();
         assert_eq!(context.effect_id, effect_id);
         assert_eq!(context.attempt_id, prepared.attempt_id());
@@ -643,7 +805,7 @@ mod tests {
                     resolution: SyntheticExecutionCompletion::UnknownOutcome,
                     reason_code: Some("still_ambiguous"),
                     evidence_ref: Some(b"status-missing"),
-                    detected_at: "2026-08-25T13:46:02Z",
+                    detected_at: "2026-08-25T13:46:03Z",
                 },
                 "local-owner",
             )

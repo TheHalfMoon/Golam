@@ -147,13 +147,20 @@ impl ProtocolAuditLog {
         if input.connection_id == 0 || input.detected_at.is_empty() {
             return Err(ProtocolAuditError::InvalidMetadata);
         }
-        let incident_id = protocol_incident_id(input.connection_id);
         let affected_refs =
             encode_affected_refs(input.connection_id, input.client_id, input.key_id);
         let resolution = input.reason.as_str().as_bytes();
         let transaction = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let next_ordinal: i64 = transaction.query_row(
+            "SELECT COALESCE(MAX(rowid), 0) + 1 FROM recovery_incidents",
+            [],
+            |row| row.get(0),
+        )?;
+        let next_ordinal =
+            u64::try_from(next_ordinal).map_err(|_| ProtocolAuditError::InvalidStoredRecord)?;
+        let incident_id = protocol_incident_id(input.connection_id, next_ordinal);
         transaction.execute(
             "INSERT INTO recovery_incidents \
              (incident_id, detected_at, kind, severity, affected_refs, recovery_mode, resolution) \
@@ -212,9 +219,10 @@ impl ProtocolAuditLog {
     }
 }
 
-fn protocol_incident_id(connection_id: u128) -> [u8; 16] {
+fn protocol_incident_id(connection_id: u128, ordinal: u64) -> [u8; 16] {
     let mut hasher = blake3::Hasher::new();
     hasher.update(PROTOCOL_AUDIT_DOMAIN);
+    hasher.update(&ordinal.to_be_bytes());
     hasher.update(&connection_id.to_be_bytes());
     let hash = hasher.finalize();
     let mut incident_id = [0_u8; 16];
@@ -309,6 +317,37 @@ mod tests {
             .unwrap();
         assert_eq!(record.connection_id, 77);
         assert_eq!(log.records().unwrap(), vec![record]);
+        drop(log);
+        AuthorityStore::open(authority.authority_db_path())
+            .unwrap()
+            .verify_integrity()
+            .unwrap();
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn repeated_rejections_on_one_connection_remain_append_only() {
+        let (runtime, authority) = authority();
+        let mut log = ProtocolAuditLog::open(&authority).unwrap();
+        let first = log
+            .append_rejection(AppendProtocolRejection {
+                connection_id: 88,
+                client_id: ClientId(42),
+                key_id: [7; 32],
+                detected_at: "2026-08-25T05:01:00Z",
+                reason: ProtocolRejectionReason::ProtocolViolation,
+            })
+            .unwrap();
+        let second = log
+            .append_rejection(AppendProtocolRejection {
+                connection_id: 88,
+                client_id: ClientId(42),
+                key_id: [7; 32],
+                detected_at: "2026-08-25T05:01:00Z",
+                reason: ProtocolRejectionReason::UnauthenticatedRequest,
+            })
+            .unwrap();
+        assert_eq!(log.records().unwrap(), vec![first, second]);
         drop(log);
         AuthorityStore::open(authority.authority_db_path())
             .unwrap()

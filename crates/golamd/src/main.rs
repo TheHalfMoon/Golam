@@ -6,6 +6,9 @@ mod deadline_io;
 use std::error::Error;
 use std::io::{self, Write};
 use std::process::ExitCode;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, mpsc};
+use std::thread;
 use std::time::Duration;
 
 use connection::{BootstrapApprover, ConnectionMaterial, serve_connection};
@@ -19,24 +22,59 @@ use golam_kernel::{BootstrapPolicy, KernelStartup, start_kernel};
 use golamd::CommandRouter;
 
 const CONNECTION_DEADLINE: Duration = Duration::from_secs(30);
+const BOOTSTRAP_APPROVAL_DEADLINE: Duration = Duration::from_secs(30);
 
-struct ForegroundApproval;
+struct ForegroundApproval {
+    stdin_pending: Arc<AtomicBool>,
+}
+
+impl ForegroundApproval {
+    fn new() -> Self {
+        Self {
+            stdin_pending: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
 
 impl BootstrapApprover for ForegroundApproval {
     fn approve(&mut self, client_id: ClientId, key_id: ClientKeyId) -> bool {
+        if self
+            .stdin_pending
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            eprintln!("golamd: bootstrap approval input is already pending; denying request");
+            return false;
+        }
+
         eprint!(
             "Approve first local Golam CLI enrollment for client {} key {}? [y/N] ",
             client_id.0,
             hex(&key_id.0)
         );
         if io::stderr().flush().is_err() {
+            self.stdin_pending.store(false, Ordering::Release);
             return false;
         }
-        let mut answer = String::new();
-        if io::stdin().read_line(&mut answer).is_err() {
-            return false;
+
+        let pending = Arc::clone(&self.stdin_pending);
+        let (sender, receiver) = mpsc::sync_channel(1);
+        thread::spawn(move || {
+            let mut answer = String::new();
+            let approved = io::stdin().read_line(&mut answer).is_ok()
+                && matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes");
+            pending.store(false, Ordering::Release);
+            let _ = sender.send(approved);
+        });
+
+        match receiver.recv_timeout(BOOTSTRAP_APPROVAL_DEADLINE) {
+            Ok(approved) => approved,
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                eprintln!("golamd: bootstrap approval timed out; denying request");
+                false
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => false,
         }
-        matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes")
     }
 }
 
@@ -87,7 +125,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     };
 
     let mut router = CommandRouter::new(kernel);
-    let mut approval = ForegroundApproval;
+    let mut approval = ForegroundApproval::new();
     let limits = ResourceLimits::default();
     let server_epoch = random_server_epoch()?;
     serve_local_loop(&runtime, &mut router, &mut approval, limits, server_epoch)

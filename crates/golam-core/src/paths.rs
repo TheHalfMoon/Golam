@@ -26,6 +26,7 @@ pub enum ProtectedPathError {
     Symlink(PathBuf),
     NotDirectory(PathBuf),
     PermissionsTooBroad { path: PathBuf, mode: u32 },
+    OwnershipMismatch { path: PathBuf, expected: u32, actual: u32 },
     WindowsAclMissing(PathBuf),
     WindowsAclMismatch(PathBuf),
     WindowsAclNotProtected(PathBuf),
@@ -44,6 +45,11 @@ impl fmt::Display for ProtectedPathError {
             Self::PermissionsTooBroad { path, mode } => write!(
                 f,
                 "protected directory permissions are too broad: {} mode {mode:o}",
+                path.display()
+            ),
+            Self::OwnershipMismatch { path, expected, actual } => write!(
+                f,
+                "protected Unix path owner mismatch at {}: expected uid {expected}, actual uid {actual}",
                 path.display()
             ),
             Self::WindowsAclMissing(path) => {
@@ -78,6 +84,7 @@ impl Error for ProtectedPathError {
             Self::Symlink(_)
             | Self::NotDirectory(_)
             | Self::PermissionsTooBroad { .. }
+            | Self::OwnershipMismatch { .. }
             | Self::WindowsAclMissing(_)
             | Self::WindowsAclMismatch(_)
             | Self::WindowsAclNotProtected(_)
@@ -169,8 +176,17 @@ fn verify_platform_permissions(
     path: &Path,
     metadata: &fs::Metadata,
 ) -> Result<(), ProtectedPathError> {
-    use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
+    let expected = nix::unistd::Uid::effective().as_raw();
+    let actual = metadata.uid();
+    if actual != expected {
+        return Err(ProtectedPathError::OwnershipMismatch {
+            path: path.to_path_buf(),
+            expected,
+            actual,
+        });
+    }
     let mode = metadata.permissions().mode() & 0o777;
     if mode & 0o077 != 0 {
         return Err(ProtectedPathError::PermissionsTooBroad {
@@ -319,17 +335,15 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn unix_layout_is_user_only() {
-        use std::os::unix::fs::PermissionsExt;
+        use std::os::unix::fs::{MetadataExt, PermissionsExt};
 
         let root = unique_root();
         let layout = RuntimeLayout::initialize(&root).unwrap();
         layout.require_authority_ready().unwrap();
-        let mode = fs::metadata(&layout.runtime_dir)
-            .unwrap()
-            .permissions()
-            .mode()
-            & 0o777;
+        let metadata = fs::metadata(&layout.runtime_dir).unwrap();
+        let mode = metadata.permissions().mode() & 0o777;
         assert_eq!(mode, 0o700);
+        assert_eq!(metadata.uid(), nix::unistd::Uid::effective().as_raw());
         fs::remove_dir_all(root).unwrap();
     }
 

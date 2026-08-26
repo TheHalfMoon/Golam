@@ -105,6 +105,7 @@ pub enum EffectStoreError {
     SecurityAudit(String),
     InvalidMetadata,
     InvalidState(String),
+    InvalidTransition { from: String, to: String },
     InvalidAttemptOutcome(String),
     EffectAlreadyExists(EffectId),
     EffectNotFound(EffectId),
@@ -125,6 +126,9 @@ impl fmt::Display for EffectStoreError {
             Self::SecurityAudit(error) => write!(f, "effect integrity-chain error: {error}"),
             Self::InvalidMetadata => f.write_str("effect request metadata must be non-empty"),
             Self::InvalidState(state) => write!(f, "invalid effect state: {state}"),
+            Self::InvalidTransition { from, to } => {
+                write!(f, "invalid effect state transition: {from} -> {to}")
+            }
             Self::InvalidAttemptOutcome(outcome) => {
                 write!(f, "invalid effect attempt outcome: {outcome}")
             }
@@ -276,6 +280,7 @@ impl EffectStore {
     ) -> Result<StoredEffectTransition, EffectStoreError> {
         validate_state(input.expected_state)?;
         validate_state(input.next_state)?;
+        validate_transition(input.expected_state, input.next_state)?;
         let transaction = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -577,6 +582,32 @@ fn validate_state(state: &str) -> Result<(), EffectStoreError> {
     }
 }
 
+fn validate_transition(from: &str, to: &str) -> Result<(), EffectStoreError> {
+    if matches!(
+        (from, to),
+        ("proposed", "denied")
+            | ("proposed", "authorized")
+            | ("authorized", "approval_required")
+            | ("authorized", "executing")
+            | ("approval_required", "authorized")
+            | ("approval_required", "denied")
+            | ("executing", "succeeded")
+            | ("executing", "failed")
+            | ("executing", "unknown_outcome")
+            | ("unknown_outcome", "reconciling")
+            | ("reconciling", "succeeded")
+            | ("reconciling", "failed")
+            | ("reconciling", "manual_review")
+    ) {
+        Ok(())
+    } else {
+        Err(EffectStoreError::InvalidTransition {
+            from: from.to_owned(),
+            to: to.to_owned(),
+        })
+    }
+}
+
 fn validate_attempt_outcome(outcome: &str) -> Result<(), EffectStoreError> {
     if ATTEMPT_OUTCOMES.contains(&outcome) {
         Ok(())
@@ -733,6 +764,35 @@ mod tests {
         );
         assert_eq!(reopened.transition_count(effect_id).unwrap(), 2);
         drop(reopened);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn invalid_fsm_transition_is_rejected_without_mutation() {
+        let (runtime, authority) = authority();
+        let effect_id = EffectId(46);
+        let mut store = EffectStore::open(&authority).unwrap();
+        store.propose(proposal(effect_id)).unwrap();
+        assert!(matches!(
+            store.compare_and_swap(CompareAndSwapEffect {
+                transition_id: EffectTransitionId(930),
+                effect_id,
+                expected_state: "proposed",
+                next_state: "succeeded",
+                attempt_id: None,
+                reason_code: Some("illegal_skip"),
+                evidence_ref: None,
+                event_id: EventId(830),
+            }),
+            Err(EffectStoreError::InvalidTransition { ref from, ref to })
+                if from == "proposed" && to == "succeeded"
+        ));
+        assert_eq!(store.transition_count(effect_id).unwrap(), 1);
+        assert_eq!(
+            store.current_state(effect_id).unwrap().as_deref(),
+            Some("proposed")
+        );
+        drop(store);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 

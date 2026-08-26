@@ -2,7 +2,9 @@
 
 use std::error::Error;
 use std::fs;
-use std::io::Write;
+use std::io::{self, Read, Write};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use golam_core::authority::AuthorityLayout;
 use golam_core::paths::RuntimeLayout;
@@ -17,6 +19,68 @@ use golam_ipc::request::{
 use golam_ipc::wire::{read_frame, write_frame};
 use golam_ipc::{FrameHeader, FrameKind};
 
+const IPC_DEADLINE: Duration = Duration::from_secs(30);
+const POLL_INTERVAL: Duration = Duration::from_millis(2);
+
+struct DeadlineIo<S> {
+    inner: S,
+    deadline: Instant,
+}
+
+impl<S> DeadlineIo<S> {
+    fn new(inner: S, lifetime: Duration) -> Self {
+        Self {
+            inner,
+            deadline: Instant::now() + lifetime,
+        }
+    }
+
+    fn wait_for_progress(&self) -> io::Result<()> {
+        let remaining = self
+            .deadline
+            .checked_duration_since(Instant::now())
+            .filter(|remaining| !remaining.is_zero())
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "Golam CLI local IPC deadline exceeded",
+                )
+            })?;
+        thread::sleep(remaining.min(POLL_INTERVAL));
+        Ok(())
+    }
+}
+
+impl<S: Read> Read for DeadlineIo<S> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        loop {
+            match self.inner.read(buffer) {
+                Ok(read) => return Ok(read),
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => self.wait_for_progress()?,
+                Err(error) => return Err(error),
+            }
+        }
+    }
+}
+
+impl<S: Write> Write for DeadlineIo<S> {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        loop {
+            match self.inner.write(buffer) {
+                Ok(written) => return Ok(written),
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => self.wait_for_progress()?,
+                Err(error) => return Err(error),
+            }
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
+
 pub fn enroll(runtime: &RuntimeLayout, client_id: ClientId) -> Result<String, Box<dyn Error>> {
     let authority = AuthorityLayout::initialize(runtime)?;
     let store = ClientCredentialStore::new(&authority);
@@ -25,12 +89,14 @@ pub fn enroll(runtime: &RuntimeLayout, client_id: ClientId) -> Result<String, Bo
     let limits = ResourceLimits::default();
 
     #[cfg(unix)]
-    let mut stream = golam_ipc::unix_transport::connect_same_user(runtime)?;
+    let stream = golam_ipc::unix_transport::connect_same_user(runtime)?;
     #[cfg(windows)]
-    let mut stream = golam_ipc::windows_transport::connect_current_user(runtime)?;
+    let stream = golam_ipc::windows_transport::connect_current_user(runtime)?;
     #[cfg(not(any(unix, windows)))]
     return Err("Golam local IPC is unsupported on this platform".into());
 
+    stream.set_nonblocking(true)?;
+    let mut stream = DeadlineIo::new(stream, IPC_DEADLINE);
     let ready = authenticate_client(
         &mut stream,
         credential.client_id,
@@ -56,12 +122,14 @@ pub fn execute(runtime: &RuntimeLayout, command: &Command) -> Result<ReplyMessag
     let limits = ResourceLimits::default();
 
     #[cfg(unix)]
-    let mut stream = golam_ipc::unix_transport::connect_same_user(runtime)?;
+    let stream = golam_ipc::unix_transport::connect_same_user(runtime)?;
     #[cfg(windows)]
-    let mut stream = golam_ipc::windows_transport::connect_current_user(runtime)?;
+    let stream = golam_ipc::windows_transport::connect_current_user(runtime)?;
     #[cfg(not(any(unix, windows)))]
     return Err("Golam local IPC is unsupported on this platform".into());
 
+    stream.set_nonblocking(true)?;
+    let mut stream = DeadlineIo::new(stream, IPC_DEADLINE);
     let ready = authenticate_client(
         &mut stream,
         credential.client_id,
@@ -268,6 +336,31 @@ mod tests {
             std::env::temp_dir().join(format!("golam-cli-client-{}-{t}-{n}", std::process::id())),
         )
         .unwrap()
+    }
+
+    struct WouldBlockForever;
+
+    impl Read for WouldBlockForever {
+        fn read(&mut self, _buffer: &mut [u8]) -> io::Result<usize> {
+            Err(io::Error::from(io::ErrorKind::WouldBlock))
+        }
+    }
+
+    impl Write for WouldBlockForever {
+        fn write(&mut self, _buffer: &[u8]) -> io::Result<usize> {
+            Err(io::Error::from(io::ErrorKind::WouldBlock))
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn stalled_local_peer_is_bounded() {
+        let mut stream = DeadlineIo::new(WouldBlockForever, Duration::from_millis(10));
+        let error = stream.read(&mut [0_u8; 1]).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::TimedOut);
     }
 
     #[test]

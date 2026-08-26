@@ -455,7 +455,7 @@ impl<P: AuthorizationPolicy> CommandRouter<P> {
         scope: &str,
     ) -> ReplyMessage {
         let (kernel, handlers) = (&mut self.kernel, &mut self.handlers);
-        let context = match kernel.begin_synthetic_reconciliation(principal, effect_id, scope) {
+        let context = match kernel.begin_synthetic_reconciliation(principal, effect_id, now, scope) {
             Ok(context) => context,
             Err(error) => return synthetic_error(error),
         };

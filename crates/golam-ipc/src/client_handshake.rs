@@ -29,6 +29,7 @@ pub enum ClientHandshakeError {
         challenge: u64,
         ready: u64,
     },
+    ServerLimitsExceedLocal,
     LimitsMismatch,
 }
 
@@ -48,6 +49,9 @@ impl fmt::Display for ClientHandshakeError {
                 f,
                 "IPC server epoch changed during handshake: challenge={challenge}, ready={ready}"
             ),
+            Self::ServerLimitsExceedLocal => {
+                f.write_str("IPC server advertised resource limits above the local client ceiling")
+            }
             Self::LimitsMismatch => {
                 f.write_str("IPC server resource limits changed during handshake")
             }
@@ -65,6 +69,7 @@ impl Error for ClientHandshakeError {
             | Self::InvalidClientNonce
             | Self::UnexpectedFrame { .. }
             | Self::ServerEpochMismatch { .. }
+            | Self::ServerLimitsExceedLocal
             | Self::LimitsMismatch => None,
         }
     }
@@ -168,6 +173,7 @@ pub fn authenticate_client<S: Read + Write>(
             LifecycleMessage::Challenge(challenge) => challenge,
             _ => unreachable!("challenge frame decodes to challenge lifecycle message"),
         };
+    require_local_limit_ceiling(challenge.limits, local_limits)?;
 
     let authenticate = sign_authenticate(hello, challenge, key_id, signing_key)?;
     write_lifecycle(
@@ -197,6 +203,19 @@ pub fn authenticate_client<S: Read + Write>(
         return Err(ClientHandshakeError::LimitsMismatch);
     }
     Ok(ready)
+}
+
+fn require_local_limit_ceiling(
+    advertised: ResourceLimits,
+    local: ResourceLimits,
+) -> Result<(), ClientHandshakeError> {
+    if advertised.max_frame_bytes > local.max_frame_bytes
+        || advertised.max_pending_requests > local.max_pending_requests
+        || advertised.max_concurrent_clients > local.max_concurrent_clients
+    {
+        return Err(ClientHandshakeError::ServerLimitsExceedLocal);
+    }
+    Ok(())
 }
 
 fn write_lifecycle<S: Write>(
@@ -335,6 +354,33 @@ mod tests {
                 .canonical_bytes(key_id)
                 .unwrap()
         );
+    }
+
+    #[test]
+    fn unauthenticated_server_limits_cannot_raise_client_allocation_ceiling() {
+        let local_limits = ResourceLimits::default();
+        let hostile_limits = ResourceLimits {
+            max_frame_bytes: u32::MAX,
+            ..local_limits
+        };
+        let challenge = Challenge {
+            protocol_version: PROTOCOL_VERSION,
+            server_epoch: 31,
+            server_nonce: [8; 32],
+            limits: hostile_limits,
+        };
+        let ready = Ready {
+            connection_id: ConnectionId(32),
+            server_epoch: challenge.server_epoch,
+            limits: hostile_limits,
+        };
+        let signing_key = SigningKey::from_bytes(&[6; 32]);
+        let key_id = key_id_for_public_key(signing_key.verifying_key().to_bytes());
+        let mut io = ScriptedIo::new(server_script(challenge, ready, local_limits));
+        assert!(matches!(
+            authenticate_client(&mut io, ClientId(33), key_id, &signing_key, local_limits),
+            Err(ClientHandshakeError::ServerLimitsExceedLocal)
+        ));
     }
 
     #[test]

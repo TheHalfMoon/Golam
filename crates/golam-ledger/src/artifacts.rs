@@ -19,6 +19,7 @@ pub struct ArtifactReceipt {
 pub enum ArtifactError {
     Io(io::Error),
     Symlink(PathBuf),
+    InvalidRelativePath(PathBuf),
     UnexpectedTempEntry(PathBuf),
     HashMismatch(PathBuf),
     SizeMismatch {
@@ -33,6 +34,11 @@ impl fmt::Display for ArtifactError {
         match self {
             Self::Io(error) => write!(f, "artifact I/O error: {error}"),
             Self::Symlink(path) => write!(f, "artifact path is a symlink: {}", path.display()),
+            Self::InvalidRelativePath(path) => write!(
+                f,
+                "artifact receipt path is not canonical for its content hash: {}",
+                path.display()
+            ),
             Self::UnexpectedTempEntry(path) => {
                 write!(f, "unexpected artifact temp entry: {}", path.display())
             }
@@ -57,6 +63,7 @@ impl Error for ArtifactError {
         match self {
             Self::Io(error) => Some(error),
             Self::Symlink(_)
+            | Self::InvalidRelativePath(_)
             | Self::UnexpectedTempEntry(_)
             | Self::HashMismatch(_)
             | Self::SizeMismatch { .. } => None,
@@ -133,11 +140,12 @@ impl ArtifactStore {
     }
 
     pub fn verify(&self, receipt: &ArtifactReceipt) -> Result<(), ArtifactError> {
-        verify_path(&self.root.join(&receipt.relative_path), receipt)
+        let path = self.validated_receipt_path(receipt)?;
+        verify_path(&path, receipt)
     }
 
     pub fn read_verified(&self, receipt: &ArtifactReceipt) -> Result<Vec<u8>, ArtifactError> {
-        let path = self.root.join(&receipt.relative_path);
+        let path = self.validated_receipt_path(receipt)?;
         verify_path(&path, receipt)?;
         Ok(fs::read(path)?)
     }
@@ -156,6 +164,32 @@ impl ArtifactStore {
             }
         }
         Ok(removed)
+    }
+
+    fn validated_receipt_path(
+        &self,
+        receipt: &ArtifactReceipt,
+    ) -> Result<PathBuf, ArtifactError> {
+        let hex = hash_hex(receipt.hash);
+        let expected_relative = PathBuf::from(&hex[..2]).join(&hex);
+        if receipt.relative_path != expected_relative {
+            return Err(ArtifactError::InvalidRelativePath(
+                receipt.relative_path.clone(),
+            ));
+        }
+        let prefix = self.root.join(&hex[..2]);
+        let metadata = fs::symlink_metadata(&prefix)?;
+        if metadata.file_type().is_symlink() {
+            return Err(ArtifactError::Symlink(prefix));
+        }
+        if !metadata.is_dir() {
+            return Err(io::Error::new(
+                io::ErrorKind::NotADirectory,
+                prefix.display().to_string(),
+            )
+            .into());
+        }
+        Ok(self.root.join(expected_relative))
     }
 
     fn next_temp_path(&self, hash_hex: &str) -> PathBuf {
@@ -195,6 +229,13 @@ fn verify_path(path: &Path, receipt: &ArtifactReceipt) -> Result<(), ArtifactErr
     let metadata = fs::symlink_metadata(path)?;
     if metadata.file_type().is_symlink() {
         return Err(ArtifactError::Symlink(path.to_path_buf()));
+    }
+    if !metadata.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("artifact path is not a regular file: {}", path.display()),
+        )
+        .into());
     }
     if metadata.len() != receipt.size_bytes {
         return Err(ArtifactError::SizeMismatch {
@@ -269,6 +310,28 @@ mod tests {
         assert_eq!(first, second);
         store.verify(&first).unwrap();
         assert_eq!(store.cleanup_temps().unwrap(), 0);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn forged_relative_path_cannot_escape_artifact_root() {
+        let root = unique_root();
+        let store = ArtifactStore::open(&root).unwrap();
+        let receipt = store.install_bytes(b"checkpoint bytes").unwrap();
+        let outside = root.parent().unwrap().join(format!(
+            "golam-artifact-outside-{}",
+            std::process::id()
+        ));
+        fs::write(&outside, b"checkpoint bytes").unwrap();
+        let forged = ArtifactReceipt {
+            relative_path: PathBuf::from("..").join(outside.file_name().unwrap()),
+            ..receipt
+        };
+        assert!(matches!(
+            store.read_verified(&forged),
+            Err(ArtifactError::InvalidRelativePath(_))
+        ));
+        fs::remove_file(outside).unwrap();
         fs::remove_dir_all(root).unwrap();
     }
 
