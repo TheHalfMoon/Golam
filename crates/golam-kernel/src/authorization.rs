@@ -352,9 +352,11 @@ fn client_action_allowed(action: &str) -> bool {
             | "session.fork"
             | "session.event.append"
             | "goal.append"
+            | "checkpoint.create"
             | "checkpoint.verify"
             | "replay.run"
             | "effect.simulate"
+            | "effect.reconcile"
             | "recovery.status.read"
     )
 }
