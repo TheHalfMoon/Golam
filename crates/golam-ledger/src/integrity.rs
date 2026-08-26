@@ -7,7 +7,7 @@ use std::fmt;
 use golam_core::{EventId, SCHEMA_VERSION, SessionId};
 use rusqlite::{Connection, OptionalExtension, params};
 
-use crate::security_audit::{self, SecurityAuditError};
+use crate::security_audit;
 use crate::{EventKind, EventRecord, audit_integrity_hash, event_integrity_hash, payload_hash};
 
 const SECURITY_AUDIT_CHAIN: &str = "security";
@@ -16,7 +16,7 @@ const SECURITY_AUDIT_CHAIN: &str = "security";
 pub enum IntegrityError {
     Sqlite(rusqlite::Error),
     Core(golam_core::CoreError),
-    Security(SecurityAuditError),
+    Security(String),
     Violation(&'static str),
 }
 
@@ -36,8 +36,7 @@ impl Error for IntegrityError {
         match self {
             Self::Sqlite(error) => Some(error),
             Self::Core(error) => Some(error),
-            Self::Security(error) => Some(error),
-            Self::Violation(_) => None,
+            Self::Security(_) | Self::Violation(_) => None,
         }
     }
 }
@@ -51,12 +50,6 @@ impl From<rusqlite::Error> for IntegrityError {
 impl From<golam_core::CoreError> for IntegrityError {
     fn from(value: golam_core::CoreError) -> Self {
         Self::Core(value)
-    }
-}
-
-impl From<SecurityAuditError> for IntegrityError {
-    fn from(value: SecurityAuditError) -> Self {
-        Self::Security(value)
     }
 }
 
@@ -184,7 +177,7 @@ pub fn verify(connection: &Connection) -> Result<(), IntegrityError> {
 
     verify_session_heads(connection, &mut session_heads)?;
     verify_audit_head(connection, audit_head)?;
-    security_audit::verify(connection)?;
+    security_audit::verify(connection).map_err(|error| IntegrityError::Security(error.to_string()))?;
     Ok(())
 }
 
