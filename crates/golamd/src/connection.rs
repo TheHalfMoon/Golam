@@ -58,10 +58,9 @@ impl fmt::Display for ConnectionError {
             Self::Kernel(error) => write!(f, "daemon kernel error: {error}"),
             Self::Enrollment(error) => write!(f, "daemon client enrollment error: {error}"),
             Self::Request(error) => write!(f, "daemon request protocol error: {error}"),
-            Self::UnexpectedFrame { expected, actual } => write!(
-                f,
-                "daemon expected {expected:?} frame, received {actual:?}"
-            ),
+            Self::UnexpectedFrame { expected, actual } => {
+                write!(f, "daemon expected {expected:?} frame, received {actual:?}")
+            }
             Self::BootstrapDenied { client_id } => write!(
                 f,
                 "local bootstrap enrollment was not approved for client {}",
@@ -170,11 +169,13 @@ pub fn serve_connection<S: Read + Write, A: BootstrapApprover>(
             actual: authenticate_frame.header.kind,
         });
     }
-    let authenticate =
-        match LifecycleMessage::decode(authenticate_frame.header.kind, &authenticate_frame.payload)? {
-            LifecycleMessage::Authenticate(authenticate) => authenticate,
-            _ => unreachable!("authenticate frame decodes to authenticate lifecycle message"),
-        };
+    let authenticate = match LifecycleMessage::decode(
+        authenticate_frame.header.kind,
+        &authenticate_frame.payload,
+    )? {
+        LifecycleMessage::Authenticate(authenticate) => authenticate,
+        _ => unreachable!("authenticate frame decodes to authenticate lifecycle message"),
+    };
 
     authenticate_with_optional_bootstrap(
         &mut auth_kernel,
@@ -210,10 +211,7 @@ pub fn serve_connection<S: Read + Write, A: BootstrapApprover>(
         }
 
         match tracker.receive_client_frame(frame.header, &frame.payload)? {
-            ClientAction::Begin {
-                request_id,
-                method,
-            } => {
+            ClientAction::Begin { request_id, method } => {
                 let request = decode_request(&frame.payload)?;
                 debug_assert_eq!(request.method, method);
                 let reply = router.route(principal, &request, &timestamp_now(), "local-ipc");
@@ -377,10 +375,9 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        RuntimeLayout::initialize(std::env::temp_dir().join(format!(
-            "golamd-connection-{}-{t}-{n}",
-            std::process::id()
-        )))
+        RuntimeLayout::initialize(
+            std::env::temp_dir().join(format!("golamd-connection-{}-{t}-{n}", std::process::id())),
+        )
         .unwrap()
     }
 
@@ -423,7 +420,8 @@ mod tests {
 
         let hello_payload = LifecycleMessage::Hello(hello).encode_payload();
         let mut bytes =
-            golam_ipc::encode_frame(FrameKind::Hello, None, &hello_payload, material.limits).unwrap();
+            golam_ipc::encode_frame(FrameKind::Hello, None, &hello_payload, material.limits)
+                .unwrap();
         let authenticate_payload = LifecycleMessage::Authenticate(authenticate).encode_payload();
         bytes.extend_from_slice(
             &golam_ipc::encode_frame(
@@ -476,14 +474,7 @@ mod tests {
             calls: 0,
         };
 
-        serve_connection(
-            &mut io,
-            &runtime,
-            &mut router,
-            material(),
-            &mut approval,
-        )
-        .unwrap();
+        serve_connection(&mut io, &runtime, &mut router, material(), &mut approval).unwrap();
         assert_eq!(approval.calls, 1);
 
         let mut output = Cursor::new(io.output);
@@ -503,7 +494,10 @@ mod tests {
         );
         let reply = read_frame(&mut output, material().limits).unwrap();
         assert_eq!(reply.header.kind, FrameKind::Reply);
-        assert_eq!(decode_reply(&reply.payload).unwrap().status, ReplyStatus::Ok);
+        assert_eq!(
+            decode_reply(&reply.payload).unwrap().status,
+            ReplyStatus::Ok
+        );
 
         let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
         assert!(
@@ -536,13 +530,7 @@ mod tests {
         };
 
         assert!(matches!(
-            serve_connection(
-                &mut io,
-                &runtime,
-                &mut router,
-                material(),
-                &mut approval,
-            ),
+            serve_connection(&mut io, &runtime, &mut router, material(), &mut approval,),
             Err(ConnectionError::BootstrapDenied {
                 client_id: ClientId(2002)
             })
@@ -591,13 +579,7 @@ mod tests {
         };
 
         assert!(matches!(
-            serve_connection(
-                &mut io,
-                &runtime,
-                &mut router,
-                material(),
-                &mut approval,
-            ),
+            serve_connection(&mut io, &runtime, &mut router, material(), &mut approval,),
             Err(ConnectionError::UnexpectedFrame {
                 expected: FrameKind::Authenticate,
                 actual: FrameKind::Request
