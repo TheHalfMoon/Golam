@@ -4,9 +4,7 @@ use std::error::Error;
 use std::fmt;
 use std::str;
 
-use golam_core::{
-    CheckpointId, ClientId, EffectId, EventId, GoalId, GoalVersionId, SessionId,
-};
+use golam_core::{CheckpointId, ClientId, EffectId, EventId, GoalId, GoalVersionId, SessionId};
 
 use crate::request::{MethodId, RequestMessage};
 
