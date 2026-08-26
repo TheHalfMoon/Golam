@@ -318,7 +318,7 @@ mod tests {
     use golam_ipc::lifecycle::{Challenge, ShutdownReason};
     use golam_ipc::request::{ReplyStatus, decode_reply, encode_request};
     use golam_ipc::wire::read_frame;
-    use golam_ipc::{FrameKind, encode_frame};
+    use golam_ipc::FrameKind;
     use std::fs;
     use std::io::{self, Cursor};
     use std::sync::atomic::{AtomicU64, Ordering};
