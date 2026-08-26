@@ -4,7 +4,7 @@ use std::fs;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use golam_core::authority::{AuthorityLayout, AuthorityPath};
+use golam_core::authority::AuthorityLayout;
 use golam_core::paths::RuntimeLayout;
 use golam_core::{ClientId, EffectId, EffectTransitionId, EventId, SessionId};
 use golam_ledger::authorization::{
