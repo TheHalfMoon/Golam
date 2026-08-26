@@ -66,14 +66,19 @@ fn parse_values(args: &[&str]) -> Result<Command, CliError> {
         ["session", "open", session_id] => Ok(Command::SessionOpen {
             session_id: SessionId(parse_u128("session-id", session_id)?),
         }),
-        ["session", "create", session_id, event_id, recorded_at, payload] => {
-            Ok(Command::SessionCreate {
-                session_id: SessionId(parse_u128("session-id", session_id)?),
-                event_id: EventId(parse_u128("event-id", event_id)?),
-                recorded_at: (*recorded_at).to_owned(),
-                payload: payload.as_bytes().to_vec(),
-            })
-        }
+        [
+            "session",
+            "create",
+            session_id,
+            event_id,
+            recorded_at,
+            payload,
+        ] => Ok(Command::SessionCreate {
+            session_id: SessionId(parse_u128("session-id", session_id)?),
+            event_id: EventId(parse_u128("event-id", event_id)?),
+            recorded_at: (*recorded_at).to_owned(),
+            payload: payload.as_bytes().to_vec(),
+        }),
         [
             "session",
             "fork",
@@ -125,24 +130,26 @@ fn parse_values(args: &[&str]) -> Result<Command, CliError> {
             through_session_seq: parse_u64("through-session-seq", through_session_seq)?,
             recorded_at: (*recorded_at).to_owned(),
         }),
-        ["checkpoint", "verify", checkpoint_id, session_id, through_session_seq] => {
-            Ok(Command::CheckpointVerify {
-                checkpoint_id: CheckpointId(parse_u128("checkpoint-id", checkpoint_id)?),
-                session_id: SessionId(parse_u128("session-id", session_id)?),
-                through_session_seq: parse_u64("through-session-seq", through_session_seq)?,
-            })
-        }
+        [
+            "checkpoint",
+            "verify",
+            checkpoint_id,
+            session_id,
+            through_session_seq,
+        ] => Ok(Command::CheckpointVerify {
+            checkpoint_id: CheckpointId(parse_u128("checkpoint-id", checkpoint_id)?),
+            session_id: SessionId(parse_u128("session-id", session_id)?),
+            through_session_seq: parse_u64("through-session-seq", through_session_seq)?,
+        }),
         ["replay", session_id, through_session_seq] => Ok(Command::Replay {
             session_id: SessionId(parse_u128("session-id", session_id)?),
             through_session_seq: parse_u64("through-session-seq", through_session_seq)?,
         }),
-        ["effect", "simulate", effect_id, session_id, semantics] => {
-            Ok(Command::EffectSimulate {
-                effect_id: EffectId(parse_u128("effect-id", effect_id)?),
-                session_id: SessionId(parse_u128("session-id", session_id)?),
-                semantics: parse_semantics(semantics)?,
-            })
-        }
+        ["effect", "simulate", effect_id, session_id, semantics] => Ok(Command::EffectSimulate {
+            effect_id: EffectId(parse_u128("effect-id", effect_id)?),
+            session_id: SessionId(parse_u128("session-id", session_id)?),
+            semantics: parse_semantics(semantics)?,
+        }),
         ["effect", "reconcile", effect_id] => Ok(Command::EffectReconcile {
             effect_id: EffectId(parse_u128("effect-id", effect_id)?),
         }),
@@ -185,11 +192,28 @@ mod tests {
     #[test]
     fn minimal_command_surface_parses_to_typed_ipc_commands() {
         let cases = [
-            (vec!["client", "enroll", "1"], Command::ClientEnroll { client_id: ClientId(1) }),
-            (vec!["sessions"], Command::SessionsList),
-            (vec!["session", "open", "2"], Command::SessionOpen { session_id: SessionId(2) }),
             (
-                vec!["session", "create", "3", "4", "2026-08-26T01:40:00Z", "root"],
+                vec!["client", "enroll", "1"],
+                Command::ClientEnroll {
+                    client_id: ClientId(1),
+                },
+            ),
+            (vec!["sessions"], Command::SessionsList),
+            (
+                vec!["session", "open", "2"],
+                Command::SessionOpen {
+                    session_id: SessionId(2),
+                },
+            ),
+            (
+                vec![
+                    "session",
+                    "create",
+                    "3",
+                    "4",
+                    "2026-08-26T01:40:00Z",
+                    "root",
+                ],
                 Command::SessionCreate {
                     session_id: SessionId(3),
                     event_id: EventId(4),
@@ -222,7 +246,9 @@ mod tests {
             ),
             (
                 vec!["effect", "reconcile", "6"],
-                Command::EffectReconcile { effect_id: EffectId(6) },
+                Command::EffectReconcile {
+                    effect_id: EffectId(6),
+                },
             ),
             (vec!["doctor"], Command::Doctor),
         ];
@@ -243,7 +269,10 @@ mod tests {
                 "1",
                 "2026-08-26T01:41:00Z"
             ]),
-            Ok(Command::SessionFork { child_session_id: SessionId(10), .. })
+            Ok(Command::SessionFork {
+                child_session_id: SessionId(10),
+                ..
+            })
         ));
         assert!(matches!(
             parse_args([
@@ -258,7 +287,10 @@ mod tests {
                 "2026-08-26T01:42:00Z",
                 "finish-spec-002"
             ]),
-            Ok(Command::GoalAppend { goal_id: GoalId(13), .. })
+            Ok(Command::GoalAppend {
+                goal_id: GoalId(13),
+                ..
+            })
         ));
         assert!(matches!(
             parse_args([
@@ -270,7 +302,10 @@ mod tests {
                 "1",
                 "2026-08-26T01:43:00Z"
             ]),
-            Ok(Command::CheckpointCreate { checkpoint_id: CheckpointId(15), .. })
+            Ok(Command::CheckpointCreate {
+                checkpoint_id: CheckpointId(15),
+                ..
+            })
         ));
     }
 
@@ -278,7 +313,10 @@ mod tests {
     fn invalid_numbers_semantics_and_shapes_fail_closed() {
         assert!(matches!(
             parse_args(["session", "open", "not-a-number"]),
-            Err(CliError::InvalidInteger { field: "session-id", .. })
+            Err(CliError::InvalidInteger {
+                field: "session-id",
+                ..
+            })
         ));
         assert_eq!(
             parse_args(["effect", "simulate", "1", "2", "unsafe"]),
