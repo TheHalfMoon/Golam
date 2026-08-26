@@ -5,7 +5,8 @@
 **Canonical base**: `main@cfcc90f452e7115bfb104f886e09c309a5d57a1c`  
 **Base tree**: `da65a0ae907a53212bbfc7afed1a25e7f4aa4636`  
 **Started**: 2026-08-24  
-**Latest code repair head before this status mutation**: `77c2f160ca0cdc5cf60d3e91170c6a1472dbf05b`  
+**Latest behavioral repair head**: `acdce817dbd89d8286fc08b8821aded0b7dbf8f7`  
+**Latest formatting-only head before this status mutation**: `1a0ef2c1a72056e42528521ec63e5acaabc297f0`  
 **State**: `SPEC_002_REPAIR_QUALIFICATION_IN_PROGRESS`.
 
 > Exact live GitHub truth is authoritative. No prior CI or review result transfers across a branch mutation. The exact final Draft head containing all repair and closeout evidence must pass the complete qualification workflow and have no unresolved material authorized-review findings before Spec 002 implementation closeout may be claimed.
@@ -23,19 +24,23 @@ SPEC_002_IMPLEMENTATION_COMPLETE=NO
 SPEC_002_CLOSED_CANONICAL=NO
 SPEC_003_AUTHORIZED=NO
 
-LATEST_CODE_REPAIR_HEAD=77c2f160ca0cdc5cf60d3e91170c6a1472dbf05b
-LATEST_CODE_REPAIR_CI=PENDING
-AUTHORIZED_REVIEW_MATERIAL_FINDINGS=PENDING_REQUALIFICATION
+LATEST_BEHAVIORAL_REPAIR_HEAD=acdce817dbd89d8286fc08b8821aded0b7dbf8f7
+LATEST_FORMATTING_ONLY_HEAD=1a0ef2c1a72056e42528521ec63e5acaabc297f0
+EXACT_HEAD_CI=PENDING
+AUTHORIZED_REVIEW_MATERIAL_FINDINGS=PENDING_FRESH_EXACT_HEAD_REVIEW
 CODEX_REVIEW_GATE=EXCLUDED_BY_FOUNDER_DIRECTION
 ```
 
 ## Why qualification was reopened
 
-Fresh authorized review on the stable Draft implementation found material Spec 002 correctness, security and reliability gaps. Two test-only findings were rejected as non-actionable because the canonical test strategy explicitly requires a subprocess kill/restart harness and real disk-full scenarios in addition to deterministic fault injection. The material code findings were repaired on code head `77c2f160ca0cdc5cf60d3e91170c6a1472dbf05b`.
+Fresh authorized review on the stable Draft implementation found material Spec 002 correctness, security and reliability gaps. Two test-only findings were rejected as non-actionable because the canonical test strategy explicitly requires a subprocess kill/restart harness and real disk-full scenarios in addition to deterministic fault injection.
+
+The material repair sequence is represented by behavioral repair heads through `acdce817dbd89d8286fc08b8821aded0b7dbf8f7`, followed by formatting-only head `1a0ef2c1a72056e42528521ec63e5acaabc297f0`.
 
 The repair set includes:
 
 - enforce the frozen Spec 002 effect FSM at the generic `EffectStore::compare_and_swap` boundary so callers cannot persist arbitrary recognized-state edges;
+- require manual-review placement to originate from durable `reconciling` state rather than bypassing reconciliation from `unknown_outcome`;
 - require exact content-addressed artifact receipt paths and reject traversal/symlink escapes;
 - reject symlink components before granting an unprivileged runtime path;
 - derive protocol incident identifiers from unique durable incident material so repeated rejections on one connection remain append-only and auditable;
@@ -90,7 +95,7 @@ Authority-store open verifies complete source-row coverage, canonical source has
 - durable intent and attempt/EXECUTING evidence before dispatch proof;
 - `UNKNOWN_OUTCOME` dependency blocking and no blind duplicate for `AT_MOST_ONCE`/`IRREVERSIBLE`;
 - interrupted `executing` state can be converted to durable unknown outcome for reconciliation without redispatch;
-- reconciliation can resume after interruption and escalate durably to manual review;
+- reconciliation can resume after interruption and escalate durably to manual review only from `reconciling`;
 - real OS process-kill/restart regression and real SQLite FULL rollback regression remain required substrate evidence;
 - `RecoveryScanner` distinguishes Normal, RecoveryOnly and Quarantined states and blocks privileged service when required.
 
@@ -114,7 +119,8 @@ No `PASS`, `SPEC_002_IMPLEMENTATION_COMPLETE`, or closeout claim is valid until 
 
 - Codex review is explicitly excluded from the Golam review workflow by founder direction and is not an implementation finding source or closeout gate.
 - Authorized review findings are handled on their exact reviewed head; stale review results do not transfer to a new head.
-- A fresh authorized external review may be requested only after the repair head is stable and exact-head CI succeeds.
+- Earlier Qodo threads on superseded heads are not fresh exact-head evidence even when resolved/outdated.
+- A fresh authorized external Qodo review may be requested only after the repair head is stable and exact-head CI succeeds.
 - Any new material finding reopens repair and exact-head qualification.
 
 ## Lifecycle state
