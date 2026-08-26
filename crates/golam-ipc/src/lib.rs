@@ -6,6 +6,7 @@ pub mod lifecycle;
 pub mod request;
 #[cfg(unix)]
 pub mod unix_transport;
+pub mod wire;
 #[cfg(windows)]
 pub mod windows_transport;
 
