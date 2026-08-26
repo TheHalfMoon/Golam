@@ -310,12 +310,12 @@ fn timestamp_now() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ed25519_dalek::Signer;
     use golam_core::authority::AuthorityLayout;
     use golam_core::{ClientId, PROTOCOL_VERSION};
+    use golam_ipc::client_handshake::sign_authenticate;
     use golam_ipc::command::{Command, encode_command};
     use golam_ipc::credentials::ClientCredentialStore;
-    use golam_ipc::lifecycle::{AuthTranscript, Challenge, ShutdownReason};
+    use golam_ipc::lifecycle::{Challenge, ShutdownReason};
     use golam_ipc::request::{ReplyStatus, decode_reply, encode_request};
     use golam_ipc::wire::read_frame;
     use golam_ipc::{FrameKind, encode_frame};
@@ -391,9 +391,9 @@ mod tests {
     }
 
     fn authenticated_input(
+        store: &ClientCredentialStore<'_>,
         client_id: ClientId,
         key_id: ClientKeyId,
-        signing_key: &ed25519_dalek::SigningKey,
         command: Option<Command>,
     ) -> Vec<u8> {
         let material = material();
@@ -409,14 +409,8 @@ mod tests {
             server_nonce: material.server_nonce,
             limits: material.limits,
         };
-        let transcript = AuthTranscript::from_messages(hello, challenge).unwrap();
-        let authenticate = Authenticate {
-            key_id,
-            client_nonce,
-            signature: signing_key
-                .sign(&transcript.canonical_bytes(key_id).unwrap())
-                .to_bytes(),
-        };
+        let signing_key = store.load(client_id, key_id).unwrap();
+        let authenticate = sign_authenticate(hello, challenge, key_id, &signing_key).unwrap();
 
         let hello_payload = LifecycleMessage::Hello(hello).encode_payload();
         let mut bytes =
@@ -459,11 +453,10 @@ mod tests {
         let authority = AuthorityLayout::initialize(&runtime).unwrap();
         let store = ClientCredentialStore::new(&authority);
         let generated = store.generate(ClientId(2001)).unwrap();
-        let signing_key = store.load(generated.client_id, generated.key_id).unwrap();
         let input = authenticated_input(
+            &store,
             generated.client_id,
             generated.key_id,
-            &signing_key,
             Some(Command::SessionsList),
         );
         let mut io = ScriptedIo::new(input);
@@ -515,11 +508,10 @@ mod tests {
         let authority = AuthorityLayout::initialize(&runtime).unwrap();
         let store = ClientCredentialStore::new(&authority);
         let generated = store.generate(ClientId(2002)).unwrap();
-        let signing_key = store.load(generated.client_id, generated.key_id).unwrap();
         let mut io = ScriptedIo::new(authenticated_input(
+            &store,
             generated.client_id,
             generated.key_id,
-            &signing_key,
             None,
         ));
         let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();

@@ -10,7 +10,10 @@ use connection::{BootstrapApprover, ConnectionMaterial, serve_connection};
 use golam_core::paths::RuntimeLayout;
 use golam_core::runtime_home::default_runtime_root;
 use golam_core::{ClientId, ResourceLimits};
-use golam_ipc::lifecycle::{ClientKeyId, ConnectionId};
+use golam_ipc::client_handshake::{
+    random_connection_id, random_server_epoch, random_server_nonce,
+};
+use golam_ipc::lifecycle::ClientKeyId;
 use golam_kernel::{BootstrapPolicy, KernelStartup, start_kernel};
 use golamd::CommandRouter;
 
@@ -83,7 +86,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let mut router = CommandRouter::new(kernel);
     let mut approval = ForegroundApproval;
     let limits = ResourceLimits::default();
-    let server_epoch = random_nonzero_u64()?;
+    let server_epoch = random_server_epoch()?;
     serve_local_loop(&runtime, &mut router, &mut approval, limits, server_epoch)
 }
 
@@ -145,41 +148,13 @@ fn serve_local_loop(
 fn connection_material(
     limits: ResourceLimits,
     server_epoch: u64,
-) -> Result<ConnectionMaterial, getrandom::Error> {
+) -> Result<ConnectionMaterial, Box<dyn Error>> {
     Ok(ConnectionMaterial {
         server_epoch,
-        server_nonce: random_nonzero_array()?,
-        connection_id: ConnectionId(random_nonzero_u128()?),
+        server_nonce: random_server_nonce()?,
+        connection_id: random_connection_id()?,
         limits,
     })
-}
-
-fn random_nonzero_array<const N: usize>() -> Result<[u8; N], getrandom::Error> {
-    loop {
-        let mut bytes = [0_u8; N];
-        getrandom::fill(&mut bytes)?;
-        if bytes.iter().any(|byte| *byte != 0) {
-            return Ok(bytes);
-        }
-    }
-}
-
-fn random_nonzero_u64() -> Result<u64, getrandom::Error> {
-    loop {
-        let value = u64::from_be_bytes(random_nonzero_array()?);
-        if value != 0 {
-            return Ok(value);
-        }
-    }
-}
-
-fn random_nonzero_u128() -> Result<u128, getrandom::Error> {
-    loop {
-        let value = u128::from_be_bytes(random_nonzero_array()?);
-        if value != 0 {
-            return Ok(value);
-        }
-    }
 }
 
 fn hex(bytes: &[u8]) -> String {

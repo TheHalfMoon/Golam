@@ -8,7 +8,8 @@ use ed25519_dalek::{Signer, SigningKey};
 use golam_core::{ClientId, PROTOCOL_VERSION, ResourceLimits};
 
 use crate::lifecycle::{
-    AuthTranscript, Authenticate, ClientKeyId, Hello, LifecycleError, LifecycleMessage, Ready,
+    AuthTranscript, Authenticate, Challenge, ClientKeyId, ConnectionId, Hello, LifecycleError,
+    LifecycleMessage, Ready,
 };
 use crate::wire::{WireError, read_frame, write_frame};
 use crate::{FrameHeader, FrameKind};
@@ -87,6 +88,54 @@ impl From<getrandom::Error> for ClientHandshakeError {
     }
 }
 
+pub fn random_server_epoch() -> Result<u64, getrandom::Error> {
+    loop {
+        let value = u64::from_be_bytes(random_nonzero_array()?);
+        if value != 0 {
+            return Ok(value);
+        }
+    }
+}
+
+pub fn random_server_nonce() -> Result<[u8; 32], getrandom::Error> {
+    random_nonzero_array()
+}
+
+pub fn random_connection_id() -> Result<ConnectionId, getrandom::Error> {
+    loop {
+        let value = u128::from_be_bytes(random_nonzero_array()?);
+        if value != 0 {
+            return Ok(ConnectionId(value));
+        }
+    }
+}
+
+pub fn sign_authenticate(
+    hello: Hello,
+    challenge: Challenge,
+    key_id: ClientKeyId,
+    signing_key: &SigningKey,
+) -> Result<Authenticate, LifecycleError> {
+    let transcript = AuthTranscript::from_messages(hello, challenge)?;
+    Ok(Authenticate {
+        key_id,
+        client_nonce: hello.client_nonce,
+        signature: signing_key
+            .sign(&transcript.canonical_bytes(key_id)?)
+            .to_bytes(),
+    })
+}
+
+fn random_nonzero_array<const N: usize>() -> Result<[u8; N], getrandom::Error> {
+    loop {
+        let mut bytes = [0_u8; N];
+        getrandom::fill(&mut bytes)?;
+        if bytes.iter().any(|byte| *byte != 0) {
+            return Ok(bytes);
+        }
+    }
+}
+
 pub fn authenticate_client<S: Read + Write>(
     stream: &mut S,
     client_id: ClientId,
@@ -98,11 +147,7 @@ pub fn authenticate_client<S: Read + Write>(
         return Err(ClientHandshakeError::InvalidClientId);
     }
 
-    let mut client_nonce = [0_u8; 32];
-    getrandom::fill(&mut client_nonce)?;
-    if client_nonce.iter().all(|byte| *byte == 0) {
-        return Err(ClientHandshakeError::InvalidClientNonce);
-    }
+    let client_nonce = random_nonzero_array()?;
 
     let hello = Hello {
         protocol_version: PROTOCOL_VERSION,
@@ -124,15 +169,7 @@ pub fn authenticate_client<S: Read + Write>(
             _ => unreachable!("challenge frame decodes to challenge lifecycle message"),
         };
 
-    let transcript = AuthTranscript::from_messages(hello, challenge)?;
-    let signature = signing_key
-        .sign(&transcript.canonical_bytes(key_id)?)
-        .to_bytes();
-    let authenticate = Authenticate {
-        key_id,
-        client_nonce,
-        signature,
-    };
+    let authenticate = sign_authenticate(hello, challenge, key_id, signing_key)?;
     write_lifecycle(
         stream,
         LifecycleMessage::Authenticate(authenticate),
