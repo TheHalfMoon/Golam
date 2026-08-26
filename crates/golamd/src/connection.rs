@@ -9,7 +9,7 @@ use golam_core::paths::RuntimeLayout;
 use golam_core::{ClientId, PROTOCOL_VERSION, ResourceLimits};
 use golam_ipc::lifecycle::{
     Authenticate, ClientKeyId, ConnectionId, Hello, LifecycleError, LifecycleMessage,
-    LifecyclePhase, ServerLifecycle, ShutdownReason,
+    LifecyclePhase, ServerLifecycle,
 };
 use golam_ipc::request::{
     ClientAction, ReplyMessage, ReplyStatus, RequestProtocolError, ServerRequestTracker,
@@ -317,7 +317,7 @@ mod tests {
     use golam_core::{ClientId, PROTOCOL_VERSION};
     use golam_ipc::command::{Command, encode_command};
     use golam_ipc::credentials::ClientCredentialStore;
-    use golam_ipc::lifecycle::{AuthTranscript, Challenge};
+    use golam_ipc::lifecycle::{AuthTranscript, Challenge, ShutdownReason};
     use golam_ipc::request::{ReplyStatus, decode_reply, encode_request};
     use golam_ipc::wire::read_frame;
     use golam_ipc::{FrameKind, encode_frame};
@@ -423,10 +423,10 @@ mod tests {
 
         let hello_payload = LifecycleMessage::Hello(hello).encode_payload();
         let mut bytes =
-            encode_frame(FrameKind::Hello, None, &hello_payload, material.limits).unwrap();
+            golam_ipc::encode_frame(FrameKind::Hello, None, &hello_payload, material.limits).unwrap();
         let authenticate_payload = LifecycleMessage::Authenticate(authenticate).encode_payload();
         bytes.extend_from_slice(
-            &encode_frame(
+            &golam_ipc::encode_frame(
                 FrameKind::Authenticate,
                 None,
                 &authenticate_payload,
@@ -438,12 +438,13 @@ mod tests {
             let message = encode_command(&command).unwrap();
             let payload = encode_request(&message).unwrap();
             bytes.extend_from_slice(
-                &encode_frame(FrameKind::Request, Some(1), &payload, material.limits).unwrap(),
+                &golam_ipc::encode_frame(FrameKind::Request, Some(1), &payload, material.limits)
+                    .unwrap(),
             );
         }
         let shutdown_payload = LifecycleMessage::Shutdown(ShutdownReason::Normal).encode_payload();
         bytes.extend_from_slice(
-            &encode_frame(
+            &golam_ipc::encode_frame(
                 FrameKind::Shutdown,
                 None,
                 &shutdown_payload,
@@ -567,11 +568,19 @@ mod tests {
             client_nonce: [4; 32],
         };
         let hello_payload = LifecycleMessage::Hello(hello).encode_payload();
-        let mut input = encode_frame(FrameKind::Hello, None, &hello_payload, material().limits).unwrap();
+        let mut input =
+            golam_ipc::encode_frame(FrameKind::Hello, None, &hello_payload, material().limits)
+                .unwrap();
         let request = encode_command(&Command::SessionsList).unwrap();
         let request_payload = encode_request(&request).unwrap();
         input.extend_from_slice(
-            &encode_frame(FrameKind::Request, Some(1), &request_payload, material().limits).unwrap(),
+            &golam_ipc::encode_frame(
+                FrameKind::Request,
+                Some(1),
+                &request_payload,
+                material().limits,
+            )
+            .unwrap(),
         );
         let mut io = ScriptedIo::new(input);
         let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();

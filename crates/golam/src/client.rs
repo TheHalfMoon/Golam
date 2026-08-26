@@ -1,9 +1,8 @@
 #![forbid(unsafe_code)]
 
 use std::error::Error;
-use std::fs::{self, OpenOptions};
-use std::io::{self, Write};
-use std::path::Path;
+use std::fs;
+use std::io::Write;
 
 use golam_core::authority::AuthorityLayout;
 use golam_core::paths::RuntimeLayout;
@@ -17,15 +16,6 @@ use golam_ipc::request::{
 };
 use golam_ipc::wire::{read_frame, write_frame};
 use golam_ipc::{FrameHeader, FrameKind};
-
-const ACTIVE_CLIENT_FILE: &str = "active-cli-client";
-const ACTIVE_CLIENT_MAGIC: &str = "golam-active-cli-v1";
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-struct ActiveClient {
-    client_id: ClientId,
-    key_id: ClientKeyId,
-}
 
 pub fn enroll(runtime: &RuntimeLayout, client_id: ClientId) -> Result<String, Box<dyn Error>> {
     let authority = AuthorityLayout::initialize(runtime)?;
@@ -48,13 +38,6 @@ pub fn enroll(runtime: &RuntimeLayout, client_id: ClientId) -> Result<String, Bo
         &signing_key,
         limits,
     )?;
-    save_active(
-        runtime,
-        ActiveClient {
-            client_id: credential.client_id,
-            key_id: credential.key_id,
-        },
-    )?;
     write_shutdown(&mut stream, ready.limits)?;
 
     Ok(format!(
@@ -66,10 +49,10 @@ pub fn enroll(runtime: &RuntimeLayout, client_id: ClientId) -> Result<String, Bo
 }
 
 pub fn execute(runtime: &RuntimeLayout, command: &Command) -> Result<ReplyMessage, Box<dyn Error>> {
-    let active = load_active(runtime)?;
     let authority = AuthorityLayout::initialize(runtime)?;
     let store = ClientCredentialStore::new(&authority);
-    let signing_key = store.load(active.client_id, active.key_id)?;
+    let credential = single_execution_credential(&authority, &store)?;
+    let signing_key = store.load(credential.client_id, credential.key_id)?;
     let limits = ResourceLimits::default();
 
     #[cfg(unix)]
@@ -81,8 +64,8 @@ pub fn execute(runtime: &RuntimeLayout, command: &Command) -> Result<ReplyMessag
 
     let ready = authenticate_client(
         &mut stream,
-        active.client_id,
-        active.key_id,
+        credential.client_id,
+        credential.key_id,
         &signing_key,
         limits,
     )?;
@@ -132,28 +115,10 @@ fn credential_for_enrollment(
     store: &ClientCredentialStore<'_>,
     client_id: ClientId,
 ) -> Result<GeneratedClientCredential, Box<dyn Error>> {
-    let prefix = format!("{:032x}-", client_id.0);
-    let mut matches = Vec::new();
-    for entry in fs::read_dir(authority.credential_dir())? {
-        let entry = entry?;
-        let name = match entry.file_name().into_string() {
-            Ok(name) => name,
-            Err(_) => continue,
-        };
-        if !name.starts_with(&prefix) || !name.ends_with(".gkey") {
-            continue;
-        }
-        let encoded = &name[prefix.len()..name.len() - ".gkey".len()];
-        if encoded.len() != 64 {
-            continue;
-        }
-        let key_id = ClientKeyId(decode_hex_32(encoded)?);
-        matches.push(store.inspect(client_id, key_id)?);
-    }
-    matches.sort_by(|left, right| left.path.cmp(&right.path));
+    let matches = credentials_matching_client(authority, store, client_id)?;
     match matches.len() {
         0 => Ok(store.generate(client_id)?),
-        1 => Ok(matches.remove(0)),
+        1 => Ok(matches.into_iter().next().expect("one credential exists")),
         count => Err(format!(
             "found {count} protected credentials for client {}; refusing ambiguous enrollment",
             client_id.0
@@ -162,84 +127,76 @@ fn credential_for_enrollment(
     }
 }
 
-fn save_active(runtime: &RuntimeLayout, active: ActiveClient) -> Result<(), Box<dyn Error>> {
-    let path = runtime.runtime_dir.join(ACTIVE_CLIENT_FILE);
-    let body = format!(
-        "{ACTIVE_CLIENT_MAGIC}\nclient_id={}\nkey_id={}\n",
-        active.client_id.0,
-        hex(&active.key_id.0)
-    );
-
-    #[cfg(unix)]
-    let mut file = {
-        use std::os::unix::fs::OpenOptionsExt;
-        OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(&path)?
-    };
-    #[cfg(not(unix))]
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .truncate(true)
-        .open(&path)?;
-
-    file.write_all(body.as_bytes())?;
-    file.sync_all()?;
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
+fn single_execution_credential(
+    authority: &AuthorityLayout,
+    store: &ClientCredentialStore<'_>,
+) -> Result<GeneratedClientCredential, Box<dyn Error>> {
+    let mut credentials = Vec::new();
+    for entry in fs::read_dir(authority.credential_dir())? {
+        let entry = entry?;
+        let name = match entry.file_name().into_string() {
+            Ok(name) => name,
+            Err(_) => continue,
+        };
+        let Some((client_id, key_id)) = parse_credential_filename(&name)? else {
+            continue;
+        };
+        credentials.push(store.inspect(client_id, key_id)?);
     }
-    Ok(())
+    credentials.sort_by(|left, right| left.path.cmp(&right.path));
+    match credentials.len() {
+        0 => Err("no protected CLI credential exists; run `golam client enroll <client-id>` first".into()),
+        1 => Ok(credentials.remove(0)),
+        count => Err(format!(
+            "found {count} protected client credentials; the minimal Spec 002 CLI requires exactly one"
+        )
+        .into()),
+    }
 }
 
-fn load_active(runtime: &RuntimeLayout) -> Result<ActiveClient, Box<dyn Error>> {
-    let path = runtime.runtime_dir.join(ACTIVE_CLIENT_FILE);
-    verify_active_file(&path)?;
-    let text = fs::read_to_string(&path)?;
-    let mut lines = text.lines();
-    if lines.next() != Some(ACTIVE_CLIENT_MAGIC) {
-        return Err("active CLI client metadata has an invalid format".into());
-    }
-    let client_line = lines
-        .next()
-        .and_then(|line| line.strip_prefix("client_id="))
-        .ok_or("active CLI client metadata is missing client_id")?;
-    let key_line = lines
-        .next()
-        .and_then(|line| line.strip_prefix("key_id="))
-        .ok_or("active CLI client metadata is missing key_id")?;
-    if lines.next().is_some() {
-        return Err("active CLI client metadata has trailing fields".into());
-    }
-    let client_id = ClientId(client_line.parse()?);
-    if client_id.0 == 0 {
-        return Err("active CLI client id must be non-zero".into());
-    }
-    Ok(ActiveClient {
-        client_id,
-        key_id: ClientKeyId(decode_hex_32(key_line)?),
-    })
-}
-
-fn verify_active_file(path: &Path) -> Result<(), Box<dyn Error>> {
-    let metadata = fs::symlink_metadata(path)?;
-    if metadata.file_type().is_symlink() || !metadata.is_file() {
-        return Err("active CLI client metadata must be a regular file".into());
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let mode = metadata.permissions().mode() & 0o777;
-        if mode != 0o600 {
-            return Err(format!("active CLI client metadata permissions are {mode:o}; expected 600").into());
+fn credentials_matching_client(
+    authority: &AuthorityLayout,
+    store: &ClientCredentialStore<'_>,
+    client_id: ClientId,
+) -> Result<Vec<GeneratedClientCredential>, Box<dyn Error>> {
+    let mut credentials = Vec::new();
+    for entry in fs::read_dir(authority.credential_dir())? {
+        let entry = entry?;
+        let name = match entry.file_name().into_string() {
+            Ok(name) => name,
+            Err(_) => continue,
+        };
+        let Some((candidate_id, key_id)) = parse_credential_filename(&name)? else {
+            continue;
+        };
+        if candidate_id == client_id {
+            credentials.push(store.inspect(candidate_id, key_id)?);
         }
     }
-    Ok(())
+    credentials.sort_by(|left, right| left.path.cmp(&right.path));
+    Ok(credentials)
+}
+
+fn parse_credential_filename(
+    name: &str,
+) -> Result<Option<(ClientId, ClientKeyId)>, Box<dyn Error>> {
+    let Some(stem) = name.strip_suffix(".gkey") else {
+        return Ok(None);
+    };
+    let Some((client_hex, key_hex)) = stem.split_once('-') else {
+        return Ok(None);
+    };
+    if client_hex.len() != 32 || key_hex.len() != 64 {
+        return Ok(None);
+    }
+    let client_id = ClientId(u128::from_str_radix(client_hex, 16)?);
+    if client_id.0 == 0 {
+        return Err("protected credential filename contains a zero client id".into());
+    }
+    Ok(Some((
+        client_id,
+        ClientKeyId(decode_hex_32(key_hex)?),
+    )))
 }
 
 fn write_shutdown<S: Write>(stream: &mut S, limits: ResourceLimits) -> Result<(), Box<dyn Error>> {
@@ -312,20 +269,6 @@ mod tests {
     }
 
     #[test]
-    fn active_client_selection_round_trips_without_private_key_material() {
-        let runtime = runtime();
-        let active = ActiveClient {
-            client_id: ClientId(3001),
-            key_id: ClientKeyId([9; 32]),
-        };
-        save_active(&runtime, active).unwrap();
-        assert_eq!(load_active(&runtime).unwrap(), active);
-        let text = fs::read_to_string(runtime.runtime_dir.join(ACTIVE_CLIENT_FILE)).unwrap();
-        assert!(!text.contains("secret"));
-        fs::remove_dir_all(runtime.root).unwrap();
-    }
-
-    #[test]
     fn enrollment_resumes_exactly_one_existing_protected_credential() {
         let runtime = runtime();
         let authority = AuthorityLayout::initialize(&runtime).unwrap();
@@ -337,7 +280,17 @@ mod tests {
     }
 
     #[test]
-    fn malformed_active_key_id_fails_closed() {
+    fn execution_discovers_exactly_one_verified_credential() {
+        let runtime = runtime();
+        let authority = AuthorityLayout::initialize(&runtime).unwrap();
+        let store = ClientCredentialStore::new(&authority);
+        let generated = store.generate(ClientId(3003)).unwrap();
+        assert_eq!(single_execution_credential(&authority, &store).unwrap(), generated);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn malformed_key_id_fails_closed() {
         assert!(decode_hex_32("00").is_err());
         assert!(decode_hex_32(&"g".repeat(64)).is_err());
         assert!(decode_hex_32(&"0".repeat(64)).is_err());

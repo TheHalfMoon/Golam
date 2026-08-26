@@ -18,7 +18,14 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let runtime = match default_runtime_root().and_then(RuntimeLayout::initialize) {
+    let root = match default_runtime_root() {
+        Ok(root) => root,
+        Err(error) => {
+            eprintln!("golam: runtime root resolution failed: {error}");
+            return ExitCode::from(1);
+        }
+    };
+    let runtime = match RuntimeLayout::initialize(root) {
         Ok(runtime) => runtime,
         Err(error) => {
             eprintln!("golam: runtime initialization failed: {error}");
