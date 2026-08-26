@@ -5,9 +5,7 @@ use golam_core::ClientId;
 use golam_core::authority::{AuthorityLayout, AuthorityPathError};
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
-use crate::security_audit::{
-    self, ClientEnrollmentAuditInput, ClientRevocationAuditInput,
-};
+use crate::security_audit::{self, ClientEnrollmentAuditInput, ClientRevocationAuditInput};
 use crate::storage::{AuthorityStore, StorageError};
 
 pub const CLIENT_KEY_ID_LEN: usize = 32;
