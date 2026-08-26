@@ -5,35 +5,48 @@
 **Canonical base**: `main@cfcc90f452e7115bfb104f886e09c309a5d57a1c`  
 **Base tree**: `da65a0ae907a53212bbfc7afed1a25e7f4aa4636`  
 **Started**: 2026-08-24  
-**Last exact convergence head proven before the final closeout-ledger package**: `a814e7d6a2b8610c9a54b96ae05c3df85335cee1`  
-**Convergence CI**: GitHub Actions run ID `32958907240`, run number `233` — Windows/macOS/Ubuntu complete qualification workflow SUCCESS.  
-**State**: `SPEC_002_IMPLEMENTATION_COMPLETE`.
+**Latest code repair head before this status mutation**: `77c2f160ca0cdc5cf60d3e91170c6a1472dbf05b`  
+**State**: `SPEC_002_REPAIR_QUALIFICATION_IN_PROGRESS`.
 
-> Exact-head rule: the branch head containing `implementation/closeout.md`, the final `tasks.md`, and this status file must also have a successful complete CI workflow before the Draft PR evidence may claim `FINAL_EXACT_HEAD_CI=PASS`. Live GitHub truth is authoritative.
+> Exact live GitHub truth is authoritative. No prior CI or review result transfers across a branch mutation. The exact final Draft head containing all repair and closeout evidence must pass the complete qualification workflow and have no unresolved material authorized-review findings before Spec 002 implementation closeout may be claimed.
 
-## Gate summary
+## Current gate summary
 
 ```text
-T002-001..078=IMPLEMENTED
+T002-001..078=IMPLEMENTED_BUT_REPAIR_QUALIFICATION_REOPENED
 WAIVER_TAKEN=NO
 
-BS-1=PASS
-BS-2=PASS
-BS-10_FOUNDATION=PASS_EXTERNALLY_OBSERVED_NO_NETWORK
-
-CODEX_REVIEW_RESULT=BLOCKED_USAGE_LIMIT_NO_REVIEW
-CODERABBIT_PREVIOUS_RESULT=NOT_COMPLETED_HEAD_CHANGED
-EXTERNAL_REVIEW_PASS_CLAIMED=NO
-
-SPEC_002_IMPLEMENTATION_COMPLETE=YES
 PR_3_DRAFT=YES
 PR_READY=NO
 MERGED=NO
+SPEC_002_IMPLEMENTATION_COMPLETE=NO
 SPEC_002_CLOSED_CANONICAL=NO
 SPEC_003_AUTHORIZED=NO
+
+LATEST_CODE_REPAIR_HEAD=77c2f160ca0cdc5cf60d3e91170c6a1472dbf05b
+LATEST_CODE_REPAIR_CI=PENDING
+AUTHORIZED_REVIEW_MATERIAL_FINDINGS=PENDING_REQUALIFICATION
+CODEX_REVIEW_GATE=EXCLUDED_BY_FOUNDER_DIRECTION
 ```
 
-## Implemented behavior
+## Why qualification was reopened
+
+Fresh authorized review on the stable Draft implementation found material Spec 002 correctness, security and reliability gaps. Two test-only findings were rejected as non-actionable because the canonical test strategy explicitly requires a subprocess kill/restart harness and real disk-full scenarios in addition to deterministic fault injection. The material code findings were repaired on code head `77c2f160ca0cdc5cf60d3e91170c6a1472dbf05b`.
+
+The repair set includes:
+
+- enforce the frozen Spec 002 effect FSM at the generic `EffectStore::compare_and_swap` boundary so callers cannot persist arbitrary recognized-state edges;
+- require exact content-addressed artifact receipt paths and reject traversal/symlink escapes;
+- reject symlink components before granting an unprivileged runtime path;
+- derive protocol incident identifiers from unique durable incident material so repeated rejections on one connection remain append-only and auditable;
+- verify effective Unix ownership for the protected runtime tree in addition to permission bits;
+- bound foreground bootstrap approval instead of permitting an unbounded stdin wait;
+- bound CLI handshake/request/reply I/O with one absolute local IPC deadline;
+- cap unauthenticated server-advertised handshake limits at the local client ceiling before those limits can influence subsequent frame allocation;
+- admit an interrupted durable `executing` effect into `unknown_outcome -> reconciling` without redispatching the attempt;
+- permit interrupted `reconciling` work to resume from durable context rather than becoming permanently stuck.
+
+## Preserved Spec 002 behavior
 
 ### Protected local authority and canonical state
 
@@ -53,85 +66,58 @@ The security-critical canonical SessionEvent chain is reinforced by an independe
 - effect attempt start/finish;
 - recovery/protocol/manual-review incidents.
 
-Authority-store open verifies complete source-row coverage, canonical source hashes, chain continuity and chain head. Tampering or missing coverage rejects the authority store. The logical model explicitly records that the companion audit table may be absent only on a completely empty protected state; protected source rows without the table/coverage fail closed.
+Authority-store open verifies complete source-row coverage, canonical source hashes, chain continuity and chain head. Protected source rows without required integrity coverage fail closed.
 
 ### Authenticated local IPC / daemon
 
 - Versioned bounded `GIPC` framing and strict Hello -> Challenge -> Authenticate -> Ready lifecycle.
 - Ed25519 transcript authentication plus independent OS-local peer checks.
 - Unix/macOS private UDS with peer credentials; Windows current-user ACL named pipe with peer metadata.
-- request/reply IDs, cancellation settlement, bounded pending requests and accepted-connection deadline.
+- request/reply IDs, cancellation settlement, bounded pending requests, daemon connection deadline and CLI-side absolute IPC deadline.
 - no HTTP/TCP control listener.
 
 ### Kernel / bootstrap authority
 
-- KernelApi is the privileged mutation boundary; authority-bearing implementation types remain sealed.
+- `KernelApi` remains the privileged mutation boundary; authority-bearing implementation types remain sealed.
 - bootstrap authorization is deny-by-default and decisions are durable/audited.
 - strict-local network egress is a monotonic hard denial.
-- enrolled CLI is explicitly authorized for the bounded checkpoint/replay/synthetic-effect/reconciliation operations it exposes, but not client enrollment/revocation or network authority.
-- reserved canonical event families are emitted through typed owning domain operations; no public arbitrary reserved `EventKind` append primitive is exposed.
+- reserved canonical event families remain owned by typed domain operations rather than an arbitrary caller-selected reserved-event append surface.
 
 ### Effects / recovery
 
-- full bounded Spec 002 effect FSM and compare-and-swap transitions;
+- frozen Spec 002 effect FSM enforced at generic CAS and typed domain operations;
 - deterministic handlers for all five execution semantics;
 - durable intent and attempt/EXECUTING evidence before dispatch proof;
-- UNKNOWN_OUTCOME dependency blocking and no blind duplicate for AT_MOST_ONCE/IRREVERSIBLE;
-- read-only reconciliation and durable manual-review escalation;
-- real OS process-kill/restart regression and real SQLite FULL rollback regression;
-- RecoveryScanner distinguishes Normal, RecoveryOnly and Quarantined states and blocks privileged service when required.
+- `UNKNOWN_OUTCOME` dependency blocking and no blind duplicate for `AT_MOST_ONCE`/`IRREVERSIBLE`;
+- interrupted `executing` state can be converted to durable unknown outcome for reconciliation without redispatch;
+- reconciliation can resume after interruption and escalate durably to manual review;
+- real OS process-kill/restart regression and real SQLite FULL rollback regression remain required substrate evidence;
+- `RecoveryScanner` distinguishes Normal, RecoveryOnly and Quarantined states and blocks privileged service when required.
 
-### CLI
+## Exact-head qualification required
 
-The bounded CLI includes:
+The final Draft head must pass on Ubuntu, macOS and Windows:
 
-```text
-golam client enroll <client-id>
-golam sessions
-golam session open ...
-golam session create ...
-golam session fork ...
-golam goal append ...
-golam checkpoint create ...
-golam checkpoint verify ...
-golam replay ...
-golam effect simulate ...
-golam effect reconcile ...
-golam doctor
-```
-
-Normal commands cross authenticated local IPC. First enrollment uses explicit foreground bootstrap approval. `golam doctor` reads recovery status while privileged serving is allowed; RecoveryOnly/Quarantined startup reports its blocking state rather than exposing an unauthenticated recovery bypass.
-
-## Qualification evidence
-
-Run #233 on convergence head `a814e7d6...` passed on Windows, macOS and Ubuntu:
-
-- Format;
-- Clippy with `-D warnings`;
-- full workspace Test;
-- Property qualification;
-- Bounded fuzz smoke;
+- `cargo fmt --all -- --check`;
+- `cargo clippy --locked --workspace --all-targets -- -D warnings`;
+- `cargo test --locked --workspace --all-targets`;
+- property qualification;
+- bounded fuzz smoke;
 - platform IPC qualification;
 - authenticated daemon IPC qualification;
 - adversarial authority qualification;
-- daemon build and externally observed strict-local no-network qualification.
+- daemon build and external strict-local no-network observation.
 
-See:
+No `PASS`, `SPEC_002_IMPLEMENTATION_COMPLETE`, or closeout claim is valid until those gates succeed on the exact final head.
 
-- `implementation/bs1-bs2-qualification.md` for BS-1/BS-2 evidence;
-- `implementation/convergence.md` for final constitutional/spec/contract reconciliation;
-- `implementation/closeout.md` for T002-078 implementation closeout;
-- `implementation/recovery-reserve-evaluation.md` for `NO_RECOVERY_RESERVE_GUARANTEE`.
+## Review policy
 
-## Review state
-
-There are no submitted GitHub PR reviews and no inline review threads at this status snapshot.
-
-A GitHub Codex review request was blocked by usage limits; there is no Codex PASS. A prior CodeRabbit request was not completed because the head changed; that is not a PASS. A fresh external review may be requested on the stable final Draft head. Any material finding must be resolved and all exact-head gates rerun.
+- Codex review is explicitly excluded from the Golam review workflow by founder direction and is not an implementation finding source or closeout gate.
+- Authorized review findings are handled on their exact reviewed head; stale review results do not transfer to a new head.
+- A fresh authorized external review may be requested only after the repair head is stable and exact-head CI succeeds.
+- Any new material finding reopens repair and exact-head qualification.
 
 ## Lifecycle state
-
-Spec 002 implementation work is complete, but ordinary implementation authority stops here.
 
 ```text
 PR_READY_AUTHORITY=NOT_TAKEN
@@ -140,7 +126,7 @@ CLOSED_CANONICAL=NO
 SPEC_003_START=BLOCKED
 ```
 
-Updating the Draft PR body/comment with exact final-head evidence and requesting a non-mutating review do not make the PR Ready and do not merge it. Any later branch mutation reopens exact-head qualification.
+PR #3 must remain Draft. Do not merge it or start Spec 003 without separate explicit founder/bootstrap authorization and canonical post-merge evidence.
 
 ## Hard scope boundary
 
