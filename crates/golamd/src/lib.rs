@@ -13,7 +13,7 @@ use golam_ipc::command::{Command, SyntheticSemantics, decode_command};
 use golam_ipc::request::{ReplyMessage, ReplyStatus, RequestMessage};
 use golam_kernel::{
     AuthorizationPolicy, ClientEnrollmentError, ClientKind, CompleteSyntheticEffect, KernelApi,
-    KernelError, KernelOperationError, Principal, PrepareSyntheticEffect,
+    KernelError, KernelOperationError, PrepareSyntheticEffect, Principal,
     ResolveSyntheticReconciliation, SyntheticEffectError, SyntheticExecutionCompletion,
     SyntheticReconciliationResult,
 };
@@ -683,10 +683,9 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        RuntimeLayout::initialize(std::env::temp_dir().join(format!(
-            "golamd-router-{}-{t}-{n}",
-            std::process::id()
-        )))
+        RuntimeLayout::initialize(
+            std::env::temp_dir().join(format!("golamd-router-{}-{t}-{n}", std::process::id())),
+        )
         .unwrap()
     }
 
@@ -740,7 +739,11 @@ mod tests {
             "local-owner",
         );
         assert_eq!(listed.status, ReplyStatus::Ok);
-        assert!(String::from_utf8(listed.body).unwrap().contains("session_id=1"));
+        assert!(
+            String::from_utf8(listed.body)
+                .unwrap()
+                .contains("session_id=1")
+        );
         drop(router);
         fs::remove_dir_all(runtime.root).unwrap();
     }
@@ -792,7 +795,11 @@ mod tests {
             "local-owner",
         );
         assert_eq!(reconciled.status, ReplyStatus::Ok);
-        assert!(String::from_utf8(reconciled.body).unwrap().contains("state=succeeded"));
+        assert!(
+            String::from_utf8(reconciled.body)
+                .unwrap()
+                .contains("state=succeeded")
+        );
         drop(router);
         fs::remove_dir_all(runtime.root).unwrap();
     }
