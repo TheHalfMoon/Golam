@@ -14,7 +14,7 @@ use crate::{
 
 #[derive(Debug)]
 pub enum ClientEnrollmentError {
-    Kernel(Box<KernelError>),
+    Kernel(KernelError),
     Credential(CredentialError),
     Registry(Box<ClientAuthorityError>),
     RegistryCleanup {
@@ -40,7 +40,7 @@ impl fmt::Display for ClientEnrollmentError {
 impl Error for ClientEnrollmentError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            Self::Kernel(error) => Some(error.as_ref()),
+            Self::Kernel(error) => Some(error),
             Self::Credential(error) => Some(error),
             Self::Registry(error) => Some(error.as_ref()),
             Self::RegistryCleanup { registry, .. } => Some(registry.as_ref()),
@@ -50,7 +50,7 @@ impl Error for ClientEnrollmentError {
 
 impl From<KernelError> for ClientEnrollmentError {
     fn from(value: KernelError) -> Self {
-        Self::Kernel(Box::new(value))
+        Self::Kernel(value)
     }
 }
 
@@ -161,8 +161,9 @@ mod tests {
         );
         assert!(matches!(
             result,
-            Err(ClientEnrollmentError::Kernel(error))
-                if matches!(error.as_ref(), KernelError::AuthorizationDenied(_))
+            Err(ClientEnrollmentError::Kernel(
+                KernelError::AuthorizationDenied(_)
+            ))
         ));
         let authority = golam_core::authority::AuthorityLayout::initialize(&runtime).unwrap();
         assert_eq!(fs::read_dir(authority.credential_dir()).unwrap().count(), 0);
