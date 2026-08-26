@@ -1,93 +1,98 @@
 # Tasks — Spec 002 Kernel & Durable Session Spine
 
-**Status**: IMPLEMENTATION_IN_PROGRESS  
+**Status**: IMPLEMENTATION_COMPLETE_PENDING_FINAL_EXACT_HEAD_CI_AND_PR_LIFECYCLE  
 **Implementation branch**: `impl/002-kernel-durable-session-spine`  
 **PR**: `#3` — OPEN / DRAFT  
 **Canonical implementation base**: `main@cfcc90f452e7115bfb104f886e09c309a5d57a1c`  
-**Last reconciled proven code head**: `cb18dc7ec3944a43a8a6a754a7870ccf23c7c2ee`  
-**Exact-head CI evidence**: run `32839006104` / run number `122` — Windows, macOS, Linux `fmt + clippy -D warnings + test` PASS
+**Last fully proven convergence head before closeout ledger mutation**: `a814e7d6a2b8610c9a54b96ae05c3df85335cee1`  
+**Exact-head convergence CI**: run ID `32958907240` / run number `233` — Windows, macOS and Ubuntu full qualification workflow SUCCESS.
 
 Legend:
-- `[x]` = task requirement is satisfied by current implementation/evidence.
-- `[ ] ... PARTIAL` = bounded implementation exists but the task is not complete.
-- `[ ]` = not yet complete.
-- A task is not promoted to PASS from intent, design, or an older head alone.
+- `[x]` = implementation/task requirement is satisfied by repository evidence.
+- A `[x]` on this final documentation ledger remains valid only if the complete CI workflow attached to the commit containing this ledger also succeeds.
+- `IMPLEMENTATION_COMPLETE` is not `CLOSED_CANONICAL`: PR #3 remains Draft/unmerged and Spec 003 remains unauthorized.
 
 ## Phase A — Exact-head/bootstrap
 
-- [x] **T002-001** Verify exact live `main` after planning PR merge; create implementation branch from that exact commit. — PASS from `main@cfcc90f452e7115bfb104f886e09c309a5d57a1c`.
-- [x] **T002-002** Create the Rust workspace with only `golam-core`, `golam-ledger`, `golam-effects`, `golam-ipc`, `golam-kernel`, `golamd`, `golam`; pin current stable toolchain and forbid unsafe Golam code. — PASS; Rust 1.98.0 and workspace `unsafe_code = forbid` are active.
-- [x] **T002-003** Add baseline CI for fmt/clippy/test on Windows/macOS/Linux; do not claim green until runs exist. — PASS; exact-head matrix runs exist, latest proven code run `32839006104`.
+- [x] **T002-001** Verify exact live `main` after planning PR merge; create implementation branch from that exact commit. — Base remains `cfcc90f452e7115bfb104f886e09c309a5d57a1c`.
+- [x] **T002-002** Create the bounded Rust workspace with only `golam-core`, `golam-ledger`, `golam-effects`, `golam-ipc`, `golam-kernel`, `golamd`, `golam`; pin stable toolchain and forbid unsafe Golam code. — Rust 1.98.0; seven-package spine retained.
+- [x] **T002-003** Add baseline CI for fmt/clippy/test on Windows/macOS/Linux. — Expanded final workflow is qualified cross-platform.
 
 ## Phase B — Donor admission/evidence
 
-- [x] **T002-010** Create bounded Source Foundry admission record for any Golam-Research files whose code (not only semantics) will be ported/copied; record exact permission evidence/scope and obligations. — SATISFIED AS NOT-APPLICABLE SO FAR: no Golam-Research source code has been copied/ported; semantics-only mapping is recorded. This task reopens before any source-code reuse.
-- [x] **T002-011** Map selected Golam-Research protocol/recovery behaviors to Rust tests before porting implementation details. — PASS; see `implementation/source-foundry/golam-research-semantics-map.md`.
-- [x] **T002-012** Qualify exact Rust dependency versions for SQLite binding, BLAKE3, async runtime, serialization, IDs/errors and property/fuzz testing; record unsafe/FFI boundaries. — PASS for qualification; see `implementation/dependency-qualification.md`. Candidate qualification does not equal production admission.
+- [x] **T002-010** Create bounded Source Foundry admission record before any donor source-code reuse. — SATISFIED N/A for Spec 002 implementation: no donor source code copied/ported/vendored; gate reopens before future code reuse.
+- [x] **T002-011** Map selected Golam-Research protocol/recovery behaviors to Rust tests before implementation-detail reuse. — See `implementation/source-foundry/golam-research-semantics-map.md`.
+- [x] **T002-012** Qualify exact Rust dependency versions and unsafe/FFI/platform boundaries. — See `implementation/dependency-qualification.md`.
 
 ## Phase C — Core types + protected storage
 
-- [x] **T002-020** Implement IDs, protocol/schema versions, bounded errors and canonical byte-encoding primitives in `golam-core`. — PASS.
-- [x] **T002-021** Implement protected Golam data/runtime directory creation and permission checks per platform. — PASS: Unix/macOS private directory permissions and Windows current-user protected DACL application/re-verification are proven; authority state lives under an explicitly protected authority subtree; generic/unprivileged path admission rejects the authority root, DB, credential subtree, reserved audit/policy paths, traversal, and paths outside the runtime root. Exact-head cross-platform proof is run `32824677555`.
-- [x] **T002-022** Implement SQLite migrations/tables for sessions/events/goals/forks/checkpoints/effects/transitions/clients/audit/recovery. — PASS for schema v1 tables and forward-version refusal.
-- [x] **T002-023** Implement transactional global/per-session sequence assignment and deterministic event/hash-chain vectors. — PASS; canonical `global_seq` allocation is reconciled across session events, effect transitions, and authorization decisions, with a regression proving a session event advances past a prior authorization decision.
-- [x] **T002-024** Implement authority DB startup integrity checks and fail-closed recovery-only mode; never silently reset. — PASS at `cb18dc7ec3944a43a8a6a754a7870ccf23c7c2ee`, CI `32839006104`: startup runs the canonical AuthorityStore schema/quick-check/hash-chain verification, classifies valid-but-incoherent authority state as `RECOVERY_ONLY`, classifies canonical DB corruption as `QUARANTINE`, refuses privileged `KernelApi` construction in both blocking modes, and a corruption regression proves the damaged canonical bytes are not silently reset or replaced.
-- [x] **T002-025** Implement content-addressed artifact temp-write/hash/atomic-install/cleanup. — PASS.
-- [x] **T002-026** Implement checkpoint creation/verification/fallback and replay equivalence tests. — PASS.
-- [x] **T002-027** Implement immutable session fork anchors and property tests. — PASS for current bounded property coverage; final property-suite expansion remains T002-071.
-- [x] **T002-028** Implement append-versioned Goal Ledger + rebuildable current projection. — PASS.
+- [x] **T002-020** Implement IDs, protocol/schema versions, bounded errors and canonical byte encoding.
+- [x] **T002-021** Implement protected Golam runtime/data/authority paths and per-platform permission verification; exclude authority from generic path admission.
+- [x] **T002-022** Implement SQLite authority schema/tables for sessions/events/goals/forks/checkpoints/effects/transitions/clients/audit/recovery with future-version refusal. — `authority-security` is an integrity companion created transactionally on first covered protected record; absence with protected rows fails integrity.
+- [x] **T002-023** Implement transactional global/per-session sequencing and deterministic event/hash-chain vectors.
+- [x] **T002-024** Implement startup integrity checks and explicit fail-closed RecoveryOnly/Quarantined behavior; never silently reset canonical state.
+- [x] **T002-025** Implement content-addressed artifact temp-write/hash/atomic-install/cleanup.
+- [x] **T002-026** Implement checkpoint creation/verification/fallback and replay equivalence.
+- [x] **T002-027** Implement immutable session fork anchors and property qualification.
+- [x] **T002-028** Implement append-versioned Goal Ledger + rebuildable current projection.
 
 ## Phase D — IPC authentication
 
-- [x] **T002-030** Implement typed/versioned IPC frame codec and parser with size/depth/resource bounds. — PASS; deterministic bounded `GIPC` framing/parser.
-- [x] **T002-031** Implement lifecycle handshake `hello/challenge/authenticate/ready/shutdown`, transcript signature and server epoch. — PASS at `13b222175eda9c760cd8581c879ccde1020af6f4`, CI `32798308181`: fixed lifecycle payload codecs; fail-closed lifecycle state machine; Ed25519 strict transcript verification; transcript binds protocol/client/nonces/server epoch plus negotiated limits and client key ID; wrong signature, stale epoch, nonce/key mismatch, malformed payload and out-of-order/repeated lifecycle tests.
-- [x] **T002-032** Implement Unix-domain-socket transport with private runtime dir/socket + peer credential checks. — PASS at `e5845cfaa9ec9aa240afc92a61e0728c071722c7`, CI `32799215791`: parent runtime dir `0700`, socket `0600`, no stale-path auto-unlink, explicit platform socket-path byte bound, Linux `SO_PEERCRED`, macOS `LOCAL_PEERCRED` + `LOCAL_PEERPID`, same-effective-UID enforcement, valid peer PID, safe Rust wrapper boundary via exact-pinned `nix`, and no TCP/HTTP listener.
-- [x] **T002-033** Implement Windows named-pipe transport with user SID ACL + peer metadata where available. — PASS at `29be235de00d853a205ae2f46add1d08b91c1796`, tree `4915eb0ee62324ff5faf25184d33c5a13680e9b4`, CI `32800522051`: protected current-user DACLs are applied and re-read/verified for Golam runtime/data/artifact directories; named pipe uses a protected current-user DACL, `accept_remote=false`, non-inheritable handles, bounded instance count, kernel-reported client PID/session metadata, and synchronous local transport. Windows CI performs the real ACL + pipe connect + peer metadata tests. SID in the pipe name is discovery only and is not treated as authority; T002-031 cryptographic client authentication remains independently required.
-- [x] **T002-034** Implement explicit local client enrollment/revocation and qualified client-key storage backend/fallback. — PASS: Ed25519 credentials use protected per-user file fallback with explicit assurance class; client registry is durable; enrollment/revocation and registered-client authentication are now kernel-owned, with unknown/wrong/revoked keys closed and durably audited.
-- [x] **T002-035** Implement request/reply IDs, cancellation, bounded pending calls and protocol-breach settlement. — PASS: bounded request tracker enforces request IDs, request/reply direction, exact payload length, pending limits, cancellation/reply settlement, duplicate/unknown IDs and close-on-breach behavior.
-- [x] **T002-036** Add adversarial tests for unauthenticated client, wrong key, replay, stale epoch, malformed/repeated lifecycle, oversized frame, request-before-ready and resource exhaustion. — PASS: wire/lifecycle probes remain in `golam-ipc`; authority-dependent unknown/wrong/revoked/replay/pre-READY probes execute inside the kernel boundary and verify durable rejection reasons. Latest exact-head cross-platform proof is run `32824677555`.
+- [x] **T002-030** Implement typed/versioned bounded IPC frame codec/parser.
+- [x] **T002-031** Implement Hello -> Challenge -> Authenticate -> Ready/Shutdown lifecycle, Ed25519 transcript authentication and server epoch binding.
+- [x] **T002-032** Implement private Unix/macOS local transport with socket/path bounds and OS peer credential checks.
+- [x] **T002-033** Implement Windows local named-pipe transport with protected current-user ACL, local-only mode, instance bound and peer metadata.
+- [x] **T002-034** Implement explicit local client enrollment/revocation and protected client-key storage fallback with assurance class.
+- [x] **T002-035** Implement request/reply IDs, cancellation, pending-call bounds and close-on-protocol-breach settlement.
+- [x] **T002-036** Add adversarial authentication/protocol/resource probes. — Final CI runs explicit adversarial qualification.
 
 ## Phase E — Kernel + bootstrap authorization
 
-- [x] **T002-040** Implement sealed/process-splittable KernelApi and prevent external construction of authority-bearing tokens. — PASS: authority grants and client-authority implementation are private modules/types; callers receive typed outcomes rather than constructible grants; `compile_fail` boundary probes enforce sealed paths; the public call shape remains future-IPC-compatible.
-- [x] **T002-041** Implement bootstrap `Authorize(principal, action, resource, context)` deny-by-default engine with auditable decisions. — PASS: explicit owner/client/kernel/test bootstrap policy, deny-by-default fallback, durable authorization-decision rows, stable decision IDs/reason codes, and a canonical global sequence shared with other authority records.
-- [x] **T002-042** Implement protected-resource checks so generic file/storage helpers cannot target kernel state. — PASS: unprivileged path admission rejects the authority root/DB/credential/audit/policy state, traversal, and external paths; product crates outside `golam-kernel` do not directly link the privileged ledger.
-- [x] **T002-043** Implement strict-local egress authorization interface as deny-by-default; Spec 002 itself has no production egress client. — PASS: `network.egress*` is a hard monotonic denial before replaceable policy evaluation and is covered even under a permissive test policy.
-- [x] **T002-044** Add hostile-adapter boundary test: cannot mint authority, modify policy-reserved state, append canonical audit or enroll/revoke clients without KernelApi. — PASS: hostile-adapter qualification proves protected-path rejection, denied client enrollment/revocation, denied egress, sealed grant/client-authority modules, and no direct privileged-ledger dependency from non-kernel product crates. Exact-head cross-platform proof is run `32824677555`.
+- [x] **T002-040** Implement sealed/process-splittable KernelApi and prevent external construction of authority-bearing tokens.
+- [x] **T002-041** Implement auditable deny-by-default `Authorize(principal, action, resource, context)` bootstrap engine.
+- [x] **T002-042** Implement protected-resource checks so generic file/storage helpers cannot target kernel state; hostile adapter has no direct privileged-ledger authority.
+- [x] **T002-043** Implement strict-local egress authorization as a monotonic hard denial for Spec 002 product behavior.
+- [x] **T002-044** Add hostile-adapter compromise tests for authority minting/protected-state/event/client mutation boundaries.
 
 ## Phase F — Effect engine
 
-- [x] **T002-050** Implement effect FSM and compare-and-swap transitions. — PASS at `34e6b9b4922c2b6a92e18416d6a0bdb8b0425135`, CI `32832568236`: full planned state vocabulary includes DENIED and APPROVAL_REQUIRED; `golam-effects` validates declared/forbidden FSM edges and blind-retry semantics; `golam-ledger::effects` durably commits effect intent plus PROPOSED transition and applies expected-current-state CAS transitions under `BEGIN IMMEDIATE`; stale CAS does not consume canonical `global_seq`; reopen tests prove durable current state and transition history.
-- [x] **T002-051** Implement EffectHandler metadata/execute/reconcile interfaces and persistent attempt records. — PASS at `ba1dc799099db59e3b4c85cc67ee446ecc568c98`, CI `32833294311`: handler metadata covers supported actions/resources, execution semantics, idempotency support, reconciliation class, timeouts and manual-review capability; the trait exposes stable `derive_idempotency_key`, mutable `execute`, and read-only `reconcile`; durable attempts persist handler/version/dispatch token/start anchor and support write-once finish with success/failure/unknown outcomes, reopen verification, duplicate rejection and refinish rejection.
-- [x] **T002-052** Implement deterministic simulator handlers for all five execution semantics. — PASS at `31cd4061b4d69bd77593f14f7f802ab37268b85a`, CI `32833866835`: deterministic in-memory simulators cover pure read, idempotent-at-least-once keyed write, at-most-once write with queryable status, compensatable write with compensation record, and irreversible write with an intentionally ambiguous acknowledgement path; tests prove stable receipts, idempotent key lookup, redispatch rejection, compensation replay safety and reconciliation behavior without external network/effects.
-- [x] **T002-053** Enforce durable intent-before-dispatch and dependent-effect blocking on UNKNOWN_OUTCOME. — PASS at `376c8d7439c7b6661f5fcb9d58887006fc0241ef`, CI `32836135066`: canonical bounded dependency encoding is fail-closed; `prepare_dispatch` requires the effect to be AUTHORIZED and every dependency to be definitively SUCCEEDED, so UNKNOWN_OUTCOME/missing/nonterminal dependencies block before any attempt exists; one `BEGIN IMMEDIATE` transaction writes the durable attempt and AUTHORIZED→EXECUTING transition before returning; `KernelApi` returns a sealed `PreparedEffectDispatch` proof rather than exposing a constructible dispatch authority token.
-- [x] **T002-054** Build fault injector for every transition and simulated remote accept/ack boundary. — PASS at `5f0e773297984e63c6e6cbb1d4d4b8e3ae89c766`, CI `32836752554`: deterministic `CrashOnce` targets exact fault points; the planned durable-transition table covers initial PROPOSED plus every declared FSM edge and tests distinguish crash-before-commit from crash-after-commit; fault-injectable simulators expose remote before/after-accept and before/after-ack boundaries at the actual mutation/ack points, proving pre-accept crashes leave no acceptance while post-accept crashes remain reconcilable without redispatch.
-- [x] **T002-055** Prove at-most-once/irreversible handlers do not blind duplicate across daemon kill/restart. — PASS at `13b8b002b3d5224301606ef445d20fcd1b356993`, CI `32837103014`: cross-platform restart integration proofs create durable first attempts for both `at_most_once` and `irreversible`, model a remote acceptance followed by daemon loss before acknowledgement/terminal state, reopen `KernelApi`, and prove a second prepared dispatch is rejected while the canonical effect remains EXECUTING with exactly one durable attempt and no second attempt row.
-- [x] **T002-056** Implement manual-review state/reporting for unreconcilable ambiguity. — PASS at `62cc7950814ffdcc0fb23b5c27a46ce51b51e2b3`, CI `32837976384`: only `UNKNOWN_OUTCOME` or `RECONCILING` may enter MANUAL_REVIEW; one `BEGIN IMMEDIATE` transaction durably records the MANUAL_REVIEW transition plus bounded recovery incident/report, validates any linked attempt belongs to the effect, preserves canonical global sequencing, and reopen tests prove the report persists while non-ambiguous states are rejected without a report.
+- [x] **T002-050** Implement effect FSM and compare-and-swap transitions.
+- [x] **T002-051** Implement EffectHandler metadata/execute/read-only-reconcile interfaces and persistent attempt records.
+- [x] **T002-052** Implement deterministic simulator handlers for all five execution semantics.
+- [x] **T002-053** Enforce durable intent/attempt/EXECUTING evidence before dispatch proof and block dependent effects on non-definitive prerequisites including UNKNOWN_OUTCOME.
+- [x] **T002-054** Build deterministic fault injection around durable transitions and simulated remote accept/ack boundaries.
+- [x] **T002-055** Prove AT_MOST_ONCE/IRREVERSIBLE handlers do not blind duplicate across process loss/restart.
+- [x] **T002-056** Implement durable manual-review state/reporting for unresolved ambiguity.
 
 ## Phase G — Recovery + CLI
 
-- [x] **T002-060** Implement startup recovery scan for incomplete effects/checkpoints/hash chains and explicit recovery-only/quarantine mode. — PASS at `cb18dc7ec3944a43a8a6a754a7870ccf23c7c2ee`, CI `32839006104`: startup classifies clean/coherent authority as NORMAL, coherent unfinished effects as recovery attention without inventing completion, incoherent executing/unknown/reconciling effects without durable attempts and invalid checkpoint anchors/artifacts as RECOVERY_ONLY, and canonical authority corruption as QUARANTINE; checkpoint files are bounded to safe relative artifact paths and reverified by size/BLAKE3; direct `KernelApi::open` cannot bypass the gate, while `start_kernel` returns explicit `Serving`, `RecoveryOnly`, or `Quarantined` outcomes.
-- [ ] **T002-061** Evaluate/implement preallocated disk recovery reserve; prove or remove the guarantee based on tests.
-- [ ] **T002-062** Implement minimal CLI commands for client enroll, sessions, replay/fork/checkpoint, effect simulator/reconcile and doctor/recovery report.
-- [ ] **T002-063** Add process-kill/restart integration harness and disk-full/corruption simulations.
+- [x] **T002-060** Implement startup recovery scan for incomplete effects/checkpoints/hash/integrity state and explicit Normal/RecoveryOnly/Quarantined outcomes.
+- [x] **T002-061** Evaluate/implement preallocated disk recovery reserve; prove or remove the guarantee based on tests. — PASS with `NO_RECOVERY_RESERVE_GUARANTEE`; see `implementation/recovery-reserve-evaluation.md` and `recovery_reserve_policy` regression. Spec 002 does not claim an unproven cross-platform reserve.
+- [x] **T002-062** Implement minimal authenticated CLI for client enroll, sessions/open/create/fork/goal, replay/checkpoint, deterministic effect simulate/reconcile and doctor. — Real CLI -> authenticated OS-local IPC -> daemon -> KernelApi path; enrolled-client bootstrap authority explicitly permits required checkpoint/reconcile operations without gaining client-management or network authority.
+- [x] **T002-063** Add process-kill/restart integration harness and disk-full/corruption simulations. — Real OS child kill regression, real SQLite FULL rollback regression, and authority corruption/recovery qualification are in the workspace suite.
 
 ## Phase H — Qualification
 
-- [ ] **T002-070** Run cargo fmt/clippy/test exact-head gates. — Slice-level exact-head gates are continuously green when claimed; final Spec 002 gate remains pending completion of all phases.
-- [ ] **T002-071** Run property tests for replay/forks/hash chains/effect state/idempotency.
-- [ ] **T002-072** Run fuzz smoke/corpus for IPC/event/migration decoders.
-- [ ] **T002-073** Run Windows/macOS/Linux IPC integration matrix; explicitly record unsupported runner gaps.
-- [ ] **T002-074** Run external listener scan and strict-local sinkhole/no-egress proof.
-- [ ] **T002-075** Run BS-1 durability and BS-2 duplicate-effect qualification artifacts.
-- [ ] **T002-076** Run kernel-boundary and unauthenticated-local-client adversarial probes.
-- [ ] **T002-077** Run final Spec Kit converge against constitution/spec/research/plan/data-model/contracts/tasks and resolve every material divergence. — Interim convergence is recorded in `implementation/convergence.md`; final gate remains pending.
-- [ ] **T002-078** Prepare exact-head closeout report; do not start Spec 003 until Spec 002 is merged/closed canonical.
+- [x] **T002-070** Run cargo fmt/clippy/test exact-head gates. — Convergence head `a814e7d6...`, CI #233, all platforms SUCCESS; final closeout-ledger head must also pass.
+- [x] **T002-071** Run deterministic property qualification for replay/checkpoints/forks/hash chains/effect FSM/idempotency. — Dedicated CI step SUCCESS on #233.
+- [x] **T002-072** Run bounded fuzz smoke/corpus for IPC/event/migration decoders. — Dedicated CI step SUCCESS on #233.
+- [x] **T002-073** Run Windows/macOS/Linux IPC integration matrix and platform-specific transport gates. — Dedicated OS steps SUCCESS on #233 where applicable.
+- [x] **T002-074** Run external listener/strict-local no-egress proof. — Daemon is built and observed from outside the Golam-managed process; no Internet socket is observed while the local IPC listener is present.
+- [x] **T002-075** Record BS-1 durability and BS-2 duplicate-effect qualification artifacts. — See `implementation/bs1-bs2-qualification.md`; `BS-1=PASS`, `BS-2=PASS`, waiver `NO`, backed by #225/#233 workspace qualification.
+- [x] **T002-076** Run kernel-boundary and unauthenticated/adversarial local-client probes. — Dedicated adversarial authority/IPC qualification SUCCESS on #233.
+- [x] **T002-077** Run final Spec Kit convergence against constitution/spec/research/plan/data-model/contracts/tasks and resolve every material divergence. — See `implementation/convergence.md`; resolved accepted-connection deadline, mandatory non-event authority integrity, enrolled-client checkpoint/reconcile authority, stale quickstart/AGENTS/checklist/data-model text, and unsafe generic reserved-event append wording. Convergence head #233 is green.
+- [x] **T002-078** Prepare exact-head closeout report and keep Spec 003 blocked until Spec 002 is merged/closed canonical. — See `implementation/closeout.md`. The commit containing this final ledger/report must receive the complete CI matrix before the final PR evidence may claim exact-head PASS.
 
-## Execution-order guardrail
+## Closeout guardrail
 
-Continue in task order unless an earlier task is required to satisfy a later platform gate:
+```text
+SPEC_002_IMPLEMENTATION=COMPLETE
+WAIVER_TAKEN=NO
+PR_3_STATE=DRAFT
+PR_READY=NO
+MERGED=NO
+SPEC_002_CLOSED_CANONICAL=NO
+SPEC_003_AUTHORIZED=NO
+```
 
-`T002-034 -> T002-035 -> T002-036 -> Phase E -> Phase F -> Phase G -> Phase H`.
-
-Do not start Spec 003, models, broad tools, Desktop, GolamConnect, real external effects, or external network behavior from Spec 002 authority.
+No remaining Spec 002 implementation task authorizes models, broad product tools, Desktop, GolamConnect, real external effects, external network behavior, marking PR #3 Ready, merging it, or starting Spec 003. A final green exact-head CI run on this closeout ledger is required before the Draft PR is presented as implementation-complete.
