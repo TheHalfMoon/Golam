@@ -7,6 +7,10 @@ use golam_core::authority::AuthorityLayout;
 use golam_core::{EffectAttemptId, EffectId, EffectTransitionId, EventId, SessionId};
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
+use crate::security_audit::{
+    self, EffectAttemptFinishedAuditInput, EffectAttemptStartedAuditInput, EffectIntentAuditInput,
+    EffectTransitionAuditInput,
+};
 use crate::storage::{AuthorityStore, StorageError};
 
 const EFFECT_STATES: &[&str] = &[
@@ -98,6 +102,7 @@ pub struct StoredEffectAttempt {
 pub enum EffectStoreError {
     Storage(StorageError),
     Sqlite(rusqlite::Error),
+    SecurityAudit(String),
     InvalidMetadata,
     InvalidState(String),
     InvalidAttemptOutcome(String),
@@ -117,6 +122,7 @@ impl fmt::Display for EffectStoreError {
         match self {
             Self::Storage(error) => write!(f, "effect store authority error: {error}"),
             Self::Sqlite(error) => write!(f, "effect store sqlite error: {error}"),
+            Self::SecurityAudit(error) => write!(f, "effect integrity-chain error: {error}"),
             Self::InvalidMetadata => f.write_str("effect request metadata must be non-empty"),
             Self::InvalidState(state) => write!(f, "invalid effect state: {state}"),
             Self::InvalidAttemptOutcome(outcome) => {
@@ -208,13 +214,15 @@ impl EffectStore {
             return Err(EffectStoreError::EffectAlreadyExists(input.effect_id));
         }
 
+        let session_blob = id_blob(input.session_id.0);
+        let proposed_event_blob = id_blob(input.proposed_event_id.0);
         transaction.execute(
             "INSERT INTO effect_intents (effect_id, session_id, requested_by, action, resource, \
              risk_class, execution_semantics, idempotency_key, preconditions, dependencies, \
              payload_hash, proposed_event_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             params![
                 &effect_blob,
-                id_blob(input.session_id.0),
+                &session_blob,
                 input.requested_by,
                 input.action,
                 input.resource,
@@ -224,9 +232,27 @@ impl EffectStore {
                 input.preconditions,
                 input.dependencies,
                 &input.payload_hash[..],
-                id_blob(input.proposed_event_id.0),
+                &proposed_event_blob,
             ],
         )?;
+        security_audit::append_effect_intent(
+            &transaction,
+            EffectIntentAuditInput {
+                effect_id: &effect_blob,
+                session_id: &session_blob,
+                requested_by: input.requested_by,
+                action: input.action,
+                resource: input.resource,
+                risk_class: input.risk_class,
+                execution_semantics: input.execution_semantics,
+                idempotency_key: input.idempotency_key,
+                preconditions: input.preconditions,
+                dependencies: input.dependencies,
+                payload_hash: &input.payload_hash,
+                proposed_event_id: &proposed_event_blob,
+            },
+        )
+        .map_err(|error| EffectStoreError::SecurityAudit(error.to_string()))?;
 
         let stored = StoredEffectTransition {
             transition_id: input.transition_id,
@@ -346,6 +372,19 @@ impl EffectStore {
                 input.started_at,
             ],
         )?;
+        security_audit::append_effect_attempt_started(
+            &transaction,
+            EffectAttemptStartedAuditInput {
+                attempt_id: &attempt_blob,
+                effect_id: &effect_blob,
+                started_global_seq,
+                handler_id: input.handler_id,
+                handler_version: input.handler_version,
+                dispatch_token: input.dispatch_token,
+                started_at: input.started_at,
+            },
+        )
+        .map_err(|error| EffectStoreError::SecurityAudit(error.to_string()))?;
         transaction.commit()?;
 
         Ok(StoredEffectAttempt {
@@ -395,6 +434,16 @@ impl EffectStore {
                 Some(None) => Err(EffectStoreError::InvalidStoredRecord),
             };
         }
+        security_audit::append_effect_attempt_finished(
+            &transaction,
+            EffectAttemptFinishedAuditInput {
+                attempt_id: &attempt_blob,
+                finished_at: input.finished_at,
+                outcome: input.outcome,
+                receipt: input.receipt,
+            },
+        )
+        .map_err(|error| EffectStoreError::SecurityAudit(error.to_string()))?;
         transaction.commit()?;
         self.attempt(input.attempt_id)?
             .ok_or(EffectStoreError::AttemptNotFound(input.attempt_id))
@@ -540,21 +589,40 @@ fn insert_transition(
     transaction: &Transaction<'_>,
     stored: &StoredEffectTransition,
 ) -> Result<(), EffectStoreError> {
+    let transition_blob = id_blob(stored.transition_id.0);
+    let effect_blob = id_blob(stored.effect_id.0);
+    let attempt_blob = stored.attempt_id.map(|attempt_id| id_blob(attempt_id.0));
+    let event_blob = id_blob(stored.event_id.0);
     transaction.execute(
         "INSERT INTO effect_transitions (transition_id, effect_id, global_seq, from_state, to_state, \
          attempt_id, reason_code, evidence_ref, event_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         params![
-            id_blob(stored.transition_id.0),
-            id_blob(stored.effect_id.0),
+            &transition_blob,
+            &effect_blob,
             seq_to_i64(stored.global_seq)?,
             stored.from_state.as_deref(),
             stored.to_state.as_str(),
-            stored.attempt_id.map(|attempt_id| id_blob(attempt_id.0)),
+            attempt_blob.as_deref(),
             stored.reason_code.as_deref(),
             stored.evidence_ref.as_deref(),
-            id_blob(stored.event_id.0),
+            &event_blob,
         ],
     )?;
+    security_audit::append_effect_transition(
+        transaction,
+        EffectTransitionAuditInput {
+            transition_id: &transition_blob,
+            effect_id: &effect_blob,
+            global_seq: stored.global_seq,
+            from_state: stored.from_state.as_deref(),
+            to_state: stored.to_state.as_str(),
+            attempt_id: attempt_blob.as_deref(),
+            reason_code: stored.reason_code.as_deref(),
+            evidence_ref: stored.evidence_ref.as_deref(),
+            event_id: &event_blob,
+        },
+    )
+    .map_err(|error| EffectStoreError::SecurityAudit(error.to_string()))?;
     Ok(())
 }
 
