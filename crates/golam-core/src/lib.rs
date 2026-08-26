@@ -2,6 +2,7 @@
 
 pub mod authority;
 pub mod paths;
+pub mod runtime_home;
 
 use core::fmt;
 
