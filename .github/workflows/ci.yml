@@ -26,3 +26,33 @@ jobs:
         run: cargo +1.98.0 clippy --locked --workspace --all-targets -- -D warnings
       - name: Test
         run: cargo +1.98.0 test --locked --workspace --all-targets
+      - name: Property qualification
+        run: |
+          cargo +1.98.0 test --locked -p golam-effects --test qualification_properties
+          cargo +1.98.0 test --locked -p golam-ledger --test qualification_properties
+      - name: Bounded fuzz smoke
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc --test fuzz_smoke
+          cargo +1.98.0 test --locked -p golam-ledger --test fuzz_smoke
+      - name: IPC transport qualification (Unix)
+        if: runner.os != 'Windows'
+        run: cargo +1.98.0 test --locked -p golam-ipc unix_transport::
+      - name: IPC transport qualification (Windows)
+        if: runner.os == 'Windows'
+        run: cargo +1.98.0 test --locked -p golam-ipc windows_transport::
+      - name: Authenticated daemon IPC qualification
+        run: cargo +1.98.0 test --locked -p golamd --bin golamd connection::tests::
+      - name: Adversarial authority qualification
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc --test adversarial
+          cargo +1.98.0 test --locked -p golam-kernel --test hostile_adapter
+          cargo +1.98.0 test --locked -p golam-kernel client_auth::tests::
+      - name: Build daemon for external locality observation
+        run: cargo +1.98.0 build --locked -p golamd --bin golamd
+      - name: Strict-local external network observation (Unix)
+        if: runner.os != 'Windows'
+        run: bash scripts/qualification/strict-local-no-network.sh target/debug/golamd
+      - name: Strict-local external network observation (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/qualification/strict-local-no-network.ps1 target/debug/golamd.exe
