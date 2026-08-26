@@ -2,15 +2,16 @@ use std::error::Error;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use golam_core::{CanonicalEncoder, CheckpointId, EventId, SessionId};
-use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
+use golam_core::{CanonicalEncoder, CheckpointId, EventId, SCHEMA_VERSION, SessionId};
+use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
-use crate::EventKind;
+use crate::{EventKind, EventRecord, audit_integrity_hash, event_integrity_hash, payload_hash};
 use crate::artifacts::{ArtifactError, ArtifactReceipt, ArtifactStore};
-use crate::storage::{AppendEvent, AuthorityStore, StorageError};
+use crate::storage::{AuthorityStore, StorageError};
 
 const PROJECTION_DOMAIN: &[u8] = b"golam:checkpoint-projection:v1";
 const CHECKPOINT_EVENT_DOMAIN: &[u8] = b"golam:checkpoint-event:v1";
+const SECURITY_AUDIT_CHAIN: &str = "security";
 pub const CHECKPOINT_PROJECTION_SCHEMA_VERSION: u16 = 1;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -133,6 +134,12 @@ struct ProjectionBuild {
     through_event_hash: [u8; 32],
 }
 
+#[derive(Clone, Copy, Debug)]
+struct CreatedCheckpointEvent {
+    global_seq: u64,
+    session_seq: u64,
+}
+
 pub struct CheckpointManager {
     connection: Connection,
     artifacts: ArtifactStore,
@@ -157,7 +164,7 @@ impl CheckpointManager {
 
     pub fn create(
         &mut self,
-        authority: &mut AuthorityStore,
+        _authority: &mut AuthorityStore,
         input: CreateCheckpoint<'_>,
     ) -> Result<CheckpointRecord, CheckpointError> {
         let projection = self.build_projection(input.session_id, input.through_session_seq)?;
@@ -171,20 +178,11 @@ impl CheckpointManager {
             artifact.hash,
         )?;
 
-        let created_event = authority.append_event(AppendEvent {
-            event_id: input.created_event_id,
-            session_id: input.session_id,
-            expected_session_seq: input.through_session_seq,
-            kind: EventKind::CheckpointCreated,
-            actor_principal: input.actor_principal,
-            recorded_at: input.recorded_at,
-            payload: &event_payload,
-            security_critical: true,
-        })?;
-
         let transaction = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let created_event = append_checkpoint_event(&transaction, &input, &event_payload)?;
+
         transaction.execute(
             "INSERT OR IGNORE INTO artifacts (artifact_hash, size_bytes, media_type, \
              created_global_seq, retention_class, relative_path) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -192,7 +190,7 @@ impl CheckpointManager {
                 &artifact.hash[..],
                 seq_to_i64(artifact.size_bytes)?,
                 "application/x-golam-checkpoint",
-                seq_to_i64(created_event.record.global_seq)?,
+                seq_to_i64(created_event.global_seq)?,
                 "checkpoint",
                 relative_path_string(&artifact.relative_path),
             ],
@@ -219,7 +217,7 @@ impl CheckpointManager {
             params![
                 id_blob(input.checkpoint_id.0),
                 id_blob(input.session_id.0),
-                seq_to_i64(created_event.record.session_seq)?,
+                seq_to_i64(created_event.session_seq)?,
             ],
         )?;
         transaction.commit()?;
@@ -415,6 +413,127 @@ impl CheckpointManager {
     }
 }
 
+fn append_checkpoint_event(
+    transaction: &Transaction<'_>,
+    input: &CreateCheckpoint<'_>,
+    payload: &[u8],
+) -> Result<CreatedCheckpointEvent, CheckpointError> {
+    let session_blob = id_blob(input.session_id.0);
+    let head = transaction
+        .query_row(
+            "SELECT latest_session_seq, latest_event_hash FROM sessions WHERE session_id = ?1",
+            params![&session_blob],
+            |row| Ok((row.get::<_, i64>(0)?, row.get::<_, Vec<u8>>(1)?)),
+        )
+        .optional()?
+        .ok_or(StorageError::SessionNotFound(input.session_id))?;
+    let actual_session_seq = seq_from_i64(head.0)?;
+    if actual_session_seq != input.through_session_seq {
+        return Err(StorageError::StaleSessionHead {
+            expected: input.through_session_seq,
+            actual: actual_session_seq,
+        }
+        .into());
+    }
+
+    let previous_session_event_hash = Some(hash_from_vec(head.1)?);
+    let session_seq = actual_session_seq
+        .checked_add(1)
+        .ok_or(CheckpointError::SequenceOverflow)?;
+    let global_seq = next_global_seq(transaction)?;
+    let previous_audit_hash = transaction
+        .query_row(
+            "SELECT last_hash FROM audit_chain_heads WHERE chain_name = ?1",
+            params![SECURITY_AUDIT_CHAIN],
+            |row| row.get::<_, Vec<u8>>(0),
+        )
+        .optional()?
+        .map(hash_from_vec)
+        .transpose()?;
+    let record = EventRecord {
+        event_id: input.created_event_id,
+        session_id: input.session_id,
+        global_seq,
+        session_seq,
+        schema_version: SCHEMA_VERSION,
+        kind: EventKind::CheckpointCreated,
+        actor_principal: input.actor_principal.to_owned(),
+        recorded_at: input.recorded_at.to_owned(),
+        payload_hash: payload_hash(payload),
+        previous_session_event_hash,
+        security_critical: true,
+        previous_audit_hash,
+    };
+    let event_hash = event_integrity_hash(&record)?;
+    let audit_hash = audit_integrity_hash(&record, event_hash)?;
+
+    transaction.execute(
+        "INSERT INTO session_events (event_id, global_seq, session_id, session_seq, event_type, \
+         schema_version, actor_principal, recorded_at, payload_bytes, payload_hash, \
+         previous_session_event_hash, event_hash, security_critical, previous_audit_hash, audit_hash) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, 1, ?13, ?14)",
+        params![
+            id_blob(record.event_id.0),
+            seq_to_i64(record.global_seq)?,
+            id_blob(record.session_id.0),
+            seq_to_i64(record.session_seq)?,
+            i64::from(record.kind.code()),
+            i64::from(record.schema_version),
+            record.actor_principal,
+            record.recorded_at,
+            payload,
+            &record.payload_hash[..],
+            record.previous_session_event_hash.map(|hash| hash.to_vec()),
+            &event_hash[..],
+            record.previous_audit_hash.map(|hash| hash.to_vec()),
+            &audit_hash[..],
+        ],
+    )?;
+    let updated = transaction.execute(
+        "UPDATE sessions SET latest_session_seq = ?1, latest_event_hash = ?2 \
+         WHERE session_id = ?3 AND latest_session_seq = ?4",
+        params![
+            seq_to_i64(session_seq)?,
+            &event_hash[..],
+            &session_blob,
+            seq_to_i64(input.through_session_seq)?,
+        ],
+    )?;
+    if updated != 1 {
+        return Err(StorageError::StaleSessionHead {
+            expected: input.through_session_seq,
+            actual: actual_session_seq,
+        }
+        .into());
+    }
+    transaction.execute(
+        "INSERT INTO audit_chain_heads (chain_name, last_global_seq, last_hash) VALUES (?1, ?2, ?3) \
+         ON CONFLICT(chain_name) DO UPDATE SET last_global_seq = excluded.last_global_seq, \
+         last_hash = excluded.last_hash",
+        params![SECURITY_AUDIT_CHAIN, seq_to_i64(global_seq)?, &audit_hash[..]],
+    )?;
+
+    Ok(CreatedCheckpointEvent {
+        global_seq,
+        session_seq,
+    })
+}
+
+fn next_global_seq(transaction: &Transaction<'_>) -> Result<u64, CheckpointError> {
+    let current: i64 = transaction.query_row(
+        "SELECT COALESCE(MAX(global_seq), 0) FROM (\
+           SELECT global_seq FROM session_events \
+           UNION ALL SELECT global_seq FROM effect_transitions \
+           UNION ALL SELECT global_seq FROM authorization_decisions\
+         )",
+        [],
+        |row| row.get(0),
+    )?;
+    seq_from_i64(current)?
+        .checked_add(1)
+        .ok_or(CheckpointError::SequenceOverflow)
+}
+
 fn checkpoint_event_payload(
     checkpoint_id: CheckpointId,
     session_id: SessionId,
@@ -544,6 +663,80 @@ mod tests {
             .unwrap();
         assert_eq!(fallback.source, ProjectionSource::ReplayFallback);
         assert_eq!(fallback.bytes, replay);
+
+        drop(manager);
+        drop(authority);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn failed_checkpoint_metadata_write_rolls_back_event_and_session_head() {
+        let root = unique_root();
+        fs::create_dir(&root).unwrap();
+        let db_path = root.join("authority.db");
+        let artifact_root = root.join("artifacts");
+        let mut authority = AuthorityStore::open(&db_path).unwrap();
+        for (session_id, event_id) in [(SessionId(10), EventId(10)), (SessionId(20), EventId(20))] {
+            authority
+                .create_session(CreateSession {
+                    session_id,
+                    event_id,
+                    owner_principal: "owner",
+                    actor_principal: "owner",
+                    recorded_at: "2026-08-26T11:55:00Z",
+                    payload: b"create",
+                    security_critical: true,
+                })
+                .unwrap();
+        }
+
+        let mut manager = CheckpointManager::open(&db_path, &artifact_root).unwrap();
+        manager
+            .create(
+                &mut authority,
+                CreateCheckpoint {
+                    checkpoint_id: CheckpointId(900),
+                    created_event_id: EventId(11),
+                    session_id: SessionId(10),
+                    through_session_seq: 1,
+                    actor_principal: "owner",
+                    recorded_at: "2026-08-26T11:55:01Z",
+                },
+            )
+            .unwrap();
+
+        let failed = manager.create(
+            &mut authority,
+            CreateCheckpoint {
+                checkpoint_id: CheckpointId(900),
+                created_event_id: EventId(21),
+                session_id: SessionId(20),
+                through_session_seq: 1,
+                actor_principal: "owner",
+                recorded_at: "2026-08-26T11:55:02Z",
+            },
+        );
+        assert!(matches!(failed, Err(CheckpointError::Sqlite(_))));
+
+        let latest_session_seq: i64 = manager
+            .connection
+            .query_row(
+                "SELECT latest_session_seq FROM sessions WHERE session_id = ?1",
+                params![id_blob(SessionId(20).0)],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(latest_session_seq, 1);
+        let rolled_back_event_count: i64 = manager
+            .connection
+            .query_row(
+                "SELECT COUNT(*) FROM session_events WHERE event_id = ?1",
+                params![id_blob(EventId(21).0)],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(rolled_back_event_count, 0);
+        authority.verify_integrity().unwrap();
 
         drop(manager);
         drop(authority);
