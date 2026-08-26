@@ -4,7 +4,9 @@ use std::error::Error;
 use std::fmt;
 use std::str;
 
-use golam_core::{CheckpointId, EffectId, EventId, GoalId, GoalVersionId, SessionId};
+use golam_core::{
+    CheckpointId, ClientId, EffectId, EventId, GoalId, GoalVersionId, SessionId,
+};
 
 use crate::request::{MethodId, RequestMessage};
 
@@ -19,6 +21,7 @@ pub const METHOD_REPLAY: MethodId = MethodId(107);
 pub const METHOD_EFFECT_SIMULATE: MethodId = MethodId(108);
 pub const METHOD_EFFECT_RECONCILE: MethodId = MethodId(109);
 pub const METHOD_DOCTOR: MethodId = MethodId(110);
+pub const METHOD_CLIENT_ENROLL: MethodId = MethodId(111);
 
 pub const MAX_COMMAND_BODY_BYTES: usize = 256 * 1024;
 pub const MAX_TEXT_BYTES: usize = 64 * 1024;
@@ -58,6 +61,9 @@ impl SyntheticSemantics {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Command {
+    ClientEnroll {
+        client_id: ClientId,
+    },
     SessionsList,
     SessionOpen {
         session_id: SessionId,
@@ -157,6 +163,11 @@ impl Error for CommandCodecError {}
 
 pub fn encode_command(command: &Command) -> Result<RequestMessage, CommandCodecError> {
     let (method, body) = match command {
+        Command::ClientEnroll { client_id } => {
+            let mut body = Writer::new();
+            body.u128(client_id.0);
+            (METHOD_CLIENT_ENROLL, body.finish())
+        }
         Command::SessionsList => (METHOD_SESSIONS_LIST, Vec::new()),
         Command::SessionOpen { session_id } => {
             let mut body = Writer::new();
@@ -279,6 +290,9 @@ pub fn decode_command(message: &RequestMessage) -> Result<Command, CommandCodecE
     check_body(message.body.len())?;
     let mut reader = Reader::new(&message.body);
     let command = match message.method {
+        METHOD_CLIENT_ENROLL => Command::ClientEnroll {
+            client_id: ClientId(reader.u128()?),
+        },
         METHOD_SESSIONS_LIST => Command::SessionsList,
         METHOD_SESSION_OPEN => Command::SessionOpen {
             session_id: SessionId(reader.u128()?),
@@ -468,6 +482,9 @@ mod tests {
 
     fn samples() -> Vec<Command> {
         vec![
+            Command::ClientEnroll {
+                client_id: ClientId(1),
+            },
             Command::SessionsList,
             Command::SessionOpen {
                 session_id: SessionId(1),
