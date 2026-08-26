@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod client_handshake;
 pub mod command;
 pub mod credentials;
 pub mod lifecycle;
