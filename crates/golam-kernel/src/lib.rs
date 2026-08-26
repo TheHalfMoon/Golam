@@ -2,6 +2,7 @@
 
 mod authorization;
 mod client_auth;
+mod client_enrollment;
 mod effect_execution;
 mod operations;
 mod resource;
@@ -22,6 +23,7 @@ pub use authorization::{
     PolicyDecision, Principal, PrincipalKind,
 };
 pub use client_auth::ClientAuthorityError;
+pub use client_enrollment::{ClientEnrollmentError, EnrolledClientCredential};
 pub use effect_execution::PreparedEffectDispatch;
 pub use golam_ipc::credentials::GeneratedClientCredential;
 pub use golam_ipc::lifecycle::{Authenticate, ClientKeyId, ConnectionId, Ready, ServerLifecycle};
