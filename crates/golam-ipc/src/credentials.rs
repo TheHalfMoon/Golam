@@ -277,7 +277,9 @@ mod tests {
         let (runtime, authority) = authority();
         let store = ClientCredentialStore::new(&authority);
         let generated = store.generate(ClientId(11)).unwrap();
-        let inspected = store.inspect(generated.client_id, generated.key_id).unwrap();
+        let inspected = store
+            .inspect(generated.client_id, generated.key_id)
+            .unwrap();
         assert_eq!(inspected, generated);
         let signing = store.load(generated.client_id, generated.key_id).unwrap();
         assert_eq!(signing.verifying_key().to_bytes(), generated.public_key);
