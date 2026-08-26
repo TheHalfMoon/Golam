@@ -184,6 +184,8 @@ impl CheckpointManager {
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         let created_event = append_checkpoint_event(&transaction, &input, &event_payload)?;
+        #[cfg(test)]
+        checkpoint_process_kill_test_hook();
 
         transaction.execute(
             "INSERT OR IGNORE INTO artifacts (artifact_hash, size_bytes, media_type, \
@@ -415,6 +417,23 @@ impl CheckpointManager {
     }
 }
 
+#[cfg(test)]
+fn checkpoint_process_kill_test_hook() {
+    const CHILD_FLAG: &str = "GOLAM_CHECKPOINT_KILL_CHILD";
+    const MARKER_ENV: &str = "GOLAM_CHECKPOINT_KILL_MARKER";
+
+    if std::env::var_os(CHILD_FLAG).is_none() {
+        return;
+    }
+    let marker = std::path::PathBuf::from(
+        std::env::var_os(MARKER_ENV).expect("checkpoint kill marker path is configured"),
+    );
+    std::fs::write(marker, b"checkpoint-event-uncommitted").unwrap();
+    loop {
+        std::thread::park_timeout(std::time::Duration::from_secs(60));
+    }
+}
+
 fn append_checkpoint_event(
     transaction: &Transaction<'_>,
     input: &CreateCheckpoint<'_>,
@@ -595,8 +614,15 @@ fn seq_from_i64(value: i64) -> Result<u64, CheckpointError> {
 mod tests {
     use super::*;
     use crate::storage::{AppendEvent, CreateSession};
+    use std::env;
     use std::fs;
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::process::{Command, Stdio};
+    use std::thread;
+    use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+    const CHILD_FLAG: &str = "GOLAM_CHECKPOINT_KILL_CHILD";
+    const ROOT_ENV: &str = "GOLAM_CHECKPOINT_KILL_ROOT";
+    const MARKER_ENV: &str = "GOLAM_CHECKPOINT_KILL_MARKER";
 
     fn unique_root() -> PathBuf {
         let nonce = SystemTime::now()
@@ -608,6 +634,9 @@ mod tests {
 
     #[test]
     fn checkpoint_matches_replay_and_missing_artifact_falls_back() {
+        if env::var_os(CHILD_FLAG).is_some() {
+            return;
+        }
         let root = unique_root();
         fs::create_dir(&root).unwrap();
         let db_path = root.join("authority.db");
@@ -673,6 +702,9 @@ mod tests {
 
     #[test]
     fn failed_checkpoint_metadata_write_rolls_back_event_and_session_head() {
+        if env::var_os(CHILD_FLAG).is_some() {
+            return;
+        }
         let root = unique_root();
         fs::create_dir(&root).unwrap();
         let db_path = root.join("authority.db");
@@ -742,6 +774,116 @@ mod tests {
 
         drop(manager);
         drop(authority);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn checkpoint_process_kill_child() {
+        if env::var_os(CHILD_FLAG).is_none() {
+            return;
+        }
+        let root = PathBuf::from(env::var_os(ROOT_ENV).expect("checkpoint kill root is configured"));
+        let db_path = root.join("authority.db");
+        let artifact_root = root.join("artifacts");
+        let mut authority = AuthorityStore::open(&db_path).unwrap();
+        let mut manager = CheckpointManager::open(&db_path, &artifact_root).unwrap();
+        let _ = manager.create(
+            &mut authority,
+            CreateCheckpoint {
+                checkpoint_id: CheckpointId(930),
+                created_event_id: EventId(931),
+                session_id: SessionId(932),
+                through_session_seq: 1,
+                actor_principal: "owner",
+                recorded_at: "2026-08-26T11:56:00Z",
+            },
+        );
+        unreachable!("checkpoint kill hook must stop the child before create returns");
+    }
+
+    #[test]
+    fn os_process_kill_during_checkpoint_transaction_rolls_back_canonical_state() {
+        if env::var_os(CHILD_FLAG).is_some() {
+            return;
+        }
+        let root = unique_root();
+        fs::create_dir(&root).unwrap();
+        let db_path = root.join("authority.db");
+        let artifact_root = root.join("artifacts");
+        let marker = root.join("checkpoint-uncommitted.marker");
+
+        let mut authority = AuthorityStore::open(&db_path).unwrap();
+        authority
+            .create_session(CreateSession {
+                session_id: SessionId(932),
+                event_id: EventId(933),
+                owner_principal: "owner",
+                actor_principal: "owner",
+                recorded_at: "2026-08-26T11:55:59Z",
+                payload: b"create",
+                security_critical: true,
+            })
+            .unwrap();
+        drop(authority);
+
+        let mut child = Command::new(env::current_exe().unwrap())
+            .arg("checkpoint_process_kill_child")
+            .arg("--nocapture")
+            .env(CHILD_FLAG, "1")
+            .env(ROOT_ENV, &root)
+            .env(MARKER_ENV, &marker)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while !marker.exists() {
+            if let Some(status) = child.try_wait().unwrap() {
+                panic!("checkpoint kill child exited before transaction marker: {status}");
+            }
+            assert!(
+                Instant::now() < deadline,
+                "checkpoint kill child did not reach uncommitted transaction marker"
+            );
+            thread::sleep(Duration::from_millis(20));
+        }
+
+        child.kill().unwrap();
+        let _ = child.wait().unwrap();
+
+        let restarted = AuthorityStore::open(&db_path).unwrap();
+        restarted.verify_integrity().unwrap();
+        drop(restarted);
+
+        let connection = Connection::open(&db_path).unwrap();
+        let latest_session_seq: i64 = connection
+            .query_row(
+                "SELECT latest_session_seq FROM sessions WHERE session_id = ?1",
+                params![id_blob(SessionId(932).0)],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(latest_session_seq, 1);
+        let event_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM session_events WHERE event_id = ?1",
+                params![id_blob(EventId(931).0)],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(event_count, 0);
+        let checkpoint_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM checkpoints WHERE checkpoint_id = ?1",
+                params![id_blob(CheckpointId(930).0)],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(checkpoint_count, 0);
+        drop(connection);
+
         fs::remove_dir_all(root).unwrap();
     }
 }
