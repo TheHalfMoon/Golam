@@ -85,7 +85,9 @@ impl fmt::Display for EffectCompletionError {
         match self {
             Self::Storage(error) => write!(f, "effect completion authority error: {error}"),
             Self::Sqlite(error) => write!(f, "effect completion sqlite error: {error}"),
-            Self::SecurityAudit(error) => write!(f, "effect completion integrity-chain error: {error}"),
+            Self::SecurityAudit(error) => {
+                write!(f, "effect completion integrity-chain error: {error}")
+            }
             Self::InvalidMetadata => {
                 f.write_str("effect completion finished-at metadata is required")
             }
