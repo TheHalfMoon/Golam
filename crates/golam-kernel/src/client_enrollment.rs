@@ -6,7 +6,7 @@ use std::fmt;
 use golam_core::ClientId;
 use golam_ipc::credentials::{ClientCredentialStore, CredentialError, GeneratedClientCredential};
 use golam_ipc::lifecycle::ClientKeyId;
-use golam_ledger::clients::{ClientKind, ClientRecord};
+use golam_ledger::clients::{ClientKind, ClientRecord, ClientRegistry, ClientRegistryError};
 
 use crate::{
     AuthorizationContext, AuthorizationPolicy, AuthorizationRequest, ClientAuthorityError,
@@ -121,6 +121,25 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         })
     }
 
+    pub fn client_requires_bootstrap_enrollment(
+        &self,
+        client_id: ClientId,
+        key_id: ClientKeyId,
+    ) -> Result<bool, KernelError> {
+        let registry = ClientRegistry::open(&self.authority)
+            .map_err(|error| KernelError::ClientAuthority(ClientAuthorityError::Registry(error)))?;
+        match registry.resolve_active(client_id, key_id.0) {
+            Ok(_) => Ok(false),
+            Err(ClientRegistryError::UnknownClient) => Ok(true),
+            Err(ClientRegistryError::ClientKeyMismatch | ClientRegistryError::RevokedClient) => {
+                Ok(false)
+            }
+            Err(error) => Err(KernelError::ClientAuthority(ClientAuthorityError::Registry(
+                error,
+            ))),
+        }
+    }
+
     fn require_client_enrollment_authority(
         &mut self,
         principal: Principal<'_>,
@@ -189,7 +208,13 @@ mod tests {
         let authority = AuthorityLayout::initialize(&runtime).unwrap();
         let store = ClientCredentialStore::new(&authority);
         let generated = store.generate(ClientId(702)).unwrap();
+        let mismatched = store.generate(ClientId(703)).unwrap();
         let mut kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
+        assert!(
+            kernel
+                .client_requires_bootstrap_enrollment(generated.client_id, generated.key_id)
+                .unwrap()
+        );
         let enrolled = kernel
             .enroll_precreated_client(
                 Principal::local_owner("owner"),
@@ -200,6 +225,12 @@ mod tests {
                 "local-owner",
             )
             .unwrap();
+        assert!(!kernel
+            .client_requires_bootstrap_enrollment(generated.client_id, generated.key_id)
+            .unwrap());
+        assert!(!kernel
+            .client_requires_bootstrap_enrollment(generated.client_id, mismatched.key_id)
+            .unwrap());
         assert_eq!(enrolled.credential, generated);
         assert_eq!(enrolled.record.client_id, ClientId(702));
         drop(kernel);
@@ -223,7 +254,7 @@ mod tests {
                 KernelError::AuthorizationDenied(_)
             ))
         ));
-        let authority = AuthorityLayout::initialize(&runtime).unwrap();
+        let authority = golam_core::authority::AuthorityLayout::initialize(&runtime).unwrap();
         assert_eq!(fs::read_dir(authority.credential_dir()).unwrap().count(), 0);
         drop(kernel);
         fs::remove_dir_all(runtime.root).unwrap();
