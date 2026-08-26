@@ -5,6 +5,7 @@ use std::fmt;
 
 use golam_core::ClientId;
 use golam_ipc::credentials::{ClientCredentialStore, CredentialError, GeneratedClientCredential};
+use golam_ipc::lifecycle::ClientKeyId;
 use golam_ledger::clients::{ClientKind, ClientRecord};
 
 use crate::{
@@ -75,13 +76,7 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         enrolled_at: &str,
         scope: &str,
     ) -> Result<EnrolledClientCredential, ClientEnrollmentError> {
-        let resource = format!("client:{}", client_id.0);
-        self.require_authority(&AuthorizationRequest {
-            principal,
-            action: "client.enroll",
-            resource: &resource,
-            context: AuthorizationContext::local(scope),
-        })?;
+        self.require_client_enrollment_authority(principal, client_id, scope)?;
 
         let store = ClientCredentialStore::new(&self.authority);
         let generated = store.generate(client_id)?;
@@ -102,12 +97,52 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             },
         }
     }
+
+    pub fn enroll_precreated_client(
+        &mut self,
+        principal: Principal<'_>,
+        client_id: ClientId,
+        key_id: ClientKeyId,
+        kind: ClientKind,
+        enrolled_at: &str,
+        scope: &str,
+    ) -> Result<EnrolledClientCredential, ClientEnrollmentError> {
+        self.require_client_enrollment_authority(principal, client_id, scope)?;
+
+        let store = ClientCredentialStore::new(&self.authority);
+        let generated = store.inspect(client_id, key_id)?;
+        let record = self
+            .clients
+            .enroll_generated(&generated, kind, principal.subject, enrolled_at)
+            .map_err(|error| ClientEnrollmentError::Registry(Box::new(error)))?;
+        Ok(EnrolledClientCredential {
+            credential: generated,
+            record,
+        })
+    }
+
+    fn require_client_enrollment_authority(
+        &mut self,
+        principal: Principal<'_>,
+        client_id: ClientId,
+        scope: &str,
+    ) -> Result<(), ClientEnrollmentError> {
+        let resource = format!("client:{}", client_id.0);
+        self.require_authority(&AuthorizationRequest {
+            principal,
+            action: "client.enroll",
+            resource: &resource,
+            context: AuthorizationContext::local(scope),
+        })?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{BootstrapPolicy, Principal};
+    use golam_core::authority::AuthorityLayout;
     use golam_core::paths::RuntimeLayout;
     use std::fs;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -149,6 +184,29 @@ mod tests {
     }
 
     #[test]
+    fn precreated_credential_is_reverified_before_kernel_enrollment() {
+        let runtime = runtime();
+        let authority = AuthorityLayout::initialize(&runtime).unwrap();
+        let store = ClientCredentialStore::new(&authority);
+        let generated = store.generate(ClientId(702)).unwrap();
+        let mut kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
+        let enrolled = kernel
+            .enroll_precreated_client(
+                Principal::local_owner("owner"),
+                generated.client_id,
+                generated.key_id,
+                ClientKind::Cli,
+                "2026-08-26T01:22:00Z",
+                "local-owner",
+            )
+            .unwrap();
+        assert_eq!(enrolled.credential, generated);
+        assert_eq!(enrolled.record.client_id, ClientId(702));
+        drop(kernel);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
     fn denied_enrollment_creates_no_credential_file() {
         let runtime = runtime();
         let mut kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
@@ -165,7 +223,7 @@ mod tests {
                 KernelError::AuthorizationDenied(_)
             ))
         ));
-        let authority = golam_core::authority::AuthorityLayout::initialize(&runtime).unwrap();
+        let authority = AuthorityLayout::initialize(&runtime).unwrap();
         assert_eq!(fs::read_dir(authority.credential_dir()).unwrap().count(), 0);
         drop(kernel);
         fs::remove_dir_all(runtime.root).unwrap();
