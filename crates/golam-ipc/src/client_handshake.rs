@@ -8,8 +8,7 @@ use ed25519_dalek::{Signer, SigningKey};
 use golam_core::{ClientId, PROTOCOL_VERSION, ResourceLimits};
 
 use crate::lifecycle::{
-    AuthTranscript, Authenticate, Challenge, ClientKeyId, Hello, LifecycleError, LifecycleMessage,
-    Ready,
+    AuthTranscript, Authenticate, ClientKeyId, Hello, LifecycleError, LifecycleMessage, Ready,
 };
 use crate::wire::{WireError, read_frame, write_frame};
 use crate::{FrameHeader, FrameKind};
@@ -183,7 +182,7 @@ fn write_lifecycle<S: Write>(
 mod tests {
     use super::*;
     use crate::credentials::key_id_for_public_key;
-    use crate::lifecycle::{ConnectionId, EnrolledClientKey};
+    use crate::lifecycle::{Challenge, ConnectionId, EnrolledClientKey};
     use crate::wire::read_frame;
     use crate::{FrameKind, encode_frame};
     use ed25519_dalek::VerifyingKey;
