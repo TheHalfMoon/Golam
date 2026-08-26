@@ -125,6 +125,30 @@ pub struct AcceptedUnixPeer {
     pub identity: PeerIdentity,
 }
 
+pub fn connect_same_user(layout: &RuntimeLayout) -> Result<UnixStream, UnixTransportError> {
+    layout.require_authority_ready()?;
+    verify_runtime_directory(&layout.runtime_dir)?;
+    let socket_path = layout.runtime_dir.join(SOCKET_NAME);
+    validate_socket_path_length(&socket_path)?;
+    verify_socket_permissions(&socket_path)?;
+
+    let stream = UnixStream::connect(&socket_path)?;
+    let identity = peer_identity(&stream)?;
+    let expected_uid = Uid::effective().as_raw();
+    if identity.uid != expected_uid {
+        return Err(UnixTransportError::PeerUidMismatch {
+            expected: expected_uid,
+            actual: identity.uid,
+        });
+    }
+    if let Some(pid) = identity.pid
+        && pid <= 0
+    {
+        return Err(UnixTransportError::InvalidPeerPid(pid));
+    }
+    Ok(stream)
+}
+
 pub struct UnixTransportListener {
     listener: UnixListener,
     socket_path: PathBuf,
@@ -225,6 +249,10 @@ fn validate_socket_path_length(path: &Path) -> Result<(), UnixTransportError> {
 
 fn set_and_verify_socket_permissions(path: &Path) -> Result<(), UnixTransportError> {
     fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+    verify_socket_permissions(path)
+}
+
+fn verify_socket_permissions(path: &Path) -> Result<(), UnixTransportError> {
     let metadata = fs::symlink_metadata(path)?;
     if !metadata.file_type().is_socket() {
         return Err(UnixTransportError::SocketPathNotSocket(path.to_path_buf()));
@@ -299,7 +327,7 @@ mod tests {
     }
 
     #[test]
-    fn listener_is_private_and_accepts_only_kernel_reported_same_user() {
+    fn listener_is_private_and_client_verifies_same_user_peer() {
         let layout = test_layout();
         let listener = UnixTransportListener::bind(&layout).unwrap();
         let path = listener.socket_path().to_path_buf();
@@ -315,13 +343,15 @@ mod tests {
             0o700
         );
 
-        let client_path = path.clone();
-        let client = thread::spawn(move || UnixStream::connect(client_path).unwrap());
+        let client_layout = layout.clone();
+        let client = thread::spawn(move || connect_same_user(&client_layout).unwrap());
         let accepted = listener.accept_same_user().unwrap();
-        let _client_stream = client.join().unwrap();
+        let client_stream = client.join().unwrap();
 
         assert_eq!(accepted.identity.uid, Uid::effective().as_raw());
         assert_eq!(accepted.identity.pid, Some(std::process::id() as i32));
+        assert_eq!(peer_identity(&client_stream).unwrap().uid, Uid::effective().as_raw());
+        drop(client_stream);
         drop(accepted);
         drop(listener);
         assert!(!path.exists());
@@ -339,6 +369,18 @@ mod tests {
             Err(UnixTransportError::SocketPathExists(existing)) if existing == path
         ));
         assert_eq!(fs::read(&path).unwrap(), b"do-not-delete");
+        remove_layout(&layout);
+    }
+
+    #[test]
+    fn client_rejects_non_socket_endpoint_before_connect() {
+        let layout = test_layout();
+        let path = layout.runtime_dir.join(SOCKET_NAME);
+        fs::write(&path, b"not-a-socket").unwrap();
+        assert!(matches!(
+            connect_same_user(&layout),
+            Err(UnixTransportError::SocketPathNotSocket(existing)) if existing == path
+        ));
         remove_layout(&layout);
     }
 
