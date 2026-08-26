@@ -6,6 +6,7 @@ use std::fmt;
 use golam_core::authority::AuthorityLayout;
 use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 
+use crate::security_audit::{self, AuthorizationAuditInput};
 use crate::storage::{AuthorityStore, StorageError};
 
 const AUTHORIZATION_DECISION_DOMAIN: &[u8] = b"golam:authorization-decision:v1";
@@ -58,6 +59,7 @@ pub struct StoredAuthorizationDecision {
 pub enum AuthorizationAuditError {
     Storage(StorageError),
     Sqlite(rusqlite::Error),
+    SecurityAudit(String),
     InvalidMetadata,
     SequenceOverflow,
     InvalidStoredRecord,
@@ -68,6 +70,7 @@ impl fmt::Display for AuthorizationAuditError {
         match self {
             Self::Storage(error) => write!(f, "authorization audit authority-store error: {error}"),
             Self::Sqlite(error) => write!(f, "authorization audit sqlite error: {error}"),
+            Self::SecurityAudit(error) => write!(f, "authorization integrity-chain error: {error}"),
             Self::InvalidMetadata => f.write_str(
                 "authorization audit principal, action, resource and reason code are required",
             ),
@@ -84,7 +87,10 @@ impl Error for AuthorizationAuditError {
         match self {
             Self::Storage(error) => Some(error),
             Self::Sqlite(error) => Some(error),
-            Self::InvalidMetadata | Self::SequenceOverflow | Self::InvalidStoredRecord => None,
+            Self::SecurityAudit(_)
+            | Self::InvalidMetadata
+            | Self::SequenceOverflow
+            | Self::InvalidStoredRecord => None,
         }
     }
 }
@@ -149,6 +155,20 @@ impl AuthorizationAuditLog {
                 i64::try_from(global_seq).map_err(|_| AuthorizationAuditError::SequenceOverflow)?,
             ],
         )?;
+        security_audit::append_authorization_decision(
+            &transaction,
+            AuthorizationAuditInput {
+                decision_id: &decision_id,
+                principal: input.principal,
+                action: input.action,
+                resource: input.resource,
+                context_hash: &context_hash,
+                decision: input.decision.as_str(),
+                reason_code: input.reason_code,
+                global_seq,
+            },
+        )
+        .map_err(|error| AuthorizationAuditError::SecurityAudit(error.to_string()))?;
         transaction.commit()?;
 
         Ok(StoredAuthorizationDecision {
