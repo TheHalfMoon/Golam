@@ -8,8 +8,8 @@ use golam_ipc::credentials::{ClientCredentialStore, CredentialError, GeneratedCl
 use golam_ledger::clients::{ClientKind, ClientRecord};
 
 use crate::{
-    AuthorizationContext, AuthorizationPolicy, AuthorizationRequest, ClientAuthorityError, KernelApi,
-    KernelError, Principal,
+    AuthorizationContext, AuthorizationPolicy, AuthorizationRequest, ClientAuthorityError,
+    KernelApi, KernelError, Principal,
 };
 
 #[derive(Debug)]
@@ -158,7 +158,9 @@ mod tests {
         );
         assert!(matches!(
             result,
-            Err(ClientEnrollmentError::Kernel(KernelError::AuthorizationDenied(_)))
+            Err(ClientEnrollmentError::Kernel(
+                KernelError::AuthorizationDenied(_)
+            ))
         ));
         let authority = golam_core::authority::AuthorityLayout::initialize(&runtime).unwrap();
         assert_eq!(fs::read_dir(authority.credential_dir()).unwrap().count(), 0);
