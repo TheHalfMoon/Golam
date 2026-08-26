@@ -86,7 +86,7 @@ fn sqlite_full_before_durable_dispatch_rolls_back_attempt_and_state() {
     let transaction = connection
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .unwrap();
-    let oversized_dispatch_token = vec![0x5a; 4 * 1024 * 1024];
+    let oversized_dispatch_token = vec![0x5a_u8; 4 * 1024 * 1024];
     let error = transaction
         .execute(
             "INSERT INTO effect_attempts (attempt_id, effect_id, started_global_seq, handler_id, \
