@@ -83,11 +83,9 @@ fn replay_checkpoint_and_fallback_are_equivalent_across_prefix_lengths() {
 
         let through = 1 + extra_events;
         let checkpoint_id = CheckpointId(40_000 + u128::from(extra_events));
-        let mut checkpoints = CheckpointManager::open(
-            authority_layout.authority_db_path(),
-            &runtime.artifact_dir,
-        )
-        .unwrap();
+        let mut checkpoints =
+            CheckpointManager::open(authority_layout.authority_db_path(), &runtime.artifact_dir)
+                .unwrap();
         let replay_before = checkpoints.replay_projection(session_id, through).unwrap();
         let created = checkpoints
             .create(
@@ -142,7 +140,13 @@ fn fork_anchor_is_immutable_across_multiple_parent_prefixes() {
                 security_critical: true,
             })
             .unwrap();
-        append_payload_events(&mut authority, parent, 1, 3, 90_000 + u128::from(through) * 100);
+        append_payload_events(
+            &mut authority,
+            parent,
+            1,
+            3,
+            90_000 + u128::from(through) * 100,
+        );
 
         let mut forks = ForkManager::open(authority_layout.authority_db_path()).unwrap();
         let created = forks
@@ -206,7 +210,10 @@ fn hash_chain_is_deterministic_and_parent_sensitive_across_corpus() {
         let event_hash = event_integrity_hash(&record).unwrap();
         let audit_hash = audit_integrity_hash(&record, event_hash).unwrap();
         assert_eq!(event_hash, event_integrity_hash(&record).unwrap());
-        assert_eq!(audit_hash, audit_integrity_hash(&record, event_hash).unwrap());
+        assert_eq!(
+            audit_hash,
+            audit_integrity_hash(&record, event_hash).unwrap()
+        );
 
         let mut changed_parent = record.clone();
         changed_parent.previous_session_event_hash = Some([seed.wrapping_add(1); 32]);
