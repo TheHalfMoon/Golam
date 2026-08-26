@@ -69,7 +69,8 @@ pub fn write_frame<W: Write>(
     payload: &[u8],
     limits: ResourceLimits,
 ) -> Result<(), WireError> {
-    if usize::try_from(header.payload_len).expect("u32 payload length fits usize") != payload.len() {
+    if usize::try_from(header.payload_len).expect("u32 payload length fits usize") != payload.len()
+    {
         return Err(WireError::Ipc(IpcError::LengthMismatch {
             expected: header.frame_len(),
             actual: FRAME_HEADER_LEN + payload.len(),
