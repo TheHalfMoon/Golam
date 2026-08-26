@@ -25,8 +25,15 @@ pub enum ProtectedPathError {
     Io(io::Error),
     Symlink(PathBuf),
     NotDirectory(PathBuf),
-    PermissionsTooBroad { path: PathBuf, mode: u32 },
-    OwnershipMismatch { path: PathBuf, expected: u32, actual: u32 },
+    PermissionsTooBroad {
+        path: PathBuf,
+        mode: u32,
+    },
+    OwnershipMismatch {
+        path: PathBuf,
+        expected: u32,
+        actual: u32,
+    },
     WindowsAclMissing(PathBuf),
     WindowsAclMismatch(PathBuf),
     WindowsAclNotProtected(PathBuf),
@@ -47,7 +54,11 @@ impl fmt::Display for ProtectedPathError {
                 "protected directory permissions are too broad: {} mode {mode:o}",
                 path.display()
             ),
-            Self::OwnershipMismatch { path, expected, actual } => write!(
+            Self::OwnershipMismatch {
+                path,
+                expected,
+                actual,
+            } => write!(
                 f,
                 "protected Unix path owner mismatch at {}: expected uid {expected}, actual uid {actual}",
                 path.display()

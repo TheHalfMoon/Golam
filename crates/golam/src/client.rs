@@ -57,7 +57,9 @@ impl<S: Read> Read for DeadlineIo<S> {
             match self.inner.read(buffer) {
                 Ok(read) => return Ok(read),
                 Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-                Err(error) if error.kind() == io::ErrorKind::WouldBlock => self.wait_for_progress()?,
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                    self.wait_for_progress()?
+                }
                 Err(error) => return Err(error),
             }
         }
@@ -70,7 +72,9 @@ impl<S: Write> Write for DeadlineIo<S> {
             match self.inner.write(buffer) {
                 Ok(written) => return Ok(written),
                 Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
-                Err(error) if error.kind() == io::ErrorKind::WouldBlock => self.wait_for_progress()?,
+                Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                    self.wait_for_progress()?
+                }
                 Err(error) => return Err(error),
             }
         }

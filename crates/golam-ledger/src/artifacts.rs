@@ -166,10 +166,7 @@ impl ArtifactStore {
         Ok(removed)
     }
 
-    fn validated_receipt_path(
-        &self,
-        receipt: &ArtifactReceipt,
-    ) -> Result<PathBuf, ArtifactError> {
+    fn validated_receipt_path(&self, receipt: &ArtifactReceipt) -> Result<PathBuf, ArtifactError> {
         let hex = hash_hex(receipt.hash);
         let expected_relative = PathBuf::from(&hex[..2]).join(&hex);
         if receipt.relative_path != expected_relative {
@@ -183,11 +180,9 @@ impl ArtifactStore {
             return Err(ArtifactError::Symlink(prefix));
         }
         if !metadata.is_dir() {
-            return Err(io::Error::new(
-                io::ErrorKind::NotADirectory,
-                prefix.display().to_string(),
-            )
-            .into());
+            return Err(
+                io::Error::new(io::ErrorKind::NotADirectory, prefix.display().to_string()).into(),
+            );
         }
         Ok(self.root.join(expected_relative))
     }
@@ -318,10 +313,10 @@ mod tests {
         let root = unique_root();
         let store = ArtifactStore::open(&root).unwrap();
         let receipt = store.install_bytes(b"checkpoint bytes").unwrap();
-        let outside = root.parent().unwrap().join(format!(
-            "golam-artifact-outside-{}",
-            std::process::id()
-        ));
+        let outside = root
+            .parent()
+            .unwrap()
+            .join(format!("golam-artifact-outside-{}", std::process::id()));
         fs::write(&outside, b"checkpoint bytes").unwrap();
         let forged = ArtifactReceipt {
             relative_path: PathBuf::from("..").join(outside.file_name().unwrap()),

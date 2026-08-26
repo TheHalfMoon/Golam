@@ -110,9 +110,7 @@ fn reject_symlink_components(root: &Path, relative: &Path) -> Result<(), Protect
     let mut current = root.to_path_buf();
     for component in relative.components() {
         if !matches!(component, Component::Normal(_)) {
-            return Err(ProtectedResourceError::OutsideRuntime(
-                root.join(relative),
-            ));
+            return Err(ProtectedResourceError::OutsideRuntime(root.join(relative)));
         }
         current.push(component.as_os_str());
         match fs::symlink_metadata(&current) {

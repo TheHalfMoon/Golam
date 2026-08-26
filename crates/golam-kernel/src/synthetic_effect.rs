@@ -147,7 +147,10 @@ pub enum SyntheticEffectError {
     IdentifierOverflow(EffectId),
     EffectNotFound(EffectId),
     MissingAttempt(EffectId),
-    NotReconcilable { effect_id: EffectId, actual: String },
+    NotReconcilable {
+        effect_id: EffectId,
+        actual: String,
+    },
     AttemptMismatch {
         expected: EffectAttemptId,
         actual: EffectAttemptId,
@@ -684,10 +687,7 @@ mod tests {
         );
         let attempt = effects.attempt(prepared.attempt_id()).unwrap().unwrap();
         assert_eq!(attempt.outcome, "unknown");
-        assert_eq!(
-            attempt.finished_at.as_deref(),
-            Some("2026-08-25T13:45:31Z")
-        );
+        assert_eq!(attempt.finished_at.as_deref(), Some("2026-08-25T13:45:31Z"));
         drop(effects);
         fs::remove_dir_all(runtime.root).unwrap();
     }
