@@ -10,9 +10,7 @@ use connection::{BootstrapApprover, ConnectionMaterial, serve_connection};
 use golam_core::paths::RuntimeLayout;
 use golam_core::runtime_home::default_runtime_root;
 use golam_core::{ClientId, ResourceLimits};
-use golam_ipc::client_handshake::{
-    random_connection_id, random_server_epoch, random_server_nonce,
-};
+use golam_ipc::client_handshake::{random_connection_id, random_server_epoch, random_server_nonce};
 use golam_ipc::lifecycle::ClientKeyId;
 use golam_kernel::{BootstrapPolicy, KernelStartup, start_kernel};
 use golamd::CommandRouter;
