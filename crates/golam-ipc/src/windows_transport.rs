@@ -14,6 +14,8 @@ use widestring::U16CString;
 const PIPE_PREFIX: &str = r"\\.\pipe\golamd-";
 const MAX_PIPE_PATH_UTF16: usize = 240;
 
+type DuplexPipeStream = PipeStream<pipe_mode::Bytes, pipe_mode::Bytes>;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct WindowsPeerIdentity {
     pub process_id: u32,
@@ -85,8 +87,23 @@ impl From<ProtectedPathError> for WindowsTransportError {
 }
 
 pub struct AcceptedWindowsPeer {
-    pub stream: PipeStream<pipe_mode::Bytes, pipe_mode::Bytes>,
+    pub stream: DuplexPipeStream,
     pub identity: WindowsPeerIdentity,
+}
+
+pub fn connect_current_user(
+    layout: &RuntimeLayout,
+) -> Result<DuplexPipeStream, WindowsTransportError> {
+    layout.require_authority_ready()?;
+    let owner_sid = windows_current_process_sid_string()?;
+    let pipe_path = format!("{PIPE_PREFIX}{owner_sid}");
+    validate_pipe_path(&pipe_path)?;
+
+    let stream = DuplexPipeStream::connect_by_path(pipe_path.as_str())?;
+    if stream.peer_process_id()? == 0 {
+        return Err(WindowsTransportError::InvalidPeerProcessId);
+    }
+    Ok(stream)
 }
 
 pub struct WindowsPipeListener {
@@ -203,18 +220,15 @@ mod tests {
     }
 
     #[test]
-    fn current_user_acl_pipe_accepts_local_client_and_reports_peer_metadata() {
+    fn current_user_acl_pipe_connects_verified_local_client_and_reports_peer_metadata() {
         let layout = test_layout();
         layout.require_authority_ready().unwrap();
         let listener = WindowsPipeListener::bind(&layout, ResourceLimits::default()).unwrap();
         assert!(listener.pipe_path().starts_with(PIPE_PREFIX));
         assert!(listener.owner_sid().starts_with("S-1-"));
 
-        let path = listener.pipe_path().to_string();
-        let client = thread::spawn(move || {
-            PipeStream::<pipe_mode::Bytes, pipe_mode::Bytes>::connect_by_path(path.as_str())
-                .unwrap()
-        });
+        let client_layout = layout.clone();
+        let client = thread::spawn(move || connect_current_user(&client_layout).unwrap());
         let accepted = listener.accept().unwrap();
         let client_stream = client.join().unwrap();
 
