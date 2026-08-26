@@ -499,6 +499,7 @@ mod tests {
                 .unwrap()
         );
         drop(kernel);
+        drop(router);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 
@@ -535,6 +536,7 @@ mod tests {
                 .unwrap()
         );
         drop(kernel);
+        drop(router);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 
@@ -578,6 +580,7 @@ mod tests {
             })
         ));
         assert_eq!(approval.calls, 0);
+        drop(router);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 }
