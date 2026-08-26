@@ -104,7 +104,9 @@ pub fn execute(runtime: &RuntimeLayout, command: &Command) -> Result<ReplyMessag
             }
             message
         }
-        ServerAction::Event => return Err("unexpected daemon event while awaiting CLI reply".into()),
+        ServerAction::Event => {
+            return Err("unexpected daemon event while awaiting CLI reply".into());
+        }
     };
     write_shutdown(&mut stream, ready.limits)?;
     Ok(reply)
@@ -193,10 +195,7 @@ fn parse_credential_filename(
     if client_id.0 == 0 {
         return Err("protected credential filename contains a zero client id".into());
     }
-    Ok(Some((
-        client_id,
-        ClientKeyId(decode_hex_32(key_hex)?),
-    )))
+    Ok(Some((client_id, ClientKeyId(decode_hex_32(key_hex)?))))
 }
 
 fn write_shutdown<S: Write>(stream: &mut S, limits: ResourceLimits) -> Result<(), Box<dyn Error>> {
@@ -261,10 +260,9 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        RuntimeLayout::initialize(std::env::temp_dir().join(format!(
-            "golam-cli-client-{}-{t}-{n}",
-            std::process::id()
-        )))
+        RuntimeLayout::initialize(
+            std::env::temp_dir().join(format!("golam-cli-client-{}-{t}-{n}", std::process::id())),
+        )
         .unwrap()
     }
 
@@ -285,7 +283,10 @@ mod tests {
         let authority = AuthorityLayout::initialize(&runtime).unwrap();
         let store = ClientCredentialStore::new(&authority);
         let generated = store.generate(ClientId(3003)).unwrap();
-        assert_eq!(single_execution_credential(&authority, &store).unwrap(), generated);
+        assert_eq!(
+            single_execution_credential(&authority, &store).unwrap(),
+            generated
+        );
         fs::remove_dir_all(runtime.root).unwrap();
     }
 
