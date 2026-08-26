@@ -5,8 +5,9 @@ use std::fmt;
 
 use golam_core::ClientId;
 use golam_core::authority::AuthorityLayout;
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, TransactionBehavior, params};
 
+use crate::security_audit::{self, RecoveryIncidentAuditInput};
 use crate::storage::{AuthorityStore, StorageError};
 
 const PROTOCOL_AUDIT_DOMAIN: &[u8] = b"golam:protocol-audit:v1";
@@ -81,6 +82,7 @@ pub struct ProtocolAuditRecord {
 pub enum ProtocolAuditError {
     Storage(StorageError),
     Sqlite(rusqlite::Error),
+    SecurityAudit(String),
     InvalidMetadata,
     InvalidStoredRecord,
 }
@@ -90,6 +92,7 @@ impl fmt::Display for ProtocolAuditError {
         match self {
             Self::Storage(error) => write!(f, "protocol audit authority-store error: {error}"),
             Self::Sqlite(error) => write!(f, "protocol audit sqlite error: {error}"),
+            Self::SecurityAudit(error) => write!(f, "protocol audit integrity-chain error: {error}"),
             Self::InvalidMetadata => {
                 f.write_str("protocol audit connection id and detected-at metadata are required")
             }
@@ -103,7 +106,7 @@ impl Error for ProtocolAuditError {
         match self {
             Self::Storage(error) => Some(error),
             Self::Sqlite(error) => Some(error),
-            Self::InvalidMetadata | Self::InvalidStoredRecord => None,
+            Self::SecurityAudit(_) | Self::InvalidMetadata | Self::InvalidStoredRecord => None,
         }
     }
 }
@@ -145,7 +148,11 @@ impl ProtocolAuditLog {
         let incident_id = protocol_incident_id(input.connection_id);
         let affected_refs =
             encode_affected_refs(input.connection_id, input.client_id, input.key_id);
-        self.connection.execute(
+        let resolution = input.reason.as_str().as_bytes();
+        let transaction = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        transaction.execute(
             "INSERT INTO recovery_incidents \
              (incident_id, detected_at, kind, severity, affected_refs, recovery_mode, resolution) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
@@ -154,11 +161,25 @@ impl ProtocolAuditLog {
                 input.detected_at,
                 PROTOCOL_INCIDENT_KIND,
                 PROTOCOL_INCIDENT_SEVERITY,
-                affected_refs,
+                &affected_refs,
                 PROTOCOL_RECOVERY_MODE,
-                input.reason.as_str().as_bytes(),
+                resolution,
             ],
         )?;
+        security_audit::append_recovery_incident(
+            &transaction,
+            RecoveryIncidentAuditInput {
+                incident_id: &incident_id,
+                detected_at: input.detected_at,
+                kind: PROTOCOL_INCIDENT_KIND,
+                severity: PROTOCOL_INCIDENT_SEVERITY,
+                affected_refs: &affected_refs,
+                recovery_mode: PROTOCOL_RECOVERY_MODE,
+                resolution: Some(resolution),
+            },
+        )
+        .map_err(|error| ProtocolAuditError::SecurityAudit(error.to_string()))?;
+        transaction.commit()?;
         Ok(ProtocolAuditRecord {
             connection_id: input.connection_id,
             client_id: input.client_id,
