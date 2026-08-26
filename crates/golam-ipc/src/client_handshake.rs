@@ -119,13 +119,11 @@ pub fn authenticate_client<S: Read + Write>(
             actual: challenge_frame.header.kind,
         });
     }
-    let challenge = match LifecycleMessage::decode(
-        challenge_frame.header.kind,
-        &challenge_frame.payload,
-    )? {
-        LifecycleMessage::Challenge(challenge) => challenge,
-        _ => unreachable!("challenge frame decodes to challenge lifecycle message"),
-    };
+    let challenge =
+        match LifecycleMessage::decode(challenge_frame.header.kind, &challenge_frame.payload)? {
+            LifecycleMessage::Challenge(challenge) => challenge,
+            _ => unreachable!("challenge frame decodes to challenge lifecycle message"),
+        };
 
     let transcript = AuthTranscript::from_messages(hello, challenge)?;
     let signature = signing_key
@@ -224,8 +222,8 @@ mod tests {
 
     fn server_script(challenge: Challenge, ready: Ready, local_limits: ResourceLimits) -> Vec<u8> {
         let challenge_payload = LifecycleMessage::Challenge(challenge).encode_payload();
-        let mut bytes = encode_frame(FrameKind::Challenge, None, &challenge_payload, local_limits)
-            .unwrap();
+        let mut bytes =
+            encode_frame(FrameKind::Challenge, None, &challenge_payload, local_limits).unwrap();
         let ready_payload = LifecycleMessage::Ready(ready).encode_payload();
         bytes.extend_from_slice(
             &encode_frame(FrameKind::Ready, None, &ready_payload, challenge.limits).unwrap(),
@@ -251,14 +249,8 @@ mod tests {
         let key_id = key_id_for_public_key(signing_key.verifying_key().to_bytes());
         let mut io = ScriptedIo::new(server_script(challenge, ready, local_limits));
 
-        let observed = authenticate_client(
-            &mut io,
-            ClientId(41),
-            key_id,
-            &signing_key,
-            local_limits,
-        )
-        .unwrap();
+        let observed =
+            authenticate_client(&mut io, ClientId(41), key_id, &signing_key, local_limits).unwrap();
         assert_eq!(observed, ready);
 
         let mut output = Cursor::new(io.output);
@@ -287,7 +279,8 @@ mod tests {
         let transcript = AuthTranscript::from_messages(hello, challenge).unwrap();
         let enrolled = EnrolledClientKey {
             key_id,
-            verifying_key: VerifyingKey::from_bytes(&signing_key.verifying_key().to_bytes()).unwrap(),
+            verifying_key: VerifyingKey::from_bytes(&signing_key.verifying_key().to_bytes())
+                .unwrap(),
         };
         let mut server = crate::lifecycle::ServerLifecycle::new(
             challenge.server_epoch,
