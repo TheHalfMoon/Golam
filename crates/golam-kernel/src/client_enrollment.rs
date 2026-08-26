@@ -14,11 +14,11 @@ use crate::{
 
 #[derive(Debug)]
 pub enum ClientEnrollmentError {
-    Kernel(KernelError),
+    Kernel(Box<KernelError>),
     Credential(CredentialError),
-    Registry(ClientAuthorityError),
+    Registry(Box<ClientAuthorityError>),
     RegistryCleanup {
-        registry: ClientAuthorityError,
+        registry: Box<ClientAuthorityError>,
         cleanup: CredentialError,
     },
 }
@@ -40,17 +40,17 @@ impl fmt::Display for ClientEnrollmentError {
 impl Error for ClientEnrollmentError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            Self::Kernel(error) => Some(error),
+            Self::Kernel(error) => Some(error.as_ref()),
             Self::Credential(error) => Some(error),
-            Self::Registry(error) => Some(error),
-            Self::RegistryCleanup { registry, .. } => Some(registry),
+            Self::Registry(error) => Some(error.as_ref()),
+            Self::RegistryCleanup { registry, .. } => Some(registry.as_ref()),
         }
     }
 }
 
 impl From<KernelError> for ClientEnrollmentError {
     fn from(value: KernelError) -> Self {
-        Self::Kernel(value)
+        Self::Kernel(Box::new(value))
     }
 }
 
@@ -94,8 +94,11 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
                 record,
             }),
             Err(registry) => match store.remove(generated.client_id, generated.key_id) {
-                Ok(()) => Err(ClientEnrollmentError::Registry(registry)),
-                Err(cleanup) => Err(ClientEnrollmentError::RegistryCleanup { registry, cleanup }),
+                Ok(()) => Err(ClientEnrollmentError::Registry(Box::new(registry))),
+                Err(cleanup) => Err(ClientEnrollmentError::RegistryCleanup {
+                    registry: Box::new(registry),
+                    cleanup,
+                }),
             },
         }
     }
@@ -158,9 +161,8 @@ mod tests {
         );
         assert!(matches!(
             result,
-            Err(ClientEnrollmentError::Kernel(
-                KernelError::AuthorizationDenied(_)
-            ))
+            Err(ClientEnrollmentError::Kernel(error))
+                if matches!(error.as_ref(), KernelError::AuthorizationDenied(_))
         ));
         let authority = golam_core::authority::AuthorityLayout::initialize(&runtime).unwrap();
         assert_eq!(fs::read_dir(authority.credential_dir()).unwrap().count(), 0);
