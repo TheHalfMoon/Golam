@@ -11,5 +11,8 @@ golam-ipc = { path = "../golam-ipc" }
 golam-kernel = { path = "../golam-kernel" }
 getrandom.workspace = true
 
+[dev-dependencies]
+ed25519-dalek.workspace = true
+
 [lints]
 workspace = true

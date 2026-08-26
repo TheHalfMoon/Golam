@@ -84,13 +84,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     let mut approval = ForegroundApproval;
     let limits = ResourceLimits::default();
     let server_epoch = random_nonzero_u64()?;
-    serve_local_loop(
-        &runtime,
-        &mut router,
-        &mut approval,
-        limits,
-        server_epoch,
-    )
+    serve_local_loop(&runtime, &mut router, &mut approval, limits, server_epoch)
 }
 
 #[cfg(unix)]
@@ -108,13 +102,8 @@ fn serve_local_loop(
     loop {
         let mut peer = listener.accept_same_user()?;
         let material = connection_material(limits, server_epoch)?;
-        if let Err(error) = serve_connection(
-            &mut peer.stream,
-            runtime,
-            router,
-            material,
-            approval,
-        ) {
+        if let Err(error) = serve_connection(&mut peer.stream, runtime, router, material, approval)
+        {
             eprintln!("golamd: connection rejected: {error}");
         }
     }
@@ -135,13 +124,8 @@ fn serve_local_loop(
     loop {
         let mut peer = listener.accept()?;
         let material = connection_material(limits, server_epoch)?;
-        if let Err(error) = serve_connection(
-            &mut peer.stream,
-            runtime,
-            router,
-            material,
-            approval,
-        ) {
+        if let Err(error) = serve_connection(&mut peer.stream, runtime, router, material, approval)
+        {
             eprintln!("golamd: connection rejected: {error}");
         }
     }
