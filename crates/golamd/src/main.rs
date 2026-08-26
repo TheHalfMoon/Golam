@@ -1,12 +1,15 @@
 #![forbid(unsafe_code)]
 
 mod connection;
+mod deadline_io;
 
 use std::error::Error;
 use std::io::{self, Write};
 use std::process::ExitCode;
+use std::time::Duration;
 
 use connection::{BootstrapApprover, ConnectionMaterial, serve_connection};
+use deadline_io::DeadlineIo;
 use golam_core::paths::RuntimeLayout;
 use golam_core::runtime_home::default_runtime_root;
 use golam_core::{ClientId, ResourceLimits};
@@ -14,6 +17,8 @@ use golam_ipc::client_handshake::{random_connection_id, random_server_epoch, ran
 use golam_ipc::lifecycle::ClientKeyId;
 use golam_kernel::{BootstrapPolicy, KernelStartup, start_kernel};
 use golamd::CommandRouter;
+
+const CONNECTION_DEADLINE: Duration = Duration::from_secs(30);
 
 struct ForegroundApproval;
 
@@ -101,10 +106,11 @@ fn serve_local_loop(
     let listener = UnixTransportListener::bind(runtime)?;
     eprintln!("golamd: listening on {}", listener.socket_path().display());
     loop {
-        let mut peer = listener.accept_same_user()?;
+        let peer = listener.accept_same_user()?;
+        peer.stream.set_nonblocking(true)?;
+        let mut stream = DeadlineIo::new(peer.stream, CONNECTION_DEADLINE);
         let material = connection_material(limits, server_epoch)?;
-        if let Err(error) = serve_connection(&mut peer.stream, runtime, router, material, approval)
-        {
+        if let Err(error) = serve_connection(&mut stream, runtime, router, material, approval) {
             eprintln!("golamd: connection rejected: {error}");
         }
     }
@@ -123,10 +129,11 @@ fn serve_local_loop(
     let listener = WindowsPipeListener::bind(runtime, limits)?;
     eprintln!("golamd: listening on {}", listener.pipe_path());
     loop {
-        let mut peer = listener.accept()?;
+        let peer = listener.accept()?;
+        peer.stream.set_nonblocking(true)?;
+        let mut stream = DeadlineIo::new(peer.stream, CONNECTION_DEADLINE);
         let material = connection_material(limits, server_epoch)?;
-        if let Err(error) = serve_connection(&mut peer.stream, runtime, router, material, approval)
-        {
+        if let Err(error) = serve_connection(&mut stream, runtime, router, material, approval) {
             eprintln!("golamd: connection rejected: {error}");
         }
     }
