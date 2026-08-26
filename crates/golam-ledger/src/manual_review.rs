@@ -8,9 +8,7 @@ use golam_core::{EffectAttemptId, EffectId, EffectTransitionId, EventId};
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
 use crate::effects::StoredEffectTransition;
-use crate::security_audit::{
-    self, EffectTransitionAuditInput, RecoveryIncidentAuditInput,
-};
+use crate::security_audit::{self, EffectTransitionAuditInput, RecoveryIncidentAuditInput};
 use crate::storage::{AuthorityStore, StorageError};
 
 const MANUAL_REVIEW_DOMAIN: &[u8] = b"golam:effect-manual-review:v1";
