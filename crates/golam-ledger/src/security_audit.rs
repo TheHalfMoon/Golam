@@ -9,11 +9,14 @@ use rusqlite::{Connection, OptionalExtension, Transaction, params};
 const CHAIN_NAME: &str = "authority-security";
 const RECORD_DOMAIN: &[u8] = b"golam:authority-security-audit:v1";
 
+pub(crate) const KIND_CLIENT_ENROLLED: &str = "client_enrolled";
+pub(crate) const KIND_CLIENT_REVOKED: &str = "client_revoked";
 pub(crate) const KIND_AUTHORIZATION_DECISION: &str = "authorization_decision";
 pub(crate) const KIND_EFFECT_INTENT: &str = "effect_intent";
 pub(crate) const KIND_EFFECT_TRANSITION: &str = "effect_transition";
 pub(crate) const KIND_EFFECT_ATTEMPT_STARTED: &str = "effect_attempt_started";
 pub(crate) const KIND_EFFECT_ATTEMPT_FINISHED: &str = "effect_attempt_finished";
+pub(crate) const KIND_RECOVERY_INCIDENT: &str = "recovery_incident";
 
 #[derive(Debug)]
 pub(crate) enum SecurityAuditError {
@@ -33,7 +36,9 @@ impl fmt::Display for SecurityAuditError {
             Self::InvalidRecord => f.write_str("authority security audit record is malformed"),
             Self::SequenceOverflow => f.write_str("authority security audit sequence overflow"),
             Self::Coverage(reason) => write!(f, "authority security audit coverage gap: {reason}"),
-            Self::Integrity(reason) => write!(f, "authority security audit integrity failure: {reason}"),
+            Self::Integrity(reason) => {
+                write!(f, "authority security audit integrity failure: {reason}")
+            }
         }
     }
 }
@@ -58,6 +63,21 @@ impl From<CoreError> for SecurityAuditError {
     fn from(value: CoreError) -> Self {
         Self::Core(value)
     }
+}
+
+pub(crate) struct ClientEnrollmentAuditInput<'a> {
+    pub client_id: &'a [u8],
+    pub key_id: &'a str,
+    pub public_key: &'a [u8],
+    pub kind: &'a str,
+    pub owner_principal: &'a str,
+    pub enrolled_at: &'a str,
+    pub assurance_class: &'a str,
+}
+
+pub(crate) struct ClientRevocationAuditInput<'a> {
+    pub client_id: &'a [u8],
+    pub revoked_at: &'a str,
 }
 
 pub(crate) struct AuthorizationAuditInput<'a> {
@@ -113,6 +133,32 @@ pub(crate) struct EffectAttemptFinishedAuditInput<'a> {
     pub finished_at: &'a str,
     pub outcome: &'a str,
     pub receipt: Option<&'a [u8]>,
+}
+
+pub(crate) struct RecoveryIncidentAuditInput<'a> {
+    pub incident_id: &'a [u8],
+    pub detected_at: &'a str,
+    pub kind: &'a str,
+    pub severity: &'a str,
+    pub affected_refs: &'a [u8],
+    pub recovery_mode: &'a str,
+    pub resolution: Option<&'a [u8]>,
+}
+
+pub(crate) fn append_client_enrollment(
+    transaction: &Transaction<'_>,
+    input: ClientEnrollmentAuditInput<'_>,
+) -> Result<(), SecurityAuditError> {
+    let payload = encode_client_enrollment(&input)?;
+    append_record(transaction, KIND_CLIENT_ENROLLED, input.client_id, &payload)
+}
+
+pub(crate) fn append_client_revocation(
+    transaction: &Transaction<'_>,
+    input: ClientRevocationAuditInput<'_>,
+) -> Result<(), SecurityAuditError> {
+    let payload = encode_client_revocation(&input)?;
+    append_record(transaction, KIND_CLIENT_REVOKED, input.client_id, &payload)
 }
 
 pub(crate) fn append_authorization_decision(
@@ -171,6 +217,19 @@ pub(crate) fn append_effect_attempt_finished(
         transaction,
         KIND_EFFECT_ATTEMPT_FINISHED,
         input.attempt_id,
+        &payload,
+    )
+}
+
+pub(crate) fn append_recovery_incident(
+    transaction: &Transaction<'_>,
+    input: RecoveryIncidentAuditInput<'_>,
+) -> Result<(), SecurityAuditError> {
+    let payload = encode_recovery_incident(&input)?;
+    append_record(
+        transaction,
+        KIND_RECOVERY_INCIDENT,
+        input.incident_id,
         &payload,
     )
 }
@@ -251,7 +310,8 @@ fn append_record(
 pub(crate) fn verify(connection: &Connection) -> Result<(), SecurityAuditError> {
     let table_exists = connection
         .query_row(
-            "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'authority_security_audit' LIMIT 1",
+            "SELECT 1 FROM sqlite_schema WHERE type = 'table' \
+             AND name = 'authority_security_audit' LIMIT 1",
             [],
             |row| row.get::<_, i64>(0),
         )
@@ -260,11 +320,14 @@ pub(crate) fn verify(connection: &Connection) -> Result<(), SecurityAuditError> 
 
     let protected_record_count: i64 = connection.query_row(
         "SELECT \
+           (SELECT COUNT(*) FROM clients) + \
+           (SELECT COUNT(*) FROM clients WHERE revoked_at IS NOT NULL) + \
            (SELECT COUNT(*) FROM authorization_decisions) + \
            (SELECT COUNT(*) FROM effect_intents) + \
            (SELECT COUNT(*) FROM effect_transitions) + \
            (SELECT COUNT(*) FROM effect_attempts) + \
-           (SELECT COUNT(*) FROM effect_attempts WHERE finished_at IS NOT NULL)",
+           (SELECT COUNT(*) FROM effect_attempts WHERE finished_at IS NOT NULL) + \
+           (SELECT COUNT(*) FROM recovery_incidents)",
         [],
         |row| row.get(0),
     )?;
@@ -287,8 +350,8 @@ pub(crate) fn verify(connection: &Connection) -> Result<(), SecurityAuditError> 
     let mut previous_hash = None;
     let mut last = None;
     while let Some(row) = rows.next()? {
-        let audit_seq = u64::try_from(row.get::<_, i64>(0)?)
-            .map_err(|_| SecurityAuditError::InvalidRecord)?;
+        let audit_seq =
+            u64::try_from(row.get::<_, i64>(0)?).map_err(|_| SecurityAuditError::InvalidRecord)?;
         if audit_seq != expected_seq {
             return Err(SecurityAuditError::Integrity(
                 "authority-security audit sequence is not contiguous",
@@ -335,67 +398,85 @@ pub(crate) fn verify(connection: &Connection) -> Result<(), SecurityAuditError> 
 }
 
 fn verify_coverage(connection: &Connection) -> Result<(), SecurityAuditError> {
-    let missing_authorization: i64 = connection.query_row(
+    require_zero_missing(
+        connection,
+        "SELECT COUNT(*) FROM clients c WHERE NOT EXISTS (\
+         SELECT 1 FROM authority_security_audit a \
+         WHERE a.record_kind = ?1 AND a.record_id = c.client_id)",
+        KIND_CLIENT_ENROLLED,
+        "client enrollment is missing integrity-chain coverage",
+    )?;
+    require_zero_missing(
+        connection,
+        "SELECT COUNT(*) FROM clients c WHERE c.revoked_at IS NOT NULL AND NOT EXISTS (\
+         SELECT 1 FROM authority_security_audit a \
+         WHERE a.record_kind = ?1 AND a.record_id = c.client_id)",
+        KIND_CLIENT_REVOKED,
+        "client revocation is missing integrity-chain coverage",
+    )?;
+    require_zero_missing(
+        connection,
         "SELECT COUNT(*) FROM authorization_decisions d WHERE NOT EXISTS (\
-           SELECT 1 FROM authority_security_audit a \
-           WHERE a.record_kind = ?1 AND a.record_id = d.decision_id)",
-        params![KIND_AUTHORIZATION_DECISION],
-        |row| row.get(0),
+         SELECT 1 FROM authority_security_audit a \
+         WHERE a.record_kind = ?1 AND a.record_id = d.decision_id)",
+        KIND_AUTHORIZATION_DECISION,
+        "authorization decision is missing integrity-chain coverage",
     )?;
-    if missing_authorization != 0 {
-        return Err(SecurityAuditError::Coverage(
-            "authorization decision is missing integrity-chain coverage",
-        ));
-    }
-    let missing_intents: i64 = connection.query_row(
+    require_zero_missing(
+        connection,
         "SELECT COUNT(*) FROM effect_intents i WHERE NOT EXISTS (\
-           SELECT 1 FROM authority_security_audit a \
-           WHERE a.record_kind = ?1 AND a.record_id = i.effect_id)",
-        params![KIND_EFFECT_INTENT],
-        |row| row.get(0),
+         SELECT 1 FROM authority_security_audit a \
+         WHERE a.record_kind = ?1 AND a.record_id = i.effect_id)",
+        KIND_EFFECT_INTENT,
+        "effect intent is missing integrity-chain coverage",
     )?;
-    if missing_intents != 0 {
-        return Err(SecurityAuditError::Coverage(
-            "effect intent is missing integrity-chain coverage",
-        ));
-    }
-    let missing_transitions: i64 = connection.query_row(
+    require_zero_missing(
+        connection,
         "SELECT COUNT(*) FROM effect_transitions t WHERE NOT EXISTS (\
-           SELECT 1 FROM authority_security_audit a \
-           WHERE a.record_kind = ?1 AND a.record_id = t.transition_id)",
-        params![KIND_EFFECT_TRANSITION],
-        |row| row.get(0),
+         SELECT 1 FROM authority_security_audit a \
+         WHERE a.record_kind = ?1 AND a.record_id = t.transition_id)",
+        KIND_EFFECT_TRANSITION,
+        "effect transition is missing integrity-chain coverage",
     )?;
-    if missing_transitions != 0 {
-        return Err(SecurityAuditError::Coverage(
-            "effect transition is missing integrity-chain coverage",
-        ));
-    }
-    let missing_started: i64 = connection.query_row(
+    require_zero_missing(
+        connection,
         "SELECT COUNT(*) FROM effect_attempts e WHERE NOT EXISTS (\
-           SELECT 1 FROM authority_security_audit a \
-           WHERE a.record_kind = ?1 AND a.record_id = e.attempt_id)",
-        params![KIND_EFFECT_ATTEMPT_STARTED],
-        |row| row.get(0),
+         SELECT 1 FROM authority_security_audit a \
+         WHERE a.record_kind = ?1 AND a.record_id = e.attempt_id)",
+        KIND_EFFECT_ATTEMPT_STARTED,
+        "effect attempt start is missing integrity-chain coverage",
     )?;
-    if missing_started != 0 {
-        return Err(SecurityAuditError::Coverage(
-            "effect attempt start is missing integrity-chain coverage",
-        ));
-    }
-    let missing_finished: i64 = connection.query_row(
+    require_zero_missing(
+        connection,
         "SELECT COUNT(*) FROM effect_attempts e WHERE e.finished_at IS NOT NULL AND NOT EXISTS (\
-           SELECT 1 FROM authority_security_audit a \
-           WHERE a.record_kind = ?1 AND a.record_id = e.attempt_id)",
-        params![KIND_EFFECT_ATTEMPT_FINISHED],
-        |row| row.get(0),
+         SELECT 1 FROM authority_security_audit a \
+         WHERE a.record_kind = ?1 AND a.record_id = e.attempt_id)",
+        KIND_EFFECT_ATTEMPT_FINISHED,
+        "effect attempt finish is missing integrity-chain coverage",
     )?;
-    if missing_finished != 0 {
-        return Err(SecurityAuditError::Coverage(
-            "finished effect attempt is missing integrity-chain coverage",
-        ));
-    }
+    require_zero_missing(
+        connection,
+        "SELECT COUNT(*) FROM recovery_incidents r WHERE NOT EXISTS (\
+         SELECT 1 FROM authority_security_audit a \
+         WHERE a.record_kind = ?1 AND a.record_id = r.incident_id)",
+        KIND_RECOVERY_INCIDENT,
+        "recovery incident is missing integrity-chain coverage",
+    )?;
     Ok(())
+}
+
+fn require_zero_missing(
+    connection: &Connection,
+    query: &str,
+    kind: &str,
+    reason: &'static str,
+) -> Result<(), SecurityAuditError> {
+    let missing: i64 = connection.query_row(query, params![kind], |row| row.get(0))?;
+    if missing == 0 {
+        Ok(())
+    } else {
+        Err(SecurityAuditError::Coverage(reason))
+    }
 }
 
 fn verify_head(
@@ -430,182 +511,327 @@ fn source_payload(
     record_id: &[u8],
 ) -> Result<Vec<u8>, SecurityAuditError> {
     match kind {
-        KIND_AUTHORIZATION_DECISION => {
-            let row = connection
-                .query_row(
-                    "SELECT principal, action, resource, context_hash, decision, reason_code, global_seq \
-                     FROM authorization_decisions WHERE decision_id = ?1",
-                    params![record_id],
-                    |row| {
-                        Ok((
-                            row.get::<_, String>(0)?,
-                            row.get::<_, String>(1)?,
-                            row.get::<_, String>(2)?,
-                            row.get::<_, Vec<u8>>(3)?,
-                            row.get::<_, String>(4)?,
-                            row.get::<_, String>(5)?,
-                            row.get::<_, i64>(6)?,
-                        ))
-                    },
-                )
-                .optional()?
-                .ok_or(SecurityAuditError::Coverage(
-                    "authorization audit record has no source row",
-                ))?;
-            encode_authorization(&AuthorizationAuditInput {
-                decision_id: record_id,
-                principal: &row.0,
-                action: &row.1,
-                resource: &row.2,
-                context_hash: &row.3,
-                decision: &row.4,
-                reason_code: &row.5,
-                global_seq: u64::try_from(row.6).map_err(|_| SecurityAuditError::InvalidRecord)?,
-            })
-        }
-        KIND_EFFECT_INTENT => {
-            let row = connection
-                .query_row(
-                    "SELECT session_id, requested_by, action, resource, risk_class, execution_semantics, \
-                     idempotency_key, preconditions, dependencies, payload_hash, proposed_event_id \
-                     FROM effect_intents WHERE effect_id = ?1",
-                    params![record_id],
-                    |row| {
-                        Ok((
-                            row.get::<_, Vec<u8>>(0)?,
-                            row.get::<_, String>(1)?,
-                            row.get::<_, String>(2)?,
-                            row.get::<_, String>(3)?,
-                            row.get::<_, String>(4)?,
-                            row.get::<_, String>(5)?,
-                            row.get::<_, Option<String>>(6)?,
-                            row.get::<_, Vec<u8>>(7)?,
-                            row.get::<_, Vec<u8>>(8)?,
-                            row.get::<_, Vec<u8>>(9)?,
-                            row.get::<_, Vec<u8>>(10)?,
-                        ))
-                    },
-                )
-                .optional()?
-                .ok_or(SecurityAuditError::Coverage(
-                    "effect-intent audit record has no source row",
-                ))?;
-            encode_effect_intent(&EffectIntentAuditInput {
-                effect_id: record_id,
-                session_id: &row.0,
-                requested_by: &row.1,
-                action: &row.2,
-                resource: &row.3,
-                risk_class: &row.4,
-                execution_semantics: &row.5,
-                idempotency_key: row.6.as_deref(),
-                preconditions: &row.7,
-                dependencies: &row.8,
-                payload_hash: &row.9,
-                proposed_event_id: &row.10,
-            })
-        }
-        KIND_EFFECT_TRANSITION => {
-            let row = connection
-                .query_row(
-                    "SELECT effect_id, global_seq, from_state, to_state, attempt_id, reason_code, evidence_ref, event_id \
-                     FROM effect_transitions WHERE transition_id = ?1",
-                    params![record_id],
-                    |row| {
-                        Ok((
-                            row.get::<_, Vec<u8>>(0)?,
-                            row.get::<_, i64>(1)?,
-                            row.get::<_, Option<String>>(2)?,
-                            row.get::<_, String>(3)?,
-                            row.get::<_, Option<Vec<u8>>>(4)?,
-                            row.get::<_, Option<String>>(5)?,
-                            row.get::<_, Option<Vec<u8>>>(6)?,
-                            row.get::<_, Vec<u8>>(7)?,
-                        ))
-                    },
-                )
-                .optional()?
-                .ok_or(SecurityAuditError::Coverage(
-                    "effect-transition audit record has no source row",
-                ))?;
-            encode_effect_transition(&EffectTransitionAuditInput {
-                transition_id: record_id,
-                effect_id: &row.0,
-                global_seq: u64::try_from(row.1).map_err(|_| SecurityAuditError::InvalidRecord)?,
-                from_state: row.2.as_deref(),
-                to_state: &row.3,
-                attempt_id: row.4.as_deref(),
-                reason_code: row.5.as_deref(),
-                evidence_ref: row.6.as_deref(),
-                event_id: &row.7,
-            })
-        }
-        KIND_EFFECT_ATTEMPT_STARTED => {
-            let row = connection
-                .query_row(
-                    "SELECT effect_id, started_global_seq, handler_id, handler_version, dispatch_token, started_at \
-                     FROM effect_attempts WHERE attempt_id = ?1",
-                    params![record_id],
-                    |row| {
-                        Ok((
-                            row.get::<_, Vec<u8>>(0)?,
-                            row.get::<_, i64>(1)?,
-                            row.get::<_, String>(2)?,
-                            row.get::<_, String>(3)?,
-                            row.get::<_, Vec<u8>>(4)?,
-                            row.get::<_, String>(5)?,
-                        ))
-                    },
-                )
-                .optional()?
-                .ok_or(SecurityAuditError::Coverage(
-                    "effect-attempt-start audit record has no source row",
-                ))?;
-            encode_effect_attempt_started(&EffectAttemptStartedAuditInput {
-                attempt_id: record_id,
-                effect_id: &row.0,
-                started_global_seq: u64::try_from(row.1)
-                    .map_err(|_| SecurityAuditError::InvalidRecord)?,
-                handler_id: &row.2,
-                handler_version: &row.3,
-                dispatch_token: &row.4,
-                started_at: &row.5,
-            })
-        }
-        KIND_EFFECT_ATTEMPT_FINISHED => {
-            let row = connection
-                .query_row(
-                    "SELECT finished_at, outcome, receipt FROM effect_attempts WHERE attempt_id = ?1",
-                    params![record_id],
-                    |row| {
-                        Ok((
-                            row.get::<_, Option<String>>(0)?,
-                            row.get::<_, String>(1)?,
-                            row.get::<_, Option<Vec<u8>>>(2)?,
-                        ))
-                    },
-                )
-                .optional()?
-                .ok_or(SecurityAuditError::Coverage(
-                    "effect-attempt-finish audit record has no source row",
-                ))?;
-            let finished_at = row.0.as_deref().ok_or(SecurityAuditError::Coverage(
-                "effect-attempt-finish audit exists for unfinished attempt",
-            ))?;
-            encode_effect_attempt_finished(&EffectAttemptFinishedAuditInput {
-                attempt_id: record_id,
-                finished_at,
-                outcome: &row.1,
-                receipt: row.2.as_deref(),
-            })
-        }
+        KIND_CLIENT_ENROLLED => source_client_enrollment(connection, record_id),
+        KIND_CLIENT_REVOKED => source_client_revocation(connection, record_id),
+        KIND_AUTHORIZATION_DECISION => source_authorization(connection, record_id),
+        KIND_EFFECT_INTENT => source_effect_intent(connection, record_id),
+        KIND_EFFECT_TRANSITION => source_effect_transition(connection, record_id),
+        KIND_EFFECT_ATTEMPT_STARTED => source_effect_attempt_started(connection, record_id),
+        KIND_EFFECT_ATTEMPT_FINISHED => source_effect_attempt_finished(connection, record_id),
+        KIND_RECOVERY_INCIDENT => source_recovery_incident(connection, record_id),
         _ => Err(SecurityAuditError::Integrity(
             "unknown authority-security audit record kind",
         )),
     }
 }
 
-fn encode_authorization(input: &AuthorizationAuditInput<'_>) -> Result<Vec<u8>, SecurityAuditError> {
+fn source_client_enrollment(
+    connection: &Connection,
+    record_id: &[u8],
+) -> Result<Vec<u8>, SecurityAuditError> {
+    let row = connection
+        .query_row(
+            "SELECT key_id, public_key, kind, owner_principal, enrolled_at, assurance_class \
+             FROM clients WHERE client_id = ?1",
+            params![record_id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Vec<u8>>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                ))
+            },
+        )
+        .optional()?
+        .ok_or(SecurityAuditError::Coverage(
+            "client-enrollment audit record has no source row",
+        ))?;
+    encode_client_enrollment(&ClientEnrollmentAuditInput {
+        client_id: record_id,
+        key_id: &row.0,
+        public_key: &row.1,
+        kind: &row.2,
+        owner_principal: &row.3,
+        enrolled_at: &row.4,
+        assurance_class: &row.5,
+    })
+}
+
+fn source_client_revocation(
+    connection: &Connection,
+    record_id: &[u8],
+) -> Result<Vec<u8>, SecurityAuditError> {
+    let revoked_at = connection
+        .query_row(
+            "SELECT revoked_at FROM clients WHERE client_id = ?1",
+            params![record_id],
+            |row| row.get::<_, Option<String>>(0),
+        )
+        .optional()?
+        .flatten()
+        .ok_or(SecurityAuditError::Coverage(
+            "client-revocation audit record has no revoked source row",
+        ))?;
+    encode_client_revocation(&ClientRevocationAuditInput {
+        client_id: record_id,
+        revoked_at: &revoked_at,
+    })
+}
+
+fn source_authorization(
+    connection: &Connection,
+    record_id: &[u8],
+) -> Result<Vec<u8>, SecurityAuditError> {
+    let row = connection
+        .query_row(
+            "SELECT principal, action, resource, context_hash, decision, reason_code, global_seq \
+             FROM authorization_decisions WHERE decision_id = ?1",
+            params![record_id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, Vec<u8>>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, i64>(6)?,
+                ))
+            },
+        )
+        .optional()?
+        .ok_or(SecurityAuditError::Coverage(
+            "authorization audit record has no source row",
+        ))?;
+    encode_authorization(&AuthorizationAuditInput {
+        decision_id: record_id,
+        principal: &row.0,
+        action: &row.1,
+        resource: &row.2,
+        context_hash: &row.3,
+        decision: &row.4,
+        reason_code: &row.5,
+        global_seq: u64::try_from(row.6).map_err(|_| SecurityAuditError::InvalidRecord)?,
+    })
+}
+
+fn source_effect_intent(
+    connection: &Connection,
+    record_id: &[u8],
+) -> Result<Vec<u8>, SecurityAuditError> {
+    let row = connection
+        .query_row(
+            "SELECT session_id, requested_by, action, resource, risk_class, execution_semantics, \
+             idempotency_key, preconditions, dependencies, payload_hash, proposed_event_id \
+             FROM effect_intents WHERE effect_id = ?1",
+            params![record_id],
+            |row| {
+                Ok((
+                    row.get::<_, Vec<u8>>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, Option<String>>(6)?,
+                    row.get::<_, Vec<u8>>(7)?,
+                    row.get::<_, Vec<u8>>(8)?,
+                    row.get::<_, Vec<u8>>(9)?,
+                    row.get::<_, Vec<u8>>(10)?,
+                ))
+            },
+        )
+        .optional()?
+        .ok_or(SecurityAuditError::Coverage(
+            "effect-intent audit record has no source row",
+        ))?;
+    encode_effect_intent(&EffectIntentAuditInput {
+        effect_id: record_id,
+        session_id: &row.0,
+        requested_by: &row.1,
+        action: &row.2,
+        resource: &row.3,
+        risk_class: &row.4,
+        execution_semantics: &row.5,
+        idempotency_key: row.6.as_deref(),
+        preconditions: &row.7,
+        dependencies: &row.8,
+        payload_hash: &row.9,
+        proposed_event_id: &row.10,
+    })
+}
+
+fn source_effect_transition(
+    connection: &Connection,
+    record_id: &[u8],
+) -> Result<Vec<u8>, SecurityAuditError> {
+    let row = connection
+        .query_row(
+            "SELECT effect_id, global_seq, from_state, to_state, attempt_id, reason_code, \
+             evidence_ref, event_id FROM effect_transitions WHERE transition_id = ?1",
+            params![record_id],
+            |row| {
+                Ok((
+                    row.get::<_, Vec<u8>>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, Option<Vec<u8>>>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, Option<Vec<u8>>>(6)?,
+                    row.get::<_, Vec<u8>>(7)?,
+                ))
+            },
+        )
+        .optional()?
+        .ok_or(SecurityAuditError::Coverage(
+            "effect-transition audit record has no source row",
+        ))?;
+    encode_effect_transition(&EffectTransitionAuditInput {
+        transition_id: record_id,
+        effect_id: &row.0,
+        global_seq: u64::try_from(row.1).map_err(|_| SecurityAuditError::InvalidRecord)?,
+        from_state: row.2.as_deref(),
+        to_state: &row.3,
+        attempt_id: row.4.as_deref(),
+        reason_code: row.5.as_deref(),
+        evidence_ref: row.6.as_deref(),
+        event_id: &row.7,
+    })
+}
+
+fn source_effect_attempt_started(
+    connection: &Connection,
+    record_id: &[u8],
+) -> Result<Vec<u8>, SecurityAuditError> {
+    let row = connection
+        .query_row(
+            "SELECT effect_id, started_global_seq, handler_id, handler_version, dispatch_token, \
+             started_at FROM effect_attempts WHERE attempt_id = ?1",
+            params![record_id],
+            |row| {
+                Ok((
+                    row.get::<_, Vec<u8>>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, Vec<u8>>(4)?,
+                    row.get::<_, String>(5)?,
+                ))
+            },
+        )
+        .optional()?
+        .ok_or(SecurityAuditError::Coverage(
+            "effect-attempt-start audit record has no source row",
+        ))?;
+    encode_effect_attempt_started(&EffectAttemptStartedAuditInput {
+        attempt_id: record_id,
+        effect_id: &row.0,
+        started_global_seq: u64::try_from(row.1).map_err(|_| SecurityAuditError::InvalidRecord)?,
+        handler_id: &row.2,
+        handler_version: &row.3,
+        dispatch_token: &row.4,
+        started_at: &row.5,
+    })
+}
+
+fn source_effect_attempt_finished(
+    connection: &Connection,
+    record_id: &[u8],
+) -> Result<Vec<u8>, SecurityAuditError> {
+    let row = connection
+        .query_row(
+            "SELECT finished_at, outcome, receipt FROM effect_attempts WHERE attempt_id = ?1",
+            params![record_id],
+            |row| {
+                Ok((
+                    row.get::<_, Option<String>>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<Vec<u8>>>(2)?,
+                ))
+            },
+        )
+        .optional()?
+        .ok_or(SecurityAuditError::Coverage(
+            "effect-attempt-finish audit record has no source row",
+        ))?;
+    let finished_at = row.0.as_deref().ok_or(SecurityAuditError::Coverage(
+        "effect-attempt-finish audit exists for unfinished attempt",
+    ))?;
+    encode_effect_attempt_finished(&EffectAttemptFinishedAuditInput {
+        attempt_id: record_id,
+        finished_at,
+        outcome: &row.1,
+        receipt: row.2.as_deref(),
+    })
+}
+
+fn source_recovery_incident(
+    connection: &Connection,
+    record_id: &[u8],
+) -> Result<Vec<u8>, SecurityAuditError> {
+    let row = connection
+        .query_row(
+            "SELECT detected_at, kind, severity, affected_refs, recovery_mode, resolution \
+             FROM recovery_incidents WHERE incident_id = ?1",
+            params![record_id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, Vec<u8>>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, Option<Vec<u8>>>(5)?,
+                ))
+            },
+        )
+        .optional()?
+        .ok_or(SecurityAuditError::Coverage(
+            "recovery-incident audit record has no source row",
+        ))?;
+    encode_recovery_incident(&RecoveryIncidentAuditInput {
+        incident_id: record_id,
+        detected_at: &row.0,
+        kind: &row.1,
+        severity: &row.2,
+        affected_refs: &row.3,
+        recovery_mode: &row.4,
+        resolution: row.5.as_deref(),
+    })
+}
+
+fn encode_client_enrollment(
+    input: &ClientEnrollmentAuditInput<'_>,
+) -> Result<Vec<u8>, SecurityAuditError> {
+    let mut encoder = CanonicalEncoder::new();
+    encoder.push_bytes(KIND_CLIENT_ENROLLED.as_bytes())?;
+    encoder.push_bytes(input.client_id)?;
+    encoder.push_bytes(input.key_id.as_bytes())?;
+    encoder.push_bytes(input.public_key)?;
+    encoder.push_bytes(input.kind.as_bytes())?;
+    encoder.push_bytes(input.owner_principal.as_bytes())?;
+    encoder.push_bytes(input.enrolled_at.as_bytes())?;
+    encoder.push_bytes(input.assurance_class.as_bytes())?;
+    Ok(encoder.finish())
+}
+
+fn encode_client_revocation(
+    input: &ClientRevocationAuditInput<'_>,
+) -> Result<Vec<u8>, SecurityAuditError> {
+    let mut encoder = CanonicalEncoder::new();
+    encoder.push_bytes(KIND_CLIENT_REVOKED.as_bytes())?;
+    encoder.push_bytes(input.client_id)?;
+    encoder.push_bytes(input.revoked_at.as_bytes())?;
+    Ok(encoder.finish())
+}
+
+fn encode_authorization(
+    input: &AuthorizationAuditInput<'_>,
+) -> Result<Vec<u8>, SecurityAuditError> {
     let mut encoder = CanonicalEncoder::new();
     encoder.push_bytes(KIND_AUTHORIZATION_DECISION.as_bytes())?;
     encoder.push_bytes(input.decision_id)?;
@@ -681,6 +907,21 @@ fn encode_effect_attempt_finished(
     Ok(encoder.finish())
 }
 
+fn encode_recovery_incident(
+    input: &RecoveryIncidentAuditInput<'_>,
+) -> Result<Vec<u8>, SecurityAuditError> {
+    let mut encoder = CanonicalEncoder::new();
+    encoder.push_bytes(KIND_RECOVERY_INCIDENT.as_bytes())?;
+    encoder.push_bytes(input.incident_id)?;
+    encoder.push_bytes(input.detected_at.as_bytes())?;
+    encoder.push_bytes(input.kind.as_bytes())?;
+    encoder.push_bytes(input.severity.as_bytes())?;
+    encoder.push_bytes(input.affected_refs)?;
+    encoder.push_bytes(input.recovery_mode.as_bytes())?;
+    encode_optional_bytes(&mut encoder, input.resolution)?;
+    Ok(encoder.finish())
+}
+
 fn audit_record_hash(
     audit_seq: u64,
     kind: &str,
@@ -751,10 +992,12 @@ mod tests {
         let connection = Connection::open_in_memory().unwrap();
         connection
             .execute_batch(
-                "CREATE TABLE authorization_decisions (decision_id BLOB PRIMARY KEY, principal TEXT, action TEXT, resource TEXT, context_hash BLOB, decision TEXT, reason_code TEXT, global_seq INTEGER);\
-                 CREATE TABLE effect_intents (effect_id BLOB PRIMARY KEY, session_id BLOB, requested_by TEXT, action TEXT, resource TEXT, risk_class TEXT, execution_semantics TEXT, idempotency_key TEXT, preconditions BLOB, dependencies BLOB, payload_hash BLOB, proposed_event_id BLOB);\
-                 CREATE TABLE effect_transitions (transition_id BLOB PRIMARY KEY, effect_id BLOB, global_seq INTEGER, from_state TEXT, to_state TEXT, attempt_id BLOB, reason_code TEXT, evidence_ref BLOB, event_id BLOB);\
-                 CREATE TABLE effect_attempts (attempt_id BLOB PRIMARY KEY, effect_id BLOB, started_global_seq INTEGER, handler_id TEXT, handler_version TEXT, dispatch_token BLOB, started_at TEXT, finished_at TEXT, outcome TEXT, receipt BLOB);\
+                "CREATE TABLE clients (client_id BLOB PRIMARY KEY, revoked_at TEXT);\
+                 CREATE TABLE authorization_decisions (decision_id BLOB PRIMARY KEY);\
+                 CREATE TABLE effect_intents (effect_id BLOB PRIMARY KEY);\
+                 CREATE TABLE effect_transitions (transition_id BLOB PRIMARY KEY);\
+                 CREATE TABLE effect_attempts (attempt_id BLOB PRIMARY KEY, finished_at TEXT);\
+                 CREATE TABLE recovery_incidents (incident_id BLOB PRIMARY KEY);\
                  CREATE TABLE audit_chain_heads (chain_name TEXT PRIMARY KEY, last_global_seq INTEGER, last_hash BLOB);",
             )
             .unwrap();
