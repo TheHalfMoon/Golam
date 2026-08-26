@@ -5,6 +5,9 @@ use golam_core::ClientId;
 use golam_core::authority::{AuthorityLayout, AuthorityPathError};
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
+use crate::security_audit::{
+    self, ClientEnrollmentAuditInput, ClientRevocationAuditInput,
+};
 use crate::storage::{AuthorityStore, StorageError};
 
 pub const CLIENT_KEY_ID_LEN: usize = 32;
@@ -86,6 +89,7 @@ pub enum ClientRegistryError {
     Storage(StorageError),
     Sqlite(rusqlite::Error),
     AuthorityPath(AuthorityPathError),
+    SecurityAudit(String),
     InvalidClientId,
     InvalidKeyId,
     InvalidPublicKey,
@@ -106,6 +110,7 @@ impl fmt::Display for ClientRegistryError {
             Self::Storage(e) => write!(f, "client registry authority-store error: {e}"),
             Self::Sqlite(e) => write!(f, "client registry sqlite error: {e}"),
             Self::AuthorityPath(e) => write!(f, "client registry path error: {e}"),
+            Self::SecurityAudit(e) => write!(f, "client registry integrity-chain error: {e}"),
             Self::InvalidClientId => f.write_str("client id must be non-zero"),
             Self::InvalidKeyId => f.write_str("client key id must not be all zero"),
             Self::InvalidPublicKey => f.write_str("client public key must not be all zero"),
@@ -174,14 +179,27 @@ impl ClientRegistry {
         let duplicate = tx
             .query_row(
                 "SELECT 1 FROM clients WHERE client_id = ?1 OR key_id = ?2 LIMIT 1",
-                params![&client_blob[..], key_text],
+                params![&client_blob[..], &key_text],
                 |row| row.get::<_, i64>(0),
             )
             .optional()?;
         if duplicate.is_some() {
             return Err(ClientRegistryError::AlreadyEnrolled);
         }
-        tx.execute("INSERT INTO clients (client_id,key_id,public_key,kind,owner_principal,enrolled_at,last_authenticated_at,revoked_at,assurance_class) VALUES (?1,?2,?3,?4,?5,?6,NULL,NULL,?7)", params![&client_blob[..], encode_hex(&input.key_id), &input.public_key[..], input.kind.as_str(), input.owner_principal, input.enrolled_at, input.assurance_class.as_str()])?;
+        tx.execute("INSERT INTO clients (client_id,key_id,public_key,kind,owner_principal,enrolled_at,last_authenticated_at,revoked_at,assurance_class) VALUES (?1,?2,?3,?4,?5,?6,NULL,NULL,?7)", params![&client_blob[..], &key_text, &input.public_key[..], input.kind.as_str(), input.owner_principal, input.enrolled_at, input.assurance_class.as_str()])?;
+        security_audit::append_client_enrollment(
+            &tx,
+            ClientEnrollmentAuditInput {
+                client_id: &client_blob,
+                key_id: &key_text,
+                public_key: &input.public_key,
+                kind: input.kind.as_str(),
+                owner_principal: input.owner_principal,
+                enrolled_at: input.enrolled_at,
+                assurance_class: input.assurance_class.as_str(),
+            },
+        )
+        .map_err(|error| ClientRegistryError::SecurityAudit(error.to_string()))?;
         tx.commit()?;
         self.resolve_active(input.client_id, input.key_id)
     }
@@ -246,6 +264,14 @@ impl ClientRegistry {
         if updated != 1 {
             return Err(ClientRegistryError::RevokedClient);
         }
+        security_audit::append_client_revocation(
+            &tx,
+            ClientRevocationAuditInput {
+                client_id: &blob,
+                revoked_at,
+            },
+        )
+        .map_err(|error| ClientRegistryError::SecurityAudit(error.to_string()))?;
         tx.commit()?;
         self.record_for_client(client_id)?
             .ok_or(ClientRegistryError::UnknownClient)
@@ -395,6 +421,10 @@ mod tests {
             Err(ClientRegistryError::RevokedClient)
         ));
         drop(reg);
+        AuthorityStore::open(a.authority_db_path())
+            .unwrap()
+            .verify_integrity()
+            .unwrap();
         fs::remove_dir_all(r.root).unwrap();
     }
     #[test]
