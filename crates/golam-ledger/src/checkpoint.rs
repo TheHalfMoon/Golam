@@ -5,9 +5,9 @@ use std::path::{Path, PathBuf};
 use golam_core::{CanonicalEncoder, CheckpointId, EventId, SCHEMA_VERSION, SessionId};
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
-use crate::{EventKind, EventRecord, audit_integrity_hash, event_integrity_hash, payload_hash};
 use crate::artifacts::{ArtifactError, ArtifactReceipt, ArtifactStore};
 use crate::storage::{AuthorityStore, StorageError};
+use crate::{EventKind, EventRecord, audit_integrity_hash, event_integrity_hash, payload_hash};
 
 const PROJECTION_DOMAIN: &[u8] = b"golam:checkpoint-projection:v1";
 const CHECKPOINT_EVENT_DOMAIN: &[u8] = b"golam:checkpoint-event:v1";
@@ -153,6 +153,8 @@ impl CheckpointManager {
         let connection = Connection::open(authority_db)?;
         connection.execute_batch(
             "PRAGMA foreign_keys = ON;\n\
+             PRAGMA journal_mode = WAL;\n\
+             PRAGMA synchronous = FULL;\n\
              PRAGMA busy_timeout = 5000;",
         )?;
         let artifacts = ArtifactStore::open(artifact_root)?;
