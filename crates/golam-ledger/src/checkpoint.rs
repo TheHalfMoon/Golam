@@ -810,7 +810,6 @@ mod tests {
         let root = unique_root();
         fs::create_dir(&root).unwrap();
         let db_path = root.join("authority.db");
-        let artifact_root = root.join("artifacts");
         let marker = root.join("checkpoint-uncommitted.marker");
 
         let mut authority = AuthorityStore::open(&db_path).unwrap();
