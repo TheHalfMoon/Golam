@@ -177,7 +177,7 @@ impl ManualReviewStore {
             )
             .optional()?
             .ok_or(ManualReviewError::EffectNotFound(input.effect_id))?;
-        if from_state != "unknown_outcome" && from_state != "reconciling" {
+        if from_state != "reconciling" {
             return Err(ManualReviewError::InvalidSourceState {
                 effect_id: input.effect_id,
                 actual: from_state,
@@ -565,7 +565,7 @@ mod tests {
     }
 
     #[test]
-    fn unknown_outcome_enters_manual_review_with_atomic_durable_report() {
+    fn unknown_outcome_must_reconcile_before_manual_review() {
         let (runtime, authority) = authority();
         let effect_id = EffectId(9000);
         let mut effects = EffectStore::open(&authority).unwrap();
@@ -573,8 +573,8 @@ mod tests {
         drop(effects);
 
         let mut reviews = ManualReviewStore::open(&authority).unwrap();
-        let report = reviews
-            .place(PlaceEffectInManualReview {
+        assert!(matches!(
+            reviews.place(PlaceEffectInManualReview {
                 effect_id,
                 transition_id: EffectTransitionId(20_000),
                 attempt_id: None,
@@ -582,20 +582,18 @@ mod tests {
                 reason: ManualReviewReason::UnreconcilableAmbiguity,
                 evidence_ref: Some(b"ambiguous-ack"),
                 event_id: EventId(20_001),
-            })
-            .unwrap();
-        assert_eq!(report.from_state, "unknown_outcome");
+            }),
+            Err(ManualReviewError::InvalidSourceState { actual, .. }) if actual == "unknown_outcome"
+        ));
+        assert!(reviews.reports().unwrap().is_empty());
         drop(reviews);
 
         let effects = EffectStore::open(&authority).unwrap();
         assert_eq!(
             effects.current_state(effect_id).unwrap().as_deref(),
-            Some("manual_review")
+            Some("unknown_outcome")
         );
         drop(effects);
-        let reopened = ManualReviewStore::open(&authority).unwrap();
-        assert_eq!(reopened.reports().unwrap(), vec![report]);
-        drop(reopened);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 
