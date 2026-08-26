@@ -3,122 +3,120 @@
 **Implementation branch**: `impl/002-kernel-durable-session-spine`  
 **PR**: #3 — OPEN / DRAFT  
 **Canonical base**: `main@cfcc90f452e7115bfb104f886e09c309a5d57a1c`  
-**Last fully qualified code head before documentation reconciliation**: `29d54ca211e17c7bbcc0b2febfc2349d7b9ed2be`  
-**Exact code-head CI**: GitHub Actions run ID `32958260286`, run number `225` — Windows/macOS/Ubuntu SUCCESS for the full qualification workflow.  
-**State**: `CONVERGED_FOR_FINAL_EXACT_HEAD_QUALIFICATION`.
+**Latest behavioral repair head**: `acdce817dbd89d8286fc08b8821aded0b7dbf8f7`  
+**Latest formatting repair head**: `1a0ef2c1a72056e42528521ec63e5acaabc297f0`  
+**Pre-reconciliation head**: `b54abec064fd16074674a7c8c141f4bf3d69a245`  
+**Final candidate head**: the commit containing this convergence package.  
+**State**: `REPAIR_CONVERGED_PENDING_FINAL_EXACT_HEAD_CI_AND_POST_CI_QODO`.
 
-This record supersedes the earlier interim convergence snapshot. Live GitHub truth still overrides every recorded SHA if the branch moves.
+Live GitHub truth overrides every recorded SHA. No PASS or review result transfers across a branch mutation.
 
 ## 1. Authority order re-read
 
-Final convergence was checked against:
+The final repair convergence was checked against:
 
 1. live GitHub branch/base/PR state;
-2. `.specify/memory/constitution.md` v1.2.0;
+2. `.specify/memory/constitution.md` v1.2.0 or later;
 3. frozen Spec 001 architecture and GolamBench foundation gates;
-4. Spec 002 `spec.md`, clarification closeout, research, donor qualification, plan, data model, contracts, quickstart, implementation-readiness checklist, tasks and analysis;
+4. Spec 002 spec, clarification closeout, research, donor qualification, plan, data model, contracts, quickstart, implementation-readiness checklist, tasks and analysis;
 5. implementation evidence under `specs/002-kernel-durable-session-spine/implementation/`;
-6. exact Rust/CI behavior on the implementation branch.
+6. exact Rust/CI behavior on the implementation branch;
+7. the authorized Qodo repair cycle.
 
 No founder waiver is taken.
 
-## 2. Constitution / Spec 002 convergence
+## 2. Converged implementation position
 
-| Area | Final implementation position | State |
+| Area | Current implementation position | State |
 |---|---|---|
-| Rust trusted path / seven-package spine | Rust 1.98, Golam crates forbid unsafe, no future crate scaffolding | PASS |
-| Small privileged authority boundary | protected authority subtree, sealed KernelApi grants, hostile-adapter tests | PASS |
-| Local ownership / no cloud prerequisite | local SQLite/artifacts/credentials, no model/provider dependency | PASS |
-| Authenticated local IPC | UDS or Windows named pipe + OS peer checks + Ed25519 challenge authentication | PASS |
-| IPC boundedness | frame/pending limits, platform listener bounds, absolute accepted-connection deadline | PASS |
-| Session/fork/goal/checkpoint durability | transactional canonical order, replay/checkpoint equivalence, immutable forks | PASS |
-| Effect durability | durable intent/attempt before dispatch proof, CAS state, deterministic handlers | PASS |
-| Ambiguous effects | UNKNOWN_OUTCOME blocks dependencies; no blind duplicate; reconciliation/manual review | PASS |
-| Recovery | explicit Normal/RecoveryOnly/Quarantined scan; no silent authority reset | PASS |
-| Disk pressure | real SQLite FULL regression; no dispatch authority after failed durable transaction | PASS |
-| Strict-local egress | kernel hard deny + externally observed zero Golam Internet sockets | PASS |
-| Security integrity | canonical event audit chain plus authority-security chain/coverage for protected non-event records | PASS |
-| Source governance | no donor source code copied/ported; semantics-only evidence remains within recorded posture | PASS |
-| Platform qualification | Windows, macOS, Ubuntu workflow steps explicitly exercise platform IPC/locality | PASS |
+| Rust trusted path / seven-package spine | Rust 1.98, Golam product crates forbid unsafe, no future crate scaffolding | IMPLEMENTED |
+| Small privileged authority boundary | protected authority subtree, sealed KernelApi authority, hostile-adapter probes | IMPLEMENTED |
+| Local ownership / no cloud prerequisite | local SQLite/artifacts/credentials, Unix ownership checks, no model/provider dependency | IMPLEMENTED |
+| Authenticated local IPC | UDS or Windows named pipe + OS peer checks + Ed25519 challenge authentication | IMPLEMENTED |
+| IPC boundedness | frame/pending limits, local-ceiling handshake negotiation, daemon/CLI absolute deadlines | IMPLEMENTED |
+| Session/fork/goal/checkpoint durability | transactional canonical order, atomic checkpoint metadata/event boundary, replay/checkpoint equivalence, immutable forks | IMPLEMENTED |
+| Effect durability | frozen FSM, durable intent/attempt before dispatch proof, deterministic handlers | IMPLEMENTED |
+| Ambiguous effects | UNKNOWN_OUTCOME blocks dependencies; interrupted executing enters reconciliation without redispatch; reconciliation resumes; manual review requires reconciling | IMPLEMENTED |
+| Recovery | explicit Normal/RecoveryOnly/Quarantined scan; no silent authority reset | IMPLEMENTED |
+| Disk pressure | real SQLite FULL regression plus deterministic fault injection | IMPLEMENTED |
+| Strict-local egress | kernel hard deny + external no-network observation workflow | IMPLEMENTED |
+| Security integrity | canonical event audit chain plus authority-security coverage for protected non-event records | IMPLEMENTED |
+| Path security | canonical artifact receipt paths; traversal/symlink rejection for artifact and unprivileged paths | IMPLEMENTED |
+| Protocol audit | repeated rejections receive unique durable incident identities | IMPLEMENTED |
+| Source governance | no donor source code copied/ported; semantics-only evidence within recorded posture | IMPLEMENTED |
+| Platform qualification | Windows, macOS, Ubuntu workflow includes platform-specific IPC/locality gates | IMPLEMENTED_PENDING_FINAL_RUN |
 
-## 3. Material divergences found and resolved
+`IMPLEMENTED` above is not a final PASS claim. The commit containing this convergence record must still pass exact-head CI and the fresh post-CI authorized Qodo review.
 
-### C-001 — authority-state boundary
+## 3. Earlier convergence divergences retained as resolved
 
-**Resolved.** Authority data is under the protected authority subtree. Generic/unprivileged path admission rejects the authority root/database/credentials/reserved state and paths outside the admitted runtime area. Hostile-adapter tests prove the public non-kernel surface cannot mint authority or directly mutate the privileged ledger.
+The earlier convergence cycle resolved:
 
-### C-002 — recovery-only / quarantine behavior
+- protected authority-state boundary and generic-path exclusion;
+- RecoveryOnly / Quarantined startup behavior;
+- accepted-connection deadline;
+- mandatory authority-security integrity for authorization/effect/client/recovery records;
+- enrolled CLI checkpoint/reconcile bootstrap authority;
+- unsafe generic caller-selected canonical `EventKind` contract wording;
+- stale quickstart/AGENTS/implementation-status text.
 
-**Resolved.** `RecoveryScanner` distinguishes normal service, coherent attention, recovery-only conditions and canonical corruption quarantine. `KernelApi::open` cannot bypass the startup gate. `golamd` refuses privileged serving in RecoveryOnly/Quarantined state rather than silently resetting state.
+Those repairs remain part of the implementation baseline.
 
-### C-003 — accepted-connection deadline
+## 4. Authorized Qodo repair cycle
 
-**Resolved.** Final convergence found that a synchronous daemon could otherwise be held indefinitely by a silent same-user client. Accepted local streams are now nonblocking behind a bounded deadline wrapper. CI requalified Windows/macOS/Linux after the fix.
+A later Qodo review found material correctness, security and reliability gaps. The repair sequence through `acdce817dbd89d8286fc08b8821aded0b7dbf8f7`, followed by formatting head `1a0ef2c1a72056e42528521ec63e5acaabc297f0`, addresses:
 
-### C-004 — mandatory integrity for authorization/effect/client/recovery records
+1. invalid effect FSM transitions accepted by generic CAS;
+2. non-atomic checkpoint event/metadata/session-pointer boundary;
+3. artifact path traversal;
+4. symlink escape in unprivileged path admission;
+5. protocol incident ID collision;
+6. missing Unix ownership verification;
+7. unbounded foreground bootstrap approval;
+8. unbounded CLI IPC waits;
+9. unauthenticated server challenge limits influencing client allocation;
+10. interrupted executing effects lacking a reconciliation entry path;
+11. durable reconciliation becoming permanently stuck after interruption;
+12. direct `unknown_outcome -> manual_review` bypass discovered during independent repair re-read.
 
-**Resolved.** The original security event chain protected canonical `SessionEvent` records but did not by itself authenticate every protected non-event authority row required by the constitution/event-ledger contract.
+Two Qodo rule findings about the real process-kill and real SQLite FULL tests were rejected as non-actionable because the canonical Spec 002 test strategy explicitly requires those substrate-level proofs in addition to deterministic fault injection.
 
-The implementation now adds the independent `authority-security` BLAKE3 chain. It covers:
+All Qodo repair-cycle threads are resolved or outdated on the pre-reconciliation head. Because this closeout package mutates the branch, those results are repair evidence only and are not a final exact-head review PASS.
 
-- client enrollment and revocation;
-- authorization decisions;
-- effect intents;
-- effect transitions;
-- effect attempt start and finish;
-- recovery/protocol/manual-review incidents.
+## 5. T002-061 recovery reserve decision
 
-Coverage and source-row hashes are verified on authority-store open. Missing audit coverage, row tampering, broken chain linkage or a mismatched chain head fails canonical integrity. Tamper integration tests exercise authorization, effect, client and recovery records.
+`implementation/recovery-reserve-evaluation.md` records `NO_RECOVERY_RESERVE_GUARANTEE`.
 
-### C-005 — enrolled CLI checkpoint/reconcile authority
+Spec 002 does not claim an unproven cross-platform reserve. Disk-full handling instead fails closed before dispatch authority when the durable transaction cannot commit.
 
-**Resolved.** The daemon authenticates a CLI as `EnrolledClient`, not `LocalOwner` or `KernelService`. Final convergence found that `checkpoint.create` and `effect.reconcile` were missing from the enrolled-client bootstrap allow set even though T002-062 exposes those authenticated CLI commands and the bootstrap contract admits checkpoint/synthetic-effect operations.
+## 6. Qualification evidence policy
 
-`BootstrapPolicy` now explicitly permits those two actions for an enrolled local client while client enrollment/revocation and network egress remain denied. Regression tests prove both the intended permits and the non-expansion guardrails.
+Prior successful workflow runs remain historical implementation evidence, but none transfers PASS to the commit containing this final reconciliation package.
 
-### C-006 — generic `append_session_event` contract wording
+The final candidate head must run the complete CI matrix:
 
-**Resolved by security narrowing of the conceptual contract, not by adding a dangerous generic primitive.**
-
-A public API accepting caller-selected `(EventKind, bytes)` would allow an adapter to claim reserved system families such as checkpoint/effect/goal lifecycle evidence without the owning protected domain record. Spec 002 therefore exposes typed domain mutations; those operations emit canonical events where required. A future general product event family must receive its own typed request under its owning spec.
-
-`kernel-api-contract.md` and `quickstart.md` now state this explicitly.
-
-### C-007 — stale quickstart / AGENTS / implementation status
-
-**Resolved in closeout documentation.** The old quickstart was explicitly a target sketch and used command shapes not implemented by the bounded CLI. It now records the actual parser grammar and recovery behavior. `AGENTS.md` now records the implementation-qualification phase and preserves Draft/no-merge/no-Spec003 guardrails.
-
-## 4. T002-061 recovery reserve decision
-
-`implementation/recovery-reserve-evaluation.md` records the tested decision: `NO_RECOVERY_RESERVE_GUARANTEE`.
-
-Spec 002 does not fabricate a platform guarantee that was not proven. The regression ensures startup does not create or rely on an unproven reserve; disk-full behavior instead fails closed before dispatch authority when the durable transaction cannot commit.
-
-## 5. Phase H evidence
-
-The exact code-head qualification run #225 exercises:
-
-- fmt and Clippy with warnings denied;
+- format;
+- Clippy with warnings denied;
 - full workspace tests;
 - deterministic property qualification;
-- bounded IPC/event/migration fuzz smoke;
-- Windows/macOS/Linux platform IPC qualification;
-- authenticated daemon IPC and hostile/adversarial authority probes;
+- bounded fuzz smoke;
+- Windows/macOS/Linux platform IPC gates;
+- authenticated daemon IPC qualification;
+- adversarial authority probes;
+- daemon build;
 - externally observed strict-local no-network checks.
 
-`implementation/bs1-bs2-qualification.md` records BS-1 and BS-2 evidence. BS-10 is represented directly by the external locality observation workflow steps.
+Only after that exact-head CI succeeds may the fresh authorized Qodo review be requested on the unchanged final candidate head.
 
-No PASS from run #225 is automatically inherited by a later documentation/task head. The final closeout head must run the same required matrix again.
+## 7. Review policy
 
-## 6. Review state
+- **Codex review is explicitly excluded from the Golam review workflow by founder direction. It is not a finding source, fallback reviewer, or closeout gate.**
+- CodeRabbit is not substituted for the authorized Qodo gate.
+- Qodo is the authorized external repair/review source for this closeout sequence.
+- Any material post-CI Qodo finding reopens repair and invalidates the current exact-head qualification.
+- PR #3 remains Draft throughout this qualification sequence.
 
-- A prior GitHub Codex review request was blocked by usage limits; there is no Codex finding set and no Codex PASS.
-- A prior CodeRabbit request was not completed because the head changed; that is not a review and not a PASS.
-- PR #3 remains Draft. External bot review is therefore not silently treated as a completed gate.
-
-Review state does not authorize making the PR Ready or merging it. If repository/founder policy requires a fresh external review before Ready/merge, request it only on a stable final head and resolve material findings before lifecycle promotion.
-
-## 7. Scope boundary remains intact
+## 8. Scope boundary remains intact
 
 Spec 002 has not admitted:
 
@@ -130,8 +128,21 @@ Spec 002 has not admitted:
 - external network behavior;
 - Spec 003 policy/secrets/sandbox implementation.
 
-## 8. Closeout condition
+## 9. Closeout condition
 
-T002-077 is implementation-converged when this reconciliation package itself receives a green exact-head CI matrix and no newly introduced material divergence exists.
+```text
+T002_001_TO_078=IMPLEMENTED
+TASK_IMPLEMENTATION=COMPLETE
+FINAL_CANDIDATE_HEAD=THIS_COMMIT
+FINAL_EXACT_HEAD_CI=PENDING
+FINAL_POST_CI_QODO=PENDING
+SPEC_002_IMPLEMENTATION_COMPLETE=NO
+WAIVER_TAKEN=NO
+PR_DRAFT=YES
+PR_READY=NO
+MERGED=NO
+SPEC_002_CLOSED_CANONICAL=NO
+SPEC_003_AUTHORIZED=NO
+```
 
-T002-078 then records the exact final Draft PR head/evidence. Spec 002 may be implementation-complete while PR #3 remains Draft; it is **not** `CLOSED_CANONICAL` until separately authorized lifecycle actions occur and the implementation is merged/canonicalized. Spec 003 remains unauthorized until that canonical closure.
+When both final gates succeed on the same unchanged head, the PR evidence may truthfully change `SPEC_002_IMPLEMENTATION_COMPLETE` to `YES` without implying Ready, merge, or canonical closure. Spec 002 is not `CLOSED_CANONICAL` until separately authorized lifecycle actions occur and the implementation is merged into canonical `main`.

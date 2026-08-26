@@ -6,15 +6,17 @@
 **Base tree**: `da65a0ae907a53212bbfc7afed1a25e7f4aa4636`  
 **Started**: 2026-08-24  
 **Latest behavioral repair head**: `acdce817dbd89d8286fc08b8821aded0b7dbf8f7`  
-**Latest formatting-only head before this status mutation**: `1a0ef2c1a72056e42528521ec63e5acaabc297f0`  
-**State**: `SPEC_002_REPAIR_QUALIFICATION_IN_PROGRESS`.
+**Latest formatting-only repair head**: `1a0ef2c1a72056e42528521ec63e5acaabc297f0`  
+**Pre-reconciliation qualification head**: `b54abec064fd16074674a7c8c141f4bf3d69a245`  
+**State**: `SPEC_002_REPAIR_CONVERGED_PENDING_FINAL_EXACT_HEAD_CI_AND_POST_CI_QODO`.
 
-> Exact live GitHub truth is authoritative. No prior CI or review result transfers across a branch mutation. The exact final Draft head containing all repair and closeout evidence must pass the complete qualification workflow and have no unresolved material authorized-review findings before Spec 002 implementation closeout may be claimed.
+> Exact live GitHub truth is authoritative. No CI or review result transfers across a branch mutation. The commit containing this reconciled closeout package is the final candidate head and must receive the complete qualification workflow and a fresh authorized Qodo review after CI succeeds.
 
 ## Current gate summary
 
 ```text
-T002-001..078=IMPLEMENTED_BUT_REPAIR_QUALIFICATION_REOPENED
+T002_001_TO_078=IMPLEMENTED
+TASK_IMPLEMENTATION=COMPLETE
 WAIVER_TAKEN=NO
 
 PR_3_DRAFT=YES
@@ -25,53 +27,49 @@ SPEC_002_CLOSED_CANONICAL=NO
 SPEC_003_AUTHORIZED=NO
 
 LATEST_BEHAVIORAL_REPAIR_HEAD=acdce817dbd89d8286fc08b8821aded0b7dbf8f7
-LATEST_FORMATTING_ONLY_HEAD=1a0ef2c1a72056e42528521ec63e5acaabc297f0
-EXACT_HEAD_CI=PENDING
-AUTHORIZED_REVIEW_MATERIAL_FINDINGS=PENDING_FRESH_EXACT_HEAD_REVIEW
+LATEST_FORMATTING_REPAIR_HEAD=1a0ef2c1a72056e42528521ec63e5acaabc297f0
+PRE_RECONCILIATION_HEAD=b54abec064fd16074674a7c8c141f4bf3d69a245
+FINAL_CANDIDATE_HEAD=THIS_COMMIT
+FINAL_EXACT_HEAD_CI=PENDING
+FINAL_POST_CI_QODO=PENDING
+AUTHORIZED_REVIEW_MATERIAL_FINDINGS=PENDING_FINAL_REVIEW
 CODEX_REVIEW_GATE=EXCLUDED_BY_FOUNDER_DIRECTION
 ```
 
-## Why qualification was reopened
+## Repair convergence
 
-Fresh authorized review on the stable Draft implementation found material Spec 002 correctness, security and reliability gaps. Two test-only findings were rejected as non-actionable because the canonical test strategy explicitly requires a subprocess kill/restart harness and real disk-full scenarios in addition to deterministic fault injection.
+The authorized Qodo review identified correctness, security and reliability gaps. The material repairs now include:
 
-The material repair sequence is represented by behavioral repair heads through `acdce817dbd89d8286fc08b8821aded0b7dbf8f7`, followed by formatting-only head `1a0ef2c1a72056e42528521ec63e5acaabc297f0`.
-
-The repair set includes:
-
-- enforce the frozen Spec 002 effect FSM at the generic `EffectStore::compare_and_swap` boundary so callers cannot persist arbitrary recognized-state edges;
-- require manual-review placement to originate from durable `reconciling` state rather than bypassing reconciliation from `unknown_outcome`;
+- enforce the frozen Spec 002 effect FSM at the generic `EffectStore::compare_and_swap` boundary;
+- require manual-review placement to originate from durable `reconciling` state;
+- make checkpoint canonical event, artifact metadata, checkpoint row, session head and security audit commit atomically;
 - require exact content-addressed artifact receipt paths and reject traversal/symlink escapes;
-- reject symlink components before granting an unprivileged runtime path;
-- derive protocol incident identifiers from unique durable incident material so repeated rejections on one connection remain append-only and auditable;
+- reject symlink components before unprivileged runtime-path admission;
+- derive protocol incident identifiers from unique durable incident material;
 - verify effective Unix ownership for the protected runtime tree in addition to permission bits;
-- bound foreground bootstrap approval instead of permitting an unbounded stdin wait;
+- bound foreground bootstrap approval;
 - bound CLI handshake/request/reply I/O with one absolute local IPC deadline;
-- cap unauthenticated server-advertised handshake limits at the local client ceiling before those limits can influence subsequent frame allocation;
-- admit an interrupted durable `executing` effect into `unknown_outcome -> reconciling` without redispatching the attempt;
-- permit interrupted `reconciling` work to resume from durable context rather than becoming permanently stuck.
+- cap unauthenticated server-advertised handshake limits at the local client ceiling;
+- admit interrupted durable `executing` effects into `unknown_outcome -> reconciling` without redispatch;
+- resume interrupted durable `reconciling` work from persisted context.
+
+Two Qodo test-only findings were rejected as non-actionable because the canonical test strategy explicitly requires real subprocess kill/restart and real SQLite `SQLITE_FULL` substrate qualification in addition to deterministic fault injection. Those tests remain required evidence.
+
+All Qodo threads from the repair cycle are resolved or outdated on the pre-reconciliation head. They do not transfer as a final-review PASS after this documentation mutation.
 
 ## Preserved Spec 002 behavior
 
 ### Protected local authority and canonical state
 
 - Seven-package Rust 1.98 workspace; Golam product crates forbid unsafe code.
-- Protected runtime/authority subtree with platform permission verification and generic/unprivileged path exclusion.
+- Protected runtime/authority subtree with per-platform verification and generic/unprivileged path exclusion.
 - SQLite WAL + `synchronous=FULL`, forward-schema refusal, quick-check and canonical integrity verification.
-- Transactional canonical ordering, deterministic BLAKE3 event/session audit material, append-versioned goals, immutable forks, content-addressed artifacts and verified checkpoints.
+- Transactional canonical ordering, deterministic BLAKE3 audit material, append-versioned goals, immutable forks, content-addressed artifacts and verified checkpoints.
 - Authority corruption fails closed without silent reset.
 
 ### Mandatory security integrity
 
-The security-critical canonical SessionEvent chain is reinforced by an independent `authority-security` chain for protected non-event authority state:
-
-- client enrollment/revocation;
-- authorization decisions;
-- effect intents/transitions;
-- effect attempt start/finish;
-- recovery/protocol/manual-review incidents.
-
-Authority-store open verifies complete source-row coverage, canonical source hashes, chain continuity and chain head. Protected source rows without required integrity coverage fail closed.
+The canonical `SessionEvent` chain is reinforced by the independent `authority-security` chain for protected non-event authority records, including client enrollment/revocation, authorization decisions, effect intents/transitions/attempts, and recovery/protocol/manual-review incidents. Authority-store open verifies source-row coverage, canonical hashes, chain linkage and the chain head.
 
 ### Authenticated local IPC / daemon
 
@@ -86,26 +84,25 @@ Authority-store open verifies complete source-row coverage, canonical source has
 - `KernelApi` remains the privileged mutation boundary; authority-bearing implementation types remain sealed.
 - bootstrap authorization is deny-by-default and decisions are durable/audited.
 - strict-local network egress is a monotonic hard denial.
-- reserved canonical event families remain owned by typed domain operations rather than an arbitrary caller-selected reserved-event append surface.
+- reserved canonical event families are emitted through their owning typed domain operations rather than a generic caller-selected reserved-event append surface.
 
 ### Effects / recovery
 
-- frozen Spec 002 effect FSM enforced at generic CAS and typed domain operations;
+- frozen Spec 002 effect FSM enforced at generic CAS and typed operations;
 - deterministic handlers for all five execution semantics;
 - durable intent and attempt/EXECUTING evidence before dispatch proof;
 - `UNKNOWN_OUTCOME` dependency blocking and no blind duplicate for `AT_MOST_ONCE`/`IRREVERSIBLE`;
-- interrupted `executing` state can be converted to durable unknown outcome for reconciliation without redispatch;
-- reconciliation can resume after interruption and escalate durably to manual review only from `reconciling`;
-- real OS process-kill/restart regression and real SQLite FULL rollback regression remain required substrate evidence;
+- interrupted `executing` can become durable unknown outcome for reconciliation without redispatch;
+- reconciliation can resume after interruption and escalate to manual review only from `reconciling`;
 - `RecoveryScanner` distinguishes Normal, RecoveryOnly and Quarantined states and blocks privileged service when required.
 
-## Exact-head qualification required
+## Final exact-head qualification required
 
-The final Draft head must pass on Ubuntu, macOS and Windows:
+The commit containing this file must pass on Ubuntu, macOS and Windows:
 
-- `cargo fmt --all -- --check`;
-- `cargo clippy --locked --workspace --all-targets -- -D warnings`;
-- `cargo test --locked --workspace --all-targets`;
+- `cargo +1.98.0 fmt --all -- --check`;
+- `cargo +1.98.0 clippy --locked --workspace --all-targets -- -D warnings`;
+- `cargo +1.98.0 test --locked --workspace --all-targets`;
 - property qualification;
 - bounded fuzz smoke;
 - platform IPC qualification;
@@ -113,15 +110,16 @@ The final Draft head must pass on Ubuntu, macOS and Windows:
 - adversarial authority qualification;
 - daemon build and external strict-local no-network observation.
 
-No `PASS`, `SPEC_002_IMPLEMENTATION_COMPLETE`, or closeout claim is valid until those gates succeed on the exact final head.
+After that exact-head CI succeeds, request a fresh authorized Qodo review on the unchanged head. Any material finding reopens repair and exact-head qualification.
+
+No `PASS`, `SPEC_002_IMPLEMENTATION_COMPLETE`, or closeout claim is valid before both gates succeed on the same final candidate head.
 
 ## Review policy
 
-- Codex review is explicitly excluded from the Golam review workflow by founder direction and is not an implementation finding source or closeout gate.
-- Authorized review findings are handled on their exact reviewed head; stale review results do not transfer to a new head.
-- Earlier Qodo threads on superseded heads are not fresh exact-head evidence even when resolved/outdated.
-- A fresh authorized external Qodo review may be requested only after the repair head is stable and exact-head CI succeeds.
-- Any new material finding reopens repair and exact-head qualification.
+- Codex review is explicitly excluded from the Golam workflow by founder direction and is not a finding source or gate.
+- CodeRabbit is not substituted for the authorized Qodo gate.
+- Prior Qodo results are repair evidence only after a branch mutation; they are not final exact-head review evidence.
+- No waiver is taken.
 
 ## Lifecycle state
 
