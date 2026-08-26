@@ -134,9 +134,9 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             Err(ClientRegistryError::ClientKeyMismatch | ClientRegistryError::RevokedClient) => {
                 Ok(false)
             }
-            Err(error) => Err(KernelError::ClientAuthority(ClientAuthorityError::Registry(
-                error,
-            ))),
+            Err(error) => Err(KernelError::ClientAuthority(
+                ClientAuthorityError::Registry(error),
+            )),
         }
     }
 
@@ -225,12 +225,16 @@ mod tests {
                 "local-owner",
             )
             .unwrap();
-        assert!(!kernel
-            .client_requires_bootstrap_enrollment(generated.client_id, generated.key_id)
-            .unwrap());
-        assert!(!kernel
-            .client_requires_bootstrap_enrollment(generated.client_id, mismatched.key_id)
-            .unwrap());
+        assert!(
+            !kernel
+                .client_requires_bootstrap_enrollment(generated.client_id, generated.key_id)
+                .unwrap()
+        );
+        assert!(
+            !kernel
+                .client_requires_bootstrap_enrollment(generated.client_id, mismatched.key_id)
+                .unwrap()
+        );
         assert_eq!(enrolled.credential, generated);
         assert_eq!(enrolled.record.client_id, ClientId(702));
         drop(kernel);
