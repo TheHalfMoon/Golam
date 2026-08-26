@@ -92,7 +92,9 @@ impl fmt::Display for ProtocolAuditError {
         match self {
             Self::Storage(error) => write!(f, "protocol audit authority-store error: {error}"),
             Self::Sqlite(error) => write!(f, "protocol audit sqlite error: {error}"),
-            Self::SecurityAudit(error) => write!(f, "protocol audit integrity-chain error: {error}"),
+            Self::SecurityAudit(error) => {
+                write!(f, "protocol audit integrity-chain error: {error}")
+            }
             Self::InvalidMetadata => {
                 f.write_str("protocol audit connection id and detected-at metadata are required")
             }
