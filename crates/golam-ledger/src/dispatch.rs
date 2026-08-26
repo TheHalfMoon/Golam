@@ -61,7 +61,9 @@ impl fmt::Display for EffectDispatchStoreError {
         match self {
             Self::Storage(error) => write!(f, "effect dispatch authority error: {error}"),
             Self::Sqlite(error) => write!(f, "effect dispatch sqlite error: {error}"),
-            Self::SecurityAudit(error) => write!(f, "effect dispatch integrity-chain error: {error}"),
+            Self::SecurityAudit(error) => {
+                write!(f, "effect dispatch integrity-chain error: {error}")
+            }
             Self::InvalidMetadata => f.write_str("effect dispatch metadata must be non-empty"),
             Self::InvalidDependencyEncoding => {
                 f.write_str("effect dependency encoding is invalid or non-canonical")
