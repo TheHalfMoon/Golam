@@ -312,13 +312,13 @@ mod tests {
     use super::*;
     use golam_core::authority::AuthorityLayout;
     use golam_core::{ClientId, PROTOCOL_VERSION};
+    use golam_ipc::FrameKind;
     use golam_ipc::client_handshake::sign_authenticate;
     use golam_ipc::command::{Command, encode_command};
     use golam_ipc::credentials::ClientCredentialStore;
     use golam_ipc::lifecycle::{Challenge, ShutdownReason};
     use golam_ipc::request::{ReplyStatus, decode_reply, encode_request};
     use golam_ipc::wire::read_frame;
-    use golam_ipc::FrameKind;
     use std::fs;
     use std::io::{self, Cursor};
     use std::sync::atomic::{AtomicU64, Ordering};
