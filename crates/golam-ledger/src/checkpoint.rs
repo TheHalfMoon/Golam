@@ -782,7 +782,8 @@ mod tests {
         if env::var_os(CHILD_FLAG).is_none() {
             return;
         }
-        let root = PathBuf::from(env::var_os(ROOT_ENV).expect("checkpoint kill root is configured"));
+        let root =
+            PathBuf::from(env::var_os(ROOT_ENV).expect("checkpoint kill root is configured"));
         let db_path = root.join("authority.db");
         let artifact_root = root.join("artifacts");
         let mut authority = AuthorityStore::open(&db_path).unwrap();
