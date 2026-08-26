@@ -350,7 +350,10 @@ mod tests {
 
         assert_eq!(accepted.identity.uid, Uid::effective().as_raw());
         assert_eq!(accepted.identity.pid, Some(std::process::id() as i32));
-        assert_eq!(peer_identity(&client_stream).unwrap().uid, Uid::effective().as_raw());
+        assert_eq!(
+            peer_identity(&client_stream).unwrap().uid,
+            Uid::effective().as_raw()
+        );
         drop(client_stream);
         drop(accepted);
         drop(listener);
