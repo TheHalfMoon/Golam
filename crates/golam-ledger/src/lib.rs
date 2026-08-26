@@ -14,6 +14,7 @@ pub mod integrity;
 pub mod manual_review;
 pub mod protocol_audit;
 pub mod recovery;
+mod security_audit;
 pub mod session_read;
 pub mod storage;
 
