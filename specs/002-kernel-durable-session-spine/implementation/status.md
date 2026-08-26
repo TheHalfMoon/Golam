@@ -8,6 +8,7 @@
 **Latest behavioral repair head**: `acdce817dbd89d8286fc08b8821aded0b7dbf8f7`  
 **Latest formatting-only repair head**: `1a0ef2c1a72056e42528521ec63e5acaabc297f0`  
 **Pre-reconciliation qualification head**: `b54abec064fd16074674a7c8c141f4bf3d69a245`  
+**Reconciled closeout predecessor**: `bf4ead5e595f5914a69217f330bf0cdab7571668`  
 **State**: `SPEC_002_REPAIR_CONVERGED_PENDING_FINAL_EXACT_HEAD_CI_AND_POST_CI_QODO`.
 
 > Exact live GitHub truth is authoritative. No CI or review result transfers across a branch mutation. The commit containing this reconciled closeout package is the final candidate head and must receive the complete qualification workflow and a fresh authorized Qodo review after CI succeeds.
@@ -29,6 +30,7 @@ SPEC_003_AUTHORIZED=NO
 LATEST_BEHAVIORAL_REPAIR_HEAD=acdce817dbd89d8286fc08b8821aded0b7dbf8f7
 LATEST_FORMATTING_REPAIR_HEAD=1a0ef2c1a72056e42528521ec63e5acaabc297f0
 PRE_RECONCILIATION_HEAD=b54abec064fd16074674a7c8c141f4bf3d69a245
+RECONCILED_CLOSEOUT_PREDECESSOR=bf4ead5e595f5914a69217f330bf0cdab7571668
 FINAL_CANDIDATE_HEAD=THIS_COMMIT
 FINAL_EXACT_HEAD_CI=PENDING
 FINAL_POST_CI_QODO=PENDING
