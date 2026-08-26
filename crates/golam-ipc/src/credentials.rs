@@ -124,6 +124,22 @@ impl<'a> ClientCredentialStore<'a> {
         })
     }
 
+    pub fn inspect(
+        &self,
+        client_id: ClientId,
+        key_id: ClientKeyId,
+    ) -> Result<GeneratedClientCredential, CredentialError> {
+        let path = self.authority.credential_path(client_id.0, &key_id.0)?;
+        let signing_key = self.load(client_id, key_id)?;
+        let public_key = signing_key.verifying_key().to_bytes();
+        Ok(GeneratedClientCredential {
+            client_id,
+            key_id,
+            public_key,
+            path,
+        })
+    }
+
     pub fn load(
         &self,
         client_id: ClientId,
@@ -261,6 +277,8 @@ mod tests {
         let (runtime, authority) = authority();
         let store = ClientCredentialStore::new(&authority);
         let generated = store.generate(ClientId(11)).unwrap();
+        let inspected = store.inspect(generated.client_id, generated.key_id).unwrap();
+        assert_eq!(inspected, generated);
         let signing = store.load(generated.client_id, generated.key_id).unwrap();
         assert_eq!(signing.verifying_key().to_bytes(), generated.public_key);
         let signature = signing.sign(b"golam-credential-proof");
@@ -283,6 +301,10 @@ mod tests {
         authority.protect_credential_file(&generated.path).unwrap();
         assert!(matches!(
             store.load(generated.client_id, generated.key_id),
+            Err(CredentialError::CredentialPublicKeyMismatch)
+        ));
+        assert!(matches!(
+            store.inspect(generated.client_id, generated.key_id),
             Err(CredentialError::CredentialPublicKeyMismatch)
         ));
         fs::remove_dir_all(runtime.root).unwrap();
