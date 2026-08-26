@@ -1,104 +1,137 @@
-# Interim Spec Kit Convergence — Spec 002
+# Final Spec Kit Convergence — Spec 002
 
-**Purpose**: keep the implementation branch self-contained so the plan, contracts, task state, exact evidence, review state, open divergences and next execution order are recoverable from the repository without chat history.  
-**Reconciled against proven code head**: `29be235de00d853a205ae2f46add1d08b91c1796`  
-**Proven tree**: `4915eb0ee62324ff5faf25184d33c5a13680e9b4`  
-**Exact-head CI**: GitHub Actions `32800522051` / run `40` — Windows/macOS/Ubuntu PASS.  
-**This is an interim convergence record**: final T002-077 remains required after all phases.
+**Implementation branch**: `impl/002-kernel-durable-session-spine`  
+**PR**: #3 — OPEN / DRAFT  
+**Canonical base**: `main@cfcc90f452e7115bfb104f886e09c309a5d57a1c`  
+**Last fully qualified code head before documentation reconciliation**: `29d54ca211e17c7bbcc0b2febfc2349d7b9ed2be`  
+**Exact code-head CI**: GitHub Actions run ID `32958260286`, run number `225` — Windows/macOS/Ubuntu SUCCESS for the full qualification workflow.  
+**State**: `CONVERGED_FOR_FINAL_EXACT_HEAD_QUALIFICATION`.
 
-## 1. Authority order
+This record supersedes the earlier interim convergence snapshot. Live GitHub truth still overrides every recorded SHA if the branch moves.
 
-Implementation continues to reconcile against `.specify/memory/constitution.md`, the full Spec 002 specification/research/plan/data-model/contracts/quickstart/checklists/donor package, `tasks.md`, and all files under `implementation/`.
+## 1. Authority order re-read
 
-`Constitution -> spec + clarification + contracts -> plan + data-model -> tasks -> implementation evidence`.
+Final convergence was checked against:
 
-Implementation evidence may reveal a needed plan amendment, but it must not silently weaken a constitutional/spec/contract requirement.
+1. live GitHub branch/base/PR state;
+2. `.specify/memory/constitution.md` v1.2.0;
+3. frozen Spec 001 architecture and GolamBench foundation gates;
+4. Spec 002 `spec.md`, clarification closeout, research, donor qualification, plan, data model, contracts, quickstart, implementation-readiness checklist, tasks and analysis;
+5. implementation evidence under `specs/002-kernel-durable-session-spine/implementation/`;
+6. exact Rust/CI behavior on the implementation branch.
 
-## 2. Implementation-to-plan mapping
+No founder waiver is taken.
 
-| Area | Current implementation | State |
+## 2. Constitution / Spec 002 convergence
+
+| Area | Final implementation position | State |
 |---|---|---|
-| Seven-package Rust spine | bounded Rust workspace | PASS |
-| Canonical explicit encoding | domain-separated Golam-owned bytes | PASS |
-| SQLite authority schema | canonical operational tables | PASS |
-| Global/per-session sequencing | transactional + hash-chain verified | PASS |
-| Artifacts/checkpoints/forks/goals | durable/rebuildable semantics | PASS |
-| IPC frame codec | bounded deterministic `GIPC` | PASS |
-| Authenticated lifecycle | strict Ed25519 canonical transcript | PASS |
-| Unix/macOS transport | private UDS + kernel peer credentials | PASS |
-| Windows transport | current-user protected DACL + local-only named pipe + peer PID/session | PASS |
-| Cross-platform directory privacy | Unix modes + Windows protected DACL | PASS |
-| Dedicated authority-state subtree / generic-tool exclusion | not yet converged | PARTIAL |
-| Persistent effect execution | initial vocabulary only | PENDING |
-| Recovery-only serving mode | integrity fail-close exists; mode pending | PARTIAL |
+| Rust trusted path / seven-package spine | Rust 1.98, Golam crates forbid unsafe, no future crate scaffolding | PASS |
+| Small privileged authority boundary | protected authority subtree, sealed KernelApi grants, hostile-adapter tests | PASS |
+| Local ownership / no cloud prerequisite | local SQLite/artifacts/credentials, no model/provider dependency | PASS |
+| Authenticated local IPC | UDS or Windows named pipe + OS peer checks + Ed25519 challenge authentication | PASS |
+| IPC boundedness | frame/pending limits, platform listener bounds, absolute accepted-connection deadline | PASS |
+| Session/fork/goal/checkpoint durability | transactional canonical order, replay/checkpoint equivalence, immutable forks | PASS |
+| Effect durability | durable intent/attempt before dispatch proof, CAS state, deterministic handlers | PASS |
+| Ambiguous effects | UNKNOWN_OUTCOME blocks dependencies; no blind duplicate; reconciliation/manual review | PASS |
+| Recovery | explicit Normal/RecoveryOnly/Quarantined scan; no silent authority reset | PASS |
+| Disk pressure | real SQLite FULL regression; no dispatch authority after failed durable transaction | PASS |
+| Strict-local egress | kernel hard deny + externally observed zero Golam Internet sockets | PASS |
+| Security integrity | canonical event audit chain plus authority-security chain/coverage for protected non-event records | PASS |
+| Source governance | no donor source code copied/ported; semantics-only evidence remains within recorded posture | PASS |
+| Platform qualification | Windows, macOS, Ubuntu workflow steps explicitly exercise platform IPC/locality | PASS |
 
-## 3. Reconciled security details
+## 3. Material divergences found and resolved
 
-### Authentication and transport identity
+### C-001 — authority-state boundary
 
-T002-031 cryptographic client authentication remains mandatory independently of T002-032/T002-033 OS transport identity. Same UID, current Windows SID, PID/session metadata, pipe name, or local transport connection alone never grants authority.
+**Resolved.** Authority data is under the protected authority subtree. Generic/unprivileged path admission rejects the authority root/database/credentials/reserved state and paths outside the admitted runtime area. Hostile-adapter tests prove the public non-kernel surface cannot mint authority or directly mutate the privileged ledger.
 
-### Unix transport
+### C-002 — recovery-only / quarantine behavior
 
-Synchronous std UDS is confined to a user-private runtime directory and explicit platform path bounds. Exact-pinned target-Unix `nix` is used only for safe kernel credential queries.
+**Resolved.** `RecoveryScanner` distinguishes normal service, coherent attention, recovery-only conditions and canonical corruption quarantine. `KernelApi::open` cannot bypass the startup gate. `golamd` refuses privileged serving in RecoveryOnly/Quarantined state rather than silently resetting state.
 
-### Windows protected directories
+### C-003 — accepted-connection deadline
 
-T002-033 closes the prior Windows ACL gap. Each protected RuntimeLayout directory receives a protected current-user DACL and is re-read/verified through the OS before `UserOnlyVerified` is returned. This was exercised on the exact Windows CI runner.
+**Resolved.** Final convergence found that a synchronous daemon could otherwise be held indefinitely by a silent same-user client. Accepted local streams are now nonblocking behind a bounded deadline wrapper. CI requalified Windows/macOS/Linux after the fix.
 
-### Windows named pipe
+### C-004 — mandatory integrity for authorization/effect/client/recovery records
 
-The pipe uses a protected current-user DACL, local-only mode, non-inheritable handles and a bounded instance count. `interprocess` provides the safe named-pipe/security-descriptor and peer metadata surface; `windows-permissions` provides the narrow SID/DACL path-protection surface. Their internal Win32 unsafe boundaries are dependency boundaries and remain documented; Golam crates retain `unsafe_code = forbid`.
+**Resolved.** The original security event chain protected canonical `SessionEvent` records but did not by itself authenticate every protected non-event authority row required by the constitution/event-ledger contract.
 
-The SID included in the pipe name is only a per-user discovery namespace. It is not a security mechanism.
+The implementation now adds the independent `authority-security` BLAKE3 chain. It covers:
 
-## 4. Material open convergence items
+- client enrollment and revocation;
+- authorization decisions;
+- effect intents;
+- effect transitions;
+- effect attempt start and finish;
+- recovery/protocol/manual-review incidents.
 
-### C-001 — Dedicated authority-state boundary
+Coverage and source-row hashes are verified on authority-store open. Missing audit coverage, row tampering, broken chain linkage or a mismatched chain head fails canonical integrity. Tamper integration tests exercise authorization, effect, client and recovery records.
 
-**Related**: Constitution II/III, FR-004, T002-021, T002-042.  
-**State**: OPEN / MATERIAL.
+### C-005 — enrolled CLI checkpoint/reconcile authority
 
-Cross-platform path permissions are now proven. The remaining issue is architectural: the plan names a dedicated protected authority-state subtree, while current SQLite authority paths remain caller-selected. T002-042 must make authority state inaccessible to future generic filesystem/storage helpers, or the plan must be formally amended with an equally strong tested boundary. This is why T002-021 remains PARTIAL even though Windows ACL enforcement now passes.
+**Resolved.** The daemon authenticates a CLI as `EnrolledClient`, not `LocalOwner` or `KernelService`. Final convergence found that `checkpoint.create` and `effect.reconcile` were missing from the enrolled-client bootstrap allow set even though T002-062 exposes those authenticated CLI commands and the bootstrap contract admits checkpoint/synthetic-effect operations.
 
-### C-002 — Explicit recovery-only/quarantine mode
+`BootstrapPolicy` now explicitly permits those two actions for an enrolled local client while client enrollment/revocation and network egress remain denied. Regression tests prove both the intended permits and the non-expansion guardrails.
 
-**Related**: US5, FR-019/FR-021, T002-024/T002-060.  
-**State**: OPEN / MATERIAL.
+### C-006 — generic `append_session_event` contract wording
 
-Startup integrity checks fail closed and never reset canonical state, but the explicit recovery-only/quarantine operational state/report path remains pending T002-060.
+**Resolved by security narrowing of the conceptual contract, not by adding a dangerous generic primitive.**
 
-## 5. Review/provenance convergence
+A public API accepting caller-selected `(EventKind, bytes)` would allow an adapter to claim reserved system families such as checkpoint/effect/goal lifecycle evidence without the owning protected domain record. Spec 002 therefore exposes typed domain mutations; those operations emit canonical events where required. A future general product event family must receive its own typed request under its owning spec.
 
-No donor source code has been copied, ported or vendored into Spec 002.
+`kernel-api-contract.md` and `quickstart.md` now state this explicitly.
 
-Official GitHub Codex Code Review was requested on PR #3 with explicit Rust IPC/security/platform instructions. Codex returned `usage limits reached`, so there is **no Codex finding set and no Codex PASS**.
+### C-007 — stale quickstart / AGENTS / implementation status
 
-A CodeRabbit manual review request returned `Action not completed — Head commit changed`; it is therefore not counted as a review. The next reviewer action is to re-trigger CodeRabbit on this stable post-T002-033 closeout head and resolve any findings before treating the external-review layer as clean.
+**Resolved in closeout documentation.** The old quickstart was explicitly a target sketch and used command shapes not implemented by the bounded CLI. It now records the actual parser grammar and recovery behavior. `AGENTS.md` now records the implementation-qualification phase and preserves Draft/no-merge/no-Spec003 guardrails.
 
-## 6. Frozen remaining execution order
+## 4. T002-061 recovery reserve decision
 
-### Phase D
-`T002-034 -> T002-035 -> T002-036`
+`implementation/recovery-reserve-evaluation.md` records the tested decision: `NO_RECOVERY_RESERVE_GUARANTEE`.
 
-### Phase E
-`T002-040 -> T002-041 -> T002-042 -> T002-043 -> T002-044`
+Spec 002 does not fabricate a platform guarantee that was not proven. The regression ensures startup does not create or rely on an unproven reserve; disk-full behavior instead fails closed before dispatch authority when the durable transaction cannot commit.
 
-### Phase F
-`T002-050 -> T002-051 -> T002-052 -> T002-053 -> T002-054 -> T002-055 -> T002-056`
+## 5. Phase H evidence
 
-### Phase G
-`T002-060 -> T002-061 -> T002-062 -> T002-063`
+The exact code-head qualification run #225 exercises:
 
-### Phase H
-`T002-070 -> T002-071 -> T002-072 -> T002-073 -> T002-074 -> T002-075 -> T002-076 -> T002-077 -> T002-078`
+- fmt and Clippy with warnings denied;
+- full workspace tests;
+- deterministic property qualification;
+- bounded IPC/event/migration fuzz smoke;
+- Windows/macOS/Linux platform IPC qualification;
+- authenticated daemon IPC and hostile/adversarial authority probes;
+- externally observed strict-local no-network checks.
 
-No task is PASS from design or a lower-level primitive alone; exact-head evidence is required.
+`implementation/bs1-bs2-qualification.md` records BS-1 and BS-2 evidence. BS-10 is represented directly by the external locality observation workflow steps.
 
-## 7. Scope outside Spec 002
+No PASS from run #225 is automatically inherited by a later documentation/task head. The final closeout head must run the same required matrix again.
 
-Models/providers, broad harness intelligence, arbitrary product tools, Desktop/computer control, GolamConnect, remote channels, real external effects and Spec 003 remain outside authority.
+## 6. Review state
 
-## 8. Next safe action
+- A prior GitHub Codex review request was blocked by usage limits; there is no Codex finding set and no Codex PASS.
+- A prior CodeRabbit request was not completed because the head changed; that is not a review and not a PASS.
+- PR #3 remains Draft. External bot review is therefore not silently treated as a completed gate.
 
-Proceed with **T002-034 only**: explicit local client enrollment/revocation, server-side public-key lookup/revocation state, and a qualified local private-key storage backend/fallback. Private key material must not enter canonical SQLite or model-visible history. Peer OS identity remains independent from cryptographic enrollment.
+Review state does not authorize making the PR Ready or merging it. If repository/founder policy requires a fresh external review before Ready/merge, request it only on a stable final head and resolve material findings before lifecycle promotion.
+
+## 7. Scope boundary remains intact
+
+Spec 002 has not admitted:
+
+- model inference/download/providers;
+- broad filesystem/shell/browser/MCP/skills product tools;
+- Desktop/computer control;
+- GolamConnect/channels;
+- real consequential external effects;
+- external network behavior;
+- Spec 003 policy/secrets/sandbox implementation.
+
+## 8. Closeout condition
+
+T002-077 is implementation-converged when this reconciliation package itself receives a green exact-head CI matrix and no newly introduced material divergence exists.
+
+T002-078 then records the exact final Draft PR head/evidence. Spec 002 may be implementation-complete while PR #3 remains Draft; it is **not** `CLOSED_CANONICAL` until separately authorized lifecycle actions occur and the implementation is merged/canonicalized. Spec 003 remains unauthorized until that canonical closure.
