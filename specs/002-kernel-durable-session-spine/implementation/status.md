@@ -1,123 +1,153 @@
 # Spec 002 Implementation Status
 
 **Implementation branch**: `impl/002-kernel-durable-session-spine`  
-**PR**: `#3` — OPEN / DRAFT  
+**PR**: #3 — OPEN / DRAFT  
 **Canonical base**: `main@cfcc90f452e7115bfb104f886e09c309a5d57a1c`  
 **Base tree**: `da65a0ae907a53212bbfc7afed1a25e7f4aa4636`  
 **Started**: 2026-08-24  
-**Last reconciled proven code head**: `29be235de00d853a205ae2f46add1d08b91c1796`  
-**Proven code tree**: `4915eb0ee62324ff5faf25184d33c5a13680e9b4`  
-**Exact-head CI**: GitHub Actions run `32800522051` / run number `40` — SUCCESS on Windows, macOS, Ubuntu for `cargo fmt --check`, `clippy -D warnings`, and workspace tests.
+**Last fully qualified code head before closeout-document reconciliation**: `29d54ca211e17c7bbcc0b2febfc2349d7b9ed2be`  
+**Exact code-head CI**: GitHub Actions run ID `32958260286`, run number `225` — SUCCESS on Windows, macOS and Ubuntu for the complete qualification workflow.  
+**Current state**: `IMPLEMENTATION_COMPLETE_PENDING_FINAL_DOCUMENTATION_HEAD_CI_AND_PR_LIFECYCLE`.
 
-> This status document is versioned on the implementation branch. The live GitHub PR head overrides this snapshot if the branch advances after the document commit.
+> Live GitHub truth overrides this file if the branch advances. A later documentation/task head requires its own exact-head CI before final PASS is recorded.
 
 ## Gate summary
 
 ```text
-T002-001_EXACT_MAIN_AND_BRANCH=PASS
-T002-002_RUST_WORKSPACE=PASS
-T002-003_BASELINE_CI=PASS
-T002-010_SOURCE_CODE_ADMISSION=SATISFIED_NA_NO_SOURCE_CODE_COPIED
-T002-011_GOLAM_RESEARCH_BEHAVIOR_MAP=PASS
-T002-012_DEPENDENCY_QUALIFICATION=PASS
+T002-001..060=PASS
+T002-061_RECOVERY_RESERVE_EVALUATION=PASS_NO_UNPROVEN_RESERVE_GUARANTEE
+T002-062_MINIMAL_AUTHENTICATED_CLI=PASS_CODE_HEAD_29d54ca
+T002-063_PROCESS_KILL_DISK_FULL_CORRUPTION=PASS_CODE_HEAD_29d54ca
 
-T002-020_CORE_TYPES_CANONICAL_ENCODING=PASS
-T002-021_PROTECTED_RUNTIME_PATHS=PARTIAL_AUTHORITY_SUBDIRECTORY_CONVERGENCE_ONLY
-T002-022_SQLITE_SCHEMA=PASS
-T002-023_SEQUENCE_AND_HASH_CHAINS=PASS
-T002-024_STARTUP_INTEGRITY_RECOVERY_MODE=PARTIAL_EXPLICIT_RECOVERY_MODE_PENDING
-T002-025_CONTENT_ADDRESSED_ARTIFACTS=PASS
-T002-026_CHECKPOINT_VERIFY_FALLBACK=PASS
-T002-027_IMMUTABLE_SESSION_FORKS=PASS
-T002-028_APPEND_VERSIONED_GOALS=PASS
+T002-070_FMT_CLIPPY_TEST=PASS_CODE_HEAD_29d54ca
+T002-071_PROPERTY_QUALIFICATION=PASS_CODE_HEAD_29d54ca
+T002-072_BOUNDED_FUZZ_SMOKE=PASS_CODE_HEAD_29d54ca
+T002-073_PLATFORM_IPC_MATRIX=PASS_CODE_HEAD_29d54ca
+T002-074_EXTERNAL_NO_NETWORK=PASS_CODE_HEAD_29d54ca
+T002-075_BS1_BS2_ARTIFACT=RECORDED_PENDING_FINAL_DOC_HEAD_CI
+T002-076_ADVERSARIAL_BOUNDARY=PASS_CODE_HEAD_29d54ca
+T002-077_FINAL_CONVERGENCE=RECORDED_PENDING_FINAL_DOC_HEAD_CI
+T002-078_CLOSEOUT=PENDING_FINAL_EXACT_HEAD
 
-T002-030_IPC_FRAME_CODEC=PASS
-T002-031_AUTHENTICATED_LIFECYCLE=PASS
-T002-032_UNIX_SOCKET_PEER_AUTH=PASS
-T002-033_WINDOWS_PIPE_SID_ACL=PASS
-T002-034_CLIENT_ENROLLMENT=PENDING
-T002-035_REQUEST_CANCEL_SETTLEMENT=PENDING
-T002-036_IPC_ADVERSARIAL_SUITE=PENDING
-
-CODEX_CODE_REVIEW_REQUESTED=YES
-CODEX_CODE_REVIEW_RESULT=BLOCKED_USAGE_LIMIT_NO_REVIEW
-CODERABBIT_PREVIOUS_MANUAL_REVIEW_RESULT=NOT_COMPLETED_HEAD_CHANGED
+CODEX_REVIEW_RESULT=BLOCKED_USAGE_LIMIT_NO_REVIEW
+CODERABBIT_PREVIOUS_RESULT=NOT_COMPLETED_HEAD_CHANGED
 EXTERNAL_REVIEW_PASS_CLAIMED=NO
 
-SPEC_002_CLOSED=NO
+SPEC_002_IMPLEMENTATION_COMPLETE=YES_PENDING_FINAL_DOC_HEAD_CI
+SPEC_002_CLOSED_CANONICAL=NO
 PR_READY=NO
 MERGE_AUTHORITY_TAKEN=NO
 SPEC_003_AUTHORIZED=NO
 ```
 
-## What is proven now
+## Implemented and qualified behavior
 
-### Durable canonical session spine
+### Protected local authority and canonical state
 
-- Seven-package Rust 1.98 workspace with `unsafe_code = forbid` in Golam code.
-- SQLite schema v1 with future-schema refusal, WAL/FULL durability settings, `PRAGMA quick_check`, canonical event/audit verification and no silent reset.
-- Transactional global/per-session sequencing and domain-separated deterministic BLAKE3 event/audit hashes.
-- Content-addressed artifacts, canonical checkpoints with replay fallback, immutable fork anchors and append-versioned goals.
+- Seven-package Rust 1.98 workspace with `unsafe_code = forbid` in Golam product crates.
+- Protected runtime/authority subtree with platform permission verification and generic/unprivileged path exclusion.
+- SQLite WAL + `synchronous=FULL`, forward-schema refusal, quick-check and canonical integrity verification.
+- Transactional global/per-session canonical ordering, deterministic BLAKE3 event/session audit material, append-versioned goals, immutable forks, content-addressed artifacts and verified checkpoints.
+- Authority corruption fails closed without silent reset.
 
-### IPC framing and authentication
+### Mandatory security integrity
 
-- Strict bounded `GIPC` framing and explicit lifecycle wire formats.
-- Fail-closed lifecycle state machine with strict Ed25519 transcript verification.
-- OS transport identity and cryptographic enrollment are independent required inputs; neither alone is authority.
+The canonical session-event audit chain is reinforced by an independent `authority-security` chain for protected non-event state:
 
-### Unix/macOS transport
+- client enrollment/revocation;
+- authorization decisions;
+- effect intents/transitions;
+- effect attempt start/finish;
+- recovery/protocol/manual-review incidents.
 
-- `0700` runtime directory, `0600` UDS, no stale-path auto-unlink, explicit `sun_path` bounds.
-- Linux `SO_PEERCRED`; macOS `LOCAL_PEERCRED` + `LOCAL_PEERPID`; same-effective-UID enforcement and valid peer PID.
-- No TCP/HTTP and no Tokio.
+Authority-store open checks chain continuity, source-row hashes, chain head and complete coverage. Tampering or missing audit coverage is an integrity failure. Integration tests directly mutate authorization/effect/client/recovery rows and prove reopen is rejected.
 
-### Windows transport and path protection
+### Authenticated local IPC / daemon
 
-- Every protected RuntimeLayout directory on Windows receives a protected DACL whose only ACE grants inheritable file-all access to the current process SID.
-- Verification re-reads the DACL through `GetNamedSecurityInfoW`, requires exactly one allow ACE for the expected SID with file-all rights, and verifies protected-DACL SDDL.
-- Windows now reaches `ProtectionLevel::UserOnlyVerified`; the previous `AuthorityProtectionUnverified` Windows state is closed by exact Windows CI.
-- The named pipe is local-only (`accept_remote=false`), non-inheritable, instance-bounded, and created with a protected DACL granting access only to the current SID.
-- Kernel-reported client PID/session metadata is captured and tested. PID/session remains metadata/identity evidence, not standalone authority.
-- The SID embedded in the pipe name is discovery only; security comes from the pipe DACL plus independent cryptographic client authentication.
-- `windows-permissions 0.2.4`, `interprocess 2.4.3`, and `widestring 1.2.1` are exact-pinned target-Windows dependencies with their unsafe/Win32 boundaries recorded in dependency qualification. Golam itself still forbids unsafe code.
+- Versioned bounded framing and strict Hello -> Challenge -> Authenticate -> Ready lifecycle.
+- Ed25519 transcript authentication plus independent OS-local peer checks.
+- Unix/macOS private UDS and peer credentials; Windows current-user ACL named pipe and peer metadata.
+- request/reply IDs, cancellation settlement and bounded pending requests.
+- accepted-connection deadline prevents a silent local peer from monopolizing the synchronous daemon indefinitely.
+- no HTTP/TCP control listener.
+
+### Kernel / bootstrap authority
+
+- KernelApi is the privileged mutation boundary; sealed authority-bearing implementation types are not public.
+- bootstrap authorization is deny-by-default and every decision is durable/audited.
+- strict-local network egress is a hard monotonic denial.
+- enrolled CLI can perform the bounded Spec 002 session/checkpoint/replay/synthetic-effect/reconciliation operations required by T002-062, but cannot enroll/revoke clients or acquire network authority.
+- canonical events are emitted through typed domain operations; no public caller-selected reserved `EventKind` append API is exposed.
+
+### Effects / recovery
+
+- full Spec 002 effect state vocabulary with compare-and-swap transitions;
+- deterministic handlers for five execution semantics;
+- durable effect intent and attempt/EXECUTING transition before a dispatch proof is returned;
+- UNKNOWN_OUTCOME dependency blocking and no blind duplicate for AT_MOST_ONCE/IRREVERSIBLE;
+- read-only reconciliation and durable manual-review escalation;
+- real process kill/restart regression and SQLite FULL rollback regression;
+- RecoveryScanner reports Normal, RecoveryOnly or Quarantined states and blocks privileged service when required.
+
+### CLI
+
+The implemented CLI is deliberately bounded and low-level:
+
+```text
+golam client enroll <client-id>
+golam sessions
+golam session open ...
+golam session create ...
+golam session fork ...
+golam goal append ...
+golam checkpoint create ...
+golam checkpoint verify ...
+golam replay ...
+golam effect simulate ...
+golam effect reconcile ...
+golam doctor
+```
+
+All normal commands cross authenticated local IPC. First client enrollment is an explicit foreground bootstrap flow.
+
+`golam doctor` reads the kernel recovery report while privileged serving is allowed. RecoveryOnly/Quarantined startup itself reports the blocking state and does not create an unauthenticated diagnostic control plane.
+
+## Qualification evidence
+
+Exact code-head run #225 passed on Windows, macOS and Ubuntu:
+
+- Format;
+- Clippy with `-D warnings`;
+- full workspace Test;
+- Property qualification;
+- Bounded fuzz smoke;
+- platform IPC qualification;
+- authenticated daemon IPC qualification;
+- adversarial authority qualification;
+- daemon build and externally observed strict-local no-network qualification.
+
+See `implementation/bs1-bs2-qualification.md` for BS-1/BS-2 evidence and `implementation/convergence.md` for final cross-artifact reconciliation.
+
+## Recovery reserve decision
+
+`implementation/recovery-reserve-evaluation.md` records `NO_RECOVERY_RESERVE_GUARANTEE`. Spec 002 does not claim a cross-platform preallocated reserve that was not proven. The implementation instead proves fail-closed SQLite FULL behavior before dispatch authority and explicit recovery/quarantine behavior.
 
 ## Review state
 
-Official GitHub Codex Code Review was requested with `@codex review` and an IPC/security-focused prompt. The Codex connector reported that the current code-review usage quota was exhausted; therefore **no Codex findings and no Codex PASS exist**.
+A GitHub Codex review request was blocked by usage limits. There is no Codex finding set and no Codex PASS.
 
-A CodeRabbit manual review was also requested, but it returned `Action not completed — Head commit changed` because implementation advanced while the request was being processed. This is not a review and not a PASS. Re-trigger CodeRabbit only on a stable post-T002-033 documentation head.
+A CodeRabbit request was not completed because the PR head changed. That result is not a review and not a PASS. Any fresh external review required for Ready/merge must be performed on a stable final head; material findings must be resolved before lifecycle promotion.
 
-## Reliability findings resolved during Phase D
+## Remaining actions within current authorization
 
-- macOS test temp-root collisions were repaired with stronger test uniqueness.
-- macOS `sockaddr_un.sun_path` limits are now explicitly validated and tested.
-- Windows path protection moved from intentional fail-closed placeholder to real current-user DACL application + OS re-verification.
-- Windows named-pipe ACL and peer metadata are exercised on the real Windows CI runner, not inferred from cross-compilation.
+1. Qualify the final documentation/convergence head with the complete CI matrix.
+2. Reconcile `tasks.md` only from that exact-head evidence.
+3. Write the T002-078 closeout record and update the Draft PR body/comment with exact evidence.
+4. Re-run exact-head CI after any final closeout-only mutation.
+5. Keep PR #3 Draft and unmerged unless separate explicit founder authorization changes its lifecycle.
 
-## Known open gaps — do not silently upgrade
-
-### T002-021 authority-state boundary
-
-Cross-platform directory privacy is now proven on Unix/macOS and Windows. The remaining T002-021 gap is different: the plan describes a dedicated protected authority-state subtree, while the current `RuntimeLayout` still permits callers to choose the SQLite authority path. T002-042 must establish generic-tool exclusion/protected-resource semantics or the plan must be formally amended to an equally strong tested boundary. Until then T002-021 remains PARTIAL.
-
-### T002-024 recovery-only mode
-
-Startup integrity verification fails closed, but explicit recovery-only/quarantine operational mode remains T002-060.
-
-### Source reuse
-
-No donor source code has been copied or ported; Source Foundry remains behavior/semantics evidence only.
-
-## Exact next execution order
-
-1. **T002-034** explicit local client enrollment/revocation + qualified private-key storage/fallback.
-2. **T002-035** request/reply IDs, cancellation, bounded pending calls, protocol-breach settlement.
-3. **T002-036** adversarial authenticated-IPC suite.
-4. Phase E kernel/bootstrap authorization.
-5. Phase F persistent effect engine and crash semantics.
-6. Phase G recovery/CLI/process-kill/disk-full work.
-7. Phase H final qualification, Spec Kit convergence and closeout.
+Spec 003 is not authorized until Spec 002 is merged and closed canonical.
 
 ## Hard scope boundary
 
-Spec 002 remains model-free and external-effect-free except deterministic simulators later in Phase F. It does not authorize models, broad product tools, Desktop, GolamConnect, cloud relays, real external effects, or starting Spec 003. PR #3 remains Draft.
+Spec 002 remains model-free, cloud-free and real-external-effect-free. It does not authorize broad product tools, Desktop/computer control, GolamConnect, external channels, model/provider integration, real secrets, or Spec 003 policy/secrets/sandbox implementation.
