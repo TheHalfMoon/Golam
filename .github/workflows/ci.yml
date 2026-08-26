@@ -36,12 +36,15 @@ jobs:
           cargo +1.98.0 test --locked -p golam-ledger --test fuzz_smoke
       - name: IPC transport qualification (Unix)
         if: runner.os != 'Windows'
-        run: cargo +1.98.0 test --locked -p golam-ipc unix_transport::
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc unix_transport::
       - name: IPC transport qualification (Windows)
         if: runner.os == 'Windows'
-        run: cargo +1.98.0 test --locked -p golam-ipc windows_transport::
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc windows_transport::
       - name: Authenticated daemon IPC qualification
-        run: cargo +1.98.0 test --locked -p golamd --bin golamd connection::tests::
+        run: |
+          cargo +1.98.0 test --locked -p golamd --bin golamd connection::tests::
       - name: Adversarial authority qualification
         run: |
           cargo +1.98.0 test --locked -p golam-ipc --test adversarial
