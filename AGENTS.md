@@ -2,52 +2,55 @@
 
 ## Current phase
 
-Golam is in **Spec 002 implementation qualification and closeout: Kernel & Durable Session Spine** on branch `impl/002-kernel-durable-session-spine`, PR #3.
+Golam is in **Spec 003 planning: Identity, Policy, Secrets & Sandbox**.
 
-The Spec 002 planning package was merged to canonical `main` at `cfcc90f452e7115bfb104f886e09c309a5d57a1c`. Rust implementation is therefore authorized only to the extent defined by the merged Spec 002 package and its task order.
+Spec 002 — Kernel & Durable Session Spine — is `CLOSED_CANONICAL` on `main@a04756f242e48faeda802e5b3fd99a0c8d52f53e` after qualified PR #3 merge and post-merge CI #252.
 
-PR #3 remains Draft until separately authorized to become Ready. Do not merge PR #3 without separate explicit founder authorization. Do not start Spec 003 until Spec 002 is merged and closed canonical.
+The active Spec 003 planning PR is documentation/governance only. **Do not write Spec 003 Rust product implementation, add product dependencies, or mutate the runtime architecture until the Spec 003 planning package is reviewed and merged to canonical `main`.**
 
 ## Authority order
 
 1. exact live GitHub truth;
 2. `.specify/memory/constitution.md` (v1.2.0 or later);
-3. frozen Spec 001 program architecture;
-4. active Spec 002 artifacts, including implementation evidence and task state;
-5. exact admitted donor/source records.
+3. frozen Spec 001 program architecture and contracts;
+4. canonical Spec 002 implementation and closeout evidence;
+5. active Spec 003 planning artifacts;
+6. exact admitted donor/source records.
 
-## Spec 002 read order
+## Spec 003 read order
 
 1. `.specify/memory/constitution.md`
 2. `specs/001-golam-local-agent-os-foundation/spec.md`
 3. `specs/001-golam-local-agent-os-foundation/plan.md`
 4. `specs/001-golam-local-agent-os-foundation/source-permission-attestation.md`
-5. `specs/002-kernel-durable-session-spine/spec.md`
-6. `specs/002-kernel-durable-session-spine/clarification-closeout.md`
-7. `specs/002-kernel-durable-session-spine/research.md`
-8. `specs/002-kernel-durable-session-spine/donor-qualification.md`
-9. `specs/002-kernel-durable-session-spine/plan.md`
-10. `specs/002-kernel-durable-session-spine/data-model.md`
-11. all `specs/002-kernel-durable-session-spine/contracts/`
-12. `specs/002-kernel-durable-session-spine/quickstart.md`
-13. `specs/002-kernel-durable-session-spine/checklists/implementation-readiness.md`
-14. `specs/002-kernel-durable-session-spine/tasks.md`
-15. `specs/002-kernel-durable-session-spine/analysis.md`
-16. all `specs/002-kernel-durable-session-spine/implementation/` evidence.
+5. canonical Spec 002 package and `implementation/` closeout evidence
+6. `specs/003-identity-policy-secrets-sandbox/spec.md`
+7. `specs/003-identity-policy-secrets-sandbox/clarification-closeout.md`
+8. `specs/003-identity-policy-secrets-sandbox/research.md`
+9. `specs/003-identity-policy-secrets-sandbox/donor-qualification.md`
+10. `specs/003-identity-policy-secrets-sandbox/plan.md`
+11. `specs/003-identity-policy-secrets-sandbox/data-model.md`
+12. all `specs/003-identity-policy-secrets-sandbox/contracts/`
+13. `specs/003-identity-policy-secrets-sandbox/quickstart.md`
+14. `specs/003-identity-policy-secrets-sandbox/checklists/implementation-readiness.md`
+15. `specs/003-identity-policy-secrets-sandbox/tasks.md`
+16. `specs/003-identity-policy-secrets-sandbox/analysis.md`
 
-## Spec 002 hard boundaries
+## Spec 003 hard boundaries
 
-- Rust is mandatory for every product component implemented by Spec 002.
-- Keep exactly the bounded seven-package implementation spine unless a reviewed Spec 002 requirement proves another package necessary. Do not scaffold empty future crates.
-- No model inference, model download, cloud provider, browser, desktop control, GolamConnect, skills, MCP, workers, or real user secrets in Spec 002.
-- No real-world consequential effects are required; effect semantics are proven with deterministic simulators/fakes.
-- No unauthenticated localhost HTTP/TCP control surface. Local client traffic uses authenticated OS-local IPC only.
-- No generic tool or client can write kernel-owned policy/authority/audit/ledger state.
-- Do not expose a generic caller-selected canonical `EventKind` append surface that could forge reserved system event families; invariant-coupled canonical events are emitted through their owning typed KernelApi operations.
-- No blind effect retry after ambiguous outcomes.
-- No network egress in strict-local Spec 002 product code. Test harnesses may observe the Golam-managed process from outside its boundary.
-- Security-critical client enrollment/revocation, authorization, effect, recovery, and canonical event evidence must retain mandatory tamper-evident integrity coverage.
-- No donor source is copied merely because permission exists. Record exact source state, permission scope/evidence, selected files, dependency/license obligations, and technical/security qualification first.
-- `Golam-Research` is high-value implementation evidence and an authorized-source candidate. Mine it seriously, but preserve the distinction between reconstructed source and original upstream authorship.
-- Never claim CI/tests passed unless exact-head evidence exists.
-- A documentation/task closeout commit does not inherit PASS merely because an earlier code head was green; run the required exact-head gate again.
+- Planning PR only: no Rust product code, product dependency admission, schema migration, workflow weakening, model/provider integration, or real external effect.
+- Preserve the existing seven-package Spec 002 spine. Do not create empty future crates; split only when implementation evidence proves a new ownership/testing boundary is necessary.
+- Keep `Authorize(principal, action, resource, context)` semantically stable. Spec 003 replaces the bootstrap evaluator; it does not replace the KernelApi architecture.
+- Cedar is a **candidate policy evaluator**, not the owner of Golam authority semantics. Exact crate/version admission requires implementation-time dependency qualification.
+- Hard Golam safety denials and strict-local denial are monotonic and dominate Cedar, leases, and approvals.
+- Capability/lease authority is kernel-minted, non-self-expanding, expiry/revocation checked at the protected action boundary, and child leases may only narrow.
+- Protected policy/principal/lease/approval/secret/egress/sandbox/effect/audit state is not generic filesystem state. Protected mutation is a typed elevated effect.
+- Real secrets stay out of model context and untrusted execution where brokerable. Planning and qualification use deterministic canaries, never production credentials.
+- `SECRET_DERIVED` content is not eligible for canonical long-term memory. Model/worker/skill/MCP assertions cannot self-clear taint.
+- Strict-local egress remains a hard deny before any policy permit. No silent cloud/network fallback.
+- Authorization and sandboxing remain separate. Wasmtime/WASI is only a candidate for portable bounded extensions and is not a universal native sandbox.
+- `Golam-Research` is `REFERENCE_ONLY` for Spec 003 unless a later Source Foundry record admits exact bounded files. No donor code is admitted by this planning package.
+- No model/harness, broad filesystem/shell/browser tool suite, Desktop/computer control, GolamConnect, channels, workers, or scheduler product implementation in Spec 003.
+- Never claim CI/tests/review PASS without exact-head evidence. Any branch mutation invalidates prior exact-head qualification evidence.
+- Codex review is excluded from the Golam workflow by founder direction. Qodo is the authorized external review source for this sequence; CodeRabbit is not a substitute.
+- Spec 003 implementation begins only after this planning package is reviewed, merged, and canonical `main` is reread.
