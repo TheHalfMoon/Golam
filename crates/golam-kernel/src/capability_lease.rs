@@ -4,10 +4,15 @@ use std::error::Error;
 use std::fmt;
 
 use golam_core::authority::AuthorityLayout;
-use golam_core::{CanonicalEncoder, CoreError};
+use golam_core::{CanonicalEncoder, CoreError, EffectId};
 use golam_ledger::capability_leases::{
-    CapabilityLeaseRuntimeError, CapabilityLeaseRuntimeState, load_capability_lease_runtime_chain,
+    CapabilityLeaseBinding, CapabilityLeaseMutationError, CapabilityLeaseRuntimeError,
+    CapabilityLeaseRuntimeState, CapabilityLeaseStore, load_capability_lease_runtime_chain,
+    prepare_capability_lease_issue, prepare_capability_lease_revocation,
 };
+
+use crate::KernelApi;
+use crate::authorization::{AuthorizationPolicy, DecisionId};
 
 const LEASE_SCOPE_DOMAIN: &[u8] = b"golam:capability-lease-scope:v1";
 const MAX_SCOPE_ITEMS: usize = 32;
@@ -215,6 +220,141 @@ impl CapabilityLease {
     pub const fn authority_digest(&self) -> [u8; 32] {
         self.authority_digest
     }
+}
+
+impl<P: AuthorizationPolicy> KernelApi<P> {
+    /// Returns the exact resource and payload hash that a typed elevated
+    /// effect and its authorization decision must bind before lease issuance.
+    /// This prepares data only; it does not mint authority.
+    pub fn capability_lease_issue_effect_binding(
+        &self,
+        principal_id: &str,
+        parent: Option<&CapabilityLease>,
+        scope: &CapabilityLeaseScope,
+        not_before: Option<&str>,
+        expires_at: Option<&str>,
+    ) -> Result<(String, [u8; 32]), CapabilityLeaseMutationError> {
+        let prepared = prepare_issue(principal_id, parent, scope, not_before, expires_at)?;
+        Ok((prepared.resource().to_owned(), prepared.intent_digest()))
+    }
+
+    /// Commits a protected capability lease only after the ledger proves that
+    /// `authority_decision_id` is the latest exact allow, the supplied effect
+    /// is exact authorized at-most-once elevated work, the ONCE approval is
+    /// unused and exact, and any parent lease is current and non-widening.
+    /// Only a successful atomic commit produces this sealed authority handle.
+    pub fn issue_capability_lease(
+        &mut self,
+        principal_id: &str,
+        parent: Option<&CapabilityLease>,
+        scope: CapabilityLeaseScope,
+        not_before: Option<&str>,
+        expires_at: Option<&str>,
+        authority_decision_id: DecisionId,
+        approval_id: [u8; 16],
+        effect_id: EffectId,
+    ) -> Result<CapabilityLease, CapabilityLeaseMutationError> {
+        let prepared = prepare_issue(principal_id, parent, &scope, not_before, expires_at)?;
+        if prepared.scope_digest() != scope.digest() {
+            return Err(CapabilityLeaseMutationError::InvalidStoredRecord(
+                "kernel and ledger scope digests differ",
+            ));
+        }
+        let expected_parent = parent.map(lease_binding);
+        let mut store = CapabilityLeaseStore::open(&self.authority)?;
+        let record = store.issue(
+            prepared,
+            authority_decision_id.0,
+            approval_id,
+            effect_id,
+        )?;
+        let expected_parent_id = expected_parent.map(CapabilityLeaseBinding::lease_id);
+        if record.principal_id != principal_id || record.parent_lease_id != expected_parent_id {
+            return Err(CapabilityLeaseMutationError::InvalidStoredRecord(
+                "committed lease identity differs from kernel request",
+            ));
+        }
+        Ok(CapabilityLease {
+            lease_id: CapabilityLeaseId(record.lease_id),
+            principal_id: record.principal_id,
+            parent_lease_id: record.parent_lease_id.map(CapabilityLeaseId),
+            scope,
+            generation: record.generation,
+            issued_global_seq: record.issued_global_seq,
+            authority_digest: record.authority_digest,
+            _sealed: LeaseSeal,
+        })
+    }
+
+    /// Returns the exact resource and payload hash that a typed elevated
+    /// effect and authorization decision must bind before monotonic revocation.
+    pub fn capability_lease_revoke_effect_binding(
+        &self,
+        lease: &CapabilityLease,
+        reason_code: &str,
+        revoked_at: &str,
+    ) -> Result<(String, [u8; 32]), CapabilityLeaseMutationError> {
+        let prepared = prepare_capability_lease_revocation(
+            lease_binding(lease),
+            reason_code,
+            revoked_at,
+        )?;
+        Ok((prepared.resource().to_owned(), prepared.intent_digest()))
+    }
+
+    /// Commits a monotonic protected revocation under the exact current lease
+    /// binding. A stale generation/digest, reused approval, wrong effect or
+    /// mismatched authorization decision fails closed before commit.
+    pub fn revoke_capability_lease(
+        &mut self,
+        lease: &CapabilityLease,
+        reason_code: &str,
+        revoked_at: &str,
+        authority_decision_id: DecisionId,
+        approval_id: [u8; 16],
+        effect_id: EffectId,
+    ) -> Result<(), CapabilityLeaseMutationError> {
+        let prepared = prepare_capability_lease_revocation(
+            lease_binding(lease),
+            reason_code,
+            revoked_at,
+        )?;
+        let mut store = CapabilityLeaseStore::open(&self.authority)?;
+        store.revoke(
+            prepared,
+            authority_decision_id.0,
+            approval_id,
+            effect_id,
+        )?;
+        Ok(())
+    }
+}
+
+fn prepare_issue(
+    principal_id: &str,
+    parent: Option<&CapabilityLease>,
+    scope: &CapabilityLeaseScope,
+    not_before: Option<&str>,
+    expires_at: Option<&str>,
+) -> Result<golam_ledger::capability_leases::PreparedCapabilityLeaseIssue, CapabilityLeaseMutationError>
+{
+    prepare_capability_lease_issue(
+        principal_id,
+        parent.map(lease_binding),
+        scope.actions(),
+        scope.resources(),
+        scope.context_constraints(),
+        not_before,
+        expires_at,
+    )
+}
+
+fn lease_binding(lease: &CapabilityLease) -> CapabilityLeaseBinding {
+    CapabilityLeaseBinding::new(
+        lease.lease_id().to_bytes(),
+        lease.generation(),
+        lease.authority_digest(),
+    )
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -708,6 +848,35 @@ mod tests {
         assert_eq!(lease.generation(), 3);
         assert_eq!(lease.issued_global_seq(), 4);
         assert_eq!(lease.authority_digest(), [5_u8; 32]);
+    }
+
+    #[test]
+    fn mutation_preparation_keeps_kernel_and_ledger_scope_digests_identical() {
+        let scope = CapabilityLeaseScope::normalize(
+            &["session.read", "session.create"],
+            &["session:1"],
+            &["local-owner"],
+        )
+        .unwrap();
+        let prepared = prepare_issue(
+            "client:9:alice",
+            None,
+            &scope,
+            Some("2026-08-27T00:00:00Z"),
+            Some("2026-08-28T00:00:00Z"),
+        )
+        .unwrap();
+        assert_eq!(prepared.scope_digest(), scope.digest());
+        assert!(prepared.resource().starts_with("capability-lease-issue:"));
+    }
+
+    #[test]
+    fn mutation_binding_uses_current_sealed_generation_and_digest() {
+        let lease = kernel_fixture_lease();
+        let binding = lease_binding(&lease);
+        assert_eq!(binding.lease_id(), lease.lease_id().to_bytes());
+        assert_eq!(binding.generation(), lease.generation());
+        assert_eq!(binding.authority_digest(), lease.authority_digest());
     }
 
     #[test]

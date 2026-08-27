@@ -16,6 +16,8 @@ const RECORD_DOMAIN: &[u8] = b"golam:authority-security-v2:record:v1";
 enum ProtectedMutationKind {
     PolicyBundle,
     ActivePolicy,
+    CapabilityLease,
+    CapabilityRevocation,
     AuthorizationDecisionV2,
     #[cfg(test)]
     Approval,
@@ -27,6 +29,8 @@ impl ProtectedMutationKind {
         match self {
             Self::PolicyBundle => "policy_bundle",
             Self::ActivePolicy => "active_policy",
+            Self::CapabilityLease => "capability_lease",
+            Self::CapabilityRevocation => "capability_revocation",
             Self::AuthorizationDecisionV2 => "authorization_decision_v2",
             #[cfg(test)]
             Self::Approval => "approval",
@@ -103,6 +107,35 @@ pub(crate) fn append_active_policy_snapshot(
         [],
     )?;
     append_snapshot(transaction, ProtectedMutationKind::ActivePolicy, 1, &values)
+}
+
+pub(crate) fn append_capability_lease_snapshot(
+    transaction: &Transaction<'_>,
+    lease_id: &[u8],
+) -> Result<(), AuthoritySecurityWriteError> {
+    let values = query_values(
+        transaction,
+        "SELECT lease_id, principal_id, parent_lease_id, actions_scope, resources_scope, context_constraints, issued_by, issued_global_seq, not_before, expires_at, generation, status, authority_digest FROM capability_leases WHERE lease_id = ?1",
+        params![lease_id],
+    )?;
+    append_snapshot(transaction, ProtectedMutationKind::CapabilityLease, 1, &values)
+}
+
+pub(crate) fn append_capability_revocation_snapshot(
+    transaction: &Transaction<'_>,
+    revocation_id: &[u8],
+) -> Result<(), AuthoritySecurityWriteError> {
+    let values = query_values(
+        transaction,
+        "SELECT revocation_id, lease_id, revoked_by, reason_code, revoked_global_seq, revoked_at FROM capability_revocations WHERE revocation_id = ?1",
+        params![revocation_id],
+    )?;
+    append_snapshot(
+        transaction,
+        ProtectedMutationKind::CapabilityRevocation,
+        1,
+        &values,
+    )
 }
 
 pub(crate) fn append_authorization_decision_v2_snapshot(
