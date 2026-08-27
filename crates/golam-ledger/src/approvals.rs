@@ -466,9 +466,12 @@ mod tests {
     #[test]
     fn once_scope_binds_exact_action_resource_and_effect() {
         let first = ApprovalScope::once(EffectId(4), "effect.simulate", "session:4").unwrap();
-        let changed_action = ApprovalScope::once(EffectId(4), "effect.execute", "session:4").unwrap();
-        let changed_resource = ApprovalScope::once(EffectId(4), "effect.simulate", "session:5").unwrap();
-        let changed_effect = ApprovalScope::once(EffectId(5), "effect.simulate", "session:4").unwrap();
+        let changed_action =
+            ApprovalScope::once(EffectId(4), "effect.execute", "session:4").unwrap();
+        let changed_resource =
+            ApprovalScope::once(EffectId(4), "effect.simulate", "session:5").unwrap();
+        let changed_effect =
+            ApprovalScope::once(EffectId(5), "effect.simulate", "session:4").unwrap();
         let digest = first.scope_digest().unwrap();
         assert_ne!(digest, changed_action.scope_digest().unwrap());
         assert_ne!(digest, changed_resource.scope_digest().unwrap());
