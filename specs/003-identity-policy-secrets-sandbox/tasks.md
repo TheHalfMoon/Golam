@@ -39,7 +39,7 @@ Legend:
 ## Phase D — Approvals
 
 - [x] **T003-030** Implement ONCE, SESSION_SCOPED, TIME_BOXED, OPERATION_PATTERN and RUN_PREAUTHORIZATION records/scopes. Exact-head regression evidence: CI #306 (`33090617555`) SUCCESS at `5e2177f5591e7eb3cf7ccf42c24e728f0ed57963` on Windows/macOS/Ubuntu.
-- [ ] **T003-031** Bind approvals to action/resource/effect/pattern, risk, taint/context digest, parent decision, expiry and limits.
+- [x] **T003-031** Bind approvals to action/resource/effect/pattern, risk, taint/context digest, parent decision, expiry and limits. Exact-head regression evidence: CI #318 (`33104078403`) SUCCESS at `a55322e99240ab569b6e8c0d3287f4f7ac3a5a9c` on Windows/macOS/Ubuntu.
 - [ ] **T003-032** Revalidate approval freshness/scope immediately before protected execution.
 - [ ] **T003-033** Implement durable atomic ONCE reservation/consumption with concurrency and crash/retry safety.
 - [ ] **T003-034** Enforce bounded RUN_PREAUTHORIZATION for unattended irreversible effects and deny generic always-allow behavior.
@@ -119,11 +119,12 @@ T003_022=PASS
 T003_023=PASS
 T003_024=PASS
 T003_030=PASS
+T003_031=PASS
 CEDAR_POLICY_ADMITTED_EXACT=4.12.0
 SECRET_CRYPTO_AND_OS_KEY_PROTECTORS_QUALIFIED=YES
 WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED
 Golam-Research=REFERENCE_ONLY
 DONOR_CODE_ADMITTED=NO
 REAL_SECRETS_USED=NO
-NEXT_TASK=T003-031
+NEXT_TASK=T003-032
 ```
