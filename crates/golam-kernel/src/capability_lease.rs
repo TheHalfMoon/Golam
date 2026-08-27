@@ -59,7 +59,7 @@ impl CapabilityLeaseScope {
             actions,
             resources,
             context_constraints,
-            digest: *blake3::hash(&canonical).as_bytes(),
+            digest: golam_ledger::payload_hash(&canonical),
         })
     }
 
