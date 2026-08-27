@@ -3,7 +3,7 @@
 **Feature Branch**: `spec/003-identity-policy-secrets-sandbox`  
 **Base**: `main@a04756f242e48faeda802e5b3fd99a0c8d52f53e`  
 **Created**: 2026-08-27  
-**Status**: PLANNING_COMPLETE_PENDING_REVIEW  
+**Status**: QODO_REPAIR_RECONCILED_PENDING_REQUALIFICATION  
 **Planning rule**: NO PRODUCT IMPLEMENTATION OR DEPENDENCY ADMISSION IN THIS PR
 
 ## Purpose
@@ -33,7 +33,9 @@ At the end of Spec 003 implementation, the existing authenticated local daemon/C
 - taint propagates through derived local artifacts and cannot be self-cleared;
 - secret values are represented by opaque handles and brokered where possible;
 - unbrokerable secret use follows a bounded isolated fallback with redaction and no argv/ambient inheritance;
-- strict-local egress remains an unconditional hard denial for Golam-managed network creation;
+- an explicit user-designated secret-entry path treats the complete submitted value as secret before any durable model-visible append, independent of format recognition;
+- strict-local egress remains an unconditional hard denial for all Golam-managed network creation, including managed descendants;
+- every changed effective non-strict destination is reauthorized before connect/follow;
 - declared sandbox profiles compile to bounded launch/admission plans and unsupported containment claims fail closed.
 
 ## User stories
@@ -82,7 +84,8 @@ Acceptance:
 - unbrokerable use requires explicit bounded approval and isolated non-argv injection;
 - ambient inheritance is denied;
 - deterministic secret canaries are absent from prompts, durable logs/events/errors and unauthorized child output;
-- user-pasted secrets are redacted/tombstoned at ingestion rather than persisted as plaintext canonical history.
+- the explicit secret-entry surface treats the complete submitted value as secret even when no detector recognizes its format, and only a handle/tombstone/redaction marker plus non-secret metadata may become durable model-visible state;
+- automatic detectors for secrets embedded in unrestricted free text are bounded defense in depth and are not the guarantee for user-designated secret entry.
 
 ### US5 — Taint survives derivation
 
@@ -103,8 +106,10 @@ Acceptance:
 - strict-local denial is enforced before Cedar/lease/approval permits;
 - a network permit cannot make external egress usable in strict-local mode;
 - non-strict permits are destination/action/purpose/time scoped;
-- DNS resolution, redirects and rebinding are represented in the authorization boundary;
-- every denied or unexpected attempt is auditable and externally observable qualification remains required.
+- hostname permission never implicitly transfers to arbitrary resolved/private targets;
+- before connect/follow, every changed effective destination caused by DNS resolution, redirect, rebinding, protocol/port change, or transition to private/link-local/loopback is reauthorized and denied unless explicitly allowed;
+- every denied or unexpected attempt is auditable;
+- external strict-local qualification observes all Golam-managed processes, including descendants, rather than only the daemon PID.
 
 ### US7 — Sandboxes are declared and fail closed
 
@@ -116,6 +121,7 @@ Acceptance:
 - profiles declare filesystem, network, process, resource, device and IPC bounds;
 - unsupported profile/platform enforcement fails closed;
 - profile approval does not override capability/egress denial;
+- no managed child with network capability is launched before the external no-egress observer can capture its descendant egress;
 - Wasmtime/WASI may implement portable bounded extension profiles after dependency qualification, but native tools require native containment evidence.
 
 ## Functional requirements
@@ -137,9 +143,9 @@ Acceptance:
 - **FR-015**: Implement opaque secret handles and protected secret metadata/version records. Raw values MUST NOT be exposed through generic APIs.
 - **FR-016**: Vault storage MUST be encrypted at rest; exact cryptographic/key-protection dependencies are implementation-time qualified and MUST fail closed when unavailable or corrupt.
 - **FR-017**: Brokerable secret use MUST avoid model/untrusted plaintext exposure. Unbrokerable use requires bounded approval, isolated non-argv injection, cleared ambient environment and value-aware redaction.
-- **FR-018**: User-pasted secret ingestion MUST redact/tombstone plaintext before durable model-visible history is committed.
-- **FR-019**: Strict-local external egress MUST remain a kernel hard deny independent of Cedar permits, leases or approvals.
-- **FR-020**: Non-strict egress permits MUST bind principal/process, action/purpose, destination, time/usage, taint and optional secret handle; DNS/redirect/rebinding are in scope.
+- **FR-018**: The explicit user-designated secret-entry boundary MUST treat the entire submitted value as secret independently of format detection and MUST persist only a handle/tombstone/redaction marker plus non-secret metadata before any durable model-visible history is committed. Recognized-format detection in ordinary free text is defense in depth only.
+- **FR-019**: Strict-local external egress MUST remain a kernel hard deny independent of Cedar permits, leases or approvals for every Golam-managed process.
+- **FR-020**: Non-strict egress permits MUST bind principal/process, action/purpose, destination, time/usage, taint and optional secret handle. Before connect/follow, every effective destination MUST remain inside authorized scope; DNS resolution, redirects, rebinding, protocol/port changes, and private/link-local/loopback target changes MUST trigger mandatory reauthorization or deny. A hostname permit MUST NOT implicitly authorize a changed effective target.
 - **FR-021**: Implement declared sandbox profile records and a fail-closed profile-to-launch/admission plan boundary.
 - **FR-022**: Sandbox profiles MUST declare FS roots/writes, network, environment, process spawning, CPU/memory/time/output, devices, IPC and inherited handles.
 - **FR-023**: Unsupported sandbox enforcement on a platform MUST deny rather than silently execute with weaker isolation.
@@ -148,6 +154,7 @@ Acceptance:
 - **FR-026**: Spec 003 MUST preserve Spec 002 effect durability/reconciliation invariants and must not introduce real external integrations to prove authority semantics.
 - **FR-027**: Implementation dependency/donor admission MUST follow Source Foundry and exact-version unsafe/FFI/platform qualification before code use.
 - **FR-028**: `Golam-Research` remains reference-only for this slice unless a later exact bounded admission record explicitly changes that state.
+- **FR-029**: Before Spec 003 launches any Golam-managed child process with network capability, external strict-local qualification MUST be upgraded to observe the complete managed process tree or an equivalent sinkholed/network boundary that independently captures descendant egress.
 
 ## Non-functional requirements
 
@@ -160,7 +167,7 @@ Acceptance:
 - **NFR-007 Portability**: Windows, macOS and Linux are qualification targets; unsupported containment capabilities are explicit and fail closed.
 - **NFR-008 TCB control**: no broad framework may become the authority owner; parser/config surfaces remain bounded and isolated from authority construction.
 - **NFR-009 No false sandbox claim**: a declarative profile is not evidence of OS containment; containment claims require implemented platform executors and tests.
-- **NFR-010 Secret hygiene**: implementation tests use deterministic canaries only; no real user/service secret is required for acceptance.
+- **NFR-010 Secret hygiene**: implementation tests use deterministic canaries only, including deliberately unknown-format values through explicit secret entry; no real user/service secret is required for acceptance.
 
 ## Success criteria
 
@@ -170,10 +177,10 @@ Acceptance:
 - **SC-004**: policy activation and protected authority mutations remain atomic under injected crash/disk-full failures.
 - **SC-005**: taint property tests prove derivation preserves source labels and self-clear attempts fail.
 - **SC-006**: `SECRET_DERIVED` memory admission tests fail closed unless a registered deterministic secret-elimination sanitizer produces a separately evidenced non-secret artifact.
-- **SC-007**: canary-secret tests show no canary in durable logs/events/errors/prompts or unauthorized subprocess output, and vault durable bytes do not contain plaintext canary.
-- **SC-008**: strict-local tests prove no policy/lease/approval/egress permit can enable external network; externally observed no-egress remains green.
+- **SC-007**: recognized and unknown-format explicit-entry canary-secret tests show no canary in durable logs/events/errors/prompts or unauthorized subprocess output, and vault durable bytes do not contain plaintext canary.
+- **SC-008**: strict-local tests prove no policy/lease/approval/egress permit can enable external network, and externally observed qualification covers the complete Golam-managed process tree or an equivalent descendant-capturing network boundary.
 - **SC-009**: sandbox profile tests deny unsupported enforcement and reject inherited env/forbidden FS/network/process rights.
-- **SC-010**: exact-head Windows/macOS/Ubuntu CI and authorized post-CI Qodo review contain no unresolved material findings before implementation closeout.
+- **SC-010**: exact-head Windows/macOS/Ubuntu CI and authorized post-CI Qodo review contain no unresolved material findings before planning closeout or later implementation closeout claims.
 
 ## Out of scope
 

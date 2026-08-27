@@ -2,7 +2,7 @@
 
 **Branch**: `spec/003-identity-policy-secrets-sandbox`  
 **Base**: `main@a04756f242e48faeda802e5b3fd99a0c8d52f53e`  
-**Status**: PLANNED — NO PRODUCT IMPLEMENTATION IN THIS PLANNING PR
+**Status**: QODO REPAIR RECONCILED — NO PRODUCT IMPLEMENTATION IN THIS PLANNING PR
 
 ## Summary
 
@@ -14,17 +14,18 @@ No new authority architecture is introduced. The work fills the authority famili
 
 | Gate | Result |
 |---|---|
-| Local ownership / strict-local | PASS_SPEC — authority is local; strict-local hard denial remains above policy |
+| Local ownership / strict-local | PASS_SPEC — authority is local; strict-local hard denial remains above policy and applies to all managed descendants |
 | Rust trusted path | PASS_SPEC — all authority product code remains Rust-first |
 | Small privileged kernel | PASS_SPEC — uses existing KernelApi, no framework-owned authority |
 | Explicit least privilege | PASS_SPEC — principal/action/resource/context + narrowing leases |
 | Protected resources | PASS_SPEC — typed elevated mutation only |
 | Durable effects | PASS_SPEC — authority mutations integrate existing effect/audit invariants |
-| Secret safety | PASS_SPEC — handles/broker/fallback/redaction/vault contracts frozen |
+| Secret safety | PASS_SPEC — explicit secret entry is whole-value secret independent of detection; handles/broker/fallback/redaction/vault contracts frozen |
 | Taint | PASS_SPEC — monotonic labels and auditable downgrade/sanitization |
-| Sandbox honesty | PASS_SPEC — profile != containment, unsupported enforcement fails closed |
+| Egress destination binding | PASS_SPEC — changed effective destinations require mandatory reauthorization |
+| Sandbox honesty | PASS_SPEC — profile != containment, unsupported enforcement fails closed, descendant observation precedes network-capable child execution |
 | Source governance | PASS — no donor/dependency admitted by planning |
-| Verification | PASS_SPEC — adversarial/property/crash/canary/no-egress gates enumerated |
+| Verification | PASS_SPEC — adversarial/property/crash/canary/process-tree no-egress gates enumerated |
 
 ## Preserve the seven-package spine
 
@@ -187,13 +188,15 @@ Callers should not receive raw values when the kernel/broker can perform the use
 
 ## Secret ingestion
 
-A designated ingestion path detects explicit/recognized secret input before durable model-visible append. It writes a redacted/tombstone representation plus non-secret audit metadata. Tests prove known deterministic canaries are removed; the product does not claim perfect arbitrary-secret detection.
+The explicit user-designated secret-entry path treats the complete submitted value as secret regardless of its syntax or whether any detector recognizes it. Before durable model-visible append it persists only an opaque handle, tombstone/redaction marker and non-secret audit metadata; raw bytes may enter only the protected vault/broker mutation path and never canonical plaintext.
+
+Recognized-format detection on ordinary free-form text remains bounded defense in depth. It may redact known canary/classes, but it does not define the security guarantee and Golam does not claim perfect automatic discovery of arbitrary secrets hidden in unrestricted text. Implementation qualification must include deliberately unknown-format deterministic canaries through the explicit entry path.
 
 ## Egress
 
 ### Strict-local
 
-The Spec 002 hard guard remains first. No external network permit is effective in strict-local mode.
+The Spec 002 hard guard remains first. No external network permit is effective in strict-local mode for `golamd` or any Golam-managed descendant.
 
 ### Non-strict permit
 
@@ -206,7 +209,7 @@ Permit scope includes:
 - optional secret handle;
 - parent lease/decision.
 
-Resolution/redirect/rebinding checks are part of the execution authorization path.
+A hostname permit is not authority for arbitrary addresses returned by DNS. Immediately before socket creation/following a redirect, the effective endpoint must still be within the authorized destination scope or receive a fresh authorization decision. Every resolution change, redirect, rebinding event, protocol/port change, and transition to private/link-local/loopback requires mandatory revalidation; an unapproved changed target denies.
 
 ## Sandbox profiles
 
@@ -230,6 +233,10 @@ Profile classes reserve:
 - local model sidecar.
 
 Spec 003 need not implement later product integrations. It must implement/test enough profile/admission mechanics to prove deny-by-default inheritance and unsupported-platform failure. A Wasmtime executor is implementation-task-gated and may be deferred if no executable WASM path is needed to satisfy the bounded slice.
+
+### Descendant-observation predecessor gate
+
+The existing Spec 002 external locality scripts observe the daemon PID and are not sufficient evidence once Spec 003 introduces managed subprocess execution. Before any native Golam-managed child with network capability is launched, implementation must upgrade external observation to the complete managed process tree or use an equivalent sinkholed/network boundary that captures descendant egress independently of PID ownership. This observer upgrade is a predecessor to the native network-capable child executor, not a deferred closeout-only task.
 
 ## Data migration
 
@@ -258,9 +265,11 @@ Before implementation code adds Cedar, crypto/vault/keychain, Wasmtime or platfo
 - policy activation/lease/approval/secret rotation disk-full and crash fault injection;
 - taint union/downgrade/sanitizer properties;
 - `SECRET_DERIVED` memory-sink rejection;
-- deterministic secret canary log/event/error/durable-vault tests;
-- egress permit + strict-local dominance tests;
-- external no-egress observation retained;
+- recognized and deliberately unknown-format deterministic secret canary tests through explicit secret entry;
+- free-form secret detectors as separate defense-in-depth tests;
+- mandatory changed-effective-destination reauthorization for DNS/redirect/rebinding/protocol/port/private targets;
+- strict-local permit dominance tests;
+- external no-egress observation across the complete Golam-managed process tree or equivalent descendant-capturing sinkhole boundary;
 - sandbox profile env/FS/network/spawn/resource/unsupported-platform tests;
 - Windows/macOS/Linux exact-head CI;
 - fresh authorized Qodo after exact-head CI.
@@ -271,7 +280,7 @@ Spec 003 implementation may close only when:
 - all implementation tasks are complete;
 - exact-head Windows/macOS/Ubuntu CI succeeds;
 - hard-denial/lease/approval/taint/secret/egress/sandbox adversarial evidence exists;
-- canary-secret and external no-egress gates pass;
+- explicit-entry canary-secret and process-tree external no-egress gates pass;
 - convergence finds no material divergence from constitution/spec/contracts/tasks;
 - fresh authorized post-CI Qodo review has zero unresolved material findings;
 - implementation PR is reviewed/merged and post-merge canonical evidence is green before Spec 004 starts.

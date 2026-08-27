@@ -19,7 +19,7 @@ A permit binds:
 - optional secret handle;
 - parent lease/decision.
 
-DNS resolution, redirects and rebinding/private-target changes are part of the authorization boundary and may require revalidation/deny.
+Hostname authorization never authorizes an arbitrary resolved address or later redirect target. DNS resolution is part of the protected execution boundary: before socket creation, every effective resolved endpoint must be inside the already-authorized destination scope or receive a fresh authorization decision. Redirects, rebinding, resolution changes, protocol/port changes, and transitions to private/link-local/loopback targets require mandatory revalidation before following/connecting; if the new effective destination is not explicitly authorized, execution denies. A prior hostname permit cannot be reused as authority for a changed effective destination.
 
 ## Sandbox profile
 
@@ -52,6 +52,8 @@ Later product integrations may instantiate these profiles in later specs; Spec 0
 
 A profile is not containment proof. Admission must resolve all required controls to a supported executor before launch. Unsupported required enforcement denies. Wasmtime/WASI may be used for portable bounded extensions after dependency qualification; it is not a universal native sandbox.
 
+Before Spec 003 launches any Golam-managed child process with network capability, the external strict-local qualification observer must be upgraded from daemon-PID-only observation to cover the complete Golam-managed process tree, or use an equivalent sinkholed/network boundary that captures descendants independently of PID ownership. A descendant socket is a Golam-managed egress attempt and must fail qualification exactly like a daemon socket.
+
 ## Verification
 
-Tests cover strict-local dominance, forbidden destination, DNS/redirect/rebinding cases, cleared environment, forbidden FS/network/device/spawn rights, resource bounds and unsupported-platform denial. External sinkhole/no-egress evidence remains required.
+Tests cover strict-local dominance, forbidden destination, mandatory DNS/redirect/rebinding/private-target reauthorization, changed-endpoint denial, cleared environment, forbidden FS/network/device/spawn rights, resource bounds and unsupported-platform denial. External sinkhole/no-egress evidence must cover every Golam-managed process, including descendants.
