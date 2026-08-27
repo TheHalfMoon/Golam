@@ -1,6 +1,6 @@
 # Tasks — Spec 003 Identity, Policy, Secrets & Sandbox
 
-**Status**: IMPLEMENTATION_ACTIVE — PHASE_A_COMPLETE  
+**Status**: IMPLEMENTATION_ACTIVE — PHASE_B_COMPLETE — PHASE_C_ACTIVE  
 **Canonical implementation base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`
 
 Legend:
@@ -19,18 +19,18 @@ Legend:
 
 ## Phase B — Schema, hard guards and policy lifecycle
 
-- [ ] **T003-010** Extend protected authority schema for policy bundles, active policy, leases/revocations, approvals/consumption, taint attestations/verifier rules, secret records/versions, egress permits and sandbox profiles/admissions.
-- [ ] **T003-011** Extend `authority-security` canonical coverage and startup verification for every new protected source record.
-- [ ] **T003-012** Freeze bounded canonical principal/action/resource/context normalization and policy input test vectors.
-- [ ] **T003-013** Implement hard-kernel-guard stage ahead of policy evaluation, preserving strict-local and other monotonic denials.
-- [ ] **T003-014** Implement candidate policy bundle parse/schema/policy validation with bounded diagnostics and fail-closed behavior.
-- [ ] **T003-015** Implement immutable bundle hashing/versioning/staging and atomic active-policy activation under current authority plus approval.
-- [ ] **T003-016** Implement startup active-policy integrity verification and fail-closed recovery behavior; no permissive bootstrap fallback after normal activation.
-- [ ] **T003-017** Implement stable authorization-decision evidence binding hard guard, lease, policy bundle/rule and approval state without secret plaintext.
+- [x] **T003-010** Extend protected authority schema for policy bundles, active policy, leases/revocations, approvals/consumption, taint attestations/verifier rules, secret records/versions, egress permits and sandbox profiles/admissions.
+- [x] **T003-011** Extend `authority-security` canonical coverage and startup verification for every new protected source record.
+- [x] **T003-012** Freeze bounded canonical principal/action/resource/context normalization and policy input test vectors.
+- [x] **T003-013** Implement hard-kernel-guard stage ahead of policy evaluation, preserving strict-local and other monotonic denials.
+- [x] **T003-014** Implement candidate policy bundle parse/schema/policy validation with bounded diagnostics and fail-closed behavior.
+- [x] **T003-015** Implement immutable bundle hashing/versioning/staging and atomic active-policy activation under current authority plus approval.
+- [x] **T003-016** Implement startup active-policy integrity verification and fail-closed recovery behavior; no permissive bootstrap fallback after normal activation.
+- [x] **T003-017** Implement stable authorization-decision evidence binding hard guard, lease, policy bundle/rule and approval state without secret plaintext. Exact-head regression evidence: CI #281 (`33075420843`) SUCCESS at `d47296e0552d196455f29cbec8da6afd7d639df9` on Windows/macOS/Ubuntu.
 
 ## Phase C — Capability leases
 
-- [ ] **T003-020** Implement sealed kernel-minted capability lease types with no public authority constructor.
+- [x] **T003-020** Implement sealed kernel-minted capability lease types with no public authority constructor. Exact-head regression evidence: CI #284 (`33076455833`) SUCCESS at `d6e7e8119b0c0f3ee1f53dd0bc70cbbb480a2f75` on Windows/macOS/Ubuntu.
 - [ ] **T003-021** Implement action/resource/context scope normalization and subset-only child derivation.
 - [ ] **T003-022** Implement expiry, revocation, generation and principal binding checks at protected action execution.
 - [ ] **T003-023** Implement protected lease issuance/revocation as typed elevated effects with security integrity.
@@ -111,11 +111,13 @@ SPEC_002_CLOSED_CANONICAL=YES
 SPEC_003_PLANNING_CLOSED_CANONICAL=YES
 SPEC_003_IMPLEMENTATION_AUTHORIZED=YES
 PHASE_A_COMPLETE=YES
+PHASE_B_COMPLETE=YES
+T003_020=PASS
 CEDAR_POLICY_ADMITTED_EXACT=4.12.0
 SECRET_CRYPTO_AND_OS_KEY_PROTECTORS_QUALIFIED=YES
 WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED
 Golam-Research=REFERENCE_ONLY
 DONOR_CODE_ADMITTED=NO
 REAL_SECRETS_USED=NO
-NEXT_TASK=T003-010
+NEXT_TASK=T003-021
 ```
