@@ -55,9 +55,9 @@ impl fmt::Display for ActivePolicyIntegrityError {
         match self {
             Self::Storage(error) => write!(f, "active-policy authority-store error: {error}"),
             Self::Sqlite(error) => write!(f, "active-policy sqlite error: {error}"),
-            Self::MissingActivePolicyAfterActivation => f.write_str(
-                "active-policy pointer is missing after a prior normal activation",
-            ),
+            Self::MissingActivePolicyAfterActivation => {
+                f.write_str("active-policy pointer is missing after a prior normal activation")
+            }
             Self::BundleNotFound => {
                 f.write_str("active-policy pointer does not resolve to an immutable bundle")
             }
@@ -91,9 +91,7 @@ impl fmt::Display for ActivePolicyIntegrityError {
             Self::InvalidLifecycleState => {
                 f.write_str("active-policy lifecycle sequencing is invalid")
             }
-            Self::InvalidStoredRecord => {
-                f.write_str("active-policy protected record is malformed")
-            }
+            Self::InvalidStoredRecord => f.write_str("active-policy protected record is malformed"),
         }
     }
 }
@@ -176,8 +174,8 @@ fn verify_connection(
     if active.2.is_empty() || active.3.len() != 16 {
         return Err(ActivePolicyIntegrityError::InvalidStoredRecord);
     }
-    let activated_global_seq = positive_u64(active.4)
-        .ok_or(ActivePolicyIntegrityError::InvalidLifecycleState)?;
+    let activated_global_seq =
+        positive_u64(active.4).ok_or(ActivePolicyIntegrityError::InvalidLifecycleState)?;
 
     let bundle = connection
         .query_row(
@@ -199,12 +197,11 @@ fn verify_connection(
         .optional()?
         .ok_or(ActivePolicyIntegrityError::BundleNotFound)?;
 
-    let version = positive_u64(bundle.0)
-        .ok_or(ActivePolicyIntegrityError::InvalidBundleVersion)?;
-    let schema_version = positive_u64(bundle.1)
-        .ok_or(ActivePolicyIntegrityError::InvalidSchemaVersion)?;
-    let stored_length = usize::try_from(bundle.2)
-        .map_err(|_| ActivePolicyIntegrityError::InvalidStoredRecord)?;
+    let version = positive_u64(bundle.0).ok_or(ActivePolicyIntegrityError::InvalidBundleVersion)?;
+    let schema_version =
+        positive_u64(bundle.1).ok_or(ActivePolicyIntegrityError::InvalidSchemaVersion)?;
+    let stored_length =
+        usize::try_from(bundle.2).map_err(|_| ActivePolicyIntegrityError::InvalidStoredRecord)?;
     if stored_length != bundle.3.len() {
         return Err(ActivePolicyIntegrityError::InvalidStoredRecord);
     }
@@ -214,8 +211,8 @@ fn verify_connection(
     if bundle.5.is_empty() {
         return Err(ActivePolicyIntegrityError::InvalidStoredRecord);
     }
-    let created_global_seq = positive_u64(bundle.6)
-        .ok_or(ActivePolicyIntegrityError::InvalidLifecycleState)?;
+    let created_global_seq =
+        positive_u64(bundle.6).ok_or(ActivePolicyIntegrityError::InvalidLifecycleState)?;
     if activated_global_seq <= created_global_seq {
         return Err(ActivePolicyIntegrityError::InvalidLifecycleState);
     }
@@ -360,8 +357,7 @@ mod tests {
 
     const POLICY: &str =
         "permit(principal is User, action == Action::\"view\", resource is Photo);\n";
-    const SCHEMA: &str =
-        "entity User;\nentity Photo;\naction view appliesTo { principal: [User], resource: [Photo] };\n";
+    const SCHEMA: &str = "entity User;\nentity Photo;\naction view appliesTo { principal: [User], resource: [Photo] };\n";
 
     static N: AtomicU64 = AtomicU64::new(0);
 
@@ -503,7 +499,9 @@ mod tests {
         let (runtime, authority) = authority();
         seed_valid_active(&authority);
         let connection = Connection::open(authority.authority_db_path()).unwrap();
-        connection.execute("DELETE FROM policy_bundles", []).unwrap();
+        connection
+            .execute("DELETE FROM policy_bundles", [])
+            .unwrap();
         assert!(matches!(
             verify_connection(&connection),
             Err(ActivePolicyIntegrityError::BundleNotFound)

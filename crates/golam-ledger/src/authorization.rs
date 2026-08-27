@@ -6,7 +6,9 @@ use std::fmt;
 use golam_core::authority::AuthorityLayout;
 use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 
-use crate::active_policy_integrity::{ActivePolicyIntegrityError, verify_path as verify_active_policy};
+use crate::active_policy_integrity::{
+    ActivePolicyIntegrityError, verify_path as verify_active_policy,
+};
 use crate::security_audit::{self, AuthorizationAuditInput};
 use crate::storage::{AuthorityStore, StorageError};
 
