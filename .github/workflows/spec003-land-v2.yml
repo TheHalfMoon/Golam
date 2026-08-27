@@ -73,7 +73,8 @@ jobs:
           cargo +1.98.0 clippy --locked --workspace --all-targets -- -D warnings
           cargo +1.98.0 test --locked --workspace --all-targets
 
-      - name: Enforce atomic changed-path boundary
+      - name: Collect atomic changed-path delta
+        id: atomic_paths
         shell: bash
         run: |
           set -euo pipefail
@@ -89,7 +90,25 @@ jobs:
             crates/golam-kernel/Cargo.toml \
             crates/golam-kernel/src/lib.rs \
             crates/golam-kernel/src/policy_candidate.rs | LC_ALL=C sort)
+          missing_paths=$(comm -23 <(printf '%s\n' "$expected_paths") <(printf '%s\n' "$actual_paths") | paste -sd ',' -)
+          extra_paths=$(comm -13 <(printf '%s\n' "$expected_paths") <(printf '%s\n' "$actual_paths") | paste -sd ',' -)
+          printf 'missing=%s\n' "${missing_paths:-none}" >> "$GITHUB_OUTPUT"
+          printf 'extra=%s\n' "${extra_paths:-none}" >> "$GITHUB_OUTPUT"
           printf '%s\n' '===== ACTUAL_PATHS =====' "$actual_paths" '===== EXPECTED_PATHS =====' "$expected_paths"
+
+      - name: Enforce atomic changed-path boundary (missing=${{ steps.atomic_paths.outputs.missing }} extra=${{ steps.atomic_paths.outputs.extra }})
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_paths=$(git diff --cached --name-only | LC_ALL=C sort)
+          expected_paths=$(printf '%s\n' \
+            .github/workflows/spec003-land-v2.yml \
+            .github/workflows/spec003-resolve-lock.yml \
+            Cargo.lock \
+            Cargo.toml \
+            crates/golam-kernel/Cargo.toml \
+            crates/golam-kernel/src/lib.rs \
+            crates/golam-kernel/src/policy_candidate.rs | LC_ALL=C sort)
           if ! test "$actual_paths" = "$expected_paths"; then
             echo "Refusing to commit an unexpected Cedar landing path set." >&2
             exit 1
