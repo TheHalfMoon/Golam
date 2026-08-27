@@ -7,7 +7,7 @@ use golam_core::authority::AuthorityLayout;
 use golam_core::{CanonicalEncoder, ClientId, CoreError};
 use golam_ledger::authorization::{
     AppendAuthorizationDecision, AuthorizationAuditError, AuthorizationAuditLog,
-    AuthorizationDecisionKind, StoredAuthorizationDecision,
+    AuthorizationDecisionEvidence, AuthorizationDecisionKind, StoredAuthorizationDecision,
 };
 
 const HARD_SAFETY_DENIAL: &str = "safety_denial_monotonic";
@@ -272,25 +272,49 @@ pub enum AuthorizationDecision {
     Deny,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct PolicyEvaluationEvidence {
+    pub policy_bundle_id: Option<[u8; 16]>,
+    pub policy_bundle_hash: Option<[u8; 32]>,
+    pub matched_rule_ids: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PolicyDecision {
     pub decision: AuthorizationDecision,
     pub reason_code: &'static str,
+    pub evidence: PolicyEvaluationEvidence,
 }
 
 impl PolicyDecision {
-    pub const fn allow(reason_code: &'static str) -> Self {
+    pub fn allow(reason_code: &'static str) -> Self {
         Self {
             decision: AuthorizationDecision::Allow,
             reason_code,
+            evidence: PolicyEvaluationEvidence::default(),
         }
     }
 
-    pub const fn deny(reason_code: &'static str) -> Self {
+    pub fn deny(reason_code: &'static str) -> Self {
         Self {
             decision: AuthorizationDecision::Deny,
             reason_code,
+            evidence: PolicyEvaluationEvidence::default(),
         }
+    }
+
+    pub fn with_policy_evidence(
+        mut self,
+        policy_bundle_id: [u8; 16],
+        policy_bundle_hash: [u8; 32],
+        matched_rule_ids: Vec<String>,
+    ) -> Self {
+        self.evidence = PolicyEvaluationEvidence {
+            policy_bundle_id: Some(policy_bundle_id),
+            policy_bundle_hash: Some(policy_bundle_hash),
+            matched_rule_ids,
+        };
+        self
     }
 }
 
@@ -310,6 +334,15 @@ pub trait AuthorizationPolicy {
 enum HardGuardOutcome {
     Pass,
     Deny(&'static str),
+}
+
+impl HardGuardOutcome {
+    const fn evidence_result(self) -> &'static str {
+        match self {
+            Self::Pass => "pass",
+            Self::Deny(reason) => reason,
+        }
+    }
 }
 
 fn evaluate_hard_guards(request: &AuthorizationRequest<'_>) -> HardGuardOutcome {
@@ -436,7 +469,8 @@ impl<P: AuthorizationPolicy> AuthorizationEngine<P> {
         let normalized = NormalizedAuthorizationRequest::new(request)?;
         let request = normalized.request();
         let canonical_policy_input = normalized.policy_input_bytes()?;
-        let policy_decision = match evaluate_hard_guards(request) {
+        let hard_guard = evaluate_hard_guards(request);
+        let policy_decision = match hard_guard {
             HardGuardOutcome::Pass => self
                 .policy
                 .authorize_normalized(request, &canonical_policy_input),
@@ -448,11 +482,26 @@ impl<P: AuthorizationPolicy> AuthorizationEngine<P> {
             AuthorizationDecision::Allow => AuthorizationDecisionKind::Allow,
             AuthorizationDecision::Deny => AuthorizationDecisionKind::Deny,
         };
+        let matched_rule_ids = policy_decision
+            .evidence
+            .matched_rule_ids
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
         let stored = self.audit.append(AppendAuthorizationDecision {
             principal: &principal,
             action: request.action,
             resource: request.resource,
             context: &context,
+            evidence: AuthorizationDecisionEvidence {
+                hard_guard_result: hard_guard.evidence_result(),
+                lease_id: None,
+                lease_generation: None,
+                policy_bundle_id: policy_decision.evidence.policy_bundle_id.as_ref(),
+                policy_bundle_hash: policy_decision.evidence.policy_bundle_hash.as_ref(),
+                matched_rule_ids: &matched_rule_ids,
+                approval_id: None,
+            },
             decision,
             reason_code: policy_decision.reason_code,
         })?;
@@ -631,7 +680,10 @@ mod tests {
         let (denied, grant) = engine.authorize(&deny).unwrap();
         assert_eq!(denied.decision, AuthorizationDecision::Deny);
         assert!(grant.is_none());
-        assert_eq!(engine.records().unwrap().len(), 2);
+        let records = engine.records().unwrap();
+        assert_eq!(records.len(), 2);
+        assert!(records.iter().all(|record| record.hard_guard_result == "pass"));
+        assert!(records.iter().all(|record| record.authority_evidence_version == 2));
         drop(engine);
         fs::remove_dir_all(runtime.root).unwrap();
     }
@@ -754,6 +806,10 @@ mod tests {
         assert_eq!(outcome.decision, AuthorizationDecision::Deny);
         assert_eq!(outcome.reason_code, STRICT_LOCAL_EGRESS_DENIAL);
         assert!(grant.is_none());
+        let records = engine.records().unwrap();
+        assert_eq!(records[0].hard_guard_result, HARD_SAFETY_DENIAL);
+        assert_eq!(records[1].hard_guard_result, STRICT_LOCAL_EGRESS_DENIAL);
+        assert!(records.iter().all(|record| record.policy_bundle_id.is_none()));
         drop(engine);
         fs::remove_dir_all(runtime.root).unwrap();
     }
@@ -784,6 +840,35 @@ mod tests {
         let (outcome, grant) = engine.authorize(&request).unwrap();
         assert_eq!(outcome.decision, AuthorizationDecision::Allow);
         assert!(grant.is_some());
+        let records = engine.records().unwrap();
+        assert_eq!(records[0].hard_guard_result, "pass");
+        drop(engine);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn policy_bundle_hash_and_stable_rule_refs_are_bound_to_decision_evidence() {
+        struct EvidencePolicy;
+        impl AuthorizationPolicy for EvidencePolicy {
+            fn authorize(&self, _request: &AuthorizationRequest<'_>) -> PolicyDecision {
+                PolicyDecision::allow("cedar_test_allow").with_policy_evidence(
+                    [3_u8; 16],
+                    [4_u8; 32],
+                    vec!["rule:z".to_owned(), "rule:a".to_owned()],
+                )
+            }
+        }
+
+        let (runtime, authority) = authority();
+        let mut engine = AuthorizationEngine::open(&authority, EvidencePolicy).unwrap();
+        let request = owner_request("session.read", "session:1", "local-owner");
+        let (outcome, grant) = engine.authorize(&request).unwrap();
+        assert_eq!(outcome.decision, AuthorizationDecision::Allow);
+        assert!(grant.is_some());
+        let records = engine.records().unwrap();
+        assert_eq!(records[0].policy_bundle_id, Some([3_u8; 16]));
+        assert_eq!(records[0].policy_bundle_hash, Some([4_u8; 32]));
+        assert_eq!(records[0].matched_rule_ids, vec!["rule:a", "rule:z"]);
         drop(engine);
         fs::remove_dir_all(runtime.root).unwrap();
     }

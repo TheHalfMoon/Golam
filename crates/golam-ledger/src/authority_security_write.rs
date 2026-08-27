@@ -16,6 +16,7 @@ const RECORD_DOMAIN: &[u8] = b"golam:authority-security-v2:record:v1";
 enum ProtectedMutationKind {
     PolicyBundle,
     ActivePolicy,
+    AuthorizationDecisionV2,
     #[cfg(test)]
     Approval,
     ApprovalConsumption,
@@ -26,6 +27,7 @@ impl ProtectedMutationKind {
         match self {
             Self::PolicyBundle => "policy_bundle",
             Self::ActivePolicy => "active_policy",
+            Self::AuthorizationDecisionV2 => "authorization_decision_v2",
             #[cfg(test)]
             Self::Approval => "approval",
             Self::ApprovalConsumption => "approval_consumption",
@@ -101,6 +103,23 @@ pub(crate) fn append_active_policy_snapshot(
         [],
     )?;
     append_snapshot(transaction, ProtectedMutationKind::ActivePolicy, 1, &values)
+}
+
+pub(crate) fn append_authorization_decision_v2_snapshot(
+    transaction: &Transaction<'_>,
+    decision_id: &[u8],
+) -> Result<(), AuthoritySecurityWriteError> {
+    let values = query_values(
+        transaction,
+        "SELECT decision_id, principal, action, resource, context_hash, hard_guard_result, lease_id, lease_generation, policy_bundle_id, policy_bundle_hash, matched_rule_ids, approval_id, decision, reason_code, global_seq, authority_evidence_version FROM authorization_decisions WHERE decision_id = ?1 AND authority_evidence_version >= 2",
+        params![decision_id],
+    )?;
+    append_snapshot(
+        transaction,
+        ProtectedMutationKind::AuthorizationDecisionV2,
+        1,
+        &values,
+    )
 }
 
 #[cfg(test)]
