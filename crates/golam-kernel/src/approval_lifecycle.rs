@@ -36,7 +36,9 @@ pub enum ApprovalMutationError {
 impl fmt::Display for ApprovalMutationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Authorization(error) => write!(f, "approval issuance authorization failed: {error}"),
+            Self::Authorization(error) => {
+                write!(f, "approval issuance authorization failed: {error}")
+            }
             Self::AuthorizationDenied(outcome) => write!(
                 f,
                 "approval issuance denied: decision={:?} reason={}",
