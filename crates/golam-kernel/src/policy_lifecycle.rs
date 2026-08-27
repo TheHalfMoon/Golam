@@ -1,5 +1,9 @@
 #![forbid(unsafe_code)]
 
+#[path = "approval_lifecycle.rs"]
+pub mod approval_lifecycle;
+pub use approval_lifecycle::{ApprovalMutationError, IssueApproval};
+
 use std::error::Error;
 use std::fmt;
 
