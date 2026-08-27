@@ -21,6 +21,7 @@ impl UnprivilegedPath {
 }
 
 #[derive(Debug)]
+// Spec 002: protected resource admission fails closed at the kernel authority boundary.
 pub enum ProtectedResourceError {
     Io(io::Error),
     OutsideRuntime(PathBuf),

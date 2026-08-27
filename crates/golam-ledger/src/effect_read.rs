@@ -17,6 +17,7 @@ pub struct EffectSnapshot {
     pub requested_by: String,
     pub action: String,
     pub resource: String,
+    pub risk_class: String,
     pub execution_semantics: String,
     pub idempotency_key: Option<String>,
     pub payload_hash: [u8; 32],
@@ -92,8 +93,8 @@ impl EffectReader {
         let raw = self
             .connection
             .query_row(
-                "SELECT i.session_id, i.requested_by, i.action, i.resource, i.execution_semantics, \
-                 i.idempotency_key, i.payload_hash, t.to_state, t.attempt_id \
+                "SELECT i.session_id, i.requested_by, i.action, i.resource, i.risk_class, \
+                 i.execution_semantics, i.idempotency_key, i.payload_hash, t.to_state, t.attempt_id \
                  FROM effect_intents i JOIN effect_transitions t ON t.effect_id = i.effect_id \
                  WHERE i.effect_id = ?1 AND t.global_seq = (\
                    SELECT MAX(t2.global_seq) FROM effect_transitions t2 WHERE t2.effect_id = i.effect_id\
@@ -106,10 +107,11 @@ impl EffectReader {
                         row.get::<_, String>(2)?,
                         row.get::<_, String>(3)?,
                         row.get::<_, String>(4)?,
-                        row.get::<_, Option<String>>(5)?,
-                        row.get::<_, Vec<u8>>(6)?,
-                        row.get::<_, String>(7)?,
-                        row.get::<_, Option<Vec<u8>>>(8)?,
+                        row.get::<_, String>(5)?,
+                        row.get::<_, Option<String>>(6)?,
+                        row.get::<_, Vec<u8>>(7)?,
+                        row.get::<_, String>(8)?,
+                        row.get::<_, Option<Vec<u8>>>(9)?,
                     ))
                 },
             )
@@ -118,7 +120,7 @@ impl EffectReader {
             return Ok(None);
         };
         let latest_attempt = raw
-            .8
+            .9
             .map(|value| self.attempt(EffectAttemptId(id_from_vec(value)?)))
             .transpose()?
             .flatten();
@@ -128,10 +130,11 @@ impl EffectReader {
             requested_by: raw.1,
             action: raw.2,
             resource: raw.3,
-            execution_semantics: raw.4,
-            idempotency_key: raw.5,
-            payload_hash: hash_from_vec(raw.6)?,
-            current_state: raw.7,
+            risk_class: raw.4,
+            execution_semantics: raw.5,
+            idempotency_key: raw.6,
+            payload_hash: hash_from_vec(raw.7)?,
+            current_state: raw.8,
             latest_attempt,
         }))
     }
@@ -280,6 +283,7 @@ mod tests {
         let reader = EffectReader::open(&authority).unwrap();
         let snapshot = reader.snapshot(effect_id).unwrap().unwrap();
         assert_eq!(snapshot.session_id, SessionId(2));
+        assert_eq!(snapshot.risk_class, "synthetic");
         assert_eq!(snapshot.current_state, "executing");
         assert_eq!(
             snapshot.latest_attempt.unwrap().attempt_id,

@@ -147,6 +147,7 @@ pub enum SyntheticEffectError {
     IdentifierOverflow(EffectId),
     EffectNotFound(EffectId),
     MissingAttempt(EffectId),
+    NotSyntheticEffect(EffectId),
     NotReconcilable {
         effect_id: EffectId,
         actual: String,
@@ -185,6 +186,11 @@ impl fmt::Display for SyntheticEffectError {
                 "synthetic effect has no durable attempt: {}",
                 effect_id.0
             ),
+            Self::NotSyntheticEffect(effect_id) => write!(
+                f,
+                "effect is not a durable synthetic effect: {}",
+                effect_id.0
+            ),
             Self::NotReconcilable { effect_id, actual } => write!(
                 f,
                 "synthetic effect is not reconcilable: effect={} state={actual}",
@@ -213,6 +219,7 @@ impl Error for SyntheticEffectError {
             | Self::IdentifierOverflow(_)
             | Self::EffectNotFound(_)
             | Self::MissingAttempt(_)
+            | Self::NotSyntheticEffect(_)
             | Self::NotReconcilable { .. }
             | Self::AttemptMismatch { .. } => None,
         }
@@ -396,6 +403,7 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             .latest_attempt
             .clone()
             .ok_or(SyntheticEffectError::MissingAttempt(effect_id))?;
+        validate_synthetic_snapshot(&snapshot, &attempt)?;
         drop(reader);
 
         match snapshot.current_state.as_str() {
@@ -458,11 +466,12 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         let snapshot = reader
             .snapshot(input.effect_id)?
             .ok_or(SyntheticEffectError::EffectNotFound(input.effect_id))?;
-        let attempt_id = snapshot
+        let attempt = snapshot
             .latest_attempt
             .as_ref()
-            .map(|attempt| attempt.attempt_id)
             .ok_or(SyntheticEffectError::MissingAttempt(input.effect_id))?;
+        validate_synthetic_snapshot(&snapshot, attempt)?;
+        let attempt_id = attempt.attempt_id;
         drop(reader);
 
         match input.resolution {
@@ -533,6 +542,29 @@ fn reconciliation_context(
         attempt_outcome: attempt.outcome,
         receipt: attempt.receipt,
     }
+}
+
+fn validate_synthetic_snapshot(
+    snapshot: &EffectSnapshot,
+    attempt: &StoredEffectAttempt,
+) -> Result<(), SyntheticEffectError> {
+    if validate_semantics(&snapshot.execution_semantics).is_err() {
+        return Err(SyntheticEffectError::NotSyntheticEffect(snapshot.effect_id));
+    }
+    let expected_action = synthetic_action(&snapshot.execution_semantics);
+    let expected_resource = synthetic_resource(snapshot.effect_id);
+    let expected_attempt_id = EffectAttemptId(stage_id(snapshot.effect_id, STAGE_ATTEMPT)?);
+    let expected_dispatch_token = synthetic_dispatch_token(snapshot.effect_id);
+    if snapshot.risk_class != "synthetic"
+        || snapshot.action != expected_action
+        || snapshot.resource != expected_resource
+        || attempt.effect_id != snapshot.effect_id
+        || attempt.attempt_id != expected_attempt_id
+        || attempt.dispatch_token.as_slice() != expected_dispatch_token.as_slice()
+    {
+        return Err(SyntheticEffectError::NotSyntheticEffect(snapshot.effect_id));
+    }
+    Ok(())
 }
 
 fn validate_semantics(value: &str) -> Result<(), SyntheticEffectError> {
