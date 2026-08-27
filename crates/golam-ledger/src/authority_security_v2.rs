@@ -5,10 +5,10 @@ use std::error::Error;
 use std::fmt;
 
 use golam_core::{CanonicalEncoder, CoreError};
-use rusqlite::types::Value;
-use rusqlite::{Connection, OptionalExtension, params};
 #[cfg(test)]
 use rusqlite::Transaction;
+use rusqlite::types::Value;
+use rusqlite::{Connection, OptionalExtension, params};
 
 const CHAIN_NAME: &str = "authority-security-v2";
 const KEY_DOMAIN: &[u8] = b"golam:authority-security-v2:key:v1";
