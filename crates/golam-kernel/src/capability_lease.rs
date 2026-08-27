@@ -101,9 +101,7 @@ impl fmt::Display for CapabilityLeaseMintError {
             Self::InvalidPrincipal => {
                 f.write_str("capability lease principal is empty, non-canonical or too large")
             }
-            Self::InvalidGeneration => {
-                f.write_str("capability lease generation must be non-zero")
-            }
+            Self::InvalidGeneration => f.write_str("capability lease generation must be non-zero"),
             Self::InvalidIssuedSequence => {
                 f.write_str("capability lease issued sequence must be non-zero")
             }
