@@ -462,10 +462,7 @@ fn canonical_matched_rule_ids(
         encoded.extend_from_slice(&len.to_be_bytes());
         encoded.extend_from_slice(bytes);
     }
-    Ok((
-        canonical.into_iter().map(str::to_owned).collect(),
-        encoded,
-    ))
+    Ok((canonical.into_iter().map(str::to_owned).collect(), encoded))
 }
 
 fn decode_matched_rule_ids(bytes: &[u8]) -> Result<Vec<String>, AuthorizationAuditError> {
@@ -598,8 +595,8 @@ fn optional_hash32(value: Option<Vec<u8>>) -> Result<Option<[u8; 32]>, Authoriza
 fn optional_positive_u64(value: Option<i64>) -> Result<Option<u64>, AuthorizationAuditError> {
     value
         .map(|value| {
-            let value = u64::try_from(value)
-                .map_err(|_| AuthorizationAuditError::InvalidStoredRecord)?;
+            let value =
+                u64::try_from(value).map_err(|_| AuthorizationAuditError::InvalidStoredRecord)?;
             if value == 0 {
                 Err(AuthorizationAuditError::InvalidStoredRecord)
             } else {

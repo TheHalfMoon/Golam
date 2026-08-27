@@ -682,8 +682,16 @@ mod tests {
         assert!(grant.is_none());
         let records = engine.records().unwrap();
         assert_eq!(records.len(), 2);
-        assert!(records.iter().all(|record| record.hard_guard_result == "pass"));
-        assert!(records.iter().all(|record| record.authority_evidence_version == 2));
+        assert!(
+            records
+                .iter()
+                .all(|record| record.hard_guard_result == "pass")
+        );
+        assert!(
+            records
+                .iter()
+                .all(|record| record.authority_evidence_version == 2)
+        );
         drop(engine);
         fs::remove_dir_all(runtime.root).unwrap();
     }
@@ -809,7 +817,11 @@ mod tests {
         let records = engine.records().unwrap();
         assert_eq!(records[0].hard_guard_result, HARD_SAFETY_DENIAL);
         assert_eq!(records[1].hard_guard_result, STRICT_LOCAL_EGRESS_DENIAL);
-        assert!(records.iter().all(|record| record.policy_bundle_id.is_none()));
+        assert!(
+            records
+                .iter()
+                .all(|record| record.policy_bundle_id.is_none())
+        );
         drop(engine);
         fs::remove_dir_all(runtime.root).unwrap();
     }
