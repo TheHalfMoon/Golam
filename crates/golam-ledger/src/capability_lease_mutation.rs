@@ -20,6 +20,7 @@ const MAX_CONTEXT_BYTES: usize = 256;
 const MAX_CANONICAL_SCOPE_BYTES: usize = 131_072;
 const MAX_PRINCIPAL_ID_BYTES: usize = 512;
 const MAX_REASON_CODE_BYTES: usize = 128;
+const INITIAL_LEASE_GENERATION: u64 = 1;
 const LEASE_SCOPE_DOMAIN: &[u8] = b"golam:capability-lease-scope:v1";
 const ISSUE_INTENT_DOMAIN: &[u8] = b"golam:capability-lease-issue-intent:v1";
 const ISSUE_ID_DOMAIN: &[u8] = b"golam:capability-lease-id:v1";
@@ -424,14 +425,13 @@ impl CapabilityLeaseStore {
             return Err(CapabilityLeaseMutationError::DuplicateLease);
         }
 
-        let generation = 1_u64;
+        let generation = INITIAL_LEASE_GENERATION;
         let parent_lease_id = prepared.parent.map(CapabilityLeaseBinding::lease_id);
         let authority_digest = issue_authority_digest(
             lease_id,
             &prepared,
             &authority.principal,
             authority.global_seq,
-            generation,
             authority_decision_id,
             approval_id,
             effect_id,
@@ -837,7 +837,6 @@ fn issue_authority_digest(
     prepared: &PreparedCapabilityLeaseIssue,
     issued_by: &str,
     issued_global_seq: u64,
-    generation: u64,
     decision_id: [u8; 16],
     approval_id: [u8; 16],
     effect_id: EffectId,
@@ -854,7 +853,7 @@ fn issue_authority_digest(
     encoder.push_u64(issued_global_seq);
     encode_optional_text(&mut encoder, prepared.not_before.as_deref())?;
     encode_optional_text(&mut encoder, prepared.expires_at.as_deref())?;
-    encoder.push_u64(generation);
+    encoder.push_u64(INITIAL_LEASE_GENERATION);
     encoder.push_bytes(b"active")?;
     encoder.push_bytes(&decision_id)?;
     encoder.push_bytes(&approval_id)?;
