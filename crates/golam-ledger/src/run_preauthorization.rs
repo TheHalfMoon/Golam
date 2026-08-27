@@ -88,7 +88,9 @@ impl fmt::Display for RunPreauthorizationError {
         match self {
             Self::Storage(error) => write!(f, "run preauthorization authority-store error: {error}"),
             Self::Sqlite(error) => write!(f, "run preauthorization sqlite error: {error}"),
-            Self::ApprovalUse(error) => write!(f, "run preauthorization use validation failed: {error}"),
+            Self::ApprovalUse(error) => {
+                write!(f, "run preauthorization use validation failed: {error}")
+            }
             Self::Integrity(error) => write!(f, "run preauthorization integrity error: {error}"),
             Self::AuthoritySecurity(error) => {
                 write!(f, "run preauthorization authority-security error: {error}")
@@ -171,9 +173,8 @@ impl RunPreauthorizationStore {
     }
 
     /// Claims one bounded RUN_PREAUTHORIZATION use for an unattended
-    /// irreversible effect. Effect action/resource/risk/session are derived
-    /// from protected effect state, not caller input. A successful claim is
-    /// durably counted before execution can rely on it.
+    /// irreversible effect. Protected effect state supplies action, resource,
+    /// risk and session; caller input cannot widen those authority dimensions.
     pub fn claim_unattended_irreversible(
         &mut self,
         request: UnattendedIrreversibleRequest<'_>,
@@ -207,8 +208,7 @@ impl RunPreauthorizationStore {
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         verify_transaction_integrity(&transaction)?;
-        let current_effect = load_effect_in_transaction(&transaction, request.effect_id)?;
-        if current_effect != effect {
+        if load_effect_in_transaction(&transaction, request.effect_id)? != effect {
             return Err(RunPreauthorizationError::EffectNotAuthorized);
         }
         verify_run_approval(
@@ -221,7 +221,7 @@ impl RunPreauthorizationStore {
         )?;
 
         let consumption_id = consumption_id(request.approval_id, request.effect_id);
-        let duplicate = transaction
+        if transaction
             .query_row(
                 "SELECT 1 FROM approval_consumptions WHERE consumption_id = ?1 OR (approval_id = ?2 AND effect_or_operation_id = ?3) LIMIT 1",
                 params![
@@ -232,8 +232,8 @@ impl RunPreauthorizationStore {
                 |row| row.get::<_, i64>(0),
             )
             .optional()?
-            .is_some();
-        if duplicate {
+            .is_some()
+        {
             return Err(RunPreauthorizationError::Replay);
         }
 
@@ -241,11 +241,11 @@ impl RunPreauthorizationStore {
         if current_uses >= evidence.max_uses() {
             return Err(RunPreauthorizationError::UsageLimitReached);
         }
-        let use_number = current_uses
-            .checked_add(1)
-            .ok_or(RunPreauthorizationError::InvalidStoredRecord(
+        let use_number = current_uses.checked_add(1).ok_or(
+            RunPreauthorizationError::InvalidStoredRecord(
                 "run preauthorization use count overflow",
-            ))?;
+            ),
+        )?;
         transaction.execute(
             "INSERT INTO approval_consumptions (consumption_id, approval_id, effect_or_operation_id, reserved_global_seq, consumed_global_seq, state) VALUES (?1, ?2, ?3, ?4, ?5, 'consumed')",
             params![
@@ -273,7 +273,10 @@ impl RunPreauthorizationStore {
         })
     }
 
-    fn load_effect(&self, effect_id: EffectId) -> Result<ProtectedEffect, RunPreauthorizationError> {
+    fn load_effect(
+        &self,
+        effect_id: EffectId,
+    ) -> Result<ProtectedEffect, RunPreauthorizationError> {
         load_effect_from_connection(&self.connection, effect_id)
     }
 }
@@ -402,16 +405,16 @@ fn verify_run_approval(
     {
         return Err(RunPreauthorizationError::RunScopeMismatch);
     }
-    if !valid_utc_second(&row.6) || observed_at < row.6.as_str() {
+    if observed_at < row.6.as_str() {
         return Err(RunPreauthorizationError::RunScopeMismatch);
     }
-    let expires_at = row.7.as_deref().ok_or(RunPreauthorizationError::InvalidStoredRecord(
-        "RUN_PREAUTHORIZATION is missing finite expiry",
-    ))?;
-    if !valid_utc_second(expires_at) || row.6.as_str() >= expires_at || observed_at >= expires_at {
-        return Err(RunPreauthorizationError::RunScopeMismatch);
-    }
-    if row.9.is_some() {
+    let expires_at = row
+        .7
+        .as_deref()
+        .ok_or(RunPreauthorizationError::InvalidStoredRecord(
+            "RUN_PREAUTHORIZATION is missing finite expiry",
+        ))?;
+    if row.6.as_str() >= expires_at || observed_at >= expires_at || row.9.is_some() {
         return Err(RunPreauthorizationError::RunScopeMismatch);
     }
     let max_uses = row
@@ -432,17 +435,15 @@ fn verify_run_approval(
 }
 
 fn exact_set_contains(encoded: &[u8], expected: &str) -> Result<bool, RunPreauthorizationError> {
-    if encoded.is_empty() {
+    let text = std::str::from_utf8(encoded).map_err(|_| {
+        RunPreauthorizationError::InvalidStoredRecord("RUN_PREAUTHORIZATION set scope is not UTF-8")
+    })?;
+    if text.is_empty() {
         return Err(RunPreauthorizationError::InvalidStoredRecord(
             "RUN_PREAUTHORIZATION set scope is empty",
         ));
     }
-    let text = std::str::from_utf8(encoded).map_err(|_| {
-        RunPreauthorizationError::InvalidStoredRecord(
-            "RUN_PREAUTHORIZATION set scope is not UTF-8",
-        )
-    })?;
-    let mut previous: Option<&str> = None;
+    let mut previous = None;
     let mut found = false;
     for value in text.split('\n') {
         if value.is_empty() || previous.is_some_and(|prior| prior >= value) {
@@ -450,9 +451,7 @@ fn exact_set_contains(encoded: &[u8], expected: &str) -> Result<bool, RunPreauth
                 "RUN_PREAUTHORIZATION set scope is not strictly sorted and unique",
             ));
         }
-        if value == expected {
-            found = true;
-        }
+        found |= value == expected;
         previous = Some(value);
     }
     Ok(found)
@@ -535,55 +534,13 @@ fn to_i64(value: u64) -> Result<i64, RunPreauthorizationError> {
     })
 }
 
-fn valid_utc_second(value: &str) -> bool {
-    let bytes = value.as_bytes();
-    if bytes.len() != 20
-        || bytes[4] != b'-'
-        || bytes[7] != b'-'
-        || bytes[10] != b'T'
-        || bytes[13] != b':'
-        || bytes[16] != b':'
-        || bytes[19] != b'Z'
-    {
-        return false;
-    }
-    for index in [0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18] {
-        if !bytes[index].is_ascii_digit() {
-            return false;
-        }
-    }
-    let year = decimal(bytes, 0, 4);
-    let month = decimal(bytes, 5, 7);
-    let day = decimal(bytes, 8, 10);
-    let hour = decimal(bytes, 11, 13);
-    let minute = decimal(bytes, 14, 16);
-    let second = decimal(bytes, 17, 19);
-    if year == 0 || !(1..=12).contains(&month) || hour > 23 || minute > 59 || second > 59 {
-        return false;
-    }
-    let max_day = match month {
-        2 if is_leap_year(year) => 29,
-        2 => 28,
-        4 | 6 | 9 | 11 => 30,
-        _ => 31,
-    };
-    (1..=max_day).contains(&day)
-}
-
-fn decimal(bytes: &[u8], start: usize, end: usize) -> u32 {
-    bytes[start..end]
-        .iter()
-        .fold(0_u32, |value, byte| value * 10 + u32::from(*byte - b'0'))
-}
-
-fn is_leap_year(year: u32) -> bool {
-    year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::approval_binding::{APPROVAL_ISSUE_ACTION, APPROVAL_MUTATION_RISK_CLASS, ApprovalStore, PreparedApproval, prepare_approval};
+    use crate::approval_binding::{
+        APPROVAL_ISSUE_ACTION, APPROVAL_MUTATION_RISK_CLASS, ApprovalStore, PreparedApproval,
+        prepare_approval,
+    };
     use crate::approvals::ApprovalScope;
     use crate::authorization::{
         AppendAuthorizationDecision, AuthorizationAuditLog, AuthorizationDecisionEvidence,
@@ -598,6 +555,12 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     static N: AtomicU64 = AtomicU64::new(0);
+    static RECORD_N: AtomicU64 = AtomicU64::new(0);
+    static ISSUE_EFFECT_N: AtomicU64 = AtomicU64::new(0);
+
+    fn next_record_id() -> u128 {
+        1_000_000 + u128::from(RECORD_N.fetch_add(1, Ordering::Relaxed))
+    }
 
     fn authority() -> (RuntimeLayout, AuthorityLayout) {
         let n = N.fetch_add(1, Ordering::Relaxed);
@@ -622,6 +585,7 @@ mod tests {
         resource: &str,
         risk_class: &str,
         execution_semantics: &str,
+        payload_hash: [u8; 32],
     ) {
         let dependencies = encode_effect_dependencies(&[]).unwrap();
         let mut effects = EffectStore::open(authority).unwrap();
@@ -637,21 +601,21 @@ mod tests {
                 idempotency_key: None,
                 preconditions: b"[]",
                 dependencies: &dependencies,
-                payload_hash: [7; 32],
-                proposed_event_id: EventId(effect_id.0 + 100),
-                transition_id: EffectTransitionId(effect_id.0 + 101),
+                payload_hash,
+                proposed_event_id: EventId(next_record_id()),
+                transition_id: EffectTransitionId(next_record_id()),
             })
             .unwrap();
         effects
             .compare_and_swap(CompareAndSwapEffect {
-                transition_id: EffectTransitionId(effect_id.0 + 102),
+                transition_id: EffectTransitionId(next_record_id()),
                 effect_id,
                 expected_state: "proposed",
                 next_state: "authorized",
                 attempt_id: None,
                 reason_code: Some("test_effect_authorized"),
                 evidence_ref: None,
-                event_id: EventId(effect_id.0 + 103),
+                event_id: EventId(next_record_id()),
             })
             .unwrap();
     }
@@ -669,6 +633,7 @@ mod tests {
             prepared.resource(),
             APPROVAL_MUTATION_RISK_CLASS,
             "at_most_once",
+            prepared.intent_digest(),
         );
     }
 
@@ -687,7 +652,9 @@ mod tests {
             max_uses,
         )
         .unwrap();
-        let issue_effect = EffectId(50_000 + max_uses as u128 + prepared.intent_digest()[0] as u128);
+        let issue_effect = EffectId(
+            50_000 + u128::from(ISSUE_EFFECT_N.fetch_add(1, Ordering::Relaxed)) * 1_000,
+        );
         authorize_issue_effect(authority, &prepared, issue_effect);
         let mut log = AuthorizationAuditLog::open(authority).unwrap();
         let decision = log
@@ -709,6 +676,32 @@ mod tests {
             .approval_id()
     }
 
+    fn create_target(authority: &AuthorityLayout, effect_id: EffectId) {
+        create_effect(
+            authority,
+            effect_id,
+            SessionId(7),
+            "effect.simulate",
+            "session:7",
+            "irreversible_effect",
+            "irreversible",
+            [7; 32],
+        );
+    }
+
+    fn request(
+        approval_id: [u8; 16],
+        effect_id: EffectId,
+        observed_at: &'static str,
+    ) -> UnattendedIrreversibleRequest<'static> {
+        UnattendedIrreversibleRequest {
+            approval_id,
+            effect_id,
+            taint_digest: [9; 32],
+            observed_at,
+        }
+    }
+
     #[test]
     fn bounded_run_preauthorization_claims_exact_irreversible_effects_until_limit() {
         let (runtime, authority) = authority();
@@ -720,43 +713,33 @@ mod tests {
             2,
         );
         for effect_id in [EffectId(700), EffectId(701), EffectId(702)] {
-            create_effect(
-                &authority,
-                effect_id,
-                SessionId(7),
-                "effect.simulate",
-                "session:7",
-                "irreversible_effect",
-                "irreversible",
-            );
+            create_target(&authority, effect_id);
         }
+
         let mut store = RunPreauthorizationStore::open(&authority).unwrap();
         let first = store
-            .claim_unattended_irreversible(UnattendedIrreversibleRequest {
+            .claim_unattended_irreversible(request(
                 approval_id,
-                effect_id: EffectId(700),
-                taint_digest: [9; 32],
-                observed_at: "2026-08-27T00:30:00Z",
-            })
+                EffectId(700),
+                "2026-08-27T00:30:00Z",
+            ))
             .unwrap();
         let second = store
-            .claim_unattended_irreversible(UnattendedIrreversibleRequest {
+            .claim_unattended_irreversible(request(
                 approval_id,
-                effect_id: EffectId(701),
-                taint_digest: [9; 32],
-                observed_at: "2026-08-27T00:31:00Z",
-            })
+                EffectId(701),
+                "2026-08-27T00:31:00Z",
+            ))
             .unwrap();
         assert_eq!(first.use_number(), 1);
         assert_eq!(second.use_number(), 2);
         assert_eq!(second.max_uses(), 2);
         assert!(matches!(
-            store.claim_unattended_irreversible(UnattendedIrreversibleRequest {
+            store.claim_unattended_irreversible(request(
                 approval_id,
-                effect_id: EffectId(702),
-                taint_digest: [9; 32],
-                observed_at: "2026-08-27T00:32:00Z",
-            }),
+                EffectId(702),
+                "2026-08-27T00:32:00Z",
+            )),
             Err(RunPreauthorizationError::ApprovalUse(
                 ApprovalUseError::UsageLimitReached
             )) | Err(RunPreauthorizationError::UsageLimitReached)
@@ -769,15 +752,7 @@ mod tests {
     #[test]
     fn unattended_irreversible_rejects_other_classes_and_unbound_run_scope() {
         let (runtime, authority) = authority();
-        create_effect(
-            &authority,
-            EffectId(710),
-            SessionId(7),
-            "effect.simulate",
-            "session:7",
-            "irreversible_effect",
-            "irreversible",
-        );
+        create_target(&authority, EffectId(710));
         let actions = vec!["effect.simulate".to_owned()];
         let resources = vec!["session:7".to_owned()];
         let time_boxed = issue_approval(
@@ -792,21 +767,19 @@ mod tests {
         );
         let mut store = RunPreauthorizationStore::open(&authority).unwrap();
         assert!(matches!(
-            store.claim_unattended_irreversible(UnattendedIrreversibleRequest {
-                approval_id: time_boxed,
-                effect_id: EffectId(710),
-                taint_digest: [9; 32],
-                observed_at: "2026-08-27T00:30:00Z",
-            }),
+            store.claim_unattended_irreversible(request(
+                time_boxed,
+                EffectId(710),
+                "2026-08-27T00:30:00Z",
+            )),
             Err(RunPreauthorizationError::WrongApprovalClass)
         ));
         assert!(matches!(
-            store.claim_unattended_irreversible(UnattendedIrreversibleRequest {
-                approval_id: unbound_run,
-                effect_id: EffectId(710),
-                taint_digest: [9; 32],
-                observed_at: "2026-08-27T00:30:00Z",
-            }),
+            store.claim_unattended_irreversible(request(
+                unbound_run,
+                EffectId(710),
+                "2026-08-27T00:30:00Z",
+            )),
             Err(RunPreauthorizationError::UnboundRunScope)
         ));
         drop(store);
@@ -829,43 +802,33 @@ mod tests {
             ApprovalScope::run_preauthorization(Some(SessionId(7)), &actions, &resources).unwrap(),
             MAX_UNATTENDED_IRREVERSIBLE_RUN_USES + 1,
         );
-        create_effect(
-            &authority,
-            EffectId(720),
-            SessionId(7),
-            "effect.simulate",
-            "session:7",
-            "irreversible_effect",
-            "irreversible",
-        );
+        create_target(&authority, EffectId(720));
+
         let mut store = RunPreauthorizationStore::open(&authority).unwrap();
         store
-            .claim_unattended_irreversible(UnattendedIrreversibleRequest {
-                approval_id: normal,
-                effect_id: EffectId(720),
-                taint_digest: [9; 32],
-                observed_at: "2026-08-27T00:30:00Z",
-            })
+            .claim_unattended_irreversible(request(
+                normal,
+                EffectId(720),
+                "2026-08-27T00:30:00Z",
+            ))
             .unwrap();
         assert!(matches!(
-            store.claim_unattended_irreversible(UnattendedIrreversibleRequest {
-                approval_id: normal,
-                effect_id: EffectId(720),
-                taint_digest: [9; 32],
-                observed_at: "2026-08-27T00:31:00Z",
-            }),
+            store.claim_unattended_irreversible(request(
+                normal,
+                EffectId(720),
+                "2026-08-27T00:31:00Z",
+            )),
             Err(RunPreauthorizationError::Replay)
                 | Err(RunPreauthorizationError::ApprovalUse(
                     ApprovalUseError::UsageLimitReached
                 ))
         ));
         assert!(matches!(
-            store.claim_unattended_irreversible(UnattendedIrreversibleRequest {
-                approval_id: huge,
-                effect_id: EffectId(720),
-                taint_digest: [9; 32],
-                observed_at: "2026-08-27T00:30:00Z",
-            }),
+            store.claim_unattended_irreversible(request(
+                huge,
+                EffectId(720),
+                "2026-08-27T00:30:00Z",
+            )),
             Err(RunPreauthorizationError::UsageLimitTooLarge)
         ));
         drop(store);
