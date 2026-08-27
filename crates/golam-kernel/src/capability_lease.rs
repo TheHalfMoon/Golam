@@ -239,10 +239,12 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
     }
 
     /// Commits a protected capability lease only after the ledger proves that
-    /// `authority_decision_id` is the latest exact allow, the supplied effect
-    /// is exact authorized at-most-once elevated work, the ONCE approval is
-    /// unused and exact, and any parent lease is current and non-widening.
-    /// Only a successful atomic commit produces this sealed authority handle.
+    /// the supplied decision is the latest exact allow, the supplied effect is
+    /// exact authorized at-most-once elevated work, the ONCE approval is unused
+    /// and exact, and any parent lease is current and non-widening. The final
+    /// tuple groups those three pieces of mutation evidence without minting a
+    /// new authority token. Only a successful atomic commit produces this
+    /// sealed authority handle.
     pub fn issue_capability_lease(
         &mut self,
         principal_id: &str,
@@ -250,10 +252,9 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         scope: CapabilityLeaseScope,
         not_before: Option<&str>,
         expires_at: Option<&str>,
-        authority_decision_id: DecisionId,
-        approval_id: [u8; 16],
-        effect_id: EffectId,
+        mutation_evidence: (DecisionId, [u8; 16], EffectId),
     ) -> Result<CapabilityLease, CapabilityLeaseMutationError> {
+        let (authority_decision_id, approval_id, effect_id) = mutation_evidence;
         let prepared = prepare_issue(principal_id, parent, &scope, not_before, expires_at)?;
         if prepared.scope_digest() != scope.digest() {
             return Err(CapabilityLeaseMutationError::InvalidStoredRecord(
