@@ -1,8 +1,8 @@
 #![forbid(unsafe_code)]
 
 pub mod artifacts;
-pub mod authorization;
 mod authority_security_v2;
+pub mod authorization;
 pub mod checkpoint;
 pub mod clients;
 pub mod dispatch;
