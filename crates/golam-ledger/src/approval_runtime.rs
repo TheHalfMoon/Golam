@@ -683,6 +683,159 @@ fn is_leap_year(year: u32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::approval_binding::{
+        APPROVAL_MUTATION_RISK_CLASS, ApprovalStore, PreparedApproval,
+    };
+    use crate::authorization::{
+        AppendAuthorizationDecision, AuthorizationAuditLog, AuthorizationDecisionEvidence,
+        AuthorizationDecisionKind,
+    };
+    use crate::dispatch::encode_effect_dependencies;
+    use crate::effects::{CompareAndSwapEffect, EffectStore, ProposeEffect};
+    use golam_core::paths::RuntimeLayout;
+    use golam_core::{EffectTransitionId, EventId};
+    use std::fs;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    static N: AtomicU64 = AtomicU64::new(0);
+
+    fn authority() -> (RuntimeLayout, AuthorityLayout) {
+        let n = N.fetch_add(1, Ordering::Relaxed);
+        let t = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let runtime = RuntimeLayout::initialize(std::env::temp_dir().join(format!(
+            "golam-approval-runtime-{}-{t}-{n}",
+            std::process::id()
+        )))
+        .unwrap();
+        let authority = AuthorityLayout::initialize(&runtime).unwrap();
+        (runtime, authority)
+    }
+
+    fn authorize_issue_effect(
+        authority: &AuthorityLayout,
+        prepared: &PreparedApproval,
+        effect_id: EffectId,
+    ) {
+        let dependencies = encode_effect_dependencies(&[]).unwrap();
+        let mut effects = EffectStore::open(authority).unwrap();
+        effects
+            .propose(ProposeEffect {
+                effect_id,
+                session_id: SessionId(1),
+                requested_by: "owner:owner",
+                action: APPROVAL_ISSUE_ACTION,
+                resource: prepared.resource(),
+                risk_class: APPROVAL_MUTATION_RISK_CLASS,
+                execution_semantics: "at_most_once",
+                idempotency_key: None,
+                preconditions: b"[]",
+                dependencies: &dependencies,
+                payload_hash: prepared.intent_digest(),
+                proposed_event_id: EventId(effect_id.0 + 100),
+                transition_id: EffectTransitionId(effect_id.0 + 101),
+            })
+            .unwrap();
+        effects
+            .compare_and_swap(CompareAndSwapEffect {
+                transition_id: EffectTransitionId(effect_id.0 + 102),
+                effect_id,
+                expected_state: "proposed",
+                next_state: "authorized",
+                attempt_id: None,
+                reason_code: Some("approval_issue_authorized"),
+                evidence_ref: None,
+                event_id: EventId(effect_id.0 + 103),
+            })
+            .unwrap();
+    }
+
+    fn issue_bound_once_approval(authority: &AuthorityLayout) -> ([u8; 16], [u8; 16]) {
+        let prepared = prepare_approval(
+            "owner:owner",
+            ApprovalScope::once(EffectId(700), "effect.simulate", "session:7").unwrap(),
+            "irreversible_effect",
+            [9; 32],
+            "2026-08-27T00:00:00Z",
+            Some("2026-08-27T01:00:00Z"),
+            1,
+        )
+        .unwrap();
+        let issue_effect = EffectId(1_000);
+        authorize_issue_effect(authority, &prepared, issue_effect);
+        let mut log = AuthorizationAuditLog::open(authority).unwrap();
+        let decision = log
+            .append(AppendAuthorizationDecision {
+                principal: "owner:owner",
+                action: APPROVAL_ISSUE_ACTION,
+                resource: prepared.resource(),
+                context: "scope=local-owner",
+                evidence: AuthorizationDecisionEvidence::hard_guard_only("pass"),
+                decision: AuthorizationDecisionKind::Allow,
+                reason_code: "test_approval_use_parent_authority",
+            })
+            .unwrap();
+        let parent_decision_id = decision.decision_id;
+        drop(log);
+        let approval = ApprovalStore::open(authority)
+            .unwrap()
+            .issue(prepared, parent_decision_id, issue_effect)
+            .unwrap();
+        (approval.approval_id(), parent_decision_id)
+    }
+
+    fn exact_use(approval_id: [u8; 16], observed_at: &str) -> ApprovalUseRequest<'_> {
+        ApprovalUseRequest {
+            approval_id,
+            action: "effect.simulate",
+            resource: "session:7",
+            effect_id: Some(EffectId(700)),
+            session_id: None,
+            risk_class: "irreversible_effect",
+            taint_digest: [9; 32],
+            observed_at,
+        }
+    }
+
+    #[test]
+    fn bound_once_approval_revalidates_exact_scope_risk_taint_and_freshness() {
+        let (runtime, authority) = authority();
+        let (approval_id, parent_decision_id) = issue_bound_once_approval(&authority);
+        let mut store = ApprovalUseStore::open(&authority).unwrap();
+        let evidence = store
+            .validate(exact_use(approval_id, "2026-08-27T00:30:00Z"))
+            .unwrap();
+        assert_eq!(evidence.approval_id(), approval_id);
+        assert_eq!(evidence.class(), ApprovalClass::Once);
+        assert_eq!(evidence.parent_decision_id(), parent_decision_id);
+        assert_eq!(evidence.max_uses(), 1);
+        assert_eq!(evidence.current_uses(), 0);
+
+        let mut wrong_scope = exact_use(approval_id, "2026-08-27T00:30:00Z");
+        wrong_scope.resource = "session:8";
+        assert!(matches!(
+            store.validate(wrong_scope),
+            Err(ApprovalUseError::ScopeMismatch)
+        ));
+
+        let mut wrong_taint = exact_use(approval_id, "2026-08-27T00:30:00Z");
+        wrong_taint.taint_digest = [8; 32];
+        assert!(matches!(
+            store.validate(wrong_taint),
+            Err(ApprovalUseError::TaintMismatch)
+        ));
+
+        assert!(matches!(
+            store.validate(exact_use(approval_id, "2026-08-27T01:00:00Z")),
+            Err(ApprovalUseError::Expired)
+        ));
+        drop(store);
+        drop(AuthorityStore::open(authority.authority_db_path()).unwrap());
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
 
     #[test]
     fn bounded_operation_pattern_supports_one_wildcard_and_rejects_ambiguous_patterns() {
