@@ -262,12 +262,7 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         }
         let expected_parent = parent.map(lease_binding);
         let mut store = CapabilityLeaseStore::open(&self.authority)?;
-        let record = store.issue(
-            prepared,
-            authority_decision_id.0,
-            approval_id,
-            effect_id,
-        )?;
+        let record = store.issue(prepared, authority_decision_id.0, approval_id, effect_id)?;
         let expected_parent_id = expected_parent.map(CapabilityLeaseBinding::lease_id);
         if record.principal_id != principal_id || record.parent_lease_id != expected_parent_id {
             return Err(CapabilityLeaseMutationError::InvalidStoredRecord(
@@ -294,11 +289,8 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         reason_code: &str,
         revoked_at: &str,
     ) -> Result<(String, [u8; 32]), CapabilityLeaseMutationError> {
-        let prepared = prepare_capability_lease_revocation(
-            lease_binding(lease),
-            reason_code,
-            revoked_at,
-        )?;
+        let prepared =
+            prepare_capability_lease_revocation(lease_binding(lease), reason_code, revoked_at)?;
         Ok((prepared.resource().to_owned(), prepared.intent_digest()))
     }
 
@@ -314,18 +306,10 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         approval_id: [u8; 16],
         effect_id: EffectId,
     ) -> Result<(), CapabilityLeaseMutationError> {
-        let prepared = prepare_capability_lease_revocation(
-            lease_binding(lease),
-            reason_code,
-            revoked_at,
-        )?;
+        let prepared =
+            prepare_capability_lease_revocation(lease_binding(lease), reason_code, revoked_at)?;
         let mut store = CapabilityLeaseStore::open(&self.authority)?;
-        store.revoke(
-            prepared,
-            authority_decision_id.0,
-            approval_id,
-            effect_id,
-        )?;
+        store.revoke(prepared, authority_decision_id.0, approval_id, effect_id)?;
         Ok(())
     }
 }
@@ -336,8 +320,10 @@ fn prepare_issue(
     scope: &CapabilityLeaseScope,
     not_before: Option<&str>,
     expires_at: Option<&str>,
-) -> Result<golam_ledger::capability_leases::PreparedCapabilityLeaseIssue, CapabilityLeaseMutationError>
-{
+) -> Result<
+    golam_ledger::capability_leases::PreparedCapabilityLeaseIssue,
+    CapabilityLeaseMutationError,
+> {
     prepare_capability_lease_issue(
         principal_id,
         parent.map(lease_binding),

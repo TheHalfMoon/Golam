@@ -118,7 +118,12 @@ pub(crate) fn append_capability_lease_snapshot(
         "SELECT lease_id, principal_id, parent_lease_id, actions_scope, resources_scope, context_constraints, issued_by, issued_global_seq, not_before, expires_at, generation, status, authority_digest FROM capability_leases WHERE lease_id = ?1",
         params![lease_id],
     )?;
-    append_snapshot(transaction, ProtectedMutationKind::CapabilityLease, 1, &values)
+    append_snapshot(
+        transaction,
+        ProtectedMutationKind::CapabilityLease,
+        1,
+        &values,
+    )
 }
 
 pub(crate) fn append_capability_revocation_snapshot(

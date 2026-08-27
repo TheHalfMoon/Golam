@@ -5,6 +5,10 @@ pub mod artifacts;
 mod authority_security_v2;
 mod authority_security_write;
 pub mod authorization;
+pub mod capability_lease_mutation;
+#[path = "capability_leases.rs"]
+pub mod capability_lease_runtime;
+#[path = "capability_leases_facade.rs"]
 pub mod capability_leases;
 pub mod checkpoint;
 pub mod clients;
