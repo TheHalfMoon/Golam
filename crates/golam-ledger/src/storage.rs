@@ -9,7 +9,7 @@ use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, 
 
 use crate::{EventKind, EventRecord, audit_integrity_hash, event_integrity_hash, payload_hash};
 
-pub const AUTHORITY_SCHEMA_VERSION: i64 = 2;
+pub const AUTHORITY_SCHEMA_VERSION: i64 = 3;
 const SECURITY_AUDIT_CHAIN: &str = "security";
 
 pub const REQUIRED_TABLES: &[&str] = &[
@@ -41,6 +41,7 @@ pub const REQUIRED_TABLES: &[&str] = &[
     "egress_permits",
     "sandbox_profiles",
     "sandbox_admissions",
+    "authority_security_audit_v2",
 ];
 
 #[derive(Debug)]
@@ -319,6 +320,8 @@ impl AuthorityStore {
 
 fn verify_canonical_integrity(connection: &Connection) -> Result<(), StorageError> {
     crate::integrity::verify(connection)
+        .map_err(|error| StorageError::IntegrityCheckFailed(error.to_string()))?;
+    crate::authority_security_v2::verify(connection)
         .map_err(|error| StorageError::IntegrityCheckFailed(error.to_string()))
 }
 
@@ -460,6 +463,10 @@ fn migrate(connection: &Connection) -> Result<(), StorageError> {
     if version == 1 {
         migrate_v2(connection)?;
         version = 2;
+    }
+    if version == 2 {
+        migrate_v3(connection)?;
+        version = 3;
     }
     debug_assert_eq!(version, AUTHORITY_SCHEMA_VERSION);
     Ok(())
@@ -650,8 +657,7 @@ fn migrate_v2(connection: &Connection) -> Result<(), StorageError> {
            status TEXT NOT NULL,\n\
            authority_digest BLOB NOT NULL\n\
          );\n\
-         CREATE INDEX capability_leases_principal_status_idx \
-           ON capability_leases(principal_id, status);\n\
+         CREATE INDEX capability_leases_principal_status_idx ON capability_leases(principal_id, status);\n\
          CREATE TABLE capability_revocations (\n\
            revocation_id BLOB PRIMARY KEY NOT NULL,\n\
            lease_id BLOB NOT NULL,\n\
@@ -794,16 +800,36 @@ fn migrate_v2(connection: &Connection) -> Result<(), StorageError> {
            platform_executor TEXT NOT NULL,\n\
            created_global_seq INTEGER NOT NULL\n\
          );\n\
-         ALTER TABLE authorization_decisions \
-           ADD COLUMN hard_guard_result TEXT NOT NULL DEFAULT 'spec002_legacy';\n\
+         ALTER TABLE authorization_decisions ADD COLUMN hard_guard_result TEXT NOT NULL DEFAULT 'spec002_legacy';\n\
          ALTER TABLE authorization_decisions ADD COLUMN lease_id BLOB;\n\
          ALTER TABLE authorization_decisions ADD COLUMN lease_generation INTEGER;\n\
          ALTER TABLE authorization_decisions ADD COLUMN policy_bundle_id BLOB;\n\
          ALTER TABLE authorization_decisions ADD COLUMN policy_bundle_hash BLOB;\n\
-         ALTER TABLE authorization_decisions \
-           ADD COLUMN matched_rule_ids BLOB NOT NULL DEFAULT X'';\n\
+         ALTER TABLE authorization_decisions ADD COLUMN matched_rule_ids BLOB NOT NULL DEFAULT X'';\n\
          ALTER TABLE authorization_decisions ADD COLUMN approval_id BLOB;\n\
          PRAGMA user_version = 2;\n\
+         COMMIT;",
+    )?;
+    Ok(())
+}
+
+fn migrate_v3(connection: &Connection) -> Result<(), StorageError> {
+    connection.execute_batch(
+        "BEGIN IMMEDIATE;\n\
+         CREATE TABLE authority_security_audit_v2 (\n\
+           audit_seq INTEGER PRIMARY KEY NOT NULL,\n\
+           record_kind TEXT NOT NULL,\n\
+           record_id BLOB NOT NULL,\n\
+           payload_bytes BLOB NOT NULL,\n\
+           payload_hash BLOB NOT NULL,\n\
+           previous_hash BLOB,\n\
+           record_hash BLOB NOT NULL\n\
+         );\n\
+         CREATE INDEX authority_security_audit_v2_record_idx \
+           ON authority_security_audit_v2(record_kind, record_id, audit_seq);\n\
+         ALTER TABLE authorization_decisions \
+           ADD COLUMN authority_evidence_version INTEGER NOT NULL DEFAULT 1;\n\
+         PRAGMA user_version = 3;\n\
          COMMIT;",
     )?;
     Ok(())
@@ -845,6 +871,7 @@ mod tests {
             "policy_bundle_hash",
             "matched_rule_ids",
             "approval_id",
+            "authority_evidence_version",
         ] {
             assert!(
                 has_column(&store.connection, "authorization_decisions", column),
@@ -891,22 +918,27 @@ mod tests {
         assert_eq!(key_id, "legacy-key");
         let legacy_guard: String = connection
             .query_row(
-                "SELECT dflt_value FROM pragma_table_info('authorization_decisions') \
-                 WHERE name = 'hard_guard_result'",
+                "SELECT dflt_value FROM pragma_table_info('authorization_decisions') WHERE name = 'hard_guard_result'",
                 [],
                 |row| row.get(0),
             )
             .unwrap();
         assert_eq!(legacy_guard, "'spec002_legacy'");
+        let legacy_evidence_version: String = connection
+            .query_row(
+                "SELECT dflt_value FROM pragma_table_info('authorization_decisions') WHERE name = 'authority_evidence_version'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(legacy_evidence_version, "1");
     }
 
     #[test]
     fn future_authority_schema_still_fails_closed() {
         let connection = Connection::open_in_memory().unwrap();
         configure_connection(&connection).unwrap();
-        connection
-            .execute_batch("PRAGMA user_version = 99;")
-            .unwrap();
+        connection.execute_batch("PRAGMA user_version = 99;").unwrap();
         assert!(matches!(
             migrate(&connection),
             Err(StorageError::FutureSchema {
