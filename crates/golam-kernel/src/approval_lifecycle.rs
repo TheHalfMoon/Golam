@@ -7,6 +7,10 @@ use golam_core::EffectId;
 use golam_ledger::approval_binding::{
     APPROVAL_ISSUE_ACTION, ApprovalBindingError, ApprovalStore, prepare_approval,
 };
+use golam_ledger::approval_consumption::ApprovalConsumptionStore;
+pub use golam_ledger::approval_consumption::{
+    ApprovalConsumption, ApprovalConsumptionError, ApprovalReservation,
+};
 use golam_ledger::approval_runtime::ApprovalUseStore;
 pub use golam_ledger::approval_runtime::{
     ApprovalUseError, ApprovalUseEvidence, ApprovalUseRequest,
@@ -118,6 +122,28 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
     ) -> Result<ApprovalUseEvidence, ApprovalUseError> {
         let mut store = ApprovalUseStore::open(&self.authority)?;
         store.validate(request)
+    }
+
+    /// Revalidates and durably reserves one exact ONCE approval immediately
+    /// before protected execution. A crash after this call leaves the durable
+    /// reservation in place, so retry cannot silently execute a second time.
+    pub fn reserve_once_approval_use(
+        &mut self,
+        request: ApprovalUseRequest<'_>,
+    ) -> Result<ApprovalReservation, ApprovalConsumptionError> {
+        let mut store = ApprovalConsumptionStore::open(&self.authority)?;
+        store.reserve_once(request)
+    }
+
+    /// Marks the exact durable ONCE reservation consumed only after the bound
+    /// effect has progressed into execution. Repeating this call for the same
+    /// reservation is idempotent and cannot create another use.
+    pub fn consume_once_approval(
+        &mut self,
+        reservation: ApprovalReservation,
+    ) -> Result<ApprovalConsumption, ApprovalConsumptionError> {
+        let mut store = ApprovalConsumptionStore::open(&self.authority)?;
+        store.consume_once(reservation)
     }
 }
 
