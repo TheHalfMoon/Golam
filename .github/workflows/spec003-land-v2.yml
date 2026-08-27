@@ -90,8 +90,8 @@ jobs:
             crates/golam-kernel/Cargo.toml \
             crates/golam-kernel/src/lib.rs \
             crates/golam-kernel/src/policy_candidate.rs | LC_ALL=C sort)
-          missing_paths=$(comm -23 <(printf '%s\n' "$expected_paths") <(printf '%s\n' "$actual_paths") | paste -sd ',' -)
-          extra_paths=$(comm -13 <(printf '%s\n' "$expected_paths") <(printf '%s\n' "$actual_paths") | paste -sd ',' -)
+          missing_paths=$(LC_ALL=C comm -23 <(printf '%s\n' "$expected_paths") <(printf '%s\n' "$actual_paths") | paste -sd ',' -)
+          extra_paths=$(LC_ALL=C comm -13 <(printf '%s\n' "$expected_paths") <(printf '%s\n' "$actual_paths") | paste -sd ',' -)
           printf 'missing=%s\n' "${missing_paths:-none}" >> "$GITHUB_OUTPUT"
           printf 'extra=%s\n' "${extra_paths:-none}" >> "$GITHUB_OUTPUT"
           printf '%s\n' '===== ACTUAL_PATHS =====' "$actual_paths" '===== EXPECTED_PATHS =====' "$expected_paths"
@@ -119,10 +119,23 @@ jobs:
           fi
 
       - name: Commit exact validated candidate
+        id: candidate_commit
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "feat: validate Spec 003 Cedar policy candidates"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          candidate_sha=$(git rev-parse HEAD)
+          printf 'sha=%s\n' "$candidate_sha" >> "$GITHUB_OUTPUT"
+          printf 'CANDIDATE_SHA=%s\n' "$candidate_sha"
+
+      - name: Push and verify exact candidate ${{ steps.candidate_commit.outputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate_sha='${{ steps.candidate_commit.outputs.sha }}'
+          git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
+          remote_sha=$(git ls-remote --exit-code origin "refs/heads/${GITHUB_REF_NAME}" | awk '{print $1}')
+          printf 'REMOTE_SHA=%s\n' "$remote_sha"
+          test "$remote_sha" = "$candidate_sha"
