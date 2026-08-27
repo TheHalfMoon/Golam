@@ -938,7 +938,9 @@ mod tests {
     fn future_authority_schema_still_fails_closed() {
         let connection = Connection::open_in_memory().unwrap();
         configure_connection(&connection).unwrap();
-        connection.execute_batch("PRAGMA user_version = 99;").unwrap();
+        connection
+            .execute_batch("PRAGMA user_version = 99;")
+            .unwrap();
         assert!(matches!(
             migrate(&connection),
             Err(StorageError::FutureSchema {
