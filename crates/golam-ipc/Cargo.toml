@@ -1,0 +1,21 @@
+[package]
+name = "golam-ipc"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+blake3.workspace = true
+ed25519-dalek.workspace = true
+getrandom.workspace = true
+golam-core = { path = "../golam-core" }
+
+[target.'cfg(unix)'.dependencies]
+nix.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+interprocess.workspace = true
+widestring.workspace = true
+
+[lints]
+workspace = true

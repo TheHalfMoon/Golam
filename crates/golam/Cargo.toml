@@ -1,0 +1,12 @@
+[package]
+name = "golam"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+golam-core = { path = "../golam-core" }
+golam-ipc = { path = "../golam-ipc" }
+
+[lints]
+workspace = true

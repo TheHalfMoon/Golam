@@ -1,0 +1,14 @@
+[package]
+name = "golam-kernel"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ed25519-dalek.workspace = true
+golam-core = { path = "../golam-core" }
+golam-ipc = { path = "../golam-ipc" }
+golam-ledger = { path = "../golam-ledger" }
+
+[lints]
+workspace = true

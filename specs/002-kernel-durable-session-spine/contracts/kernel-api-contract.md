@@ -15,7 +15,6 @@ open_authenticated_client(context) -> ClientSession | Deny
 revoke_client(client_id) -> Result
 create_session(request) -> Session
 fork_session(parent_session, through_seq) -> Session
-append_session_event(event_request) -> SessionEvent
 append_goal_version(goal_request) -> GoalVersion
 create_checkpoint(session, projection) -> Checkpoint
 verify_checkpoint(checkpoint) -> Verified | Invalid
@@ -25,6 +24,16 @@ authorize(principal, action, resource, context) -> Allow | Deny
 network_egress_authorize(request) -> Allow | Deny
 read_recovery_status() -> RecoveryStatus
 ```
+
+### Typed canonical-event construction
+
+`SessionEvent` append is an internal kernel/ledger primitive, not a public caller-selected `(EventKind, bytes)` mutation surface.
+
+Spec 002 creates canonical session events through typed domain operations such as session creation, fork, goal versioning, and checkpoint creation. A domain operation that requires both a canonical event and a companion protected record MUST commit those invariant-coupled records through the owning typed path.
+
+A client or adapter MUST NOT be able to choose reserved system event families directly. In particular, a generic public append API must not permit a caller to forge event families such as checkpoint/effect/goal lifecycle evidence without the corresponding domain record and authorization path.
+
+A later product event family may add a dedicated typed request and event kind under its owning spec. That extension must preserve authorization, auditability, schema/version checks, canonical ordering, and integrity chaining.
 
 ## Protected resources
 
@@ -48,11 +57,15 @@ No generic file/path API can address these as ordinary resources.
 - stale server epoch invalidates transient authority;
 - unsafe code is forbidden in Golam kernel code.
 
+## Integrity rule
+
+Security-critical client enrollment/revocation, authorization decisions, effect intent/transitions/attempts, recovery incidents, and security-critical canonical events MUST be protected by mandatory tamper-evident integrity chaining or an equivalently strong authenticated integrity mechanism. Missing integrity coverage is a fail-closed authority-store integrity failure.
+
 ## Compromise test
 
 A test-only hostile adapter receives all public non-kernel APIs and filesystem access to an ordinary workspace. It must fail to:
 - mint an authorization result/token;
 - mutate authority DB through a generic path;
-- append/forge a canonical event without KernelApi;
+- append/forge a canonical event without the owning KernelApi domain operation;
 - modify audit chain head;
 - revoke/enroll a client.

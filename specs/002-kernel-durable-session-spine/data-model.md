@@ -14,7 +14,7 @@ Logical model; exact SQL column types/migrations are implementation details cons
 - `revoked_at?`
 - `assurance_class`
 
-Invariant: revoked client cannot establish a new privileged IPC session.
+Invariant: revoked client cannot establish a new privileged IPC session. Enrollment and revocation are protected security records and require mandatory integrity coverage.
 
 ## IpcConnection
 
@@ -64,7 +64,9 @@ Fork invariant: parent anchor is immutable after child creation.
 - `previous_audit_hash?`
 - `audit_hash?`
 
-Ordering invariant: `global_seq` defines total canonical audit order; timestamp does not.
+Ordering invariant: `global_seq` defines total canonical order across the Spec 002 canonical sequence domains; timestamp does not.
+
+Construction invariant: reserved system event families are emitted by their owning typed kernel/domain operation. A public adapter/client cannot select an arbitrary reserved `event_type` to manufacture lifecycle evidence without the corresponding protected domain record.
 
 ## GoalVersion
 
@@ -170,6 +172,34 @@ Spec 002 policy is bootstrap-only; schema remains stable for Spec 003.
 - `last_global_seq`
 - `last_hash`
 
+Spec 002 maintains distinct integrity domains rather than allowing one chain to masquerade as coverage for unrelated protected rows.
+
+## AuthoritySecurityAuditRecord
+
+Protected non-event authority records are bound into the `authority-security` BLAKE3 chain.
+
+- `audit_seq`
+- `record_kind`
+- `record_id`
+- `payload_hash`
+- `previous_hash?`
+- `record_hash`
+
+Covered record kinds in Spec 002:
+
+- client enrollment;
+- client revocation;
+- authorization decision;
+- effect intent;
+- effect transition;
+- effect attempt start;
+- effect attempt finish;
+- recovery/protocol/manual-review incident.
+
+The physical `authority_security_audit` table is an integrity companion initialized transactionally when the first covered protected record is written. An entirely empty authority database may therefore omit the companion table. This is safe only because authority-store verification enforces the inverse invariant: **if any covered protected source row exists, matching audit coverage and a valid chain/head MUST exist or open fails closed**.
+
+Verification recomputes the canonical source payload from the protected row, checks its payload hash, checks every previous-hash link and contiguous audit sequence, checks the final chain head, and checks complete source-row coverage. The audit table is not a projection that may be silently rebuilt after tampering.
+
 ## RecoveryIncident
 
 - `incident_id`
@@ -180,4 +210,4 @@ Spec 002 policy is bootstrap-only; schema remains stable for Spec 003.
 - `recovery_mode`
 - `resolution?`
 
-Recovery incidents are append-only evidence; resolution does not erase the incident.
+Recovery incidents are append-oriented security evidence; resolution does not erase the incident. Incidents created by Spec 002 protected recovery/protocol/manual-review paths require `authority-security` integrity coverage.
