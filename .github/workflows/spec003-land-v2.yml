@@ -1,0 +1,103 @@
+name: spec003-land-qualified-cedar-candidate-v2
+
+on:
+  push:
+    branches:
+      - impl/003-identity-policy-secrets-sandbox
+
+permissions:
+  contents: write
+
+jobs:
+  land:
+    if: github.repository == 'TheHalfMoon/Golam' && github.ref == 'refs/heads/impl/003-identity-policy-secrets-sandbox'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+      - name: Materialize exact qualified candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path("Cargo.toml")
+          text = root.read_text()
+          needle = 'blake3 = { version = "=1.8.7", features = ["pure"] }\n'
+          replacement = needle + 'cedar-policy = { version = "=4.12.0", default-features = false }\n'
+          if text.count(needle) != 1 or 'cedar-policy = ' in text:
+              raise SystemExit("unexpected root Cargo.toml state")
+          root.write_text(text.replace(needle, replacement, 1))
+
+          kernel = Path("crates/golam-kernel/Cargo.toml")
+          text = kernel.read_text()
+          needle = '[dependencies]\n'
+          replacement = '[dependencies]\ncedar-policy.workspace = true\n'
+          if text.count(needle) != 1 or 'cedar-policy.workspace' in text:
+              raise SystemExit("unexpected kernel Cargo.toml state")
+          kernel.write_text(text.replace(needle, replacement, 1))
+
+          lib = Path("crates/golam-kernel/src/lib.rs")
+          text = lib.read_text()
+          needle = 'mod operations;\nmod resource;\n'
+          replacement = 'mod operations;\npub mod policy_candidate;\nmod resource;\n'
+          if text.count(needle) != 1 or 'mod policy_candidate;' in text:
+              raise SystemExit("unexpected kernel lib.rs state")
+          lib.write_text(text.replace(needle, replacement, 1))
+
+          workflow = Path('.github/workflows/spec003-resolve-lock.yml').read_text()
+          start = "          cat > crates/golam-kernel/src/policy_candidate.rs <<'RS'\n"
+          end = "          RS\n"
+          if workflow.count(start) != 1:
+              raise SystemExit("candidate source start marker not unique")
+          payload = workflow.split(start, 1)[1]
+          if end not in payload:
+              raise SystemExit("candidate source end marker missing")
+          payload = payload.split(end, 1)[0]
+          lines = payload.splitlines()
+          if any(line and not line.startswith('          ') for line in lines):
+              raise SystemExit("candidate source indentation invariant failed")
+          source = '\n'.join(line[10:] if line else '' for line in lines) + '\n'
+          Path('crates/golam-kernel/src/policy_candidate.rs').write_text(source)
+          PY
+
+          cargo +1.98.0 generate-lockfile
+          actual_lock_sha=$(sha256sum Cargo.lock | awk '{print $1}')
+          printf 'LOCK_SHA=%s\n' "$actual_lock_sha"
+          test "$actual_lock_sha" = "bf512d050decd6de89152fb5301e84fadcf0c1c09583f2bcec83fe0c6423061d"
+          cargo +1.98.0 fmt --all
+          cargo +1.98.0 clippy --locked --workspace --all-targets -- -D warnings
+          cargo +1.98.0 test --locked --workspace --all-targets
+
+      - name: Enforce atomic changed-path boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/spec003-resolve-lock.yml
+          rm .github/workflows/spec003-land-v2.yml
+          git diff --check
+          git add -A
+          actual_paths=$(git diff --cached --name-only | sort)
+          expected_paths=$(printf '%s\n' \
+            .github/workflows/spec003-land-v2.yml \
+            .github/workflows/spec003-resolve-lock.yml \
+            Cargo.lock \
+            Cargo.toml \
+            crates/golam-kernel/Cargo.toml \
+            crates/golam-kernel/src/lib.rs \
+            crates/golam-kernel/src/policy_candidate.rs | sort)
+          printf '%s\n' '===== ACTUAL_PATHS =====' "$actual_paths" '===== EXPECTED_PATHS =====' "$expected_paths"
+          test "$actual_paths" = "$expected_paths"
+
+      - name: Commit exact validated candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "feat: validate Spec 003 Cedar policy candidates"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
