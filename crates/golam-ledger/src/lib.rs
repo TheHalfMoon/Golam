@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod active_policy_integrity;
+pub mod approval_binding;
 pub mod approvals;
 pub mod artifacts;
 mod authority_security_v2;
