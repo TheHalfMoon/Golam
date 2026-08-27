@@ -7,6 +7,10 @@ use golam_core::EffectId;
 use golam_ledger::approval_binding::{
     APPROVAL_ISSUE_ACTION, ApprovalBindingError, ApprovalStore, prepare_approval,
 };
+pub use golam_ledger::approval_runtime::{
+    ApprovalUseError, ApprovalUseEvidence, ApprovalUseRequest,
+};
+use golam_ledger::approval_runtime::ApprovalUseStore;
 use golam_ledger::approvals::{ApprovalRecord, ApprovalScope};
 
 use crate::{
@@ -102,6 +106,18 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         };
         let mut store = ApprovalStore::open(&self.authority)?;
         Ok(store.issue(prepared, parent_decision_id, input.issue_effect_id)?)
+    }
+
+    /// Revalidates an approval against the exact protected use and current
+    /// protected authority snapshot immediately before execution. The returned
+    /// value is evidence only: consumptive execution still requires the atomic
+    /// reservation/consumption path introduced by T003-033.
+    pub fn validate_approval_use(
+        &self,
+        request: ApprovalUseRequest<'_>,
+    ) -> Result<ApprovalUseEvidence, ApprovalUseError> {
+        let mut store = ApprovalUseStore::open(&self.authority)?;
+        store.validate(request)
     }
 }
 
