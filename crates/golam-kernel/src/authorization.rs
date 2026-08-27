@@ -198,8 +198,10 @@ fn validate_action(action: &str) -> Result<(), AuthorizationError> {
         return Err(AuthorizationError::ActionTooLarge);
     }
     let bytes = action.as_bytes();
-    if !bytes[0].is_ascii_lowercase()
-        || !bytes[bytes.len() - 1].is_ascii_alphanumeric()
+    let first_is_canonical = bytes.first().is_some_and(u8::is_ascii_lowercase);
+    let last_is_canonical = bytes.last().is_some_and(u8::is_ascii_alphanumeric);
+    if !first_is_canonical
+        || !last_is_canonical
         || bytes.windows(2).any(|pair| pair == b"..")
         || bytes.iter().any(|byte| {
             !(byte.is_ascii_lowercase()
@@ -230,8 +232,10 @@ fn validate_scope(scope: &str) -> Result<(), AuthorizationError> {
         return Err(AuthorizationError::ContextScopeTooLarge);
     }
     let bytes = scope.as_bytes();
-    if !bytes[0].is_ascii_lowercase()
-        || !bytes[bytes.len() - 1].is_ascii_alphanumeric()
+    let first_is_canonical = bytes.first().is_some_and(u8::is_ascii_lowercase);
+    let last_is_canonical = bytes.last().is_some_and(u8::is_ascii_alphanumeric);
+    if !first_is_canonical
+        || !last_is_canonical
         || bytes.iter().any(|byte| {
             !(byte.is_ascii_lowercase()
                 || byte.is_ascii_digit()
@@ -292,6 +296,14 @@ impl PolicyDecision {
 
 pub trait AuthorizationPolicy {
     fn authorize(&self, request: &AuthorizationRequest<'_>) -> PolicyDecision;
+
+    fn authorize_normalized(
+        &self,
+        request: &AuthorizationRequest<'_>,
+        _canonical_policy_input: &[u8],
+    ) -> PolicyDecision {
+        self.authorize(request)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -324,6 +336,7 @@ pub struct AuthorizationOutcome {
 #[derive(Debug)]
 pub enum AuthorizationError {
     Audit(AuthorizationAuditError),
+    CanonicalInput(CoreError),
     EmptyPrincipal,
     EmptyAction,
     EmptyResource,
@@ -343,6 +356,9 @@ impl fmt::Display for AuthorizationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Audit(error) => write!(f, "authorization audit failed: {error}"),
+            Self::CanonicalInput(error) => {
+                write!(f, "authorization canonical input encoding failed: {error}")
+            }
             Self::EmptyPrincipal => f.write_str("authorization principal is empty"),
             Self::EmptyAction => f.write_str("authorization action is empty"),
             Self::EmptyResource => f.write_str("authorization resource is empty"),
@@ -353,13 +369,9 @@ impl fmt::Display for AuthorizationError {
             Self::ContextScopeTooLarge => {
                 f.write_str("authorization context scope exceeds bounded size")
             }
-            Self::NonCanonicalPrincipal => {
-                f.write_str("authorization principal is not canonical")
-            }
+            Self::NonCanonicalPrincipal => f.write_str("authorization principal is not canonical"),
             Self::NonCanonicalAction => f.write_str("authorization action is not canonical"),
-            Self::NonCanonicalResource => {
-                f.write_str("authorization resource is not canonical")
-            }
+            Self::NonCanonicalResource => f.write_str("authorization resource is not canonical"),
             Self::NonCanonicalContextScope => {
                 f.write_str("authorization context scope is not canonical")
             }
@@ -374,6 +386,7 @@ impl Error for AuthorizationError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Audit(error) => Some(error),
+            Self::CanonicalInput(error) => Some(error),
             _ => None,
         }
     }
@@ -382,6 +395,12 @@ impl Error for AuthorizationError {
 impl From<AuthorizationAuditError> for AuthorizationError {
     fn from(value: AuthorizationAuditError) -> Self {
         Self::Audit(value)
+    }
+}
+
+impl From<CoreError> for AuthorizationError {
+    fn from(value: CoreError) -> Self {
+        Self::CanonicalInput(value)
     }
 }
 
@@ -416,8 +435,11 @@ impl<P: AuthorizationPolicy> AuthorizationEngine<P> {
     ) -> Result<(AuthorizationOutcome, Option<AuthorityGrant>), AuthorizationError> {
         let normalized = NormalizedAuthorizationRequest::new(request)?;
         let request = normalized.request();
+        let canonical_policy_input = normalized.policy_input_bytes()?;
         let policy_decision = match evaluate_hard_guards(request) {
-            HardGuardOutcome::Pass => self.policy.authorize(request),
+            HardGuardOutcome::Pass => self
+                .policy
+                .authorize_normalized(request, &canonical_policy_input),
             HardGuardOutcome::Deny(reason) => PolicyDecision::deny(reason),
         };
         let principal = request.principal.audit_subject();
@@ -578,7 +600,11 @@ mod tests {
         (runtime, authority)
     }
 
-    fn owner_request<'a>(action: &'a str, resource: &'a str, scope: &'a str) -> AuthorizationRequest<'a> {
+    fn owner_request<'a>(
+        action: &'a str,
+        resource: &'a str,
+        scope: &'a str,
+    ) -> AuthorizationRequest<'a> {
         AuthorizationRequest {
             principal: Principal::local_owner("owner"),
             action,
@@ -617,7 +643,11 @@ mod tests {
         let first = normalized.policy_input_bytes().unwrap();
         assert_eq!(first, normalized.policy_input_bytes().unwrap());
         assert!(first.starts_with(&[0, 0, 0, 35]));
-        assert!(first.windows(POLICY_INPUT_DOMAIN.len()).any(|window| window == POLICY_INPUT_DOMAIN));
+        assert!(
+            first
+                .windows(POLICY_INPUT_DOMAIN.len())
+                .any(|window| window == POLICY_INPUT_DOMAIN)
+        );
 
         let changed = owner_request("session.read", "session:new", "local-owner");
         let changed = NormalizedAuthorizationRequest::new(&changed).unwrap();
@@ -626,7 +656,13 @@ mod tests {
 
     #[test]
     fn bounded_canonical_input_vectors_fail_closed() {
-        let invalid_actions = ["Session.create", ".session", "session.", "session..read", "session read"];
+        let invalid_actions = [
+            "Session.create",
+            ".session",
+            "session.",
+            "session..read",
+            "session read",
+        ];
         for action in invalid_actions {
             assert!(matches!(
                 NormalizedAuthorizationRequest::new(&owner_request(
@@ -713,11 +749,7 @@ mod tests {
         assert_eq!(outcome.reason_code, HARD_SAFETY_DENIAL);
         assert!(grant.is_none());
 
-        let egress = owner_request(
-            "network.egress",
-            "https://example.invalid",
-            "local-owner",
-        );
+        let egress = owner_request("network.egress", "https://example.invalid", "local-owner");
         let (outcome, grant) = engine.authorize(&egress).unwrap();
         assert_eq!(outcome.decision, AuthorizationDecision::Deny);
         assert_eq!(outcome.reason_code, STRICT_LOCAL_EGRESS_DENIAL);
@@ -734,6 +766,15 @@ mod tests {
                 assert_eq!(request.action, "session.read");
                 assert_eq!(request.context.scope, "local-owner");
                 PolicyDecision::allow("normalized_test_allow")
+            }
+
+            fn authorize_normalized(
+                &self,
+                request: &AuthorizationRequest<'_>,
+                canonical_policy_input: &[u8],
+            ) -> PolicyDecision {
+                assert!(canonical_policy_input.starts_with(&[0, 0, 0, 35]));
+                self.authorize(request)
             }
         }
 
