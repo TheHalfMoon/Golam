@@ -25,7 +25,10 @@ pub use authorization::{
     AuthorizationPolicy, AuthorizationRequest, BootstrapPolicy, DecisionId, DenyByDefault,
     PolicyDecision, Principal, PrincipalKind,
 };
-pub use capability_lease::{CapabilityLease, CapabilityLeaseId};
+pub use capability_lease::{
+    CapabilityLease, CapabilityLeaseId, CapabilityLeaseScope, CapabilityLeaseScopeError,
+    CapabilityLeaseUseError, CapabilityLeaseUseEvidence,
+};
 pub use client_auth::ClientAuthorityError;
 pub use client_enrollment::{ClientEnrollmentError, EnrolledClientCredential};
 pub use effect_execution::PreparedEffectDispatch;
@@ -189,6 +192,29 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             debug_assert_eq!(grant.decision_id(), outcome.decision_id);
         }
         Ok(outcome)
+    }
+
+    /// Revalidates a sealed capability lease against the current protected
+    /// authority snapshot immediately before a protected action uses it.
+    /// The returned value is evidence only and is not an authority grant.
+    pub fn validate_capability_lease_use(
+        &self,
+        lease: &CapabilityLease,
+        principal_id: &str,
+        action: &str,
+        resource: &str,
+        context_constraints: &[&str],
+        observed_at: &str,
+    ) -> Result<CapabilityLeaseUseEvidence, CapabilityLeaseUseError> {
+        capability_lease::validate_capability_lease_use(
+            &self.authority,
+            lease,
+            principal_id,
+            action,
+            resource,
+            context_constraints,
+            observed_at,
+        )
     }
 
     pub fn enroll_generated_client(

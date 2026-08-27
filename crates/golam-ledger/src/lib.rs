@@ -5,6 +5,7 @@ pub mod artifacts;
 mod authority_security_v2;
 mod authority_security_write;
 pub mod authorization;
+pub mod capability_leases;
 pub mod checkpoint;
 pub mod clients;
 pub mod dispatch;
