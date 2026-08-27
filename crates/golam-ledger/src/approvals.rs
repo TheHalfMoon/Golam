@@ -325,9 +325,7 @@ fn normalize_scope_values(
     normalized.sort();
     normalized.dedup();
     for value in &normalized {
-        if value.is_empty()
-            || value.len() > max_value_bytes
-            || value.chars().any(char::is_control)
+        if value.is_empty() || value.len() > max_value_bytes || value.chars().any(char::is_control)
         {
             return Err(ApprovalScopeError::InvalidScopeValue(kind));
         }
@@ -390,11 +388,7 @@ mod tests {
                 &values(&["session:7"]),
             )
             .unwrap(),
-            ApprovalScope::time_boxed(
-                &values(&["session.read"]),
-                &values(&["session:7"]),
-            )
-            .unwrap(),
+            ApprovalScope::time_boxed(&values(&["session.read"]), &values(&["session:7"])).unwrap(),
             ApprovalScope::operation_pattern("effect.*", "session:7/*").unwrap(),
             ApprovalScope::run_preauthorization(
                 Some(SessionId(7)),
@@ -427,7 +421,10 @@ mod tests {
             &values(&["session:1", "session:2"]),
         )
         .unwrap();
-        assert_eq!(first.scope_digest().unwrap(), second.scope_digest().unwrap());
+        assert_eq!(
+            first.scope_digest().unwrap(),
+            second.scope_digest().unwrap()
+        );
     }
 
     #[test]
