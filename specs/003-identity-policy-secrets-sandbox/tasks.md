@@ -1,21 +1,21 @@
 # Tasks — Spec 003 Identity, Policy, Secrets & Sandbox
 
-**Status**: PLANNED — QODO REPAIR RECONCILED; IMPLEMENTATION BLOCKED UNTIL PLANNING PR MERGES CANONICAL  
-**Planning base**: `main@a04756f242e48faeda802e5b3fd99a0c8d52f53e`
+**Status**: IMPLEMENTATION_ACTIVE — PHASE_A_COMPLETE  
+**Canonical implementation base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`
 
 Legend:
-- `[ ]` is future implementation work authorized only after this planning package is reviewed/merged.
-- Planning completion does not mean product implementation exists.
-- No PASS transfers across a branch mutation.
+- `[x]` means the task has repository evidence on the implementation branch or canonical predecessor.
+- `[ ]` is remaining implementation work.
+- No PASS transfers across a branch mutation for final exact-head qualification.
 
 ## Phase A — Exact-main bootstrap and dependency gates
 
-- [ ] **T003-001** Re-read exact canonical `main` after planning merge; create implementation branch from that exact commit.
-- [ ] **T003-002** Re-read constitution, Spec 001 authority contracts, canonical Spec 002 closeout and the merged Spec 003 package before code mutation.
-- [ ] **T003-003** Qualify exact Cedar source/crate/version/features/license/transitives/unsafe/resource behavior before adding it.
-- [ ] **T003-004** Qualify exact cryptographic/vault/key-protection dependencies and Windows/macOS/Linux backing-store boundaries before handling secret values.
-- [ ] **T003-005** Qualify Wasmtime/WASI only if a bounded WASM-profile implementation task actually requires it; otherwise record `NOT_ADMITTED_NOT_NEEDED`.
-- [ ] **T003-006** Record Source Foundry evidence before any donor source reuse; default `Golam-Research=REFERENCE_ONLY`.
+- [x] **T003-001** Re-read exact canonical `main` after planning merge; create implementation branch from that exact commit. Evidence: `implementation/implementation-bootstrap.md`.
+- [x] **T003-002** Re-read constitution, Spec 001 authority contracts, canonical Spec 002 closeout and the merged Spec 003 package before code mutation. Evidence: `implementation/implementation-bootstrap.md`.
+- [x] **T003-003** Qualify exact Cedar source/crate/version/features/license/transitives/unsafe/resource behavior before adding it. Evidence: `implementation/cedar-dependency-qualification.md`.
+- [x] **T003-004** Qualify exact cryptographic/vault/key-protection dependencies and Windows/macOS/Linux backing-store boundaries before handling secret values. Evidence: `implementation/secret-dependency-qualification.md`.
+- [x] **T003-005** Qualify Wasmtime/WASI only if a bounded WASM-profile implementation task actually requires it; otherwise record `NOT_ADMITTED_NOT_NEEDED`. Evidence: `implementation/wasmtime-disposition.md`.
+- [x] **T003-006** Record Source Foundry evidence before any donor source reuse; default `Golam-Research=REFERENCE_ONLY`. Evidence: `implementation/source-foundry-disposition.md`.
 
 ## Phase B — Schema, hard guards and policy lifecycle
 
@@ -81,7 +81,7 @@ Legend:
 - [ ] **T003-072** Enforce cleared environment and explicit FS/network/spawn/resource/device/IPC/handle inheritance rules.
 - [ ] **T003-073** Implement platform-executor capability checks and fail closed when a required containment control is unsupported.
 - [ ] **T003-074** Before launching any native Golam-managed child process with network capability, upgrade the external strict-local observer from daemon-PID-only inspection to complete managed-process-tree observation or an equivalent descendant-capturing sinkholed boundary; then implement the minimum native untrusted-process test executor/profile required to prove the contract without claiming unsupported universal isolation.
-- [ ] **T003-075** If admitted by T003-005, implement bounded WASM/WASI profile via the qualified executor; otherwise keep it deferred with explicit evidence.
+- [ ] **T003-075** If Wasmtime is later admitted by reopened T003-005, implement bounded WASM/WASI profile via the qualified executor; otherwise keep it deferred with explicit evidence.
 - [ ] **T003-076** Add escape/inheritance/forbidden-FS/network/spawn/resource/unsupported-platform tests.
 
 ## Phase I — Kernel/CLI integration and adversarial qualification
@@ -104,16 +104,18 @@ Legend:
 - [ ] **T003-097** Prepare exact-head closeout evidence; no Ready/merge/Spec 004 claim without repository-authorized lifecycle evidence.
 - [ ] **T003-098** After merge, require canonical `main` post-merge CI success before `SPEC_003_CLOSED_CANONICAL=YES` or starting Spec 004.
 
-## Planning gate
+## Current gate
 
 ```text
 SPEC_002_CLOSED_CANONICAL=YES
-SPEC_003_TASKS_PLANNED=YES
-QODO_REPAIR_FINDINGS=3_ACCEPTED_AND_RECONCILED
-FINAL_EXACT_HEAD_CI=PENDING_AFTER_REPAIR
-FINAL_POST_CI_QODO=PENDING_AFTER_REPAIR
-PRODUCT_IMPLEMENTATION_IN_PLANNING_PR=NO
+SPEC_003_PLANNING_CLOSED_CANONICAL=YES
+SPEC_003_IMPLEMENTATION_AUTHORIZED=YES
+PHASE_A_COMPLETE=YES
+CEDAR_POLICY_ADMITTED_EXACT=4.12.0
+SECRET_CRYPTO_AND_OS_KEY_PROTECTORS_QUALIFIED=YES
+WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED
+Golam-Research=REFERENCE_ONLY
 DONOR_CODE_ADMITTED=NO
-DEPENDENCY_ADMISSION_PENDING_IMPLEMENTATION_TASKS=YES
-SPEC_003_IMPLEMENTATION_AUTHORIZED=NO_UNTIL_PLANNING_MERGE
+REAL_SECRETS_USED=NO
+NEXT_TASK=T003-010
 ```
