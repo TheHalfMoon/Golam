@@ -5,6 +5,8 @@ pub mod artifacts;
 mod authority_security_v2;
 mod authority_security_write;
 pub mod authorization;
+#[cfg(test)]
+mod capability_lease_adversarial;
 pub mod capability_lease_mutation;
 #[path = "capability_leases.rs"]
 pub mod capability_lease_runtime;
