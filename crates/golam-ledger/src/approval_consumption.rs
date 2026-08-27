@@ -502,11 +502,7 @@ fn verify_once_approval(
         parent.3,
         "approval parent authorization context hash is not 32 bytes",
     )?;
-    let rebound = bound_scope_digest(
-        prepared.intent_digest(),
-        parent_decision_id,
-        context_hash,
-    )?;
+    let rebound = bound_scope_digest(prepared.intent_digest(), parent_decision_id, context_hash)?;
     if rebound != scope_digest {
         return Err(ApprovalConsumptionError::BindingMismatch);
     }
@@ -856,7 +852,9 @@ mod tests {
         create_target_effect(&authority, effect_id);
         let approval_id = issue_bound_once_approval(&authority, effect_id);
         let mut store = ApprovalConsumptionStore::open(&authority).unwrap();
-        let reservation = store.reserve_once(exact_use(approval_id, effect_id)).unwrap();
+        let reservation = store
+            .reserve_once(exact_use(approval_id, effect_id))
+            .unwrap();
         assert_eq!(reservation.approval_id(), approval_id);
         assert_eq!(reservation.effect_id(), effect_id);
         drop(store);
@@ -917,7 +915,9 @@ mod tests {
         create_target_effect(&authority, effect_id);
         let approval_id = issue_bound_once_approval(&authority, effect_id);
         let mut store = ApprovalConsumptionStore::open(&authority).unwrap();
-        let reservation = store.reserve_once(exact_use(approval_id, effect_id)).unwrap();
+        let reservation = store
+            .reserve_once(exact_use(approval_id, effect_id))
+            .unwrap();
         assert!(matches!(
             store.consume_once(reservation),
             Err(ApprovalConsumptionError::EffectNotProgressed)
