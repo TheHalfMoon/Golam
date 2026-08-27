@@ -82,10 +82,7 @@ impl CapabilityLeaseScope {
     /// Returns the requested child scope only when every requested exact entry
     /// is already present in the parent. A widening request fails instead of
     /// being silently intersected into a different authority request.
-    pub fn derive_child(
-        &self,
-        requested: &Self,
-    ) -> Result<Self, CapabilityLeaseScopeError> {
+    pub fn derive_child(&self, requested: &Self) -> Result<Self, CapabilityLeaseScopeError> {
         if is_subset(&requested.actions, &self.actions)
             && is_subset(&requested.resources, &self.resources)
             && is_subset(&requested.context_constraints, &self.context_constraints)
