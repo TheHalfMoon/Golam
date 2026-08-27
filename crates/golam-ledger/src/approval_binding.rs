@@ -77,19 +77,31 @@ impl fmt::Display for ApprovalBindingError {
             Self::Core(error) => write!(f, "approval canonical encoding error: {error}"),
             Self::Scope(error) => write!(f, "approval scope error: {error}"),
             Self::Integrity(error) => write!(f, "approval integrity error: {error}"),
-            Self::AuthoritySecurity(error) => write!(f, "approval authority-security error: {error}"),
+            Self::AuthoritySecurity(error) => {
+                write!(f, "approval authority-security error: {error}")
+            }
             Self::InvalidApprover => f.write_str("approval approver principal is not canonical"),
             Self::InvalidRiskClass => f.write_str("approval risk class is not canonical"),
             Self::InvalidTime => f.write_str("approval time bound is invalid"),
             Self::InvalidUsageLimit => f.write_str("approval usage limit is invalid"),
             Self::MissingExpiry => f.write_str("approval class requires a finite expiry"),
-            Self::MissingAuthorityDecision => f.write_str("approval issuance has no durable authorization decision"),
-            Self::AuthorityDecisionMismatch => f.write_str("approval issuance authorization decision does not match exact current authority"),
-            Self::StaleAuthorityDecision => f.write_str("approval issuance authorization decision is stale"),
+            Self::MissingAuthorityDecision => {
+                f.write_str("approval issuance has no durable authorization decision")
+            }
+            Self::AuthorityDecisionMismatch => f.write_str(
+                "approval issuance authorization decision does not match exact current authority",
+            ),
+            Self::StaleAuthorityDecision => {
+                f.write_str("approval issuance authorization decision is stale")
+            }
             Self::EffectNotFound => f.write_str("approval issuance effect does not exist"),
-            Self::EffectMismatch => f.write_str("approval issuance effect is not exact authorized at-most-once elevated work"),
+            Self::EffectMismatch => f.write_str(
+                "approval issuance effect is not exact authorized at-most-once elevated work",
+            ),
             Self::DuplicateApproval => f.write_str("approval already exists"),
-            Self::InvalidStoredRecord(reason) => write!(f, "stored approval authority record is invalid: {reason}"),
+            Self::InvalidStoredRecord(reason) => {
+                write!(f, "stored approval authority record is invalid: {reason}")
+            }
         }
     }
 }
@@ -218,7 +230,8 @@ impl ApprovalStore {
             &prepared.resource,
             prepared.intent_digest,
         )?;
-        let scope_digest = bound_scope_digest(&prepared, parent_decision_id, authority.context_hash)?;
+        let scope_digest =
+            bound_scope_digest(&prepared, parent_decision_id, authority.context_hash)?;
         let approval_id = approval_id(scope_digest, issue_effect_id);
         let exists = transaction
             .query_row(
@@ -330,10 +343,9 @@ fn verify_current_authority(
     if global_seq != seq_from_i64(latest)? {
         return Err(ApprovalBindingError::StaleAuthorityDecision);
     }
-    let context_hash = row
-        .3
-        .try_into()
-        .map_err(|_| ApprovalBindingError::InvalidStoredRecord("authorization context hash is not 32 bytes"))?;
+    let context_hash = row.3.try_into().map_err(|_| {
+        ApprovalBindingError::InvalidStoredRecord("authorization context hash is not 32 bytes")
+    })?;
     Ok(AuthorityEvidence { context_hash })
 }
 
@@ -452,7 +464,9 @@ fn validate_class_bounds(
     max_uses: u64,
 ) -> Result<(), ApprovalBindingError> {
     match scope {
-        ApprovalScope::Once { .. } if max_uses != 1 => Err(ApprovalBindingError::InvalidUsageLimit),
+        ApprovalScope::Once { .. } if max_uses != 1 => {
+            Err(ApprovalBindingError::InvalidUsageLimit)
+        }
         ApprovalScope::SessionScoped { .. }
         | ApprovalScope::TimeBoxed { .. }
         | ApprovalScope::RunPreauthorization { .. }
@@ -472,9 +486,7 @@ fn validate_risk_class(value: &str) -> Result<(), ApprovalBindingError> {
     if !bytes.first().is_some_and(u8::is_ascii_lowercase)
         || !bytes.last().is_some_and(u8::is_ascii_alphanumeric)
         || bytes.iter().any(|byte| {
-            !(byte.is_ascii_lowercase()
-                || byte.is_ascii_digit()
-                || matches!(*byte, b'_' | b'-'))
+            !(byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(*byte, b'_' | b'-'))
         })
     {
         return Err(ApprovalBindingError::InvalidRiskClass);
@@ -568,8 +580,7 @@ fn hex_bytes(bytes: &[u8]) -> String {
 }
 
 fn seq_from_i64(value: i64) -> Result<u64, ApprovalBindingError> {
-    u64::try_from(value)
-        .map_err(|_| ApprovalBindingError::InvalidStoredRecord("negative sequence"))
+    u64::try_from(value).map_err(|_| ApprovalBindingError::InvalidStoredRecord("negative sequence"))
 }
 
 fn to_i64(value: u64) -> Result<i64, ApprovalBindingError> {
@@ -608,7 +619,11 @@ mod tests {
         (runtime, authority)
     }
 
-    fn authorize_effect(authority: &AuthorityLayout, prepared: &PreparedApproval, effect_id: EffectId) {
+    fn authorize_effect(
+        authority: &AuthorityLayout,
+        prepared: &PreparedApproval,
+        effect_id: EffectId,
+    ) {
         let dependencies = encode_effect_dependencies(&[]).unwrap();
         let mut effects = EffectStore::open(authority).unwrap();
         effects
@@ -642,7 +657,11 @@ mod tests {
             .unwrap();
     }
 
-    fn authorize_issue(authority: &AuthorityLayout, prepared: &PreparedApproval, context: &str) -> [u8; 16] {
+    fn authorize_issue(
+        authority: &AuthorityLayout,
+        prepared: &PreparedApproval,
+        context: &str,
+    ) -> [u8; 16] {
         let mut log = AuthorizationAuditLog::open(authority).unwrap();
         log.append(AppendAuthorizationDecision {
             principal: "owner:owner",
@@ -691,11 +710,8 @@ mod tests {
             let (runtime, authority) = authority(label);
             let prepared = prepare_approval(
                 "owner:owner",
-                ApprovalScope::time_boxed(
-                    &["session.read".to_owned()],
-                    &["session:7".to_owned()],
-                )
-                .unwrap(),
+                ApprovalScope::time_boxed(&["session.read".to_owned()], &["session:7".to_owned()])
+                    .unwrap(),
                 "sensitive_read",
                 [3; 32],
                 "2026-08-27T00:00:00Z",
