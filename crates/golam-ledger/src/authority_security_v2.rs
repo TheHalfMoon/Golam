@@ -6,12 +6,18 @@ use std::fmt;
 
 use golam_core::{CanonicalEncoder, CoreError};
 use rusqlite::types::Value;
-use rusqlite::{Connection, OptionalExtension, Transaction, params};
+use rusqlite::{Connection, OptionalExtension, params};
+#[cfg(test)]
+use rusqlite::Transaction;
 
 const CHAIN_NAME: &str = "authority-security-v2";
 const KEY_DOMAIN: &[u8] = b"golam:authority-security-v2:key:v1";
 const PAYLOAD_DOMAIN: &[u8] = b"golam:authority-security-v2:payload:v1";
 const RECORD_DOMAIN: &[u8] = b"golam:authority-security-v2:record:v1";
+
+type SnapshotKey = (String, Vec<u8>);
+type LatestSnapshots = HashMap<SnapshotKey, [u8; 32]>;
+type SourceRow = (Vec<u8>, Vec<u8>);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum ProtectedSourceKind {
@@ -58,22 +64,16 @@ impl ProtectedSourceKind {
     }
 }
 
+#[cfg(test)]
 pub(crate) enum ProtectedSourceKey<'a> {
     Text(&'a str),
-    Blob(&'a [u8]),
-    Integer(i64),
-    BlobVersion(&'a [u8], i64),
 }
 
+#[cfg(test)]
 impl ProtectedSourceKey<'_> {
     fn values(&self) -> Vec<Value> {
         match self {
             Self::Text(value) => vec![Value::Text((*value).to_owned())],
-            Self::Blob(value) => vec![Value::Blob((*value).to_vec())],
-            Self::Integer(value) => vec![Value::Integer(*value)],
-            Self::BlobVersion(value, version) => {
-                vec![Value::Blob((*value).to_vec()), Value::Integer(*version)]
-            }
         }
     }
 }
@@ -227,6 +227,7 @@ const SOURCE_SPECS: &[SourceSpec] = &[
     },
 ];
 
+#[cfg(test)]
 pub(crate) fn append_current_snapshot(
     transaction: &Transaction<'_>,
     kind: ProtectedSourceKind,
@@ -262,9 +263,7 @@ fn ensure_table_exists(connection: &Connection) -> Result<(), AuthoritySecurityV
     }
 }
 
-fn verify_chain(
-    connection: &Connection,
-) -> Result<HashMap<(String, Vec<u8>), [u8; 32]>, AuthoritySecurityV2Error> {
+fn verify_chain(connection: &Connection) -> Result<LatestSnapshots, AuthoritySecurityV2Error> {
     let mut statement = connection.prepare(
         "SELECT audit_seq, record_kind, record_id, payload_bytes, payload_hash, previous_hash, record_hash FROM authority_security_audit_v2 ORDER BY audit_seq ASC",
     )?;
@@ -330,7 +329,7 @@ fn verify_chain(
 
 fn verify_current_sources(
     connection: &Connection,
-    latest: &HashMap<(String, Vec<u8>), [u8; 32]>,
+    latest: &LatestSnapshots,
 ) -> Result<(), AuthoritySecurityV2Error> {
     let mut current = HashSet::new();
     for spec in SOURCE_SPECS {
@@ -361,6 +360,7 @@ fn verify_current_sources(
     Ok(())
 }
 
+#[cfg(test)]
 fn current_payload_for_record(
     connection: &Connection,
     kind: ProtectedSourceKind,
@@ -386,7 +386,7 @@ fn current_payload_for_record(
 fn source_rows(
     connection: &Connection,
     spec: SourceSpec,
-) -> Result<Vec<(Vec<u8>, Vec<u8>)>, AuthoritySecurityV2Error> {
+) -> Result<Vec<SourceRow>, AuthoritySecurityV2Error> {
     let mut statement = connection.prepare(spec.query)?;
     let column_count = statement.column_count();
     if spec.key_columns == 0 || spec.key_columns > column_count {
@@ -411,6 +411,7 @@ fn source_rows(
     Ok(result)
 }
 
+#[cfg(test)]
 fn source_spec(kind: ProtectedSourceKind) -> SourceSpec {
     SOURCE_SPECS
         .iter()
@@ -487,6 +488,7 @@ fn encode_value(
     Ok(())
 }
 
+#[cfg(test)]
 fn append_snapshot(
     transaction: &Transaction<'_>,
     kind: ProtectedSourceKind,
