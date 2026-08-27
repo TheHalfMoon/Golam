@@ -73,20 +73,20 @@ pub fn start_kernel<P: AuthorizationPolicy>(
     policy: P,
 ) -> Result<KernelStartup<P>, KernelStartupError> {
     let mut report = RecoveryScanner::scan(runtime)?;
-    if report.mode != RecoveryMode::Quarantine {
-        if let Err(error) = verify_active_policy(&report.authority_db) {
-            report.mode = RecoveryMode::Quarantine;
-            report.issues.push(RecoveryIssue {
-                kind: RecoveryIssueKind::AuthorityIntegrity,
-                reference: "authority:active-policy".to_owned(),
-                detail: error
-                    .to_string()
-                    .chars()
-                    .take(MAX_RECOVERY_DETAIL_CHARS)
-                    .collect(),
-                blocking: true,
-            });
-        }
+    if report.mode != RecoveryMode::Quarantine
+        && let Err(error) = verify_active_policy(&report.authority_db)
+    {
+        report.mode = RecoveryMode::Quarantine;
+        report.issues.push(RecoveryIssue {
+            kind: RecoveryIssueKind::AuthorityIntegrity,
+            reference: "authority:active-policy".to_owned(),
+            detail: error
+                .to_string()
+                .chars()
+                .take(MAX_RECOVERY_DETAIL_CHARS)
+                .collect(),
+            blocking: true,
+        });
     }
     match report.mode {
         RecoveryMode::Normal => Ok(KernelStartup::Serving {
