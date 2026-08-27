@@ -622,8 +622,8 @@ mod tests {
     use super::*;
     use crate::authority_security_write::append_approval_snapshot;
     use crate::authorization::{
-        AppendAuthorizationDecision, AuthorizationAuditLog, AuthorizationDecisionKind,
-        StoredAuthorizationDecision,
+        AppendAuthorizationDecision, AuthorizationAuditLog, AuthorizationDecisionEvidence,
+        AuthorizationDecisionKind, StoredAuthorizationDecision,
     };
     use crate::dispatch::encode_effect_dependencies;
     use crate::effects::{CompareAndSwapEffect, EffectStore, ProposeEffect};
@@ -666,6 +666,7 @@ mod tests {
             action,
             resource,
             context: "scope=local-owner",
+            evidence: AuthorizationDecisionEvidence::hard_guard_only("pass"),
             decision: AuthorizationDecisionKind::Allow,
             reason_code: "test_current_authority",
         })
