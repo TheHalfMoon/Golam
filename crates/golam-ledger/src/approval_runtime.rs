@@ -112,9 +112,9 @@ impl fmt::Display for ApprovalUseError {
             Self::ParentDecisionNotFound => {
                 f.write_str("approval parent authorization decision does not exist")
             }
-            Self::ParentDecisionMismatch => {
-                f.write_str("approval parent authorization decision does not match issuance authority")
-            }
+            Self::ParentDecisionMismatch => f.write_str(
+                "approval parent authorization decision does not match issuance authority",
+            ),
             Self::BindingMismatch => {
                 f.write_str("approval scope digest does not match its bound issuance authority")
             }
@@ -123,7 +123,9 @@ impl fmt::Display for ApprovalUseError {
             Self::Revoked => f.write_str("approval is revoked"),
             Self::ScopeMismatch => f.write_str("approval does not cover the exact protected use"),
             Self::RiskMismatch => f.write_str("approval risk class does not match protected use"),
-            Self::TaintMismatch => f.write_str("approval taint digest does not match protected use"),
+            Self::TaintMismatch => {
+                f.write_str("approval taint digest does not match protected use")
+            }
             Self::UsageLimitReached => f.write_str("approval usage limit has been reached"),
         }
     }
@@ -314,11 +316,8 @@ impl ApprovalUseStore {
             parent.3,
             "approval parent authorization context hash is not 32 bytes",
         )?;
-        let rebound = bound_scope_digest(
-            prepared.intent_digest(),
-            parent_decision_id,
-            context_hash,
-        )?;
+        let rebound =
+            bound_scope_digest(prepared.intent_digest(), parent_decision_id, context_hash)?;
         if rebound != scope_digest {
             return Err(ApprovalUseError::BindingMismatch);
         }
@@ -333,11 +332,9 @@ impl ApprovalUseStore {
         for state in states {
             match state?.as_str() {
                 "reserved" | "consumed" => {
-                    current_uses = current_uses
-                        .checked_add(1)
-                        .ok_or(ApprovalUseError::InvalidStoredRecord(
-                            "approval use count overflow",
-                        ))?;
+                    current_uses = current_uses.checked_add(1).ok_or(
+                        ApprovalUseError::InvalidStoredRecord("approval use count overflow"),
+                    )?;
                 }
                 "released" => {}
                 _ => {
@@ -403,7 +400,8 @@ fn decode_scope(
                 ))
                 .and_then(|value| id16(value, "approval session id is not 16 bytes"))?;
             let actions = decode_set(&action_scope, "approval action scope is not canonical")?;
-            let resources = decode_set(&resource_scope, "approval resource scope is not canonical")?;
+            let resources =
+                decode_set(&resource_scope, "approval resource scope is not canonical")?;
             let scope = ApprovalScope::session_scoped(
                 SessionId(u128::from_be_bytes(session_id)),
                 &actions,
@@ -419,7 +417,8 @@ fn decode_scope(
                 ));
             }
             let actions = decode_set(&action_scope, "approval action scope is not canonical")?;
-            let resources = decode_set(&resource_scope, "approval resource scope is not canonical")?;
+            let resources =
+                decode_set(&resource_scope, "approval resource scope is not canonical")?;
             let scope = ApprovalScope::time_boxed(&actions, &resources)?;
             require_canonical_sets(&scope, &action_scope, &resource_scope)?;
             Ok(scope)
@@ -445,7 +444,8 @@ fn decode_scope(
                 .transpose()?
                 .map(|value| SessionId(u128::from_be_bytes(value)));
             let actions = decode_set(&action_scope, "approval action scope is not canonical")?;
-            let resources = decode_set(&resource_scope, "approval resource scope is not canonical")?;
+            let resources =
+                decode_set(&resource_scope, "approval resource scope is not canonical")?;
             let scope = ApprovalScope::run_preauthorization(session_id, &actions, &resources)?;
             require_canonical_sets(&scope, &action_scope, &resource_scope)?;
             Ok(scope)
