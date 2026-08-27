@@ -26,8 +26,7 @@ const ISSUE_ID_DOMAIN: &[u8] = b"golam:capability-lease-id:v1";
 const AUTHORITY_DOMAIN: &[u8] = b"golam:capability-lease-authority:v1";
 const REVOKE_INTENT_DOMAIN: &[u8] = b"golam:capability-lease-revocation-intent:v1";
 const REVOKE_ID_DOMAIN: &[u8] = b"golam:capability-lease-revocation-id:v1";
-const APPROVAL_CONSUMPTION_DOMAIN: &[u8] =
-    b"golam:capability-lease-approval-consumption:v1";
+const APPROVAL_CONSUMPTION_DOMAIN: &[u8] = b"golam:capability-lease-approval-consumption:v1";
 
 pub const CAPABILITY_LEASE_ISSUE_ACTION: &str = "lease.issue";
 pub const CAPABILITY_LEASE_REVOKE_ACTION: &str = "lease.revoke";
@@ -41,11 +40,7 @@ pub struct CapabilityLeaseBinding {
 }
 
 impl CapabilityLeaseBinding {
-    pub const fn new(
-        lease_id: [u8; 16],
-        generation: u64,
-        authority_digest: [u8; 32],
-    ) -> Self {
+    pub const fn new(lease_id: [u8; 16], generation: u64, authority_digest: [u8; 32]) -> Self {
         Self {
             lease_id,
             generation,
@@ -754,9 +749,7 @@ fn verify_parent_lease(
     }
     let generation = seq_from_i64(row.6)?;
     let authority_digest: [u8; 32] = row.8.try_into().map_err(|_| {
-        CapabilityLeaseMutationError::InvalidStoredRecord(
-            "parent authority digest is not 32 bytes",
-        )
+        CapabilityLeaseMutationError::InvalidStoredRecord("parent authority digest is not 32 bytes")
     })?;
     if generation != parent.generation || authority_digest != parent.authority_digest {
         return Err(CapabilityLeaseMutationError::ParentEvidenceMismatch);
@@ -976,7 +969,9 @@ fn normalize_entries(
     kind: ScopeEntryKind,
 ) -> Result<Vec<String>, CapabilityLeaseMutationError> {
     if entries.len() > MAX_SCOPE_ITEMS {
-        return Err(CapabilityLeaseMutationError::InvalidScope("too many entries"));
+        return Err(CapabilityLeaseMutationError::InvalidScope(
+            "too many entries",
+        ));
     }
     let mut normalized = Vec::with_capacity(entries.len());
     for entry in entries {
