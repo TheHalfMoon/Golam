@@ -44,7 +44,9 @@ impl fmt::Display for PolicyMutationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Candidate(error) => write!(f, "policy mutation candidate rejected: {error}"),
-            Self::Authorization(error) => write!(f, "policy mutation authorization failed: {error}"),
+            Self::Authorization(error) => {
+                write!(f, "policy mutation authorization failed: {error}")
+            }
             Self::AuthorizationDenied(outcome) => write!(
                 f,
                 "policy mutation denied: decision={:?} reason={}",
@@ -158,7 +160,8 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     const SCHEMA: &str = "entity User;\nentity Photo;\naction view appliesTo { principal: [User], resource: [Photo] };\n";
-    const POLICY: &str = "permit(principal is User, action == Action::\"view\", resource is Photo);\n";
+    const POLICY: &str =
+        "permit(principal is User, action == Action::\"view\", resource is Photo);\n";
 
     static N: AtomicU64 = AtomicU64::new(0);
 

@@ -101,7 +101,9 @@ impl fmt::Display for PolicyLifecycleError {
             Self::Storage(error) => write!(f, "policy lifecycle authority-store error: {error}"),
             Self::Sqlite(error) => write!(f, "policy lifecycle sqlite error: {error}"),
             Self::Core(error) => write!(f, "policy lifecycle canonical encoding error: {error}"),
-            Self::Integrity(error) => write!(f, "policy lifecycle canonical integrity error: {error}"),
+            Self::Integrity(error) => {
+                write!(f, "policy lifecycle canonical integrity error: {error}")
+            }
             Self::AuthoritySecurity(error) => {
                 write!(f, "policy lifecycle authority-security error: {error}")
             }
@@ -110,24 +112,24 @@ impl fmt::Display for PolicyLifecycleError {
             Self::MissingAuthorityDecision => {
                 f.write_str("policy mutation has no durable authorization decision")
             }
-            Self::AuthorityDecisionMismatch => {
-                f.write_str("policy mutation authorization decision does not match the exact action/resource")
-            }
-            Self::StaleAuthorityDecision => {
-                f.write_str("policy mutation authorization decision is not the latest canonical decision")
-            }
+            Self::AuthorityDecisionMismatch => f.write_str(
+                "policy mutation authorization decision does not match the exact action/resource",
+            ),
+            Self::StaleAuthorityDecision => f.write_str(
+                "policy mutation authorization decision is not the latest canonical decision",
+            ),
             Self::DuplicateBundle => f.write_str("immutable policy bundle already exists"),
             Self::BundleNotFound => f.write_str("policy bundle does not exist"),
             Self::BundleNotValidated => f.write_str("policy bundle is not validated"),
             Self::InvalidStoredBundle => f.write_str("stored policy bundle integrity is invalid"),
             Self::EffectNotFound => f.write_str("policy activation effect does not exist"),
-            Self::EffectMismatch => {
-                f.write_str("policy activation effect is not exact, authorized at-most-once policy work")
-            }
+            Self::EffectMismatch => f.write_str(
+                "policy activation effect is not exact, authorized at-most-once policy work",
+            ),
             Self::ApprovalNotFound => f.write_str("policy activation approval does not exist"),
-            Self::ApprovalMismatch => {
-                f.write_str("policy activation approval does not match the exact effect/action/resource")
-            }
+            Self::ApprovalMismatch => f.write_str(
+                "policy activation approval does not match the exact effect/action/resource",
+            ),
             Self::ApprovalAlreadyUsed => {
                 f.write_str("policy activation one-shot approval was already consumed")
             }
@@ -380,9 +382,7 @@ struct StoredBundle {
     bundle_hash: [u8; 32],
 }
 
-fn verify_transaction_integrity(
-    transaction: &Transaction<'_>,
-) -> Result<(), PolicyLifecycleError> {
+fn verify_transaction_integrity(transaction: &Transaction<'_>) -> Result<(), PolicyLifecycleError> {
     crate::integrity::verify(transaction)
         .map_err(|error| PolicyLifecycleError::Integrity(error.to_string()))?;
     crate::authority_security_v2::verify(transaction)
@@ -634,8 +634,10 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     const SCHEMA: &str = "entity User;\nentity Photo;\naction view appliesTo { principal: [User], resource: [Photo] };\n";
-    const POLICY_A: &str = "permit(principal is User, action == Action::\"view\", resource is Photo);\n";
-    const POLICY_B: &str = "forbid(principal is User, action == Action::\"view\", resource is Photo);\n";
+    const POLICY_A: &str =
+        "permit(principal is User, action == Action::\"view\", resource is Photo);\n";
+    const POLICY_B: &str =
+        "forbid(principal is User, action == Action::\"view\", resource is Photo);\n";
 
     static N: AtomicU64 = AtomicU64::new(0);
 
@@ -878,12 +880,7 @@ mod tests {
             second.bundle_hash,
             9_200,
         );
-        seed_activation_approval(
-            &authority,
-            second_approval,
-            second_effect,
-            &second_resource,
-        );
+        seed_activation_approval(&authority, second_approval, second_effect, &second_resource);
         let second_decision = append_allow(&mut log, POLICY_ACTIVATE_ACTION, &second_resource);
         let mut store = PolicyStore::open(&authority).unwrap();
         let activated = store
