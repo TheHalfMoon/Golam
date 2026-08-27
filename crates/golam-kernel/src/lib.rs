@@ -5,6 +5,7 @@ mod client_auth;
 mod client_enrollment;
 mod effect_execution;
 mod operations;
+pub mod policy_candidate;
 mod resource;
 mod startup;
 mod synthetic_effect;
