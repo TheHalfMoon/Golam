@@ -683,9 +683,7 @@ fn is_leap_year(year: u32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::approval_binding::{
-        APPROVAL_MUTATION_RISK_CLASS, ApprovalStore, PreparedApproval,
-    };
+    use crate::approval_binding::{APPROVAL_MUTATION_RISK_CLASS, ApprovalStore, PreparedApproval};
     use crate::authorization::{
         AppendAuthorizationDecision, AuthorizationAuditLog, AuthorizationDecisionEvidence,
         AuthorizationDecisionKind,
