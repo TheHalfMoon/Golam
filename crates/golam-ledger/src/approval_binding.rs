@@ -803,6 +803,7 @@ mod tests {
                 .issue(prepared, decision, issue_effect),
             Err(ApprovalBindingError::AuthorityDecisionMismatch)
         ));
+        drop(log);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 }
