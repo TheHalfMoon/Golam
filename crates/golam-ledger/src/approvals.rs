@@ -62,6 +62,8 @@ impl TryFrom<&str> for ApprovalClass {
 pub enum ApprovalScope {
     Once {
         effect_id: EffectId,
+        action: String,
+        resource: String,
     },
     SessionScoped {
         session_id: SessionId,
@@ -84,8 +86,18 @@ pub enum ApprovalScope {
 }
 
 impl ApprovalScope {
-    pub const fn once(effect_id: EffectId) -> Self {
-        Self::Once { effect_id }
+    pub fn once(
+        effect_id: EffectId,
+        action: &str,
+        resource: &str,
+    ) -> Result<Self, ApprovalScopeError> {
+        validate_action(action)?;
+        validate_resource(resource)?;
+        Ok(Self::Once {
+            effect_id,
+            action: action.to_owned(),
+            resource: resource.to_owned(),
+        })
     }
 
     pub fn session_scoped(
@@ -95,8 +107,8 @@ impl ApprovalScope {
     ) -> Result<Self, ApprovalScopeError> {
         Ok(Self::SessionScoped {
             session_id,
-            actions: normalize_scope_values(actions, MAX_ACTION_BYTES, "action")?,
-            resources: normalize_scope_values(resources, MAX_RESOURCE_BYTES, "resource")?,
+            actions: normalize_actions(actions)?,
+            resources: normalize_resources(resources)?,
         })
     }
 
@@ -105,8 +117,8 @@ impl ApprovalScope {
         resources: &[String],
     ) -> Result<Self, ApprovalScopeError> {
         Ok(Self::TimeBoxed {
-            actions: normalize_scope_values(actions, MAX_ACTION_BYTES, "action")?,
-            resources: normalize_scope_values(resources, MAX_RESOURCE_BYTES, "resource")?,
+            actions: normalize_actions(actions)?,
+            resources: normalize_resources(resources)?,
         })
     }
 
@@ -129,8 +141,8 @@ impl ApprovalScope {
     ) -> Result<Self, ApprovalScopeError> {
         Ok(Self::RunPreauthorization {
             session_id,
-            actions: normalize_scope_values(actions, MAX_ACTION_BYTES, "action")?,
-            resources: normalize_scope_values(resources, MAX_RESOURCE_BYTES, "resource")?,
+            actions: normalize_actions(actions)?,
+            resources: normalize_resources(resources)?,
         })
     }
 
@@ -149,8 +161,14 @@ impl ApprovalScope {
         encoder.push_bytes(APPROVAL_SCOPE_DOMAIN)?;
         encoder.push_u8(self.class().code());
         match self {
-            Self::Once { effect_id } => {
+            Self::Once {
+                effect_id,
+                action,
+                resource,
+            } => {
                 encoder.push_u128(effect_id.0);
+                encoder.push_bytes(action.as_bytes())?;
+                encoder.push_bytes(resource.as_bytes())?;
             }
             Self::SessionScoped {
                 session_id,
@@ -202,17 +220,17 @@ impl ApprovalScope {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ApprovalRecord {
-    approval_id: [u8; 16],
-    approver_principal: String,
-    scope: ApprovalScope,
-    scope_digest: [u8; 32],
-    risk_class: String,
-    taint_digest: [u8; 32],
-    parent_decision_id: [u8; 16],
-    issued_at: String,
-    expires_at: Option<String>,
-    max_uses: Option<u64>,
-    revoked_at: Option<String>,
+    pub(crate) approval_id: [u8; 16],
+    pub(crate) approver_principal: String,
+    pub(crate) scope: ApprovalScope,
+    pub(crate) scope_digest: [u8; 32],
+    pub(crate) risk_class: String,
+    pub(crate) taint_digest: [u8; 32],
+    pub(crate) parent_decision_id: [u8; 16],
+    pub(crate) issued_at: String,
+    pub(crate) expires_at: Option<String>,
+    pub(crate) max_uses: Option<u64>,
+    pub(crate) revoked_at: Option<String>,
 }
 
 impl ApprovalRecord {
@@ -310,10 +328,18 @@ impl From<CoreError> for ApprovalScopeError {
     }
 }
 
+fn normalize_actions(values: &[String]) -> Result<Vec<String>, ApprovalScopeError> {
+    normalize_scope_values(values, "action", validate_action)
+}
+
+fn normalize_resources(values: &[String]) -> Result<Vec<String>, ApprovalScopeError> {
+    normalize_scope_values(values, "resource", validate_resource)
+}
+
 fn normalize_scope_values(
     values: &[String],
-    max_value_bytes: usize,
     kind: &'static str,
+    validate: fn(&str) -> Result<(), ApprovalScopeError>,
 ) -> Result<Vec<String>, ApprovalScopeError> {
     if values.is_empty() {
         return Err(ApprovalScopeError::EmptyScope(kind));
@@ -325,16 +351,46 @@ fn normalize_scope_values(
     normalized.sort();
     normalized.dedup();
     for value in &normalized {
-        if value.is_empty() || value.len() > max_value_bytes || value.chars().any(char::is_control)
-        {
-            return Err(ApprovalScopeError::InvalidScopeValue(kind));
-        }
+        validate(value)?;
     }
     Ok(normalized)
 }
 
+fn validate_action(value: &str) -> Result<(), ApprovalScopeError> {
+    let bytes = value.as_bytes();
+    if value.is_empty()
+        || value.len() > MAX_ACTION_BYTES
+        || !bytes.first().is_some_and(u8::is_ascii_lowercase)
+        || !bytes.last().is_some_and(u8::is_ascii_alphanumeric)
+        || bytes.windows(2).any(|pair| pair == b"..")
+        || bytes.iter().any(|byte| {
+            !(byte.is_ascii_lowercase()
+                || byte.is_ascii_digit()
+                || matches!(*byte, b'.' | b'_' | b'-'))
+        })
+    {
+        return Err(ApprovalScopeError::InvalidScopeValue("action"));
+    }
+    Ok(())
+}
+
+fn validate_resource(value: &str) -> Result<(), ApprovalScopeError> {
+    if value.is_empty()
+        || value.len() > MAX_RESOURCE_BYTES
+        || value.trim() != value
+        || value.chars().any(char::is_control)
+    {
+        return Err(ApprovalScopeError::InvalidScopeValue("resource"));
+    }
+    Ok(())
+}
+
 fn validate_pattern(value: &str, kind: &'static str) -> Result<(), ApprovalScopeError> {
-    if value.is_empty() || value.len() > MAX_PATTERN_BYTES || value.chars().any(char::is_control) {
+    if value.is_empty()
+        || value.len() > MAX_PATTERN_BYTES
+        || value.trim() != value
+        || value.chars().any(char::is_control)
+    {
         return Err(ApprovalScopeError::InvalidPattern(kind));
     }
     Ok(())
@@ -381,7 +437,7 @@ mod tests {
     #[test]
     fn every_class_has_a_distinct_canonical_scope() {
         let scopes = [
-            ApprovalScope::once(EffectId(1)),
+            ApprovalScope::once(EffectId(1), "effect.simulate", "session:7").unwrap(),
             ApprovalScope::session_scoped(
                 SessionId(7),
                 &values(&["session.read"]),
@@ -405,6 +461,18 @@ mod tests {
         digests.sort();
         digests.dedup();
         assert_eq!(digests.len(), scopes.len());
+    }
+
+    #[test]
+    fn once_scope_binds_exact_action_resource_and_effect() {
+        let first = ApprovalScope::once(EffectId(4), "effect.simulate", "session:4").unwrap();
+        let changed_action = ApprovalScope::once(EffectId(4), "effect.execute", "session:4").unwrap();
+        let changed_resource = ApprovalScope::once(EffectId(4), "effect.simulate", "session:5").unwrap();
+        let changed_effect = ApprovalScope::once(EffectId(5), "effect.simulate", "session:4").unwrap();
+        let digest = first.scope_digest().unwrap();
+        assert_ne!(digest, changed_action.scope_digest().unwrap());
+        assert_ne!(digest, changed_resource.scope_digest().unwrap());
+        assert_ne!(digest, changed_effect.scope_digest().unwrap());
     }
 
     #[test]
