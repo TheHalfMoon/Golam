@@ -1,0 +1,47 @@
+name: spec003-resolve-qualified-cedar-lock
+
+on:
+  push:
+    branches:
+      - impl/003-identity-policy-secrets-sandbox
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal
+      - name: Resolve qualified Cedar dependency without mutating repository state
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path("Cargo.toml")
+          text = root.read_text()
+          needle = '[workspace.dependencies]\n'
+          replacement = '[workspace.dependencies]\ncedar-policy = { version = "=4.12.0", default-features = false }\n'
+          if needle not in text:
+              raise SystemExit("workspace dependency section not found")
+          root.write_text(text.replace(needle, replacement, 1))
+
+          kernel = Path("crates/golam-kernel/Cargo.toml")
+          text = kernel.read_text()
+          needle = '[dependencies]\n'
+          replacement = '[dependencies]\ncedar-policy.workspace = true\n'
+          if needle not in text:
+              raise SystemExit("kernel dependency section not found")
+          kernel.write_text(text.replace(needle, replacement, 1))
+          PY
+          cargo +1.98.0 generate-lockfile
+          echo '===== SPEC003_CEDAR_LOCK_BEGIN ====='
+          cat Cargo.lock
+          echo '===== SPEC003_CEDAR_LOCK_END ====='
+          echo '===== SPEC003_CEDAR_TREE_BEGIN ====='
+          cargo +1.98.0 tree -p cedar-policy --edges normal,build
+          echo '===== SPEC003_CEDAR_TREE_END ====='
