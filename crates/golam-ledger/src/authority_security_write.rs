@@ -19,7 +19,6 @@ enum ProtectedMutationKind {
     CapabilityLease,
     CapabilityRevocation,
     AuthorizationDecisionV2,
-    #[cfg(test)]
     Approval,
     ApprovalConsumption,
 }
@@ -32,7 +31,6 @@ impl ProtectedMutationKind {
             Self::CapabilityLease => "capability_lease",
             Self::CapabilityRevocation => "capability_revocation",
             Self::AuthorizationDecisionV2 => "authorization_decision_v2",
-            #[cfg(test)]
             Self::Approval => "approval",
             Self::ApprovalConsumption => "approval_consumption",
         }
@@ -160,7 +158,6 @@ pub(crate) fn append_authorization_decision_v2_snapshot(
     )
 }
 
-#[cfg(test)]
 pub(crate) fn append_approval_snapshot(
     transaction: &Transaction<'_>,
     approval_id: &[u8],
