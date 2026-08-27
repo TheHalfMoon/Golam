@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 mod authorization;
+mod capability_lease;
 mod client_auth;
 mod client_enrollment;
 mod effect_execution;
@@ -24,6 +25,7 @@ pub use authorization::{
     AuthorizationPolicy, AuthorizationRequest, BootstrapPolicy, DecisionId, DenyByDefault,
     PolicyDecision, Principal, PrincipalKind,
 };
+pub use capability_lease::{CapabilityLease, CapabilityLeaseId};
 pub use client_auth::ClientAuthorityError;
 pub use client_enrollment::{ClientEnrollmentError, EnrolledClientCredential};
 pub use effect_execution::PreparedEffectDispatch;
