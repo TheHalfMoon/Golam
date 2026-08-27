@@ -219,6 +219,7 @@ dependencies = [
 name = "golam-core"
 version = "0.1.0"
 dependencies = [
+ "nix",
  "windows-permissions",
 ]
 
