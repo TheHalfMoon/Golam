@@ -464,9 +464,7 @@ fn validate_class_bounds(
     max_uses: u64,
 ) -> Result<(), ApprovalBindingError> {
     match scope {
-        ApprovalScope::Once { .. } if max_uses != 1 => {
-            Err(ApprovalBindingError::InvalidUsageLimit)
-        }
+        ApprovalScope::Once { .. } if max_uses != 1 => Err(ApprovalBindingError::InvalidUsageLimit),
         ApprovalScope::SessionScoped { .. }
         | ApprovalScope::TimeBoxed { .. }
         | ApprovalScope::RunPreauthorization { .. }
