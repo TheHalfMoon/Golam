@@ -6,6 +6,7 @@ use std::fmt;
 use golam_core::authority::AuthorityLayout;
 use rusqlite::{Connection, Transaction, TransactionBehavior, params};
 
+use crate::active_policy_integrity::{ActivePolicyIntegrityError, verify_path as verify_active_policy};
 use crate::security_audit::{self, AuthorizationAuditInput};
 use crate::storage::{AuthorityStore, StorageError};
 
@@ -60,6 +61,7 @@ pub enum AuthorizationAuditError {
     Storage(StorageError),
     Sqlite(rusqlite::Error),
     SecurityAudit(String),
+    ActivePolicyIntegrity(ActivePolicyIntegrityError),
     InvalidMetadata,
     SequenceOverflow,
     InvalidStoredRecord,
@@ -71,6 +73,9 @@ impl fmt::Display for AuthorizationAuditError {
             Self::Storage(error) => write!(f, "authorization audit authority-store error: {error}"),
             Self::Sqlite(error) => write!(f, "authorization audit sqlite error: {error}"),
             Self::SecurityAudit(error) => write!(f, "authorization integrity-chain error: {error}"),
+            Self::ActivePolicyIntegrity(error) => {
+                write!(f, "authorization active-policy integrity error: {error}")
+            }
             Self::InvalidMetadata => f.write_str(
                 "authorization audit principal, action, resource and reason code are required",
             ),
@@ -87,6 +92,7 @@ impl Error for AuthorizationAuditError {
         match self {
             Self::Storage(error) => Some(error),
             Self::Sqlite(error) => Some(error),
+            Self::ActivePolicyIntegrity(error) => Some(error),
             Self::SecurityAudit(_)
             | Self::InvalidMetadata
             | Self::SequenceOverflow
@@ -107,6 +113,12 @@ impl From<rusqlite::Error> for AuthorizationAuditError {
     }
 }
 
+impl From<ActivePolicyIntegrityError> for AuthorizationAuditError {
+    fn from(value: ActivePolicyIntegrityError) -> Self {
+        Self::ActivePolicyIntegrity(value)
+    }
+}
+
 pub struct AuthorizationAuditLog {
     connection: Connection,
 }
@@ -115,6 +127,7 @@ impl AuthorizationAuditLog {
     pub fn open(layout: &AuthorityLayout) -> Result<Self, AuthorizationAuditError> {
         let store = AuthorityStore::open(layout.authority_db_path())?;
         drop(store);
+        verify_active_policy(layout.authority_db_path())?;
         let connection = Connection::open(layout.authority_db_path())?;
         connection.execute_batch(
             "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA busy_timeout = 5000;",
