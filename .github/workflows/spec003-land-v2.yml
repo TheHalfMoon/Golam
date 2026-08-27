@@ -79,9 +79,8 @@ jobs:
           set -euo pipefail
           rm .github/workflows/spec003-resolve-lock.yml
           rm .github/workflows/spec003-land-v2.yml
-          git diff --check
           git add -A
-          actual_paths=$(git diff --cached --name-only | sort)
+          actual_paths=$(git diff --cached --name-only | LC_ALL=C sort)
           expected_paths=$(printf '%s\n' \
             .github/workflows/spec003-land-v2.yml \
             .github/workflows/spec003-resolve-lock.yml \
@@ -89,9 +88,16 @@ jobs:
             Cargo.toml \
             crates/golam-kernel/Cargo.toml \
             crates/golam-kernel/src/lib.rs \
-            crates/golam-kernel/src/policy_candidate.rs | sort)
+            crates/golam-kernel/src/policy_candidate.rs | LC_ALL=C sort)
           printf '%s\n' '===== ACTUAL_PATHS =====' "$actual_paths" '===== EXPECTED_PATHS =====' "$expected_paths"
-          test "$actual_paths" = "$expected_paths"
+          if ! test "$actual_paths" = "$expected_paths"; then
+            echo "Refusing to commit an unexpected Cedar landing path set." >&2
+            exit 1
+          fi
+          if ! git diff --cached --check; then
+            echo "Refusing to commit a Cedar landing diff with whitespace errors." >&2
+            exit 1
+          fi
 
       - name: Commit exact validated candidate
         shell: bash
