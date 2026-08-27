@@ -39,9 +39,13 @@ jobs:
           kernel.write_text(text.replace(needle, replacement, 1))
           PY
           cargo +1.98.0 generate-lockfile
-          echo '===== SPEC003_CEDAR_LOCK_BEGIN ====='
-          cat Cargo.lock
-          echo '===== SPEC003_CEDAR_LOCK_END ====='
-          echo '===== SPEC003_CEDAR_TREE_BEGIN ====='
-          cargo +1.98.0 tree -p cedar-policy --edges normal,build
-          echo '===== SPEC003_CEDAR_TREE_END ====='
+          cargo +1.98.0 tree -p cedar-policy --edges normal,build > spec003-cedar-tree.txt
+      - name: Upload exact generated resolution evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: spec003-cedar-resolution
+          path: |
+            Cargo.lock
+            spec003-cedar-tree.txt
+          if-no-files-found: error
+          retention-days: 1
