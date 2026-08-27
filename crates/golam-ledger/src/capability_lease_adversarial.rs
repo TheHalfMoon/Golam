@@ -146,7 +146,14 @@ fn authorize_mutation(
     payload_hash: [u8; 32],
     id_base: u128,
 ) -> StoredAuthorizationDecision {
-    authorize_effect(authority, effect_id, action, resource, payload_hash, id_base);
+    authorize_effect(
+        authority,
+        effect_id,
+        action,
+        resource,
+        payload_hash,
+        id_base,
+    );
     let decision = append_allow(authority, action, resource);
     seed_approval(
         authority,
@@ -175,7 +182,10 @@ fn basic_issue(
     prepare_capability_lease_issue(
         principal,
         parent,
-        &actions.iter().map(|value| (*value).to_owned()).collect::<Vec<_>>(),
+        &actions
+            .iter()
+            .map(|value| (*value).to_owned())
+            .collect::<Vec<_>>(),
         &resources
             .iter()
             .map(|value| (*value).to_owned())
