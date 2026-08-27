@@ -33,7 +33,7 @@ Legend:
 - [x] **T003-020** Implement sealed kernel-minted capability lease types with no public authority constructor. Exact-head regression evidence: CI #284 (`33076455833`) SUCCESS at `d6e7e8119b0c0f3ee1f53dd0bc70cbbb480a2f75` on Windows/macOS/Ubuntu.
 - [x] **T003-021** Implement action/resource/context scope normalization and subset-only child derivation. Exact-head regression evidence: CI #289 (`33077921766`) SUCCESS at `60930d4531fecb230c14b8f3c76708a8cd15f2b7` on Windows/macOS/Ubuntu.
 - [x] **T003-022** Implement expiry, revocation, generation and principal binding checks at protected action execution. Exact-head regression evidence: CI #292 (`33082378023`) SUCCESS at `b04340e2497f2eabfedc372087a83c57ddb8db2f` on Windows/macOS/Ubuntu.
-- [ ] **T003-023** Implement protected lease issuance/revocation as typed elevated effects with security integrity.
+- [x] **T003-023** Implement protected lease issuance/revocation as typed elevated effects with security integrity. Exact-head regression evidence: CI #298 (`33088214980`) SUCCESS at `dfdc91887022b0d2c874a218508d06225a9ebe13` on Windows/macOS/Ubuntu.
 - [ ] **T003-024** Add property/adversarial tests for widening, self-grant, stale generation, expiry, revocation and replay.
 
 ## Phase D — Approvals
@@ -115,11 +115,12 @@ PHASE_B_COMPLETE=YES
 T003_020=PASS
 T003_021=PASS
 T003_022=PASS
+T003_023=PASS
 CEDAR_POLICY_ADMITTED_EXACT=4.12.0
 SECRET_CRYPTO_AND_OS_KEY_PROTECTORS_QUALIFIED=YES
 WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED
 Golam-Research=REFERENCE_ONLY
 DONOR_CODE_ADMITTED=NO
 REAL_SECRETS_USED=NO
-NEXT_TASK=T003-023
+NEXT_TASK=T003-024
 ```
