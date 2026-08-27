@@ -78,6 +78,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git clean -fd -- target/
           rm .github/workflows/spec003-resolve-lock.yml
           rm .github/workflows/spec003-land-v2.yml
           git add -A
