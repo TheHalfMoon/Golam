@@ -275,13 +275,13 @@ impl fmt::Display for CapabilityLeaseUseError {
             Self::Runtime(error) => write!(f, "capability lease runtime state error: {error}"),
             Self::Scope(error) => write!(f, "capability lease request scope error: {error}"),
             Self::LeaseNotFound => f.write_str("capability lease does not exist"),
-            Self::HandleStateMismatch => {
-                f.write_str("capability lease handle does not match current protected authority state")
+            Self::HandleStateMismatch => f.write_str(
+                "capability lease handle does not match current protected authority state",
+            ),
+            Self::StaleGeneration => f.write_str("capability lease handle generation is stale"),
+            Self::InvalidPrincipal => {
+                f.write_str("capability lease use principal is not canonical")
             }
-            Self::StaleGeneration => {
-                f.write_str("capability lease handle generation is stale")
-            }
-            Self::InvalidPrincipal => f.write_str("capability lease use principal is not canonical"),
             Self::PrincipalMismatch => {
                 f.write_str("capability lease is not bound to the requesting principal")
             }
@@ -353,7 +353,8 @@ pub(crate) fn validate_capability_lease_use(
         return Err(CapabilityLeaseUseError::PrincipalMismatch);
     }
 
-    let request_scope = CapabilityLeaseScope::normalize(&[action], &[resource], context_constraints)?;
+    let request_scope =
+        CapabilityLeaseScope::normalize(&[action], &[resource], context_constraints)?;
     validate_scope_use(lease.scope(), &request_scope)?;
 
     let chain = load_capability_lease_runtime_chain(layout, lease.lease_id().to_bytes())?;
@@ -833,7 +834,12 @@ mod tests {
 
         let current = runtime_state([1_u8; 16], Some([2_u8; 16]));
         assert!(matches!(
-            validate_loaded_chain(&lease, &[current.clone()], "owner:other", "2026-08-27T12:00:00Z"),
+            validate_loaded_chain(
+                &lease,
+                &[current.clone()],
+                "owner:other",
+                "2026-08-27T12:00:00Z"
+            ),
             Err(CapabilityLeaseUseError::PrincipalMismatch)
         ));
 
@@ -877,11 +883,21 @@ mod tests {
         let lease = kernel_fixture_lease();
         let current = runtime_state([1_u8; 16], Some([2_u8; 16]));
         assert!(matches!(
-            validate_loaded_chain(&lease, &[current.clone()], "owner:local", "2026-08-26T23:59:59Z"),
+            validate_loaded_chain(
+                &lease,
+                &[current.clone()],
+                "owner:local",
+                "2026-08-26T23:59:59Z"
+            ),
             Err(CapabilityLeaseUseError::NotYetValid)
         ));
         assert!(matches!(
-            validate_loaded_chain(&lease, &[current.clone()], "owner:local", "2026-08-28T00:00:00Z"),
+            validate_loaded_chain(
+                &lease,
+                &[current.clone()],
+                "owner:local",
+                "2026-08-28T00:00:00Z"
+            ),
             Err(CapabilityLeaseUseError::Expired)
         ));
         assert!(matches!(
@@ -923,12 +939,9 @@ mod tests {
             Err(CapabilityLeaseUseError::ResourceOutOfScope)
         ));
 
-        let bad_context = CapabilityLeaseScope::normalize(
-            &["session.read"],
-            &["session:1"],
-            &["local-owner"],
-        )
-        .unwrap();
+        let bad_context =
+            CapabilityLeaseScope::normalize(&["session.read"], &["session:1"], &["local-owner"])
+                .unwrap();
         assert!(matches!(
             validate_scope_use(lease.scope(), &bad_context),
             Err(CapabilityLeaseUseError::ContextOutOfScope)

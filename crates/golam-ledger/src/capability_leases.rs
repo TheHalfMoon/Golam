@@ -41,10 +41,16 @@ impl fmt::Display for CapabilityLeaseRuntimeError {
                 write!(f, "capability lease runtime integrity error: {error}")
             }
             Self::AuthoritySecurity(error) => {
-                write!(f, "capability lease runtime authority-security error: {error}")
+                write!(
+                    f,
+                    "capability lease runtime authority-security error: {error}"
+                )
             }
             Self::InvalidStoredRecord(reason) => {
-                write!(f, "capability lease runtime stored record is invalid: {reason}")
+                write!(
+                    f,
+                    "capability lease runtime stored record is invalid: {reason}"
+                )
             }
             Self::MissingParent => {
                 f.write_str("capability lease parent chain references a missing lease")
@@ -160,9 +166,8 @@ fn load_state(
 
     row.map(|row| {
         let parent_lease_id = row.1.map(id_from_vec).transpose()?;
-        let generation = u64::try_from(row.4).map_err(|_| {
-            CapabilityLeaseRuntimeError::InvalidStoredRecord("negative generation")
-        })?;
+        let generation = u64::try_from(row.4)
+            .map_err(|_| CapabilityLeaseRuntimeError::InvalidStoredRecord("negative generation"))?;
         if generation == 0 {
             return Err(CapabilityLeaseRuntimeError::InvalidStoredRecord(
                 "zero generation",
@@ -185,9 +190,9 @@ fn load_state(
 }
 
 fn id_from_vec(value: Vec<u8>) -> Result<[u8; 16], CapabilityLeaseRuntimeError> {
-    value.try_into().map_err(|_| {
-        CapabilityLeaseRuntimeError::InvalidStoredRecord("lease id is not 16 bytes")
-    })
+    value
+        .try_into()
+        .map_err(|_| CapabilityLeaseRuntimeError::InvalidStoredRecord("lease id is not 16 bytes"))
 }
 
 fn hash_from_vec(value: Vec<u8>) -> Result<[u8; 32], CapabilityLeaseRuntimeError> {
