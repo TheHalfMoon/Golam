@@ -6,6 +6,7 @@ mod client_enrollment;
 mod effect_execution;
 mod operations;
 pub mod policy_candidate;
+pub mod policy_lifecycle;
 mod resource;
 mod startup;
 mod synthetic_effect;

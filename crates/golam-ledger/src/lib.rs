@@ -2,6 +2,7 @@
 
 pub mod artifacts;
 mod authority_security_v2;
+mod authority_security_write;
 pub mod authorization;
 pub mod checkpoint;
 pub mod clients;
@@ -13,6 +14,7 @@ pub mod fork;
 pub mod goal;
 pub mod integrity;
 pub mod manual_review;
+pub mod policy;
 pub mod protocol_audit;
 pub mod recovery;
 mod security_audit;
