@@ -460,10 +460,9 @@ fn validate_runtime_state(
     }
     if let (Some(not_before), Some(expires_at)) =
         (state.not_before.as_deref(), state.expires_at.as_deref())
+        && not_before >= expires_at
     {
-        if not_before >= expires_at {
-            return Err(CapabilityLeaseUseError::InvalidStoredTime);
-        }
+        return Err(CapabilityLeaseUseError::InvalidStoredTime);
     }
     Ok(())
 }
@@ -836,7 +835,7 @@ mod tests {
         assert!(matches!(
             validate_loaded_chain(
                 &lease,
-                &[current.clone()],
+                std::slice::from_ref(&current),
                 "owner:other",
                 "2026-08-27T12:00:00Z"
             ),
@@ -885,7 +884,7 @@ mod tests {
         assert!(matches!(
             validate_loaded_chain(
                 &lease,
-                &[current.clone()],
+                std::slice::from_ref(&current),
                 "owner:local",
                 "2026-08-26T23:59:59Z"
             ),
@@ -894,7 +893,7 @@ mod tests {
         assert!(matches!(
             validate_loaded_chain(
                 &lease,
-                &[current.clone()],
+                std::slice::from_ref(&current),
                 "owner:local",
                 "2026-08-28T00:00:00Z"
             ),
