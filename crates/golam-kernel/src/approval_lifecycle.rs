@@ -16,6 +16,11 @@ pub use golam_ledger::approval_runtime::{
     ApprovalUseError, ApprovalUseEvidence, ApprovalUseRequest,
 };
 use golam_ledger::approvals::{ApprovalRecord, ApprovalScope};
+use golam_ledger::run_preauthorization::RunPreauthorizationStore;
+pub use golam_ledger::run_preauthorization::{
+    MAX_UNATTENDED_IRREVERSIBLE_RUN_USES, RunPreauthorizationError, RunPreauthorizationUse,
+    UnattendedIrreversibleRequest,
+};
 
 use crate::{
     AuthorizationContext, AuthorizationError, AuthorizationOutcome, AuthorizationPolicy,
@@ -49,7 +54,7 @@ impl fmt::Display for ApprovalMutationError {
             }
             Self::AuthorizationDenied(outcome) => write!(
                 f,
-                "approval issuance denied: decision={:?} reason={}",
+                "approval mutation denied: decision={:?} reason={}",
                 outcome.decision_id, outcome.reason_code
             ),
             Self::Binding(error) => write!(f, "approval issuance binding failed: {error}"),
@@ -144,6 +149,18 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
     ) -> Result<ApprovalConsumption, ApprovalConsumptionError> {
         let mut store = ApprovalConsumptionStore::open(&self.authority)?;
         store.consume_once(reservation)
+    }
+
+    /// Claims one bounded per-run authorization for unattended irreversible
+    /// work. The protected effect supplies action/resource/risk/session; callers
+    /// cannot widen those fields. Other approval classes, sessionless run scopes,
+    /// replay, exhausted limits and limits above the Spec 003 ceiling deny.
+    pub fn claim_unattended_irreversible_run_preauthorization(
+        &mut self,
+        request: UnattendedIrreversibleRequest<'_>,
+    ) -> Result<RunPreauthorizationUse, RunPreauthorizationError> {
+        let mut store = RunPreauthorizationStore::open(&self.authority)?;
+        store.claim_unattended_irreversible(request)
     }
 }
 
