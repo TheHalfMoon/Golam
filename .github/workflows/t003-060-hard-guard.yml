@@ -1,0 +1,44 @@
+name: t003-060-hard-guard
+on:
+  push:
+    branches:
+      - impl/003-identity-policy-secrets-sandbox
+permissions:
+  contents: write
+jobs:
+  qualify:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/003-identity-policy-secrets-sandbox
+          fetch-depth: 0
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt
+      - name: Add strict-local downstream-dominance regression
+        shell: python
+        run: |
+          import base64
+          from pathlib import Path
+
+          path = Path('crates/golam-kernel/src/authorization.rs')
+          source = path.read_text()
+          anchor = '    #[test]\n    fn normalized_non_hard_request_reaches_policy() {'
+          if source.count(anchor) != 1:
+              raise SystemExit(f'expected one insertion anchor, found {source.count(anchor)}')
+          insertion = base64.b64decode('CiAgICAjW3Rlc3RdCiAgICBmbiBzdHJpY3RfbG9jYWxfZWdyZXNzX2RvbWluYXRlc19kb3duc3RyZWFtX3Blcm1pdF9wb2xpY3lfZXZhbHVhdGlvbigpIHsKICAgICAgICBzdGF0aWMgRE9XTlNUUkVBTV9DQUxMUzogQXRvbWljVTY0ID0gQXRvbWljVTY0OjpuZXcoMCk7CgogICAgICAgIHN0cnVjdCBEb3duc3RyZWFtUGVybWl0UG9saWN5OwogICAgICAgIGltcGwgQXV0aG9yaXphdGlvblBvbGljeSBmb3IgRG93bnN0cmVhbVBlcm1pdFBvbGljeSB7CiAgICAgICAgICAgIGZuIGF1dGhvcml6ZSgmc2VsZiwgX3JlcXVlc3Q6ICZBdXRob3JpemF0aW9uUmVxdWVzdDwnXz4pIC0+IFBvbGljeURlY2lzaW9uIHsKICAgICAgICAgICAgICAgIERPV05TVFJFQU1fQ0FMTFMuZmV0Y2hfYWRkKDEsIE9yZGVyaW5nOjpTZXFDc3QpOwogICAgICAgICAgICAgICAgUG9saWN5RGVjaXNpb246OmFsbG93KCJkb3duc3RyZWFtX2VncmVzc19wZXJtaXRfd291bGRfYWxsb3ciKS53aXRoX3BvbGljeV9ldmlkZW5jZSgKICAgICAgICAgICAgICAgICAgICBbOV91ODsgMTZdLAogICAgICAgICAgICAgICAgICAgIFsxMF91ODsgMzJdLAogICAgICAgICAgICAgICAgICAgIHZlYyFbInJ1bGU6ZWdyZXNzLXBlcm1pdCIudG9fb3duZWQoKV0sCiAgICAgICAgICAgICAgICApCiAgICAgICAgICAgIH0KICAgICAgICB9CgogICAgICAgIERPV05TVFJFQU1fQ0FMTFMuc3RvcmUoMCwgT3JkZXJpbmc6OlNlcUNzdCk7CiAgICAgICAgbGV0IChydW50aW1lLCBhdXRob3JpdHkpID0gYXV0aG9yaXR5KCk7CiAgICAgICAgbGV0IG11dCBlbmdpbmUgPSBBdXRob3JpemF0aW9uRW5naW5lOjpvcGVuKCZhdXRob3JpdHksIERvd25zdHJlYW1QZXJtaXRQb2xpY3kpLnVud3JhcCgpOwogICAgICAgIGxldCByZXF1ZXN0ID0gb3duZXJfcmVxdWVzdCgKICAgICAgICAgICAgIm5ldHdvcmsuZWdyZXNzLmNvbm5lY3QiLAogICAgICAgICAgICAiaHR0cHM6Ly9leGFtcGxlLmludmFsaWQ6NDQzIiwKICAgICAgICAgICAgImxvY2FsLW93bmVyIiwKICAgICAgICApOwoKICAgICAgICBsZXQgKG91dGNvbWUsIGdyYW50KSA9IGVuZ2luZS5hdXRob3JpemUoJnJlcXVlc3QpLnVud3JhcCgpOwoKICAgICAgICBhc3NlcnRfZXEhKG91dGNvbWUuZGVjaXNpb24sIEF1dGhvcml6YXRpb25EZWNpc2lvbjo6RGVueSk7CiAgICAgICAgYXNzZXJ0X2VxIShvdXRjb21lLnJlYXNvbl9jb2RlLCBTVFJJQ1RfTE9DQUxfRUdSRVNTX0RFTklBTCk7CiAgICAgICAgYXNzZXJ0IShncmFudC5pc19ub25lKCkpOwogICAgICAgIGFzc2VydF9lcSEoRE9XTlNUUkVBTV9DQUxMUy5sb2FkKE9yZGVyaW5nOjpTZXFDc3QpLCAwKTsKCiAgICAgICAgbGV0IHJlY29yZHMgPSBlbmdpbmUucmVjb3JkcygpLnVud3JhcCgpOwogICAgICAgIGFzc2VydF9lcSEocmVjb3Jkcy5sZW4oKSwgMSk7CiAgICAgICAgYXNzZXJ0X2VxISgKICAgICAgICAgICAgcmVjb3Jkc1swXS5oYXJkX2d1YXJkX3Jlc3VsdCwKICAgICAgICAgICAgU1RSSUNUX0xPQ0FMX0VHUkVTU19ERU5JQUwKICAgICAgICApOwogICAgICAgIGFzc2VydCEocmVjb3Jkc1swXS5wb2xpY3lfYnVuZGxlX2lkLmlzX25vbmUoKSk7CiAgICAgICAgYXNzZXJ0IShyZWNvcmRzWzBdLnBvbGljeV9idW5kbGVfaGFzaC5pc19ub25lKCkpOwogICAgICAgIGFzc2VydCEocmVjb3Jkc1swXS5tYXRjaGVkX3J1bGVfaWRzLmlzX2VtcHR5KCkpOwoKICAgICAgICBkcm9wKGVuZ2luZSk7CiAgICAgICAgZnM6OnJlbW92ZV9kaXJfYWxsKHJ1bnRpbWUucm9vdCkudW53cmFwKCk7CiAgICB9Cgo=').decode()
+          path.write_text(source.replace(anchor, insertion + anchor, 1))
+      - name: Format and run focused regression
+        run: |
+          cargo +1.98.0 fmt --all
+          cargo +1.98.0 test -p golam-kernel strict_local_egress_dominates_downstream_permit_policy_evaluation -- --nocapture
+          cargo +1.98.0 test -p golam-kernel authorization::tests:: -- --nocapture
+      - name: Commit clean implementation delta
+        run: |
+          git rm .github/workflows/t003-060-hard-guard.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/golam-kernel/src/authorization.rs
+          git commit -m 'test: lock strict-local egress hard-guard dominance'
+          git push origin HEAD:impl/003-identity-policy-secrets-sandbox
