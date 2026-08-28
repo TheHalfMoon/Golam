@@ -49,7 +49,7 @@ Legend:
 
 - [x] **T003-040** Implement baseline taint-label set and deterministic canonical encoding. Exact-head qualification: CI #359 (`33150969442`) SUCCESS at `cb69d638107ca4fe0118c9a61f143ac3ba65a2d3` on Windows/macOS/Ubuntu. Evidence: `implementation/taint-baseline-qualification.md`.
 - [x] **T003-041** Implement monotonic union propagation for derived artifacts/authority context. Exact-head qualification: CI #366 (`33151556481`) SUCCESS at `76e1addf35c92a22d2c5826ca429278cacd598b3` on Windows/macOS/Ubuntu. Evidence: `implementation/taint-propagation-qualification.md`.
-- [ ] **T003-042** Implement protected verifier/sanitizer registry; tainted sources cannot register their own downgrade rule.
+- [x] **T003-042** Implement protected verifier/sanitizer registry; tainted sources cannot register their own downgrade rule. Exact-head qualification: CI #373 (`33152187952`) SUCCESS at `67f74c9b9b75e43b9fa00069050c97c041567184` on Windows/macOS/Ubuntu. Evidence: `implementation/verifier-registry-qualification.md`.
 - [ ] **T003-043** Implement human/deterministic-verifier downgrade attestations as new evidence rather than in-place source mutation.
 - [ ] **T003-044** Enforce `SECRET_DERIVED` rejection at long-term-memory admission boundary reserved for later memory integration tests.
 - [ ] **T003-045** Implement deterministic secret-elimination sanitizer evidence path for creating a separately non-secret-derived artifact.
@@ -136,11 +136,14 @@ T003_040_CI_RUN=33150969442
 T003_041=PASS
 T003_041_QUALIFIED_HEAD=76e1addf35c92a22d2c5826ca429278cacd598b3
 T003_041_CI_RUN=33151556481
+T003_042=PASS
+T003_042_QUALIFIED_HEAD=67f74c9b9b75e43b9fa00069050c97c041567184
+T003_042_CI_RUN=33152187952
 CEDAR_POLICY_ADMITTED_EXACT=4.12.0
 SECRET_CRYPTO_AND_OS_KEY_PROTECTORS_QUALIFIED=YES
 WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED
 Golam-Research=REFERENCE_ONLY
 DONOR_CODE_ADMITTED=NO
 REAL_SECRETS_USED=NO
-NEXT_TASK=T003-042
+NEXT_TASK=T003-043
 ```
