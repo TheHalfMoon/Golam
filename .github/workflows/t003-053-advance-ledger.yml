@@ -1,0 +1,57 @@
+name: t003-053-advance-ledger
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/t003-053-advance-ledger.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  advance:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'impl/003-identity-policy-secrets-sandbox'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/003-identity-policy-secrets-sandbox
+          fetch-depth: 0
+      - name: Record T003-053 and activate T003-054
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          tasks = Path('specs/003-identity-policy-secrets-sandbox/tasks.md')
+          s = tasks.read_text()
+          old = '- [ ] **T003-053** ACTIVE — Implement `BrokerSecretUse` authorization around handle, purpose, destination/process, lease/policy/approval and locality state.\n- [ ] **T003-054** Implement bounded unbrokerable fallback: no argv, cleared environment, exact injection scope, no ambient child inheritance, minimized lifetime and redaction.'
+          new = '- [x] **T003-053** Implement `BrokerSecretUse` authorization around handle, purpose, destination/process, lease/policy/approval and locality state. Exact-head qualification: CI #448 (`33165034463`) SUCCESS at `6f24182e1d810bc4fe6e437117149c4479241034` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-broker-qualification.md`.\n- [ ] **T003-054** ACTIVE — Implement bounded unbrokerable fallback: no argv, cleared environment, exact injection scope, no ambient child inheritance, minimized lifetime and redaction.'
+          if old not in s: raise SystemExit('tasks phase F anchor missing')
+          s = s.replace(old, new, 1)
+          old_gate = 'T003_052_CI_RUN=33163396509\nT003_053=ACTIVE\nCEDAR_POLICY_ADMITTED_EXACT=4.12.0'
+          new_gate = 'T003_052_CI_RUN=33163396509\nT003_053=PASS\nT003_053_QUALIFIED_HEAD=6f24182e1d810bc4fe6e437117149c4479241034\nT003_053_CI_RUN=33165034463\nT003_054=ACTIVE\nCEDAR_POLICY_ADMITTED_EXACT=4.12.0'
+          if old_gate not in s: raise SystemExit('tasks gate anchor missing')
+          s = s.replace(old_gate, new_gate, 1).replace('NEXT_TASK=T003-053', 'NEXT_TASK=T003-054', 1)
+          tasks.write_text(s)
+
+          plan = Path('specs/003-identity-policy-secrets-sandbox/implementation/current-execution-plan.md')
+          s = plan.read_text()
+          s = s.replace('**Current task**: `T003-053`', '**Current task**: `T003-054`', 1)
+          start = s.index('### T003-053 — ACTIVE')
+          end = s.index('### Remaining Phase F ordering', start)
+          replacement = '''### T003-053 — COMPLETE\n\nQualified at exact implementation head `6f24182e1d810bc4fe6e437117149c4479241034` by CI #448 / run `33165034463`, SUCCESS on Windows/macOS/Ubuntu.\n\nEvidence: `implementation/secret-broker-qualification.md`.\n\nThe qualified boundary provides protected metadata-only `BrokerSecretUse` authorization with exact handle/purpose/destination, strict-local, current decision, active policy, complete lease-chain and optional approval binding. Approval-bound uses are atomically consumed. No generic plaintext/ciphertext read API, egress authority or fallback injection is exposed.\n\n### T003-054 — ACTIVE\n\nImplement the bounded unbrokerable fallback only when brokered credential application is impossible.\n\nRequired boundaries:\n\n- require explicit bounded approval and an already-authenticated sandbox/process admission authorizing the exact injection channel;\n- never inject secret material into argv;\n- construct execution from a cleared ambient environment and add only the exact authorized injection value plus explicitly admitted non-secret variables;\n- prevent implicit child/grandchild secret inheritance;\n- minimize plaintext lifetime and keep any decrypted bytes inside the trusted fallback boundary;\n- apply value-aware redaction to captured stdout/stderr/log/error surfaces before they can reach model-visible or durable ordinary paths;\n- use deterministic canaries only; no real credentials;\n- fail closed when admission, approval, channel, process inheritance control, redaction, key protection or locality state is unavailable/ambiguous;\n- do not create sandbox admission or egress authority in this task; those remain owned by their later lifecycle tasks.\n\nAfter exact-head T003-054 qualification, continue directly to T003-055.\n\n'''
+          s = s[:start] + replacement + s[end:]
+          old_gate = 'T003_052_CI_RUN=33163396509\nT003_053=ACTIVE\nNEXT_TASK=T003-053'
+          new_gate = 'T003_052_CI_RUN=33163396509\nT003_053=PASS\nT003_053_QUALIFIED_HEAD=6f24182e1d810bc4fe6e437117149c4479241034\nT003_053_CI_RUN=33165034463\nT003_054=ACTIVE\nNEXT_TASK=T003-054'
+          if old_gate not in s: raise SystemExit('plan gate anchor missing')
+          s = s.replace(old_gate, new_gate, 1)
+          plan.write_text(s)
+          PY
+          git rm .github/workflows/t003-053-advance-ledger.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add specs/003-identity-policy-secrets-sandbox/tasks.md specs/003-identity-policy-secrets-sandbox/implementation/current-execution-plan.md
+          git commit -m 'docs: close T003-053 and activate T003-054'
+          git push origin HEAD:impl/003-identity-policy-secrets-sandbox
