@@ -27,6 +27,7 @@ Status vocabulary:
 | EricLBuehler/mistral.rs | VERIFIED_SNAPSHOT | FOUNDER_PERMISSION_ATTESTED | DIRECT_DEPENDENCY candidate | Rust inference candidate; exact release/API/hardware/no-egress qualification deferred to Spec 004. |
 | cedar-policy/cedar | PARTIALLY_VERIFIED | FOUNDER_PERMISSION_ATTESTED | DIRECT_DEPENDENCY candidate | Exact version/schema/perf qualification deferred to Spec 003. |
 | bytecodealliance/wasmtime | PARTIALLY_VERIFIED | FOUNDER_PERMISSION_ATTESTED | DIRECT_DEPENDENCY candidate | Bounded WASI extension runtime; not a native universal sandbox. |
+| opensandbox-group/OpenSandbox | VERIFIED_SNAPSHOT — `main@48b0215f1bd097b31d0f022a44640e00c11ac49d` | FOUNDER_PERMISSION_ATTESTED | HIGH_VALUE_SANDBOX_PLATFORM / PROTOCOL / DIRECT_PROVIDER candidate | Apache-2.0. PA-002A inspected lifecycle/provider/data-plane separation, Docker/Kubernetes runtimes, `execd`, PTY/SSE, snapshots/pause-resume, egress controls, secure-runtime options and Credential Vault. Candidate only behind Golam-owned sandbox/authority contracts; provider state, snapshots and runtime policy never become authority. |
 | llama.cpp | PARTIALLY_VERIFIED | FOUNDER_PERMISSION_ATTESTED | ADAPTER | Prefer sidecar in trusted architecture; exact build/dependency qualification deferred to Spec 004. |
 | lahfir/agent-desktop | PARTIALLY_VERIFIED | FOUNDER_PERMISSION_ATTESTED | SELECTIVE_PORT candidate | Semantic snapshot/ref concepts; exact source state admission required. |
 | mem0ai/mem0 | VERIFIED_SNAPSHOT — `main@fdfb763d6e5e5509bdb35d4ddc9ca8003f6af009` | FOUNDER_PERMISSION_ATTESTED | HIGH_VALUE_MEMORY_REFERENCE / SELECTIVE_SEMANTIC_PORT candidate | Apache-2.0. PA-002 inspected ADD-first extraction, temporal/entity metadata, scoped memory and semantic+BM25+entity retrieval. Golam keeps promotion governance and does not grant agent-generated facts equal authority. |
@@ -36,6 +37,7 @@ Status vocabulary:
 | firecrawl/firecrawl | VERIFIED_SNAPSHOT — `main@83df13affe6373ffe32b5daa99dd000ebab2ec73` | FOUNDER_PERMISSION_ATTESTED | BEHAVIOR_REFERENCE / EXTERNAL_ADAPTER candidate | Root license inspected as AGPL-3.0. Target search/scrape/crawl/map/extract/interact behavior; default no core code import without explicit reciprocal-license decision. Never a hidden strict-local dependency. |
 | run-llama/llama_index | VERIFIED_SNAPSHOT — `main@39f481fc41d1da26cf511ef697762b3b0a93636d` | FOUNDER_PERMISSION_ATTESTED | HIGH_VALUE_CONTEXT_REFERENCE / SELECTIVE_SEMANTIC_PORT candidate | MIT. Source/ingest/retrieve/postprocess/rerank/citation decomposition is useful; implement independently in Rust and keep managed services optional. |
 | NousResearch/hermes-agent | VERIFIED_SNAPSHOT — `main@4e7eb39947f132f961923f9e3f600bc8e63066dd` | FOUNDER_PERMISSION_ATTESTED | HIGH_VALUE_BEHAVIOR_REFERENCE / SELECTIVE_PORT candidate | MIT. PA-002 inspected curated memory, FTS5 session search, learning journey, background learning, skills, scheduling/subagents and messaging UX. Golam explicitly rejects free-form messaging approval and broad yolo/always-allow semantics for protected effects. |
+| openclaw/openclaw | VERIFIED_SNAPSHOT — `main@23a681efa6fc0e264e562c4249d8906c0785b5e4` | FOUNDER_PERMISSION_ATTESTED | HIGH_VALUE_PRODUCT / MEMORY / CHANNEL / SECURITY REFERENCE; SELECTIVE_PORT candidate | MIT. PA-002A inspected Gateway/device pairing, typed node capabilities, Markdown-first USER/MEMORY/daily/DREAMS model, hybrid search, dreaming, taint-gated promotion, Memory Wiki, sandbox provider UX and operator security audit. Golam rejects OpenClaw's single-trusted-operator Gateway assumptions as an authority model and preserves stronger per-effect/device/channel boundaries. |
 | karpathy/autoresearch | PARTIALLY_VERIFIED — `master@228791fb499afffb54b46200aca536f79142f117` | FOUNDER_PERMISSION_ATTESTED | HIGH_VALUE_EXPERIMENT_PATTERN / REFERENCE | README declares MIT but root LICENSE was not found during PA-002 verification. Use bounded baseline/fixed-budget/immutable-evaluator/keep-discard pattern; direct code reuse requires rights re-verification. |
 | braintrustdata/agentbehavior | VERIFIED_SNAPSHOT — `main@1866cffb530c93412719b7d3e243612a11bedf97` | FOUNDER_PERMISSION_ATTESTED | OPEN_BEHAVIOR_FORMAT / EVAL_REFERENCE candidate | Apache-2.0. `BEHAVIOR.md` trajectory-level specification is a strong GolamBench compatibility target; behavior text is never authority. |
 | braintrustdata/autoevals | VERIFIED_SNAPSHOT — `main@b0e1055892bea1305a10f8d42fdc47ff1b41ffa4` | FOUNDER_PERMISSION_ATTESTED | SCORER_REFERENCE / SELECTIVE_SEMANTIC_PORT candidate | MIT. Deterministic/heuristic/statistical/model scorers and compact score objects are useful; LLM judge remains supplementary evidence. |
@@ -43,20 +45,21 @@ Status vocabulary:
 | Graphify-Labs/graphify | UNVERIFIED_REFERENCE | FOUNDER_PERMISSION_ATTESTED | OPTIONAL ADAPTER / SELECTIVE_PORT candidate | Reverify/benchmark only if Spec 005 demonstrates L2 need. |
 | vitali87/code-graph-rag | UNVERIFIED_REFERENCE | FOUNDER_PERMISSION_ATTESTED | OPTIONAL ADAPTER / SELECTIVE_PORT candidate | Deep semantic/dataflow/runtime ideas; no mandatory graph DB. |
 | TencentDB Agent Memory / Graphiti / Letta / OpenViking / IWE / AFFiNE | UNVERIFIED_REFERENCE | FOUNDER_PERMISSION_ATTESTED | REFERENCE / SELECTIVE_PORT candidates | Reverify and select only bounded mechanisms that improve Golam's governed memory. Mem0 moved to its own verified PA-002 row. |
-| DeerFlow / OpenFang / OpenFleet / IronClaw / ZeroClaw / PicoClaw / block/buzz | UNVERIFIED_REFERENCE | FOUNDER_PERMISSION_ATTESTED | REFERENCE / SELECTIVE_PORT candidates | Permission removes default rights exclusion; full Source Foundry qualification still required before reuse. Hermes moved to its own verified PA-002 row. |
+| DeerFlow / OpenFang / OpenFleet / IronClaw / ZeroClaw / PicoClaw / block/buzz | UNVERIFIED_REFERENCE | FOUNDER_PERMISSION_ATTESTED | REFERENCE / SELECTIVE_PORT candidates | Permission removes default rights exclusion; full Source Foundry qualification still required before reuse. Hermes and OpenClaw moved to their own verified PA-002/PA-002A rows. |
 | Restate / Temporal | UNVERIFIED_REFERENCE | FOUNDER_PERMISSION_ATTESTED | REFERENCE / SELECTIVE_PORT candidates | Durable-execution semantics; Golam still avoids mandatory external server dependency. |
 | RustDesk / OpenControl / reciprocal remote-control sources | PARTIALLY_VERIFIED / REFERENCE | FOUNDER_PERMISSION_ATTESTED | AUTHORIZED_SOURCE_CANDIDATE | Prior reciprocal-license exclusion is no longer automatic because founder permission is asserted. Exact permission must explicitly cover intended reuse/redistribution and any continuing license obligations before admission. |
 
 ## PA-002 research record
 
-Detailed exact-head findings, source classifications, prohibited transplants and owning-spec assignments for the newly verified memory/retrieval/harness/learning/eval wave are recorded in:
+Detailed exact-head findings, source classifications, prohibited transplants and owning-spec assignments for the newly verified memory/retrieval/harness/learning/eval/sandbox wave are recorded in:
 
 - `program-amendments/PA-002-source-foundry-research.md`
 - `program-amendments/PA-002-memory-retrieval-learning-evals.md`
+- `program-amendments/PA-002A-openclaw-opensandbox-source-foundry.md`
 - `contracts/memory-retrieval-learning-contract.md`
 - `contracts/behavior-evaluation-contract.md`
 
-No PA-002 source is marked `ADMITTED` by this planning wave.
+No PA-002 or PA-002A source is marked `ADMITTED` by this planning wave.
 
 ## Admission rule
 
