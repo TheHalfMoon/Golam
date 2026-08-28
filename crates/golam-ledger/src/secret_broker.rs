@@ -1181,10 +1181,10 @@ fn is_leap_year(year: u32) -> bool {
 mod tests {
     use super::*;
     use crate::authority_security_write::{
-        append_active_policy_snapshot, append_authorization_decision_v2_snapshot,
-        append_capability_lease_snapshot, append_policy_bundle_snapshot,
-        append_secret_handle_snapshot, append_secret_record_snapshot,
-        append_secret_version_snapshot,
+        append_active_policy_snapshot, append_approval_snapshot,
+        append_authorization_decision_v2_snapshot, append_capability_lease_snapshot,
+        append_policy_bundle_snapshot, append_secret_handle_snapshot,
+        append_secret_record_snapshot, append_secret_version_snapshot,
     };
     use crate::security_audit::{AuthorizationAuditInput, append_authorization_decision};
     use golam_core::paths::RuntimeLayout;
@@ -1214,10 +1214,13 @@ mod tests {
         secret_id: [u8; 16],
         lease_id: [u8; 16],
         decision_id: [u8; 16],
+        policy_id: [u8; 16],
+        policy_hash: [u8; 32],
+        approval_id: Option<[u8; 16]>,
         resource: String,
     }
 
-    fn seed_fixture(connection: &mut Connection) -> Fixture {
+    fn seed_fixture(connection: &mut Connection, with_approval: bool) -> Fixture {
         let handle_id = [3_u8; 16];
         let secret_id = [4_u8; 16];
         let lease_id = [5_u8; 16];
@@ -1241,16 +1244,6 @@ mod tests {
             )
             .unwrap();
         append_policy_bundle_snapshot(&transaction, &policy_id).unwrap();
-        transaction
-            .execute(
-                "INSERT INTO active_policy (singleton_id, policy_bundle_id, bundle_hash, activated_by, activation_effect_id, activated_global_seq) VALUES (1, ?1, ?2, 'owner:owner', ?3, 0)",
-                params![&policy_id[..], &[9_u8; 16][..], &policy_hash[..]],
-            )
-            .unwrap();
-        // Correct argument order after intentionally using explicit named values.
-        transaction
-            .execute("DELETE FROM active_policy", [])
-            .unwrap();
         transaction
             .execute(
                 "INSERT INTO active_policy (singleton_id, policy_bundle_id, bundle_hash, activated_by, activation_effect_id, activated_global_seq) VALUES (1, ?1, ?2, 'owner:owner', ?3, 0)",
@@ -1286,17 +1279,93 @@ mod tests {
             )
             .unwrap();
         append_secret_handle_snapshot(&transaction, &handle_id).unwrap();
+
+        let mut broker_global_seq = 1_u64;
+        let approval_id = if with_approval {
+            let approval_id = [13_u8; 16];
+            let parent_decision_id = [14_u8; 16];
+            let parent_context_hash = [15_u8; 32];
+            let scope = ApprovalScope::time_boxed(
+                &[BROKER_ACTION.to_owned()],
+                std::slice::from_ref(&resource),
+            )
+            .unwrap();
+            let prepared = prepare_approval(
+                "owner:owner",
+                scope,
+                BROKER_RISK_CLASS,
+                [0_u8; 32],
+                "2026-08-28T00:00:00Z",
+                Some("2026-08-29T00:00:00Z"),
+                1,
+            )
+            .unwrap();
+            transaction
+                .execute(
+                    "INSERT INTO authorization_decisions (decision_id, principal, action, resource, context_hash, decision, reason_code, global_seq, hard_guard_result, lease_id, lease_generation, policy_bundle_id, policy_bundle_hash, matched_rule_ids, approval_id, authority_evidence_version) VALUES (?1, 'owner:owner', ?2, ?3, ?4, 'allow', 'test_approval_issue', 1, 'pass', NULL, NULL, NULL, NULL, X'', NULL, 2)",
+                    params![
+                        &parent_decision_id[..],
+                        APPROVAL_ISSUE_ACTION,
+                        prepared.resource(),
+                        &parent_context_hash[..],
+                    ],
+                )
+                .unwrap();
+            append_authorization_decision(
+                &transaction,
+                AuthorizationAuditInput {
+                    decision_id: &parent_decision_id,
+                    principal: "owner:owner",
+                    action: APPROVAL_ISSUE_ACTION,
+                    resource: prepared.resource(),
+                    context_hash: &parent_context_hash,
+                    decision: "allow",
+                    reason_code: "test_approval_issue",
+                    global_seq: 1,
+                },
+            )
+            .unwrap();
+            append_authorization_decision_v2_snapshot(&transaction, &parent_decision_id).unwrap();
+            let scope_digest = bound_scope_digest(
+                prepared.intent_digest(),
+                parent_decision_id,
+                parent_context_hash,
+            )
+            .unwrap();
+            transaction
+                .execute(
+                    "INSERT INTO approvals (approval_id, class, approver_principal, scope_digest, action_scope, resource_scope, effect_id, session_id, risk_class, taint_digest, parent_decision_id, issued_at, expires_at, max_uses, revoked_at) VALUES (?1, 'TIME_BOXED', 'owner:owner', ?2, ?3, ?4, NULL, NULL, ?5, ?6, ?7, '2026-08-28T00:00:00Z', '2026-08-29T00:00:00Z', 1, NULL)",
+                    params![
+                        &approval_id[..],
+                        &scope_digest[..],
+                        BROKER_ACTION.as_bytes(),
+                        resource.as_bytes(),
+                        BROKER_RISK_CLASS,
+                        &[0_u8; 32][..],
+                        &parent_decision_id[..],
+                    ],
+                )
+                .unwrap();
+            append_approval_snapshot(&transaction, &approval_id).unwrap();
+            broker_global_seq = 2;
+            Some(approval_id)
+        } else {
+            None
+        };
+
         transaction
             .execute(
-                "INSERT INTO authorization_decisions (decision_id, principal, action, resource, context_hash, decision, reason_code, global_seq, hard_guard_result, lease_id, lease_generation, policy_bundle_id, policy_bundle_hash, matched_rule_ids, approval_id, authority_evidence_version) VALUES (?1, 'owner:owner', ?2, ?3, ?4, 'allow', 'test_broker_allow', 1, 'pass', ?5, 1, ?6, ?7, X'', NULL, 2)",
+                "INSERT INTO authorization_decisions (decision_id, principal, action, resource, context_hash, decision, reason_code, global_seq, hard_guard_result, lease_id, lease_generation, policy_bundle_id, policy_bundle_hash, matched_rule_ids, approval_id, authority_evidence_version) VALUES (?1, 'owner:owner', ?2, ?3, ?4, 'allow', 'test_broker_allow', ?5, 'pass', ?6, 1, ?7, ?8, X'', ?9, 2)",
                 params![
                     &decision_id[..],
                     BROKER_ACTION,
                     &resource,
                     &[12_u8; 32][..],
+                    i64::try_from(broker_global_seq).unwrap(),
                     &lease_id[..],
                     &policy_id[..],
                     &policy_hash[..],
+                    approval_id.map(|value| value.to_vec()),
                 ],
             )
             .unwrap();
@@ -1310,7 +1379,7 @@ mod tests {
                 context_hash: &[12_u8; 32],
                 decision: "allow",
                 reason_code: "test_broker_allow",
-                global_seq: 1,
+                global_seq: broker_global_seq,
             },
         )
         .unwrap();
@@ -1323,6 +1392,9 @@ mod tests {
             secret_id,
             lease_id,
             decision_id,
+            policy_id,
+            policy_hash,
+            approval_id,
             resource,
         }
     }
@@ -1346,7 +1418,7 @@ mod tests {
     fn broker_authorization_records_metadata_without_plaintext_surface() {
         let (runtime, authority) = authority();
         let mut store = SecretBrokerStore::open(&authority).unwrap();
-        let fixture = seed_fixture(&mut store.connection);
+        let fixture = seed_fixture(&mut store.connection, false);
         let permit = store.authorize_brokered_use(request(&fixture)).unwrap();
         assert_eq!(permit.handle_id(), fixture.handle_id);
         assert_eq!(permit.secret_id(), fixture.secret_id);
@@ -1376,7 +1448,7 @@ mod tests {
     fn strict_local_rejects_external_destination_before_recording_use() {
         let (runtime, authority) = authority();
         let mut store = SecretBrokerStore::open(&authority).unwrap();
-        let fixture = seed_fixture(&mut store.connection);
+        let fixture = seed_fixture(&mut store.connection, false);
         let mut external = request(&fixture);
         external.destination_or_process = "https://example.invalid";
         assert!(matches!(
@@ -1398,7 +1470,7 @@ mod tests {
     fn stale_handle_version_and_revoked_secret_fail_closed() {
         let (runtime, authority) = authority();
         let mut store = SecretBrokerStore::open(&authority).unwrap();
-        let fixture = seed_fixture(&mut store.connection);
+        let fixture = seed_fixture(&mut store.connection, false);
         let transaction = store
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -1431,6 +1503,109 @@ mod tests {
         assert!(matches!(
             store.authorize_brokered_use(request(&fixture)),
             Err(SecretBrokerError::SecretRevoked)
+        ));
+        drop(store);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn approval_bound_broker_use_is_consumed_atomically_and_exhausts_authority() {
+        let (runtime, authority) = authority();
+        let mut store = SecretBrokerStore::open(&authority).unwrap();
+        let fixture = seed_fixture(&mut store.connection, true);
+        let approval_id = fixture.approval_id.expect("approval fixture");
+        let permit = store.authorize_brokered_use(request(&fixture)).unwrap();
+        assert_eq!(permit.approval_id(), Some(approval_id));
+        let state: String = store
+            .connection
+            .query_row(
+                "SELECT state FROM approval_consumptions WHERE approval_id = ?1",
+                params![&approval_id[..]],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(state, "consumed");
+        assert!(matches!(
+            store.authorize_brokered_use(request(&fixture)),
+            Err(SecretBrokerError::ApprovalUsageLimitReached)
+        ));
+        crate::authority_security_v2::verify(&store.connection).unwrap();
+        drop(store);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn approval_taint_mismatch_fails_before_consumption() {
+        let (runtime, authority) = authority();
+        let mut store = SecretBrokerStore::open(&authority).unwrap();
+        let fixture = seed_fixture(&mut store.connection, true);
+        let approval_id = fixture.approval_id.expect("approval fixture");
+        let mut mismatched = request(&fixture);
+        mismatched.taint_digest = [1_u8; 32];
+        assert!(matches!(
+            store.authorize_brokered_use(mismatched),
+            Err(SecretBrokerError::ApprovalTaintMismatch)
+        ));
+        let count: i64 = store
+            .connection
+            .query_row(
+                "SELECT COUNT(*) FROM approval_consumptions WHERE approval_id = ?1",
+                params![&approval_id[..]],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 0);
+        drop(store);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn active_policy_mismatch_fails_closed() {
+        let (runtime, authority) = authority();
+        let mut store = SecretBrokerStore::open(&authority).unwrap();
+        let fixture = seed_fixture(&mut store.connection, false);
+        let transaction = store
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .unwrap();
+        let mismatched_hash = [99_u8; 32];
+        transaction
+            .execute(
+                "UPDATE active_policy SET bundle_hash = ?1 WHERE singleton_id = 1",
+                params![&mismatched_hash[..]],
+            )
+            .unwrap();
+        append_active_policy_snapshot(&transaction).unwrap();
+        transaction.commit().unwrap();
+        assert_ne!(fixture.policy_hash, mismatched_hash);
+        assert!(matches!(
+            store.authorize_brokered_use(request(&fixture)),
+            Err(SecretBrokerError::PolicyMismatch)
+        ));
+        drop(store);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn lease_scope_mismatch_fails_closed() {
+        let (runtime, authority) = authority();
+        let mut store = SecretBrokerStore::open(&authority).unwrap();
+        let fixture = seed_fixture(&mut store.connection, false);
+        let transaction = store
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .unwrap();
+        transaction
+            .execute(
+                "UPDATE capability_leases SET resources_scope = ?2 WHERE lease_id = ?1",
+                params![&fixture.lease_id[..], b"secret-broker:forbidden".as_slice()],
+            )
+            .unwrap();
+        append_capability_lease_snapshot(&transaction, &fixture.lease_id).unwrap();
+        transaction.commit().unwrap();
+        assert!(matches!(
+            store.authorize_brokered_use(request(&fixture)),
+            Err(SecretBrokerError::LeaseScopeMismatch)
         ));
         drop(store);
         fs::remove_dir_all(runtime.root).unwrap();
