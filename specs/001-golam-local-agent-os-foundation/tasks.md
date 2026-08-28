@@ -106,24 +106,28 @@ No later feature may infer authority from this program task graph alone.
 
 ---
 
-## Phase 6 — Spec 007: GolamConnect
+## Phase 6 — Spec 007: Phone, GolamConnect & Channel Access
 
-- [ ] **T070** Create bounded Spec 007 after prerequisites 003+006 close; Spec 008 may precede 007 only with explicit reviewed dependency justification.
-- [ ] **T071** Qualify exact Iroh dependency and relay metadata/privacy behavior.
-- [ ] **T072** Qualify RASystem exact selected crates/files and independently review grants/nonces/control/audit/media; permission is asserted but technical/security qualification still governs reuse.
-- [ ] **T073** Implement cryptographic device pairing/revocation and short-lived generation-based control leases.
-- [ ] **T074** Implement signed/replay-protected per-message host authorization and reconnect full revalidation.
-- [ ] **T075** Implement screen/media, input, multi-monitor, clipboard, file transfer, visible indicator, emergency stop and human/agent takeover arbitration.
-- [ ] **T076** Implement Telegram first as command/notification bridge using provider-stable IDs; WhatsApp/Slack/Discord follow through the same channel-binding contract.
-- [ ] **T077** Run two-machine NAT/relay/loss/replay/revocation/lease-expiry/channel-impersonation/emergency-stop tests on supported host platforms.
+**Binding amendment**: `program-amendments/PA-001-phone-channel-access.md` expands this phase. Native mobile and phone voice are no longer deferred through Spec 010. No implementation is authorized by this task graph; Spec 007 still requires its full Spec Kit lifecycle.
+
+- [ ] **T070** Create bounded Spec 007 after prerequisites 003+006 close; Spec 008 may precede 007 only with explicit reviewed dependency justification. Read PA-001 and `contracts/phone-channel-access-contract.md` before scope freeze.
+- [ ] **T071** Qualify exact Iroh dependency and relay metadata/privacy behavior; define Connect Core device identity, pairing, signed/encrypted envelopes, replay protection, reconnect and generation semantics before channel/mobile UI work.
+- [ ] **T072** Qualify RASystem exact selected crates/files plus relevant mobile/channel donors and provider SDK/source candidates. Independently review grants/nonces/control/audit/media/provenance; permission does not bypass technical/security admission.
+- [ ] **T073** Implement GolamConnect cryptographic device pairing/revocation, short-lived generation-based capability leases, host-side per-message authorization and reconnect full revalidation.
+- [ ] **T074** Implement **Golam Mobile** for iOS/Android as a client of the canonical daemon: shared Rust protocol/crypto core, secure device-key storage, session/task/worker continuity, mobile approvals, privacy-minimized push wake/sync, file/photo/voice-note input, pause/stop controls, and explicit strict-local behavior. Qualify Tauri 2 mobile versus a native Swift/Kotlin shell around shared Rust before freezing the UI stack.
+- [ ] **T075** Implement native Connect screen/media, input, multi-monitor, clipboard, file transfer, visible indicator, emergency stop and human/agent takeover arbitration after Spec 006 computer-control prerequisites exist. Add mobile remote-view/control UX without routing protected control through messaging providers.
+- [ ] **T076** Implement early voice interaction on mobile: push-to-talk/voice notes, governed ASR/TTS provider selection, interruption/cancel, bounded audio/transcript retention, and tests proving voice cannot act as authentication or bypass approval. Full-duplex “call Golam” follows only after basic mobile reliability/safety gates.
+- [ ] **T077** Implement the common `ChannelAdapterDescriptor` + normalized `ChannelEnvelope`, stable binding/revocation generations, narrow ingress modes, attachment quarantine, edit/delete/replay semantics, causality/hop-loop protection and outbound Effect Gate. Ship Telegram first through the official Bot API, preferring local polling for the initial local-first path; optional webhook mode must authenticate and dedupe.
+- [ ] **T078** Add channels only through current official paths: WhatsApp Business Platform/Cloud API (not unofficial WhatsApp Web/personal-account automation); qualified official WeChat/WeCom robot/application APIs (not unsupported consumer WeChat automation); Slack official Events/Socket Mode; Discord official bot/Gateway; Matrix Application Service as an open/self-hostable candidate. Every adapter publishes an exact capability/privacy matrix and current official-source qualification.
+- [ ] **T079** Run phone/channel release-entry gates: two-device pairing/revoke/reconnect; push-payload privacy/reorder/collapse; stale mobile approval; voice approval-bypass; provider webhook forgery/replay/duplicate/out-of-order; spoofed/recycled identity; group injection; cross-channel replay; message edit/delete; attachment fuzz/quarantine; provider outage/rate limits; channel loops; strict-local no channel/push egress; and mobile remote-control emergency-stop/takeover races on claimed platforms.
 
 ---
 
 ## Phase 7 — Spec 008: Workers & Automations
 
 - [ ] **T080** Define typed worker lifecycle, spawn/join/cancel/crash-adopt, narrow lease inheritance and workspace/worktree isolation after comparing qualified worker/subagent implementations from authorized sources.
-- [ ] **T081** Implement durable scheduler/triggers using canonical event/effect semantics; prove restart does not double-fire effects.
-- [ ] **T082** Implement bounded parallelism and parent/child goal/causality tracking.
+- [ ] **T081** Implement durable scheduler/triggers using canonical event/effect semantics; prove restart does not double-fire effects. Phone/channel inputs may become typed triggers only through explicit policy-bound rules defined by Spec 007; receiving a message is not blanket automation authority.
+- [ ] **T082** Implement bounded parallelism and parent/child goal/causality tracking. Worker notifications to mobile/channels remain ordinary auditable outbound effects.
 - [ ] **T083** Keep groups/collaboration and teach-by-demonstration late in the spec; single-worker reliability is the entry gate.
 
 ---
@@ -131,7 +135,7 @@ No later feature may infer authority from this program task graph alone.
 ## Phase 8 — Spec 009: Grok Public Feature Parity
 
 - [ ] **T090** Refresh public Grok Bot capability evidence AND mine the pinned Golam-Research/Grok Bot 0.18 implementation evidence at exact source state. Keep source-derived implementation evidence distinct from public behavior evidence and from any later Grok releases.
-- [ ] **T091** Close independently implementable MUST-MATCH domains: persistent agents/computer/workspace, apps/browser/files/shell, long-running/background work, memory, approvals, local computer control, channels/connectors/MCP, routines/schedules, multimodal input, deep research/artifacts and built-in Documents/Presentations/Spreadsheets/PDFs/Skill Creator equivalents.
+- [ ] **T091** Close independently implementable MUST-MATCH domains: persistent agents/computer/workspace, apps/browser/files/shell, long-running/background work, memory, approvals, local computer control, native mobile continuity, channels/connectors/MCP, routines/schedules, multimodal input, deep research/artifacts and built-in Documents/Presentations/Spreadsheets/PDFs/Skill Creator equivalents.
 - [ ] **T092** Use authorized source code/behavior where technically justified but preserve Golam's Rust/local-first/security architecture rather than mechanically cloning Electron/cloud assumptions.
 - [ ] **T093** Require scenario evidence before `VERIFIED_EQUIVALENT` or `VERIFIED_SUPERSET` states.
 
@@ -143,16 +147,15 @@ No later feature may infer authority from this program task graph alone.
 - [ ] **T101** Qualify long-horizon goal retention/premature termination/model-switch/compaction behavior.
 - [ ] **T102** Qualify crash/recovery/idempotency/fork/checkpoint/disk failure.
 - [ ] **T103** Qualify prompt injection/taint/memory poisoning/secret isolation/policy self-escalation/local IPC/channel impersonation.
-- [ ] **T104** Qualify computer control and GolamConnect across the exact claimed platform matrix.
-- [ ] **T105** Prove strict-local no-egress from outside the Golam process boundary.
+- [ ] **T104** Qualify computer control, native Golam Mobile, push privacy, voice approval isolation and GolamConnect across the exact claimed platform/device matrix.
+- [ ] **T105** Prove strict-local no-egress from outside the Golam process boundary, including no third-party channel or APNs/FCM traffic when strict-local is active.
 - [ ] **T106** Produce exact-head evidence/receipts for every release/parity/security claim.
 
 ---
 
 ## Deferred through Spec 010 unless separately re-authorized
 
-- native mobile application;
-- voice-mode product experience;
+- always-on background wake-word / autonomous microphone listening;
 - A2A external federation;
 - image/video generation parity;
 - custom Golam relay infrastructure;
@@ -162,4 +165,4 @@ No later feature may infer authority from this program task graph alone.
 
 ## Next safe action
 
-Merge PR #1 at its exact reviewed head. Then re-read exact live `main`, create Spec 002 from that exact commit, and run its full Spec Kit lifecycle. Do not begin product implementation directly from this program task file.
+Follow exact live repository truth and the currently active bounded Spec Kit feature. PA-001 does not authorize leapfrogging the current implementation sequence; phone/mobile/channel product work starts only when the future Spec 007 package is legitimately opened and completes its planning gates.
