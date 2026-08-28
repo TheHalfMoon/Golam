@@ -163,33 +163,67 @@ impl fmt::Display for TaintAttestationError {
             Self::InvalidPrincipal => f.write_str("taint attestation principal is not canonical"),
             Self::EmptySourceArtifacts => f.write_str("taint attestation requires a source artifact"),
             Self::TooManySourceArtifacts => f.write_str("taint attestation source artifact set is too large"),
-            Self::DuplicateSourceArtifact => f.write_str("taint attestation source artifacts contain a duplicate"),
-            Self::ResultArtifactMustBeNew => f.write_str("taint downgrade must produce a distinct result artifact"),
+            Self::DuplicateSourceArtifact => {
+                f.write_str("taint attestation source artifacts contain a duplicate")
+            }
+            Self::ResultArtifactMustBeNew => {
+                f.write_str("taint downgrade must produce a distinct result artifact")
+            }
             Self::EmptySourceLabels => f.write_str("taint downgrade source labels cannot be empty"),
-            Self::ResultLabelsNotSubset => f.write_str("taint downgrade result labels must be a subset of source labels"),
+            Self::ResultLabelsNotSubset => {
+                f.write_str("taint downgrade result labels must be a subset of source labels")
+            }
             Self::NoDowngrade => f.write_str("taint attestation does not remove any source label"),
             Self::SecretDerivedRequiresSanitizer => f.write_str(
                 "SECRET_DERIVED can only be removed by the separately authorized secret-elimination sanitizer path",
             ),
             Self::MissingEvidence => f.write_str("taint downgrade requires non-empty evidence"),
-            Self::InvalidAuthoritySourceBinding => f.write_str("deterministic verifier source binding is invalid or too large"),
-            Self::WrongMechanism => f.write_str("taint attestation commit method does not match prepared mechanism"),
+            Self::InvalidAuthoritySourceBinding => {
+                f.write_str("deterministic verifier source binding is invalid or too large")
+            }
+            Self::WrongMechanism => {
+                f.write_str("taint attestation commit method does not match prepared mechanism")
+            }
             Self::IntegerOverflow => f.write_str("taint attestation integer conversion overflow"),
-            Self::MissingAuthorityDecision => f.write_str("taint downgrade has no durable authorization decision"),
-            Self::AuthorityDecisionMismatch => f.write_str("taint downgrade decision does not match exact principal/action/resource"),
-            Self::StaleAuthorityDecision => f.write_str("taint downgrade authorization decision is stale"),
+            Self::MissingAuthorityDecision => {
+                f.write_str("taint downgrade has no durable authorization decision")
+            }
+            Self::AuthorityDecisionMismatch => {
+                f.write_str("taint downgrade decision does not match exact principal/action/resource")
+            }
+            Self::StaleAuthorityDecision => {
+                f.write_str("taint downgrade authorization decision is stale")
+            }
             Self::EffectNotFound => f.write_str("taint downgrade effect does not exist"),
-            Self::EffectMismatch => f.write_str("taint downgrade effect is not exact authorized at-most-once protected work"),
+            Self::EffectMismatch => f.write_str(
+                "taint downgrade effect is not exact authorized at-most-once protected work",
+            ),
             Self::ApprovalNotFound => f.write_str("human taint downgrade approval does not exist"),
-            Self::ApprovalMismatch => f.write_str("human taint downgrade approval does not match exact effect/risk/provenance"),
-            Self::ApprovalAlreadyUsed => f.write_str("human taint downgrade one-shot approval was already consumed"),
-            Self::VerifierRuleNotFound => f.write_str("deterministic verifier rule does not exist"),
-            Self::VerifierRuleInactive => f.write_str("deterministic verifier rule is not active"),
-            Self::VerifierRuleKindMismatch => f.write_str("registered rule is not a deterministic verifier"),
-            Self::VerifierSourceBindingMismatch => f.write_str("verification evidence is not bound to the registered authoritative source"),
-            Self::VerifierRuleDoesNotAuthorizeDowngrade => f.write_str("registered verifier rule does not authorize every requested label removal"),
+            Self::ApprovalMismatch => f.write_str(
+                "human taint downgrade approval does not match exact effect/risk/provenance",
+            ),
+            Self::ApprovalAlreadyUsed => {
+                f.write_str("human taint downgrade one-shot approval was already consumed")
+            }
+            Self::VerifierRuleNotFound => {
+                f.write_str("deterministic verifier rule does not exist")
+            }
+            Self::VerifierRuleInactive => {
+                f.write_str("deterministic verifier rule is not active")
+            }
+            Self::VerifierRuleKindMismatch => {
+                f.write_str("registered rule is not a deterministic verifier")
+            }
+            Self::VerifierSourceBindingMismatch => f.write_str(
+                "verification evidence is not bound to the registered authoritative source",
+            ),
+            Self::VerifierRuleDoesNotAuthorizeDowngrade => f.write_str(
+                "registered verifier rule does not authorize every requested label removal",
+            ),
             Self::DuplicateAttestation => f.write_str("taint attestation already exists"),
-            Self::InvalidStoredRecord(reason) => write!(f, "stored taint attestation state is invalid: {reason}"),
+            Self::InvalidStoredRecord(reason) => {
+                write!(f, "stored taint attestation state is invalid: {reason}")
+            }
         }
     }
 }
@@ -975,6 +1009,8 @@ mod tests {
         binding: &[u8],
         allowed: TaintSet,
     ) {
+        let store = AuthorityStore::open(authority.authority_db_path()).unwrap();
+        drop(store);
         let mut connection = Connection::open(authority.authority_db_path()).unwrap();
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
