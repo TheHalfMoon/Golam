@@ -1,9 +1,9 @@
 # Spec 003 — Live Implementation Execution Plan
 
-**Status**: IMPLEMENTATION_ACTIVE — PHASE_F_ACTIVE  
+**Status**: IMPLEMENTATION_ACTIVE — PHASE_F_COMPLETE — PHASE_G_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current task**: `T003-057`
+**Current task**: `T003-060`
 
 ## Authority
 
@@ -64,7 +64,7 @@ T003-030..T003-035 complete at their task-recorded qualified heads.
 
 ## Phase F — Secret vault and broker
 
-`ACTIVE`
+`COMPLETE`
 
 ### T003-050 — COMPLETE
 
@@ -122,9 +122,13 @@ Evidence: `implementation/secret-canary-qualification.md`.
 
 The qualified suite exercises recognized and deliberately unknown-format deterministic canaries through the same explicit-entry path, scans durable authority files and canonical model-visible event payloads, checks rendered errors, and proves an environment-cleared unauthorized subprocess cannot recover the plaintext from durable authority bytes. Free-text recognition remains bounded defense in depth only.
 
-### T003-057 — ACTIVE
+### T003-057 — COMPLETE
 
-Add crash/disk-full/rotation/revocation qualification and prove no acknowledged half-transition exposes stale secret authority.
+Qualified at exact implementation head `3621b502854fd46d7b45b28f7e8d0ca071b08b68` by CI #495 / run `33195054055`, SUCCESS on Windows/macOS/Ubuntu.
+
+Evidence: `implementation/secret-fault-qualification.md`.
+
+The qualified suite uses the real secret mutation transaction path with test-only pre-commit pause injection, OS process termination before rotation/revocation commit, bounded SQLite `SQLITE_FULL` rotation/revocation faults, approval-consumption rollback checks, restart verification, and successful-commit controls. Only fully committed transitions change durable secret authority.
 
 Required boundaries:
 
@@ -134,7 +138,7 @@ Required boundaries:
 - revocation must immediately block broker/fallback use without deleting prior encrypted versions or weakening audit integrity;
 - no failure mode may acknowledge success while leaving old secret authority usable as current.
 
-After exact-head T003-057 qualification, close Phase F and continue directly to T003-060.
+Phase F is closed at the task-qualified head above. Phase G is active at T003-060.
 
 ### Remaining Phase F ordering
 
@@ -158,7 +162,8 @@ PHASE_B_COMPLETE=YES
 PHASE_C_COMPLETE=YES
 PHASE_D_COMPLETE=YES
 PHASE_E_COMPLETE=YES
-PHASE_F_ACTIVE=YES
+PHASE_F_COMPLETE=YES
+PHASE_G_ACTIVE=YES
 T003_046=PASS
 T003_046_QUALIFIED_HEAD=890571fe705f36f42c1c20acff3a8a2c4fa3498e
 T003_046_CI_RUN=33157139728
@@ -183,8 +188,10 @@ T003_055_CI_RUN=33167705734
 T003_056=PASS
 T003_056_QUALIFIED_HEAD=b1a47898515dc06237a0d71cea00e81b19cddd0a
 T003_056_CI_RUN=33169107060
-T003_057=ACTIVE
-NEXT_TASK=T003-057
+T003_057=PASS
+T003_057_QUALIFIED_HEAD=3621b502854fd46d7b45b28f7e8d0ca071b08b68
+T003_057_CI_RUN=33195054055
+NEXT_TASK=T003-060
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO

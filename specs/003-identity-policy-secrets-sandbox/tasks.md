@@ -1,6 +1,6 @@
 # Tasks — Spec 003 Identity, Policy, Secrets & Sandbox
 
-**Status**: IMPLEMENTATION_ACTIVE — PHASE_B_COMPLETE — PHASE_C_COMPLETE — PHASE_D_COMPLETE — PHASE_E_COMPLETE — PHASE_F_ACTIVE  
+**Status**: IMPLEMENTATION_ACTIVE — PHASE_B_COMPLETE — PHASE_C_COMPLETE — PHASE_D_COMPLETE — PHASE_E_COMPLETE — PHASE_F_COMPLETE — PHASE_G_ACTIVE  
 **Canonical implementation base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`
 
 Legend:
@@ -64,7 +64,7 @@ Legend:
 - [x] **T003-054** Implement bounded unbrokerable fallback: no argv, cleared environment, exact injection scope, no ambient child inheritance, minimized lifetime and redaction. Exact-head qualification: CI #464 (`33166659638`) SUCCESS at `f2cef061f4a6847a2eedf7b867b8b94e4ccadd8f` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-fallback-qualification.md`.
 - [x] **T003-055** Implement an explicit user-designated secret-entry boundary that treats the entire submitted value as secret independent of format detection; before any model-visible canonical append persist only an opaque handle, tombstone/redaction marker and non-secret metadata. Keep recognized-format detection only as defense in depth for ordinary free text. Exact-head qualification: CI #473 (`33167705734`) SUCCESS at `b434da7c675fecf41d3f3aed2104559f959e8310` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-entry-qualification.md`.
 - [x] **T003-056** Add canary tests covering both recognized and deliberately unknown-format deterministic values through the explicit secret-entry path, proving no plaintext in durable vault bytes, event/audit/log/error/prompt paths or unauthorized subprocess output; separately test free-text detectors as defense in depth. Exact-head qualification: CI #484 (`33169107060`) SUCCESS at `b1a47898515dc06237a0d71cea00e81b19cddd0a` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-canary-qualification.md`.
-- [ ] **T003-057** ACTIVE — Add crash/disk-full/rotation/revocation tests and prove no acknowledged half-transition exposes stale secret authority.
+- [x] **T003-057** Add crash/disk-full/rotation/revocation tests and prove no acknowledged half-transition exposes stale secret authority. Exact-head qualification: CI #495 (`33195054055`) SUCCESS at `3621b502854fd46d7b45b28f7e8d0ca071b08b68` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-fault-qualification.md`.
 
 ## Phase G — Egress permits
 
@@ -115,7 +115,8 @@ PHASE_B_COMPLETE=YES
 PHASE_C_COMPLETE=YES
 PHASE_D_COMPLETE=YES
 PHASE_E_COMPLETE=YES
-PHASE_F_ACTIVE=YES
+PHASE_F_COMPLETE=YES
+PHASE_G_ACTIVE=YES
 T003_020=PASS
 T003_021=PASS
 T003_022=PASS
@@ -173,12 +174,14 @@ T003_055_CI_RUN=33167705734
 T003_056=PASS
 T003_056_QUALIFIED_HEAD=b1a47898515dc06237a0d71cea00e81b19cddd0a
 T003_056_CI_RUN=33169107060
-T003_057=ACTIVE
+T003_057=PASS
+T003_057_QUALIFIED_HEAD=3621b502854fd46d7b45b28f7e8d0ca071b08b68
+T003_057_CI_RUN=33195054055
 CEDAR_POLICY_ADMITTED_EXACT=4.12.0
 SECRET_CRYPTO_AND_OS_KEY_PROTECTORS_QUALIFIED=YES
 WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED
 Golam-Research=REFERENCE_ONLY
 DONOR_CODE_ADMITTED=NO
 REAL_SECRETS_USED=NO
-NEXT_TASK=T003-057
+NEXT_TASK=T003-060
 ```
