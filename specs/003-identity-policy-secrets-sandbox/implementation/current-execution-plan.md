@@ -53,7 +53,6 @@ The original `plan.md` metadata records the planning branch/base at the time the
 - T003-034 qualified at `0bcaffb231070082be411e2e37959004ce359ad6` with CI #349 / run `33149069868` SUCCESS on Windows/macOS/Ubuntu.
 - T003-035 qualified at `ffc8a66c881b1a34dafe32f79beebe03cceba939` with CI #354 / run `33149715031` SUCCESS on Windows/macOS/Ubuntu.
 - T003-035 includes production typed approval revocation as a monotonic protected mutation plus expiry/revocation/replay/double-use/scope-overreach/taint-mismatch coverage.
-- Later branch mutations do not transfer these historical qualification runs into final exact-head closeout evidence.
 
 ### Phase E — Taint and verifier state
 
@@ -62,27 +61,30 @@ The original `plan.md` metadata records the planning branch/base at the time the
 Completed:
 
 - T003-040 qualified at `cb69d638107ca4fe0118c9a61f143ac3ba65a2d3` with CI #359 / run `33150969442` SUCCESS on Windows/macOS/Ubuntu. Evidence: `implementation/taint-baseline-qualification.md`.
-- The baseline primitive is data-only in `golam-core`: exact nine-label closed set, frozen codes/names, bounded duplicate-insensitive set representation, and deterministic domain-separated canonical encoding.
+- T003-041 qualified at `76e1addf35c92a22d2c5826ca429278cacd598b3` with CI #366 / run `33151556481` SUCCESS on Windows/macOS/Ubuntu. Evidence: `implementation/taint-propagation-qualification.md`.
 
-Next canonical task: **T003-041** — implement monotonic union propagation for derived artifacts and authority context.
+T003-041 established monotonic `TaintSet::union`, a provenance carrier that does not alter the wrapped value's identity, derived-artifact propagation tests, and typed authority-context provenance tests. There is still no downgrade/removal API. Normal policy-path consumption remains later integration work rather than widening T003-041.
 
-T003-041 bounded design constraints:
+Next canonical task: **T003-042** — implement the protected verifier/sanitizer registry; tainted sources cannot register their own downgrade rule.
 
-- propagation is monotonic set union: all source labels plus transform-introduced labels;
-- no API in T003-041 may remove/downgrade labels;
-- `ArtifactReceipt` remains content identity only; provenance must be a separate typed wrapper/metadata layer so taint does not alter content hash semantics;
-- authorization context must carry relevant taint and bind it into deterministic policy/audit context;
-- caller/source order must not change the resulting set or canonical authority input;
-- verifier registration, downgrade attestations, sanitizer authority and memory-sink rejection remain T003-042+ and must not be pulled forward.
+T003-042 bounded design constraints:
+
+- reuse the already-created `verifier_rules` protected schema; no new migration unless a proven invariant requires one;
+- registry mutation must be typed protected work, not generic SQL/filesystem/tool access;
+- exact current authorization + exact effect/approval evidence must bind registration where required by the protected-resource mutation contract;
+- the registration source must be trusted: untrusted/model/channel/MCP/plugin/secret-derived provenance cannot register a rule that could later downgrade provenance;
+- allowed downgrade labels and authoritative source binding are canonical/bounded data;
+- registration commits the protected row and fresh `authority-security` evidence atomically;
+- this task registers/reads rules only; it does not yet create downgrade attestations or mutate artifact labels;
+- T003-043 remains the owner of actual human/deterministic-verifier downgrade attestations.
 
 Remaining Phase E order:
 
-1. T003-041 monotonic union propagation;
-2. T003-042 protected verifier/sanitizer registry;
-3. T003-043 downgrade attestations as new evidence;
-4. T003-044 `SECRET_DERIVED` long-term-memory admission denial boundary;
-5. T003-045 deterministic secret-elimination sanitizer evidence;
-6. T003-046 multi-hop/self-clear/unregistered-verifier/SECRET_DERIVED adversarial qualification.
+1. T003-042 protected verifier/sanitizer registry;
+2. T003-043 downgrade attestations as new evidence;
+3. T003-044 `SECRET_DERIVED` long-term-memory admission denial boundary;
+4. T003-045 deterministic secret-elimination sanitizer evidence;
+5. T003-046 multi-hop/self-clear/unregistered-verifier/SECRET_DERIVED adversarial qualification.
 
 Do not begin Phase F until the Phase E predecessor tasks required by `tasks.md` are complete and qualified.
 
@@ -126,17 +128,20 @@ PHASE_A_COMPLETE=YES
 PHASE_B_COMPLETE=YES
 PHASE_C_COMPLETE=YES
 PHASE_D_COMPLETE=YES
+PHASE_E_ACTIVE=YES
 T003_034=PASS
 T003_034_QUALIFIED_HEAD=0bcaffb231070082be411e2e37959004ce359ad6
 T003_034_CI_RUN=33149069868
 T003_035=PASS
 T003_035_QUALIFIED_HEAD=ffc8a66c881b1a34dafe32f79beebe03cceba939
 T003_035_CI_RUN=33149715031
-PHASE_E_ACTIVE=YES
 T003_040=PASS
 T003_040_QUALIFIED_HEAD=cb69d638107ca4fe0118c9a61f143ac3ba65a2d3
 T003_040_CI_RUN=33150969442
-NEXT_TASK=T003-041
+T003_041=PASS
+T003_041_QUALIFIED_HEAD=76e1addf35c92a22d2c5826ca429278cacd598b3
+T003_041_CI_RUN=33151556481
+NEXT_TASK=T003-042
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO
 PR_READY=NO
