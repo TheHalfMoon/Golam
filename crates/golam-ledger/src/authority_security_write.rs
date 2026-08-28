@@ -256,7 +256,12 @@ pub(crate) fn append_secret_version_snapshot(
         "SELECT secret_id, version, ciphertext, nonce_or_algorithm_metadata, associated_data_hash, created_global_seq, rotated_from, retired_at FROM secret_versions WHERE secret_id = ?1 AND version = ?2",
         params![secret_id, version],
     )?;
-    append_snapshot(transaction, ProtectedMutationKind::SecretVersion, 2, &values)
+    append_snapshot(
+        transaction,
+        ProtectedMutationKind::SecretVersion,
+        2,
+        &values,
+    )
 }
 
 #[cfg(test)]
