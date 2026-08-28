@@ -57,8 +57,8 @@ Legend:
 
 ## Phase F — Secret vault and broker
 
-- [ ] **T003-050** ACTIVE — Implement protected opaque SecretHandle/SecretRecord/SecretVersion interfaces without generic plaintext reads.
-- [ ] **T003-051** Implement qualified encrypted-at-rest vault storage and key-protection abstraction with fail-closed corruption/unavailability behavior.
+- [x] **T003-050** Implement protected opaque SecretHandle/SecretRecord/SecretVersion interfaces without generic plaintext reads. Exact-head qualification: CI #416 (`33160722873`) SUCCESS at `9dc77f9ff565f0540b21feb4706e25cc36087be1` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-interface-qualification.md`.
+- [ ] **T003-051** ACTIVE — Implement qualified encrypted-at-rest vault storage and key-protection abstraction with fail-closed corruption/unavailability behavior.
 - [ ] **T003-052** Implement secret create/version/rotate/revoke protected transitions with atomic security evidence.
 - [ ] **T003-053** Implement `BrokerSecretUse` authorization around handle, purpose, destination/process, lease/policy/approval and locality state.
 - [ ] **T003-054** Implement bounded unbrokerable fallback: no argv, cleared environment, exact injection scope, no ambient child inheritance, minimized lifetime and redaction.
@@ -152,11 +152,15 @@ T003_045_CI_RUN=33155929307
 T003_046=PASS
 T003_046_QUALIFIED_HEAD=890571fe705f36f42c1c20acff3a8a2c4fa3498e
 T003_046_CI_RUN=33157139728
+T003_050=PASS
+T003_050_QUALIFIED_HEAD=9dc77f9ff565f0540b21feb4706e25cc36087be1
+T003_050_CI_RUN=33160722873
+T003_051=ACTIVE
 CEDAR_POLICY_ADMITTED_EXACT=4.12.0
 SECRET_CRYPTO_AND_OS_KEY_PROTECTORS_QUALIFIED=YES
 WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED
 Golam-Research=REFERENCE_ONLY
 DONOR_CODE_ADMITTED=NO
 REAL_SECRETS_USED=NO
-NEXT_TASK=T003-050
+NEXT_TASK=T003-051
 ```
