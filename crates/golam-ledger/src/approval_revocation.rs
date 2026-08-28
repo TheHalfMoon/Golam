@@ -312,12 +312,7 @@ fn verify_target(
         .query_row(
             "SELECT issued_at, revoked_at FROM approvals WHERE approval_id = ?1",
             params![&approval_id[..]],
-            |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, Option<String>>(1)?,
-                ))
-            },
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?)),
         )
         .optional()?
         .ok_or(ApprovalRevocationError::ApprovalNotFound)?;
@@ -383,9 +378,7 @@ fn hex_bytes(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::approval_binding::{
-        APPROVAL_ISSUE_ACTION, ApprovalStore, prepare_approval,
-    };
+    use crate::approval_binding::{APPROVAL_ISSUE_ACTION, ApprovalStore, prepare_approval};
     use crate::approval_runtime::{ApprovalUseError, ApprovalUseRequest, ApprovalUseStore};
     use crate::approvals::ApprovalScope;
     use crate::authorization::{
@@ -542,12 +535,9 @@ mod tests {
             .validate(request)
             .unwrap();
 
-        let prepared = prepare_approval_revocation(
-            approval_id,
-            "owner:owner",
-            "2026-08-27T00:11:00Z",
-        )
-        .unwrap();
+        let prepared =
+            prepare_approval_revocation(approval_id, "owner:owner", "2026-08-27T00:11:00Z")
+                .unwrap();
         let revoke_effect_id = EffectId(10_001);
         create_authorized_effect(
             &authority,
@@ -587,12 +577,8 @@ mod tests {
         let (runtime, authority) = authority();
         let approval_id = issue_time_boxed_approval(&authority);
 
-        let first = prepare_approval_revocation(
-            approval_id,
-            "owner:owner",
-            "2026-08-27T00:11:00Z",
-        )
-        .unwrap();
+        let first = prepare_approval_revocation(approval_id, "owner:owner", "2026-08-27T00:11:00Z")
+            .unwrap();
         let first_effect_id = EffectId(10_010);
         create_authorized_effect(
             &authority,
@@ -615,12 +601,9 @@ mod tests {
             .revoke(first, first_decision, first_effect_id)
             .unwrap();
 
-        let second = prepare_approval_revocation(
-            approval_id,
-            "owner:owner",
-            "2026-08-27T00:12:00Z",
-        )
-        .unwrap();
+        let second =
+            prepare_approval_revocation(approval_id, "owner:owner", "2026-08-27T00:12:00Z")
+                .unwrap();
         let second_effect_id = EffectId(10_011);
         create_authorized_effect(
             &authority,
@@ -639,9 +622,11 @@ mod tests {
             "test_second_revoke_authority",
         );
         assert!(matches!(
-            ApprovalRevocationStore::open(&authority)
-                .unwrap()
-                .revoke(second, second_decision, second_effect_id),
+            ApprovalRevocationStore::open(&authority).unwrap().revoke(
+                second,
+                second_decision,
+                second_effect_id
+            ),
             Err(ApprovalRevocationError::ApprovalAlreadyRevoked)
         ));
 
