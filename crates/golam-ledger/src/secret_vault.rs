@@ -3,8 +3,8 @@ use std::error::Error;
 use std::fmt;
 use std::sync::{Mutex, MutexGuard};
 
-use aes_gcm::aead::{Aead, KeyInit, Nonce, Payload};
 use aes_gcm::Aes256Gcm;
+use aes_gcm::aead::{Aead, KeyInit, Nonce, Payload};
 use keyring_core::api::CredentialStoreApi;
 use keyring_core::{Entry, Error as KeyringError};
 use zeroize::{Zeroize, Zeroizing};
@@ -38,7 +38,9 @@ impl VaultBinding {
     ) -> Result<Self, VaultError> {
         let classification = classification.into();
         if version == 0 {
-            return Err(VaultError::InvalidBinding("secret version must be non-zero"));
+            return Err(VaultError::InvalidBinding(
+                "secret version must be non-zero",
+            ));
         }
         if security_metadata_version == 0 {
             return Err(VaultError::InvalidBinding(
@@ -315,8 +317,8 @@ impl<P: KeyProtector> SecretVault<P> {
             key.zeroize();
             return Err(VaultError::InvalidMasterKey);
         }
-        let cipher = Aes256Gcm::new_from_slice(key.as_slice())
-            .map_err(|_| VaultError::InvalidMasterKey)?;
+        let cipher =
+            Aes256Gcm::new_from_slice(key.as_slice()).map_err(|_| VaultError::InvalidMasterKey)?;
         key.zeroize();
 
         let associated_data = binding.associated_data();
@@ -372,8 +374,8 @@ impl<P: KeyProtector> SecretVault<P> {
             key.zeroize();
             return Err(VaultError::InvalidMasterKey);
         }
-        let cipher = Aes256Gcm::new_from_slice(key.as_slice())
-            .map_err(|_| VaultError::InvalidMasterKey)?;
+        let cipher =
+            Aes256Gcm::new_from_slice(key.as_slice()).map_err(|_| VaultError::InvalidMasterKey)?;
         key.zeroize();
         let nonce: Nonce<Aes256Gcm> = nonce_bytes.into();
         let plaintext = cipher
@@ -549,14 +551,18 @@ mod tests {
             .unwrap();
 
         assert_ne!(encrypted.ciphertext(), CANARY);
-        assert!(!encrypted
-            .ciphertext()
-            .windows(CANARY.len())
-            .any(|window| window == CANARY));
-        assert!(!encrypted
-            .algorithm_metadata()
-            .windows(CANARY.len())
-            .any(|window| window == CANARY));
+        assert!(
+            !encrypted
+                .ciphertext()
+                .windows(CANARY.len())
+                .any(|window| window == CANARY)
+        );
+        assert!(
+            !encrypted
+                .algorithm_metadata()
+                .windows(CANARY.len())
+                .any(|window| window == CANARY)
+        );
         let mut plaintext = vault.open(&binding(), &encrypted).unwrap();
         assert_eq!(plaintext.as_slice(), CANARY);
         plaintext.zeroize();
