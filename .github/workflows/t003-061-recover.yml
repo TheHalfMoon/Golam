@@ -1,0 +1,94 @@
+name: t003-061-recover
+on:
+  push:
+    branches:
+      - impl/003-identity-policy-secrets-sandbox
+permissions:
+  contents: write
+jobs:
+  recover:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/003-identity-policy-secrets-sandbox
+          fetch-depth: 0
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
+      - name: Integrate protected egress permit lifecycle
+        shell: python
+        run: |
+          import base64
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              text = path.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: replacement count {count} for {old!r}')
+              path.write_text(text.replace(old, new, 1))
+
+          lib = Path('crates/golam-ledger/src/lib.rs')
+          replace_once(lib, 'pub mod effects;\n', 'pub mod effects;\npub mod egress_permit;\n')
+
+          storage = Path('crates/golam-ledger/src/storage.rs')
+          replace_once(storage, 'pub const AUTHORITY_SCHEMA_VERSION: i64 = 3;', 'pub const AUTHORITY_SCHEMA_VERSION: i64 = 4;')
+          replace_once(
+              storage,
+              '    if version == 2 {\n        migrate_v3(connection)?;\n        version = 3;\n    }\n    debug_assert_eq!(version, AUTHORITY_SCHEMA_VERSION);',
+              '    if version == 2 {\n        migrate_v3(connection)?;\n        version = 3;\n    }\n    if version == 3 {\n        migrate_v4(connection)?;\n        version = 4;\n    }\n    debug_assert_eq!(version, AUTHORITY_SCHEMA_VERSION);',
+          )
+          migrate_v4 = base64.b64decode('Zm4gbWlncmF0ZV92NChjb25uZWN0aW9uOiAmQ29ubmVjdGlvbikgLT4gUmVzdWx0PCgpLCBTdG9yYWdlRXJyb3I+IHsKICAgIGNvbm5lY3Rpb24uZXhlY3V0ZV9iYXRjaCgKICAgICAgICAiQkVHSU4gSU1NRURJQVRFO1xuXAogICAgICAgICBBTFRFUiBUQUJMRSBlZ3Jlc3NfcGVybWl0cyBBREQgQ09MVU1OIHVzZXNfY29uc3VtZWQgSU5URUdFUiBOT1QgTlVMTCBERUZBVUxUIDA7XG5cCiAgICAgICAgIFBSQUdNQSB1c2VyX3ZlcnNpb24gPSA0O1xuXAogICAgICAgICBDT01NSVQ7IiwKICAgICk/OwogICAgT2soKCkpCn0KCg==').decode()
+          replace_once(storage, 'fn verify_quick_check(connection: &Connection) -> Result<(), StorageError> {', migrate_v4 + 'fn verify_quick_check(connection: &Connection) -> Result<(), StorageError> {')
+
+          security = Path('crates/golam-ledger/src/authority_security_v2.rs')
+          replace_once(
+              security,
+              'query: "SELECT permit_id, principal_or_process, action, purpose, destination_scope, protocol_port_scope, taint_digest, secret_handle_id, parent_lease_id, issued_at, expires_at, usage_limit, status FROM egress_permits ORDER BY permit_id",',
+              'query: "SELECT permit_id, principal_or_process, action, purpose, destination_scope, protocol_port_scope, taint_digest, secret_handle_id, parent_lease_id, issued_at, expires_at, usage_limit, status, uses_consumed FROM egress_permits ORDER BY permit_id",',
+          )
+
+          writer = Path('crates/golam-ledger/src/authority_security_write.rs')
+          replace_once(writer, '    SecretUseRecord,\n    #[cfg(test)]', '    SecretUseRecord,\n    EgressPermit,\n    #[cfg(test)]')
+          replace_once(writer, '            Self::SecretUseRecord => "secret_use_record",\n            #[cfg(test)]', '            Self::SecretUseRecord => "secret_use_record",\n            Self::EgressPermit => "egress_permit",\n            #[cfg(test)]')
+          writer_fn = base64.b64decode('cHViKGNyYXRlKSBmbiBhcHBlbmRfZWdyZXNzX3Blcm1pdF9zbmFwc2hvdCgKICAgIHRyYW5zYWN0aW9uOiAmVHJhbnNhY3Rpb248J18+LAogICAgcGVybWl0X2lkOiAmW3U4XSwKKSAtPiBSZXN1bHQ8KCksIEF1dGhvcml0eVNlY3VyaXR5V3JpdGVFcnJvcj4gewogICAgbGV0IHZhbHVlcyA9IHF1ZXJ5X3ZhbHVlcygKICAgICAgICB0cmFuc2FjdGlvbiwKICAgICAgICAiU0VMRUNUIHBlcm1pdF9pZCwgcHJpbmNpcGFsX29yX3Byb2Nlc3MsIGFjdGlvbiwgcHVycG9zZSwgZGVzdGluYXRpb25fc2NvcGUsIHByb3RvY29sX3BvcnRfc2NvcGUsIHRhaW50X2RpZ2VzdCwgc2VjcmV0X2hhbmRsZV9pZCwgcGFyZW50X2xlYXNlX2lkLCBpc3N1ZWRfYXQsIGV4cGlyZXNfYXQsIHVzYWdlX2xpbWl0LCBzdGF0dXMsIHVzZXNfY29uc3VtZWQgRlJPTSBlZ3Jlc3NfcGVybWl0cyBXSEVSRSBwZXJtaXRfaWQgPSA/MSIsCiAgICAgICAgcGFyYW1zIVtwZXJtaXRfaWRdLAogICAgKT87CiAgICBhcHBlbmRfc25hcHNob3QoCiAgICAgICAgdHJhbnNhY3Rpb24sCiAgICAgICAgUHJvdGVjdGVkTXV0YXRpb25LaW5kOjpFZ3Jlc3NQZXJtaXQsCiAgICAgICAgMSwKICAgICAgICAmdmFsdWVzLAogICAgKQp9Cgo=').decode()
+          replace_once(writer, '#[cfg(test)]\npub(crate) fn append_sandbox_profile_snapshot(', writer_fn + '#[cfg(test)]\npub(crate) fn append_sandbox_profile_snapshot(')
+
+          egress = Path('crates/golam-ledger/src/egress_permit.rs')
+          replace_once(egress, '    reason_code: String,\n    intent_digest:', '    intent_digest:')
+          replace_once(egress, '        reason_code: reason_code.to_owned(),\n        intent_digest,', '        intent_digest,')
+          replace_once(egress, '            None,\n        ),\n    )\n}\n\nfn verify_lease_chain(', '            Some(observed_at),\n        ),\n    )\n}\n\nfn verify_lease_chain(')
+          replace_once(egress, '            } else if permit_expires_at.is_none() && depth == 0 {', '            } else if permit_expires_at.is_none() {')
+          replace_once(egress, '        if row.8 >= *expires_at {', '        if row.8.as_str() >= expires_at {')
+          replace_once(
+              egress,
+              '    require_latest_global_seq(transaction, global_seq, EgressPermitError::StaleAuthorityDecision)?;',
+              '    if latest_global_seq(transaction)? != global_seq {\n        return Err(EgressPermitError::StaleAuthorityDecision);\n    }',
+          )
+          replace_once(
+              egress,
+              '    require_latest_global_seq(transaction, global_seq, EgressPermitError::UseDecisionStale)?;',
+              '    if latest_global_seq(transaction)? != global_seq {\n        return Err(EgressPermitError::UseDecisionStale);\n    }',
+          )
+          old = base64.b64decode('Zm4gcmVxdWlyZV9sYXRlc3RfZ2xvYmFsX3NlcTxFPigKICAgIHRyYW5zYWN0aW9uOiAmVHJhbnNhY3Rpb248J18+LAogICAgZXhwZWN0ZWQ6IHU2NCwKICAgIGVycm9yOiBFLAopIC0+IFJlc3VsdDwoKSwgRT4Kd2hlcmUKICAgIEU6IFNpemVkLAp7CiAgICBsZXQgbGF0ZXN0OiBpNjQgPSB0cmFuc2FjdGlvbgogICAgICAgIC5xdWVyeV9yb3coCiAgICAgICAgICAgICJTRUxFQ1QgQ09BTEVTQ0UoTUFYKGdsb2JhbF9zZXEpLCAwKSBGUk9NIChTRUxFQ1QgZ2xvYmFsX3NlcSBGUk9NIHNlc3Npb25fZXZlbnRzIFVOSU9OIEFMTCBTRUxFQ1QgZ2xvYmFsX3NlcSBGUk9NIGVmZmVjdF90cmFuc2l0aW9ucyBVTklPTiBBTEwgU0VMRUNUIGdsb2JhbF9zZXEgRlJPTSBhdXRob3JpemF0aW9uX2RlY2lzaW9ucykiLAogICAgICAgICAgICBbXSwKICAgICAgICAgICAgfHJvd3wgcm93LmdldCgwKSwKICAgICAgICApCiAgICAgICAgLm1hcF9lcnIofF98IGVycm9yKT87CiAgICBpZiB1NjQ6OnRyeV9mcm9tKGxhdGVzdCkub2soKSA9PSBTb21lKGV4cGVjdGVkKSB7CiAgICAgICAgT2soKCkpCiAgICB9IGVsc2UgewogICAgICAgIEVycihlcnJvcikKICAgIH0KfQo=').decode()
+          new = base64.b64decode('Zm4gbGF0ZXN0X2dsb2JhbF9zZXEodHJhbnNhY3Rpb246ICZUcmFuc2FjdGlvbjwnXz4pIC0+IFJlc3VsdDx1NjQsIEVncmVzc1Blcm1pdEVycm9yPiB7CiAgICBsZXQgbGF0ZXN0OiBpNjQgPSB0cmFuc2FjdGlvbi5xdWVyeV9yb3coCiAgICAgICAgIlNFTEVDVCBDT0FMRVNDRShNQVgoZ2xvYmFsX3NlcSksIDApIEZST00gKFNFTEVDVCBnbG9iYWxfc2VxIEZST00gc2Vzc2lvbl9ldmVudHMgVU5JT04gQUxMIFNFTEVDVCBnbG9iYWxfc2VxIEZST00gZWZmZWN0X3RyYW5zaXRpb25zIFVOSU9OIEFMTCBTRUxFQ1QgZ2xvYmFsX3NlcSBGUk9NIGF1dGhvcml6YXRpb25fZGVjaXNpb25zKSIsCiAgICAgICAgW10sCiAgICAgICAgfHJvd3wgcm93LmdldCgwKSwKICAgICk/OwogICAgbm9ubmVnYXRpdmVfdTY0KGxhdGVzdCwgImxhdGVzdCBnbG9iYWwgc2VxdWVuY2UgaXMgaW52YWxpZCIpCn0K').decode()
+          replace_once(egress, old, new)
+      - name: Format and run focused T003-061 qualification
+        run: |
+          cargo +1.98.0 fmt --all
+          cargo +1.98.0 test -p golam-ledger egress_permit::tests:: -- --nocapture
+          cargo +1.98.0 test -p golam-ledger storage::tests::migration_creates_required_authority_tables -- --nocapture
+          cargo +1.98.0 clippy -p golam-ledger --all-targets -- -D warnings
+      - name: Commit clean implementation delta
+        run: |
+          git rm .github/workflows/t003-061-recover.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/golam-ledger/src/lib.rs
+          git add crates/golam-ledger/src/storage.rs
+          git add crates/golam-ledger/src/authority_security_v2.rs
+          git add crates/golam-ledger/src/authority_security_write.rs
+          git add crates/golam-ledger/src/egress_permit.rs
+          git commit -m 'feat: implement protected egress permit lifecycle'
+          git push origin HEAD:impl/003-identity-policy-secrets-sandbox
