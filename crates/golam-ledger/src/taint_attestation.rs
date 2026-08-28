@@ -1360,15 +1360,9 @@ mod tests {
         assert!(matches!(
             prepare_secret_elimination_sanitizer(
                 [[32; 32]],
-                TaintSet::from_labels([
-                    TaintLabel::SecretDerived,
-                    TaintLabel::ModelGenerated,
-                ]),
+                TaintSet::from_labels([TaintLabel::SecretDerived, TaintLabel::ModelGenerated,]),
                 [33; 32],
-                TaintSet::from_labels([
-                    TaintLabel::SecretDerived,
-                    TaintLabel::ModelGenerated,
-                ]),
+                TaintSet::from_labels([TaintLabel::SecretDerived, TaintLabel::ModelGenerated,]),
                 "owner:owner",
                 evidence,
             ),
@@ -1384,10 +1378,7 @@ mod tests {
                     TaintLabel::WebUntrusted,
                 ]),
                 [35; 32],
-                TaintSet::from_labels([
-                    TaintLabel::SecretDerived,
-                    TaintLabel::ModelGenerated,
-                ]),
+                TaintSet::from_labels([TaintLabel::SecretDerived, TaintLabel::ModelGenerated,]),
                 "owner:owner",
                 evidence,
             ),
@@ -1408,10 +1399,8 @@ mod tests {
             TaintSet::from_labels([TaintLabel::SecretDerived]),
         );
 
-        let source_labels = TaintSet::from_labels([
-            TaintLabel::SecretDerived,
-            TaintLabel::ModelGenerated,
-        ]);
+        let source_labels =
+            TaintSet::from_labels([TaintLabel::SecretDerived, TaintLabel::ModelGenerated]);
         let result_labels = TaintSet::from_labels([TaintLabel::ModelGenerated]);
         assert_eq!(
             validate_canonical_long_term_memory_admission(source_labels),
@@ -1481,10 +1470,8 @@ mod tests {
             binding,
             TaintSet::from_labels([TaintLabel::SecretDerived]),
         );
-        let source_labels = TaintSet::from_labels([
-            TaintLabel::SecretDerived,
-            TaintLabel::WebUntrusted,
-        ]);
+        let source_labels =
+            TaintSet::from_labels([TaintLabel::SecretDerived, TaintLabel::WebUntrusted]);
         let wrong_kind = prepare_secret_elimination_sanitizer(
             [[50; 32]],
             source_labels,
