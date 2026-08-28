@@ -42,7 +42,7 @@ Legend:
 - [x] **T003-031** Bind approvals to action/resource/effect/pattern, risk, taint/context digest, parent decision, expiry and limits. Exact-head regression evidence: CI #318 (`33104078403`) SUCCESS at `a55322e99240ab569b6e8c0d3287f4f7ac3a5a9c` on Windows/macOS/Ubuntu.
 - [x] **T003-032** Revalidate approval freshness/scope immediately before protected execution. Exact-head regression evidence: CI #326 (`33105526713`) SUCCESS at `bc2b0580afc20125331b8c4f75d1ed796b8bff1d` on Windows/macOS/Ubuntu.
 - [x] **T003-033** Implement durable atomic ONCE reservation/consumption with concurrency and crash/retry safety. Exact-head regression evidence: CI #330 (`33106765798`) SUCCESS at `2cd685098e92d34485636d11a1e3b9df59a2205b` on Windows/macOS/Ubuntu.
-- [ ] **T003-034** Enforce bounded RUN_PREAUTHORIZATION for unattended irreversible effects and deny generic always-allow behavior.
+- [x] **T003-034** Enforce bounded RUN_PREAUTHORIZATION for unattended irreversible effects and deny generic always-allow behavior. Exact-head qualification: CI #349 (`33149069868`) SUCCESS at `0bcaffb231070082be411e2e37959004ce359ad6` on Windows/macOS/Ubuntu. Evidence: `implementation/run-preauthorization-qualification.md`.
 - [ ] **T003-035** Add approval expiry/revocation/replay/double-use/scope-overreach/taint-mismatch tests.
 
 ## Phase E — Taint and verifier state
@@ -122,11 +122,14 @@ T003_030=PASS
 T003_031=PASS
 T003_032=PASS
 T003_033=PASS
+T003_034=PASS
+T003_034_QUALIFIED_HEAD=0bcaffb231070082be411e2e37959004ce359ad6
+T003_034_CI_RUN=33149069868
 CEDAR_POLICY_ADMITTED_EXACT=4.12.0
 SECRET_CRYPTO_AND_OS_KEY_PROTECTORS_QUALIFIED=YES
 WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED
 Golam-Research=REFERENCE_ONLY
 DONOR_CODE_ADMITTED=NO
 REAL_SECRETS_USED=NO
-NEXT_TASK=T003-034
+NEXT_TASK=T003-035
 ```
