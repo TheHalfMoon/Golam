@@ -3,7 +3,7 @@
 **Status**: IMPLEMENTATION_ACTIVE — PHASE_F_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current task**: `T003-052`
+**Current task**: `T003-053`
 
 ## Authority
 
@@ -82,23 +82,30 @@ Evidence: `implementation/secret-vault-storage-qualification.md`.
 
 The qualified boundary provides AES-256-GCM encrypted-at-rest secret-value storage, fresh 96-bit nonces with hard nonce-reuse failure, associated-data binding across secret/version/classification/security-metadata/vault-format identity, and fail-closed OS-backed key protection on the exact dependency/platform set admitted by T003-004. No plaintext master-key fallback or generic public plaintext secret-read API is introduced.
 
-### T003-052 — ACTIVE
+### T003-052 — COMPLETE
 
-Implement protected secret create/version/rotate/revoke transitions with atomic security evidence.
+Qualified at exact implementation head `b70689c1e4836f1540541f45d66cdd5a3f514dec` by CI #434 / run `33163396509`, SUCCESS on Windows/macOS/Ubuntu.
+
+Evidence: `implementation/secret-mutation-qualification.md`.
+
+The qualified boundary implements atomic Golam-owned create, immutable rotation/versioning, and monotonic revocation transitions with exact durable authorization/effect/ONCE-approval binding, encrypted-before-persist storage, authenticated security snapshots, stale-version/replay rejection, and rollback on vault/key-protection failure.
+
+### T003-053 — ACTIVE
+
+Implement `BrokerSecretUse` authorization around opaque handle, purpose, destination/process, lease/policy/approval and locality state.
 
 Required boundaries:
 
-- use the T003-050 opaque secret metadata/handle interfaces and T003-051 vault/key-protection core rather than introducing parallel authority paths;
-- every create/version/rotate/revoke transition is typed elevated work under current durable Golam authority and exact effect/approval binding where required;
-- mutation and authenticated `authority-security` evidence commit atomically in one protected SQLite transaction;
-- durable secret values are encrypted before insertion into `secret_versions`; plaintext is never written to canonical/audit/event/error payloads;
-- secret versions are immutable; rotation creates a new version and retires the prior version rather than overwriting it;
-- revocation is monotonic and blocks future protected use without deleting or rewriting historical security evidence;
-- stale authority, stale version/current-version binding, replay, duplicate transition, integrity failure, vault failure, key-protection failure, and transaction failure all fail closed;
-- use deterministic canary values only in qualification; no real secrets;
-- do not implement T003-053 broker authorization semantics early.
+- resolve only an authenticated protected `SecretHandle`; never accept caller-constructed secret identity as authority;
+- require an active non-revoked secret/version and validate handle purpose/expiry/version constraint;
+- bind broker authorization to the authenticated principal, exact purpose, destination/process, active lease, current policy decision and required approval state;
+- strict-local and other hard denials remain dominant; broker binding cannot mint or widen egress/network authority;
+- record metadata-only `SecretUseRecord` evidence with handle/version/principal/purpose/destination/mode/approval/decision/global sequence and no plaintext;
+- keep plaintext decryption/application inside the trusted broker boundary only; do not expose a generic plaintext-return API;
+- do not implement the T003-054 unbrokerable argv/environment/process injection fallback early;
+- fail closed on stale handle, revoked/retired secret state, stale lease/policy/approval/decision, locality mismatch, integrity ambiguity or storage failure.
 
-After exact-head T003-052 qualification, continue directly to T003-053.
+After exact-head T003-053 qualification, continue directly to T003-054.
 
 ### Remaining Phase F ordering
 
@@ -132,8 +139,11 @@ T003_050_CI_RUN=33160722873
 T003_051=PASS
 T003_051_QUALIFIED_HEAD=92acf59670024004e5fca1658021a99e3e7df913
 T003_051_CI_RUN=33161883864
-T003_052=ACTIVE
-NEXT_TASK=T003-052
+T003_052=PASS
+T003_052_QUALIFIED_HEAD=b70689c1e4836f1540541f45d66cdd5a3f514dec
+T003_052_CI_RUN=33163396509
+T003_053=ACTIVE
+NEXT_TASK=T003-053
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO

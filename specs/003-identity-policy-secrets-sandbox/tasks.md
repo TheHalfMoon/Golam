@@ -59,8 +59,8 @@ Legend:
 
 - [x] **T003-050** Implement protected opaque SecretHandle/SecretRecord/SecretVersion interfaces without generic plaintext reads. Exact-head qualification: CI #416 (`33160722873`) SUCCESS at `9dc77f9ff565f0540b21feb4706e25cc36087be1` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-interface-qualification.md`.
 - [x] **T003-051** Implement qualified encrypted-at-rest vault storage and key-protection abstraction with fail-closed corruption/unavailability behavior. Exact-head qualification: CI #424 (`33161883864`) SUCCESS at `92acf59670024004e5fca1658021a99e3e7df913` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-vault-storage-qualification.md`.
-- [ ] **T003-052** ACTIVE — Implement secret create/version/rotate/revoke protected transitions with atomic security evidence.
-- [ ] **T003-053** Implement `BrokerSecretUse` authorization around handle, purpose, destination/process, lease/policy/approval and locality state.
+- [x] **T003-052** Implement secret create/version/rotate/revoke protected transitions with atomic security evidence. Exact-head qualification: CI #434 (`33163396509`) SUCCESS at `b70689c1e4836f1540541f45d66cdd5a3f514dec` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-mutation-qualification.md`.
+- [ ] **T003-053** ACTIVE — Implement `BrokerSecretUse` authorization around handle, purpose, destination/process, lease/policy/approval and locality state.
 - [ ] **T003-054** Implement bounded unbrokerable fallback: no argv, cleared environment, exact injection scope, no ambient child inheritance, minimized lifetime and redaction.
 - [ ] **T003-055** Implement an explicit user-designated secret-entry boundary that treats the entire submitted value as secret independent of format detection; before any model-visible canonical append persist only an opaque handle, tombstone/redaction marker and non-secret metadata. Keep recognized-format detection only as defense in depth for ordinary free text.
 - [ ] **T003-056** Add canary tests covering both recognized and deliberately unknown-format deterministic values through the explicit secret-entry path, proving no plaintext in durable vault bytes, event/audit/log/error/prompt paths or unauthorized subprocess output; separately test free-text detectors as defense in depth.
@@ -158,12 +158,15 @@ T003_050_CI_RUN=33160722873
 T003_051=PASS
 T003_051_QUALIFIED_HEAD=92acf59670024004e5fca1658021a99e3e7df913
 T003_051_CI_RUN=33161883864
-T003_052=ACTIVE
+T003_052=PASS
+T003_052_QUALIFIED_HEAD=b70689c1e4836f1540541f45d66cdd5a3f514dec
+T003_052_CI_RUN=33163396509
+T003_053=ACTIVE
 CEDAR_POLICY_ADMITTED_EXACT=4.12.0
 SECRET_CRYPTO_AND_OS_KEY_PROTECTORS_QUALIFIED=YES
 WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED
 Golam-Research=REFERENCE_ONLY
 DONOR_CODE_ADMITTED=NO
 REAL_SECRETS_USED=NO
-NEXT_TASK=T003-052
+NEXT_TASK=T003-053
 ```
