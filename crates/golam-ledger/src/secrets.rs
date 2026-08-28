@@ -609,6 +609,7 @@ mod tests {
             ))
         ));
         drop(catalog);
+        drop(connection);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 }
