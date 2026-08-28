@@ -208,7 +208,7 @@ const SOURCE_SPECS: &[SourceSpec] = &[
     SourceSpec {
         kind: ProtectedSourceKind::EgressPermit,
         key_columns: 1,
-        query: "SELECT permit_id, principal_or_process, action, purpose, destination_scope, protocol_port_scope, taint_digest, secret_handle_id, parent_lease_id, issued_at, expires_at, usage_limit, status FROM egress_permits ORDER BY permit_id",
+        query: "SELECT permit_id, principal_or_process, action, purpose, destination_scope, protocol_port_scope, taint_digest, secret_handle_id, parent_lease_id, issued_at, expires_at, usage_limit, status, uses_consumed FROM egress_permits ORDER BY permit_id",
     },
     SourceSpec {
         kind: ProtectedSourceKind::SandboxProfile,

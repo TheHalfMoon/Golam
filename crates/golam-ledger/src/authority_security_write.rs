@@ -26,6 +26,7 @@ enum ProtectedMutationKind {
     SecretRecord,
     SecretVersion,
     SecretUseRecord,
+    EgressPermit,
     #[cfg(test)]
     SandboxProfile,
     #[cfg(test)]
@@ -48,6 +49,7 @@ impl ProtectedMutationKind {
             Self::SecretRecord => "secret_record",
             Self::SecretVersion => "secret_version",
             Self::SecretUseRecord => "secret_use_record",
+            Self::EgressPermit => "egress_permit",
             #[cfg(test)]
             Self::SandboxProfile => "sandbox_profile",
             #[cfg(test)]
@@ -281,6 +283,18 @@ pub(crate) fn append_secret_use_record_snapshot(
         1,
         &values,
     )
+}
+
+pub(crate) fn append_egress_permit_snapshot(
+    transaction: &Transaction<'_>,
+    permit_id: &[u8],
+) -> Result<(), AuthoritySecurityWriteError> {
+    let values = query_values(
+        transaction,
+        "SELECT permit_id, principal_or_process, action, purpose, destination_scope, protocol_port_scope, taint_digest, secret_handle_id, parent_lease_id, issued_at, expires_at, usage_limit, status, uses_consumed FROM egress_permits WHERE permit_id = ?1",
+        params![permit_id],
+    )?;
+    append_snapshot(transaction, ProtectedMutationKind::EgressPermit, 1, &values)
 }
 
 #[cfg(test)]

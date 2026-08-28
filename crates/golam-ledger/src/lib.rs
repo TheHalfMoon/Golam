@@ -23,6 +23,7 @@ pub mod dispatch;
 pub mod effect_completion;
 pub mod effect_read;
 pub mod effects;
+pub mod egress_permit;
 pub mod fork;
 pub mod goal;
 pub mod integrity;

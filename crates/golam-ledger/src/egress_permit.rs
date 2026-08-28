@@ -88,7 +88,6 @@ impl PreparedEgressPermitIssue {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PreparedEgressPermitRevocation {
     permit_id: [u8; 16],
-    reason_code: String,
     intent_digest: [u8; 32],
     resource: String,
 }
@@ -218,16 +217,26 @@ impl fmt::Display for EgressPermitError {
                 f.write_str("egress permit mutation approval was already consumed")
             }
             Self::ParentLeaseNotFound => f.write_str("egress permit parent lease does not exist"),
-            Self::ParentLeaseMismatch => f.write_str("egress permit parent lease binding is mismatched"),
+            Self::ParentLeaseMismatch => {
+                f.write_str("egress permit parent lease binding is mismatched")
+            }
             Self::ParentLeaseInactive => f.write_str("egress permit parent lease is inactive"),
-            Self::ParentLeaseRevoked => f.write_str("egress permit parent lease or ancestor is revoked"),
-            Self::ParentLeaseNotYetValid => f.write_str("egress permit parent lease is not yet valid"),
+            Self::ParentLeaseRevoked => {
+                f.write_str("egress permit parent lease or ancestor is revoked")
+            }
+            Self::ParentLeaseNotYetValid => {
+                f.write_str("egress permit parent lease is not yet valid")
+            }
             Self::ParentLeaseExpired => f.write_str("egress permit parent lease is expired"),
-            Self::ParentLeaseScopeMismatch => f.write_str("egress permit exceeds parent lease scope"),
+            Self::ParentLeaseScopeMismatch => {
+                f.write_str("egress permit exceeds parent lease scope")
+            }
             Self::ParentLeaseTemporalWidening => {
                 f.write_str("egress permit lifetime exceeds parent lease lifetime")
             }
-            Self::ParentLeaseCycle => f.write_str("egress permit parent lease chain contains a cycle"),
+            Self::ParentLeaseCycle => {
+                f.write_str("egress permit parent lease chain contains a cycle")
+            }
             Self::ParentLeaseTooDeep => f.write_str("egress permit parent lease chain is too deep"),
             Self::DuplicatePermit => f.write_str("egress permit already exists"),
             Self::PermitNotFound => f.write_str("egress permit does not exist"),
@@ -236,13 +245,19 @@ impl fmt::Display for EgressPermitError {
             Self::PermitExpired => f.write_str("egress permit is expired"),
             Self::PermitScopeMismatch => f.write_str("egress permit does not cover exact use"),
             Self::PermitUsageExhausted => f.write_str("egress permit usage limit is exhausted"),
-            Self::UseDecisionNotFound => f.write_str("egress use authorization decision is missing"),
-            Self::UseDecisionMismatch => f.write_str("egress use authorization decision is mismatched"),
+            Self::UseDecisionNotFound => {
+                f.write_str("egress use authorization decision is missing")
+            }
+            Self::UseDecisionMismatch => {
+                f.write_str("egress use authorization decision is mismatched")
+            }
             Self::UseDecisionStale => f.write_str("egress use authorization decision is stale"),
             Self::ActivePolicyMissing => f.write_str("egress use active policy is missing"),
             Self::PolicyMismatch => f.write_str("egress use decision policy is not active"),
             Self::PolicyBundleInvalid => f.write_str("egress use active policy bundle is invalid"),
-            Self::ConcurrentUseConflict => f.write_str("egress permit use raced with another mutation"),
+            Self::ConcurrentUseConflict => {
+                f.write_str("egress permit use raced with another mutation")
+            }
             Self::InvalidStoredRecord(reason) => {
                 write!(f, "egress permit stored record is invalid: {reason}")
             }
@@ -279,6 +294,8 @@ impl From<CoreError> for EgressPermitError {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+// Keep each authority binding explicit at this security-sensitive preparation boundary.
 pub fn prepare_egress_permit_issue(
     principal_or_process: &str,
     action: &str,
@@ -294,7 +311,11 @@ pub fn prepare_egress_permit_issue(
 ) -> Result<PreparedEgressPermitIssue, EgressPermitError> {
     validate_principal(principal_or_process)?;
     validate_action(action)?;
-    validate_bounded_text(purpose, MAX_PURPOSE_BYTES, EgressPermitError::InvalidPurpose)?;
+    validate_bounded_text(
+        purpose,
+        MAX_PURPOSE_BYTES,
+        EgressPermitError::InvalidPurpose,
+    )?;
     validate_bounded_text(
         destination_scope,
         MAX_DESTINATION_BYTES,
@@ -364,7 +385,6 @@ pub fn prepare_egress_permit_revocation(
     let intent_digest = crate::payload_hash(&encoder.finish());
     Ok(PreparedEgressPermitRevocation {
         permit_id,
-        reason_code: reason_code.to_owned(),
         intent_digest,
         resource,
     })
@@ -536,6 +556,8 @@ impl EgressPermitStore {
         Ok(record)
     }
 
+    #[allow(clippy::too_many_arguments)]
+    // Keep the exact permit-use bindings visible at the protected execution boundary.
     pub fn authorize_use(
         &mut self,
         permit_id: [u8; 16],
@@ -549,7 +571,11 @@ impl EgressPermitStore {
     ) -> Result<EgressPermitUseReceipt, EgressPermitError> {
         validate_principal(principal_or_process)?;
         validate_action(action)?;
-        validate_bounded_text(purpose, MAX_PURPOSE_BYTES, EgressPermitError::InvalidPurpose)?;
+        validate_bounded_text(
+            purpose,
+            MAX_PURPOSE_BYTES,
+            EgressPermitError::InvalidPurpose,
+        )?;
         validate_bounded_text(
             destination,
             MAX_DESTINATION_BYTES,
@@ -700,7 +726,9 @@ fn verify_current_mutation_authority(
         return Err(EgressPermitError::AuthorityDecisionMismatch);
     }
     let global_seq = nonnegative_u64(row.4, "mutation decision sequence is invalid")?;
-    require_latest_global_seq(transaction, global_seq, EgressPermitError::StaleAuthorityDecision)?;
+    if latest_global_seq(transaction)? != global_seq {
+        return Err(EgressPermitError::StaleAuthorityDecision);
+    }
     Ok(AuthorityEvidence { global_seq })
 }
 
@@ -851,10 +879,12 @@ fn verify_lease_chain_for_use(
         action,
         resource,
         observed_at,
-        None,
+        Some(observed_at),
     )
 }
 
+#[allow(clippy::too_many_arguments)]
+// Chain validation intentionally receives each authority dimension separately.
 fn verify_lease_chain(
     transaction: &Transaction<'_>,
     lease_id: [u8; 16],
@@ -928,7 +958,7 @@ fn verify_lease_chain(
                 if permit_end > expires_at {
                     return Err(EgressPermitError::ParentLeaseTemporalWidening);
                 }
-            } else if permit_expires_at.is_none() && depth == 0 {
+            } else if permit_expires_at.is_none() {
                 return Err(EgressPermitError::ParentLeaseTemporalWidening);
             }
         }
@@ -987,8 +1017,13 @@ fn load_permit(
         )
         .optional()?
         .ok_or(EgressPermitError::PermitNotFound)?;
-    let destination_scope = stored_text(row.3, MAX_DESTINATION_BYTES, "destination scope is invalid")?;
-    let protocol_port_scope = stored_text(row.4, MAX_PROTOCOL_PORT_BYTES, "protocol/port scope is invalid")?;
+    let destination_scope =
+        stored_text(row.3, MAX_DESTINATION_BYTES, "destination scope is invalid")?;
+    let protocol_port_scope = stored_text(
+        row.4,
+        MAX_PROTOCOL_PORT_BYTES,
+        "protocol/port scope is invalid",
+    )?;
     let taint_digest = hash32(row.5, "taint digest is invalid")?;
     let secret_handle_id = row
         .6
@@ -998,8 +1033,10 @@ fn load_permit(
     require_stored_time(&row.8, "permit issued_at is malformed")?;
     if let Some(expires_at) = row.9.as_deref() {
         require_stored_time(expires_at, "permit expires_at is malformed")?;
-        if row.8 >= *expires_at {
-            return Err(EgressPermitError::InvalidStoredRecord("permit lifetime is invalid"));
+        if row.8.as_str() >= expires_at {
+            return Err(EgressPermitError::InvalidStoredRecord(
+                "permit lifetime is invalid",
+            ));
         }
     }
     let usage_limit = row
@@ -1089,7 +1126,9 @@ fn load_current_use_decision(
         "decision policy bundle hash is invalid",
     )?;
     let global_seq = nonnegative_u64(row.9, "use decision sequence is invalid")?;
-    require_latest_global_seq(transaction, global_seq, EgressPermitError::UseDecisionStale)?;
+    if latest_global_seq(transaction)? != global_seq {
+        return Err(EgressPermitError::UseDecisionStale);
+    }
     Ok(UseDecisionEvidence {
         lease_generation,
         policy_bundle_id,
@@ -1128,26 +1167,13 @@ fn verify_active_policy(
     Ok(())
 }
 
-fn require_latest_global_seq<E>(
-    transaction: &Transaction<'_>,
-    expected: u64,
-    error: E,
-) -> Result<(), E>
-where
-    E: Sized,
-{
-    let latest: i64 = transaction
-        .query_row(
-            "SELECT COALESCE(MAX(global_seq), 0) FROM (SELECT global_seq FROM session_events UNION ALL SELECT global_seq FROM effect_transitions UNION ALL SELECT global_seq FROM authorization_decisions)",
-            [],
-            |row| row.get(0),
-        )
-        .map_err(|_| error)?;
-    if u64::try_from(latest).ok() == Some(expected) {
-        Ok(())
-    } else {
-        Err(error)
-    }
+fn latest_global_seq(transaction: &Transaction<'_>) -> Result<u64, EgressPermitError> {
+    let latest: i64 = transaction.query_row(
+        "SELECT COALESCE(MAX(global_seq), 0) FROM (SELECT global_seq FROM session_events UNION ALL SELECT global_seq FROM effect_transitions UNION ALL SELECT global_seq FROM authorization_decisions)",
+        [],
+        |row| row.get(0),
+    )?;
+    nonnegative_u64(latest, "latest global sequence is invalid")
 }
 
 fn scope_contains(bytes: &[u8], expected: &str) -> Result<bool, EgressPermitError> {
@@ -1216,9 +1242,9 @@ fn validate_protocol_port(value: &str) -> Result<(), EgressPermitError> {
         return Err(EgressPermitError::InvalidProtocolPort);
     };
     if protocol.is_empty()
-        || protocol.bytes().any(|byte| {
-            !(byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
-        })
+        || protocol
+            .bytes()
+            .any(|byte| !(byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-'))
     {
         return Err(EgressPermitError::InvalidProtocolPort);
     }
@@ -1378,8 +1404,8 @@ fn stored_text(
     if value.is_empty() || value.len() > max_bytes {
         return Err(EgressPermitError::InvalidStoredRecord(reason));
     }
-    let value = String::from_utf8(value)
-        .map_err(|_| EgressPermitError::InvalidStoredRecord(reason))?;
+    let value =
+        String::from_utf8(value).map_err(|_| EgressPermitError::InvalidStoredRecord(reason))?;
     if value.trim() != value || value.chars().any(char::is_control) {
         return Err(EgressPermitError::InvalidStoredRecord(reason));
     }

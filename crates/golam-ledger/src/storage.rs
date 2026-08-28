@@ -9,7 +9,7 @@ use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, 
 
 use crate::{EventKind, EventRecord, audit_integrity_hash, event_integrity_hash, payload_hash};
 
-pub const AUTHORITY_SCHEMA_VERSION: i64 = 3;
+pub const AUTHORITY_SCHEMA_VERSION: i64 = 4;
 const SECURITY_AUDIT_CHAIN: &str = "security";
 
 pub const REQUIRED_TABLES: &[&str] = &[
@@ -468,6 +468,10 @@ fn migrate(connection: &Connection) -> Result<(), StorageError> {
         migrate_v3(connection)?;
         version = 3;
     }
+    if version == 3 {
+        migrate_v4(connection)?;
+        version = 4;
+    }
     debug_assert_eq!(version, AUTHORITY_SCHEMA_VERSION);
     Ok(())
 }
@@ -830,6 +834,16 @@ fn migrate_v3(connection: &Connection) -> Result<(), StorageError> {
          ALTER TABLE authorization_decisions \
            ADD COLUMN authority_evidence_version INTEGER NOT NULL DEFAULT 1;\n\
          PRAGMA user_version = 3;\n\
+         COMMIT;",
+    )?;
+    Ok(())
+}
+
+fn migrate_v4(connection: &Connection) -> Result<(), StorageError> {
+    connection.execute_batch(
+        "BEGIN IMMEDIATE;\n\
+         ALTER TABLE egress_permits ADD COLUMN uses_consumed INTEGER NOT NULL DEFAULT 0;\n\
+         PRAGMA user_version = 4;\n\
          COMMIT;",
     )?;
     Ok(())
