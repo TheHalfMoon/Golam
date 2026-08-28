@@ -33,6 +33,7 @@ pub mod recovery;
 pub mod run_preauthorization;
 #[allow(dead_code)]
 mod secret_vault;
+// T003-052 keeps plaintext-bearing mutation preparation crate-internal; kernel/broker integration is later.
 #[allow(dead_code)]
 pub(crate) mod secret_mutation;
 pub mod secrets;
