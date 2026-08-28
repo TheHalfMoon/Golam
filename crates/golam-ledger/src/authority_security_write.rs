@@ -21,6 +21,7 @@ enum ProtectedMutationKind {
     AuthorizationDecisionV2,
     Approval,
     ApprovalConsumption,
+    VerifierRule,
 }
 
 impl ProtectedMutationKind {
@@ -33,6 +34,7 @@ impl ProtectedMutationKind {
             Self::AuthorizationDecisionV2 => "authorization_decision_v2",
             Self::Approval => "approval",
             Self::ApprovalConsumption => "approval_consumption",
+            Self::VerifierRule => "verifier_rule",
         }
     }
 }
@@ -185,6 +187,18 @@ pub(crate) fn append_approval_consumption_snapshot(
         1,
         &values,
     )
+}
+
+pub(crate) fn append_verifier_rule_snapshot(
+    transaction: &Transaction<'_>,
+    rule_id: &[u8],
+) -> Result<(), AuthoritySecurityWriteError> {
+    let values = query_values(
+        transaction,
+        "SELECT rule_id, kind, version, authority_source_binding, allowed_downgrades, registered_by, status, created_global_seq FROM verifier_rules WHERE rule_id = ?1",
+        params![rule_id],
+    )?;
+    append_snapshot(transaction, ProtectedMutationKind::VerifierRule, 1, &values)
 }
 
 fn query_values<P: Params>(
