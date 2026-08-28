@@ -31,6 +31,8 @@ pub mod policy;
 pub mod protocol_audit;
 pub mod recovery;
 pub mod run_preauthorization;
+#[allow(dead_code)]
+mod secret_vault;
 pub mod secrets;
 mod security_audit;
 pub mod session_read;
