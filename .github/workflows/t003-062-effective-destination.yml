@@ -66,8 +66,14 @@ jobs:
           )
           replace_once('    fn install_mutation_work(', '    pub(crate) fn install_mutation_work(')
           replace_once('    fn prepared(limit: Option<u64>) -> PreparedEgressPermitIssue {', '    pub(crate) fn prepared(limit: Option<u64>) -> PreparedEgressPermitIssue {')
-
           path.write_text(text)
+
+          effective_path = Path('crates/golam-ledger/src/egress_effective_use.rs')
+          effective_text = effective_path.read_text()
+          count = effective_text.count('.connection_mut()')
+          if count != 2:
+              raise SystemExit(f'expected 2 connection_mut calls, found {count}')
+          effective_path.write_text(effective_text.replace('.connection_mut()', '.connection'))
       - name: Format and run focused T003-062 qualification
         run: |
           cargo +1.98.0 fmt --all
