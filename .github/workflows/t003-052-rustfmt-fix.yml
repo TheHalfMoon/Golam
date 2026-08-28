@@ -1,0 +1,29 @@
+name: t003-052-rustfmt-fix
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'impl/003-identity-policy-secrets-sandbox'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - name: Install pinned Rust formatter
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt
+      - name: Persist rustfmt-only T003-052 repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +1.98.0 fmt --all
+          git rm .github/workflows/t003-052-rustfmt-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/golam-ledger/src/secret_mutation.rs crates/golam-ledger/src/lib.rs crates/golam-ledger/src/authority_security_write.rs
+          git commit -m "style: apply rustfmt to T003-052 secret mutations"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
