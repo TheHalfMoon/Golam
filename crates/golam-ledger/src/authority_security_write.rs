@@ -25,6 +25,7 @@ enum ProtectedMutationKind {
     VerifierRule,
     SecretRecord,
     SecretVersion,
+    SecretUseRecord,
     #[cfg(test)]
     SecretHandle,
 }
@@ -43,6 +44,7 @@ impl ProtectedMutationKind {
             Self::VerifierRule => "verifier_rule",
             Self::SecretRecord => "secret_record",
             Self::SecretVersion => "secret_version",
+            Self::SecretUseRecord => "secret_use_record",
             #[cfg(test)]
             Self::SecretHandle => "secret_handle",
         }
@@ -254,6 +256,23 @@ pub(crate) fn append_secret_version_snapshot(
         transaction,
         ProtectedMutationKind::SecretVersion,
         2,
+        &values,
+    )
+}
+
+pub(crate) fn append_secret_use_record_snapshot(
+    transaction: &Transaction<'_>,
+    use_id: &[u8],
+) -> Result<(), AuthoritySecurityWriteError> {
+    let values = query_values(
+        transaction,
+        "SELECT use_id, handle_id, principal, purpose, destination_or_process, mode, approval_id, decision_id, created_global_seq FROM secret_use_records WHERE use_id = ?1",
+        params![use_id],
+    )?;
+    append_snapshot(
+        transaction,
+        ProtectedMutationKind::SecretUseRecord,
+        1,
         &values,
     )
 }
