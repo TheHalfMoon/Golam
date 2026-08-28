@@ -16,15 +16,21 @@ edition = "2024"
 rust-version = "1.98"
 
 [workspace.dependencies]
+aes-gcm = { version = "=0.11.0", default-features = false, features = ["aes", "alloc", "zeroize"] }
+apple-native-keyring-store = { version = "=1.0.2", default-features = false, features = ["keychain"] }
 blake3 = { version = "=1.8.7", features = ["pure"] }
 cedar-policy = { version = "=4.12.0", default-features = false }
 ed25519-dalek = { version = "=3.0.0", default-features = false, features = ["signature", "zeroize"] }
 getrandom = { version = "=0.4.3", features = ["std"] }
 interprocess = { version = "=2.4.3", default-features = false }
+keyring-core = { version = "=1.0.0", default-features = false }
 nix = { version = "=0.31.3", default-features = false, features = ["socket", "user"] }
 rusqlite = { version = "=0.40.2", features = ["bundled"] }
 widestring = "=1.2.1"
+windows-native-keyring-store = { version = "=1.1.0", default-features = false }
 windows-permissions = "=0.2.4"
+zbus-secret-service-keyring-store = { version = "=1.0.1", default-features = false, features = ["crypto-rust"] }
+zeroize = { version = "=1.9.0", default-features = false, features = ["alloc"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

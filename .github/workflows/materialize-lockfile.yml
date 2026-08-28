@@ -1,0 +1,32 @@
+name: materialize-lockfile
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal
+      - name: Materialize Cargo.lock for bounded dependency update
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +1.98.0 generate-lockfile
+          python - <<'PY'
+          import base64
+          import gzip
+          from pathlib import Path
+
+          payload = gzip.compress(Path("Cargo.lock").read_bytes(), compresslevel=9)
+          encoded = base64.b64encode(payload).decode("ascii")
+          print("GOLAM_LOCK_GZIP_B64_BEGIN")
+          for offset in range(0, len(encoded), 120):
+              print(encoded[offset:offset + 120])
+          print("GOLAM_LOCK_GZIP_B64_END")
+          PY

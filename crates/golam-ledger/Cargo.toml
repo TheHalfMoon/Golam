@@ -5,9 +5,22 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+aes-gcm.workspace = true
 blake3.workspace = true
+getrandom.workspace = true
 golam-core = { path = "../golam-core" }
+keyring-core.workspace = true
 rusqlite.workspace = true
+zeroize.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+apple-native-keyring-store.workspace = true
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-native-keyring-store.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus-secret-service-keyring-store.workspace = true
 
 [lints]
 workspace = true
