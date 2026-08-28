@@ -23,6 +23,9 @@ enum ProtectedMutationKind {
     ApprovalConsumption,
     TaintAttestation,
     VerifierRule,
+    SecretRecord,
+    SecretVersion,
+    SecretHandle,
 }
 
 impl ProtectedMutationKind {
@@ -37,6 +40,9 @@ impl ProtectedMutationKind {
             Self::ApprovalConsumption => "approval_consumption",
             Self::TaintAttestation => "taint_attestation",
             Self::VerifierRule => "verifier_rule",
+            Self::SecretRecord => "secret_record",
+            Self::SecretVersion => "secret_version",
+            Self::SecretHandle => "secret_handle",
         }
     }
 }
@@ -218,6 +224,43 @@ pub(crate) fn append_verifier_rule_snapshot(
         params![rule_id],
     )?;
     append_snapshot(transaction, ProtectedMutationKind::VerifierRule, 1, &values)
+}
+
+pub(crate) fn append_secret_record_snapshot(
+    transaction: &Transaction<'_>,
+    secret_id: &[u8],
+) -> Result<(), AuthoritySecurityWriteError> {
+    let values = query_values(
+        transaction,
+        "SELECT secret_id, classification, owner_principal, current_version, status, created_global_seq, revoked_at FROM secret_records WHERE secret_id = ?1",
+        params![secret_id],
+    )?;
+    append_snapshot(transaction, ProtectedMutationKind::SecretRecord, 1, &values)
+}
+
+pub(crate) fn append_secret_version_snapshot(
+    transaction: &Transaction<'_>,
+    secret_id: &[u8],
+    version: i64,
+) -> Result<(), AuthoritySecurityWriteError> {
+    let values = query_values(
+        transaction,
+        "SELECT secret_id, version, ciphertext, nonce_or_algorithm_metadata, associated_data_hash, created_global_seq, rotated_from, retired_at FROM secret_versions WHERE secret_id = ?1 AND version = ?2",
+        params![secret_id, version],
+    )?;
+    append_snapshot(transaction, ProtectedMutationKind::SecretVersion, 2, &values)
+}
+
+pub(crate) fn append_secret_handle_snapshot(
+    transaction: &Transaction<'_>,
+    handle_id: &[u8],
+) -> Result<(), AuthoritySecurityWriteError> {
+    let values = query_values(
+        transaction,
+        "SELECT handle_id, secret_id, version_constraint, purpose_scope, expires_at FROM secret_handles WHERE handle_id = ?1",
+        params![handle_id],
+    )?;
+    append_snapshot(transaction, ProtectedMutationKind::SecretHandle, 1, &values)
 }
 
 fn query_values<P: Params>(
