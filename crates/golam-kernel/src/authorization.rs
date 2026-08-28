@@ -827,6 +827,49 @@ mod tests {
     }
 
     #[test]
+    fn strict_local_egress_dominates_downstream_permit_policy_evaluation() {
+        static DOWNSTREAM_CALLS: AtomicU64 = AtomicU64::new(0);
+
+        struct DownstreamPermitPolicy;
+        impl AuthorizationPolicy for DownstreamPermitPolicy {
+            fn authorize(&self, _request: &AuthorizationRequest<'_>) -> PolicyDecision {
+                DOWNSTREAM_CALLS.fetch_add(1, Ordering::SeqCst);
+                PolicyDecision::allow("downstream_egress_permit_would_allow").with_policy_evidence(
+                    [9_u8; 16],
+                    [10_u8; 32],
+                    vec!["rule:egress-permit".to_owned()],
+                )
+            }
+        }
+
+        DOWNSTREAM_CALLS.store(0, Ordering::SeqCst);
+        let (runtime, authority) = authority();
+        let mut engine = AuthorizationEngine::open(&authority, DownstreamPermitPolicy).unwrap();
+        let request = owner_request(
+            "network.egress.connect",
+            "https://example.invalid:443",
+            "local-owner",
+        );
+
+        let (outcome, grant) = engine.authorize(&request).unwrap();
+
+        assert_eq!(outcome.decision, AuthorizationDecision::Deny);
+        assert_eq!(outcome.reason_code, STRICT_LOCAL_EGRESS_DENIAL);
+        assert!(grant.is_none());
+        assert_eq!(DOWNSTREAM_CALLS.load(Ordering::SeqCst), 0);
+
+        let records = engine.records().unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].hard_guard_result, STRICT_LOCAL_EGRESS_DENIAL);
+        assert!(records[0].policy_bundle_id.is_none());
+        assert!(records[0].policy_bundle_hash.is_none());
+        assert!(records[0].matched_rule_ids.is_empty());
+
+        drop(engine);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
     fn normalized_non_hard_request_reaches_policy() {
         struct AllowRead;
         impl AuthorizationPolicy for AllowRead {
