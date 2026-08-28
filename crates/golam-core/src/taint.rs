@@ -74,8 +74,8 @@ impl TaintLabel {
 /// Canonical set of provenance labels.
 ///
 /// Internally this is a bounded bitset so duplicate labels and caller-provided
-/// ordering cannot affect the canonical representation. T003-040 deliberately
-/// defines only representation; propagation/union policy is owned by T003-041.
+/// ordering cannot affect the canonical representation. Union only adds bits;
+/// downgrade/removal is deliberately not part of this type.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 pub struct TaintSet {
     bits: u16,
@@ -96,6 +96,18 @@ impl TaintSet {
 
     pub const fn contains(self, label: TaintLabel) -> bool {
         self.bits & bit(label) != 0
+    }
+
+    pub const fn contains_all(self, required: Self) -> bool {
+        self.bits & required.bits == required.bits
+    }
+
+    /// Monotonic provenance composition. There is intentionally no inverse or
+    /// removal operation; downgrade authority belongs to later attested paths.
+    pub const fn union(self, other: Self) -> Self {
+        Self {
+            bits: self.bits | other.bits,
+        }
     }
 
     pub const fn len(self) -> u8 {
@@ -120,6 +132,47 @@ impl TaintSet {
             encoder.push_u8(label.code());
         }
         Ok(encoder.finish())
+    }
+}
+
+/// Carries provenance beside a value without changing the value's own identity
+/// or canonical bytes. This is suitable for artifact receipts and authority
+/// context values whose domain identity must remain independent of provenance.
+///
+/// `derive` is the only constructor for derived values: it unions every source
+/// set with labels introduced by the transform. The wrapper exposes no taint
+/// mutation or removal method.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Provenanced<T> {
+    value: T,
+    taint: TaintSet,
+}
+
+impl<T> Provenanced<T> {
+    /// Establishes provenance at an explicit source/trust boundary.
+    pub const fn source(value: T, taint: TaintSet) -> Self {
+        Self { value, taint }
+    }
+
+    /// Creates a derived value whose provenance is the union of all source
+    /// labels plus labels introduced by the transform itself.
+    pub fn derive(
+        value: T,
+        source_taint: impl IntoIterator<Item = TaintSet>,
+        introduced: TaintSet,
+    ) -> Self {
+        let taint = source_taint
+            .into_iter()
+            .fold(introduced, TaintSet::union);
+        Self { value, taint }
+    }
+
+    pub const fn value(&self) -> &T {
+        &self.value
+    }
+
+    pub const fn taint(&self) -> TaintSet {
+        self.taint
     }
 }
 
@@ -224,5 +277,37 @@ mod tests {
         let set = TaintSet::from_labels(TaintLabel::ALL);
         assert_eq!(set.len(), MAX_TAINT_LABELS);
         assert!(TaintLabel::ALL.into_iter().all(|label| set.contains(label)));
+    }
+
+    #[test]
+    fn union_is_monotonic_commutative_and_idempotent() {
+        let web = TaintSet::from_labels([TaintLabel::WebUntrusted]);
+        let model = TaintSet::from_labels([TaintLabel::ModelGenerated]);
+        let combined = web.union(model);
+
+        assert!(combined.contains_all(web));
+        assert!(combined.contains_all(model));
+        assert_eq!(combined, model.union(web));
+        assert_eq!(combined, combined.union(web));
+    }
+
+    #[test]
+    fn derived_value_cannot_lose_source_or_transform_labels() {
+        let web = TaintSet::from_labels([TaintLabel::WebUntrusted]);
+        let mcp = TaintSet::from_labels([TaintLabel::McpUntrusted]);
+        let generated = TaintSet::from_labels([TaintLabel::ModelGenerated]);
+        let derived = Provenanced::derive("summary", [mcp, web], generated);
+
+        assert_eq!(derived.value(), &"summary");
+        assert!(derived.taint().contains_all(web));
+        assert!(derived.taint().contains_all(mcp));
+        assert!(derived.taint().contains_all(generated));
+
+        let reordered = Provenanced::derive("summary", [web, mcp], generated);
+        assert_eq!(derived.taint(), reordered.taint());
+        assert_eq!(
+            derived.taint().canonical_bytes().unwrap(),
+            reordered.taint().canonical_bytes().unwrap()
+        );
     }
 }
