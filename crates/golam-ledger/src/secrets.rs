@@ -550,6 +550,7 @@ mod tests {
         assert_eq!(handle.purpose_scope(), b"purpose=test-api");
         assert_eq!(handle.expires_at(), Some("2026-08-29T00:00:00Z"));
 
+        drop(catalog);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 
@@ -607,6 +608,7 @@ mod tests {
                 "secret_id must be exactly 16 bytes"
             ))
         ));
+        drop(catalog);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 }
