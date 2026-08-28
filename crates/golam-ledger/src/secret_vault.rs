@@ -196,6 +196,16 @@ pub(crate) trait KeyProtector: Send + Sync {
     fn store_master_key(&self, key: &[u8]) -> Result<(), KeyProtectionError>;
 }
 
+impl<T: KeyProtector + ?Sized> KeyProtector for &T {
+    fn load_master_key(&self) -> Result<Zeroizing<Vec<u8>>, KeyProtectionError> {
+        (**self).load_master_key()
+    }
+
+    fn store_master_key(&self, key: &[u8]) -> Result<(), KeyProtectionError> {
+        (**self).store_master_key(key)
+    }
+}
+
 pub(crate) struct OsKeyProtector {
     operation_lock: Mutex<()>,
 }
@@ -353,6 +363,23 @@ impl<P: KeyProtector> SecretVault<P> {
             return Err(VaultError::NonceReuse);
         }
         Ok(())
+    }
+
+    pub(crate) fn with_persisted_plaintext<R>(
+        &self,
+        binding: &VaultBinding,
+        ciphertext: &[u8],
+        algorithm_metadata: &[u8],
+        associated_data_hash: [u8; 32],
+        callback: impl FnOnce(&[u8]) -> R,
+    ) -> Result<R, VaultError> {
+        let encrypted = EncryptedSecretValue {
+            ciphertext: ciphertext.to_vec(),
+            algorithm_metadata: algorithm_metadata.to_vec(),
+            associated_data_hash,
+        };
+        let plaintext = self.open(binding, &encrypted)?;
+        Ok(callback(plaintext.as_slice()))
     }
 
     fn open(

@@ -34,6 +34,8 @@ pub mod run_preauthorization;
 #[allow(dead_code)]
 pub(crate) mod secret_broker;
 #[allow(dead_code)]
+pub(crate) mod secret_fallback;
+#[allow(dead_code)]
 mod secret_vault;
 // T003-052 keeps plaintext-bearing mutation preparation crate-internal; kernel/broker integration is owned by later tasks.
 #[allow(dead_code)]

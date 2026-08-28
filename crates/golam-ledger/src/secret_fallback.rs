@@ -238,49 +238,87 @@ impl fmt::Display for SecretFallbackError {
             Self::AuthoritySecurity(error) => {
                 write!(f, "secret fallback authority-security error: {error}")
             }
-            Self::InvalidRequest(reason) => write!(f, "secret fallback request is invalid: {reason}"),
-            Self::InjectorCapabilitiesUnavailable => {
-                f.write_str("secret fallback injector does not provide all required containment capabilities")
+            Self::InvalidRequest(reason) => {
+                write!(f, "secret fallback request is invalid: {reason}")
             }
-            Self::AdmissionNotFound => f.write_str("secret fallback sandbox/process admission does not exist"),
-            Self::AdmissionMismatch => f.write_str("secret fallback admission does not match the exact request"),
-            Self::AdmissionPlanMismatch => f.write_str("secret fallback admission launch-plan hash mismatch"),
-            Self::AdmissionExecutorMismatch => f.write_str("secret fallback admission executor mismatch"),
-            Self::AdmissionEgressNotAllowed => f.write_str("secret fallback admission carries egress authority"),
-            Self::AdmissionDecisionNotFound => f.write_str("secret fallback admission decision does not exist"),
-            Self::AdmissionDecisionMismatch => f.write_str("secret fallback admission decision is not usable authority"),
+            Self::InjectorCapabilitiesUnavailable => f.write_str(
+                "secret fallback injector does not provide all required containment capabilities",
+            ),
+            Self::AdmissionNotFound => {
+                f.write_str("secret fallback sandbox/process admission does not exist")
+            }
+            Self::AdmissionMismatch => {
+                f.write_str("secret fallback admission does not match the exact request")
+            }
+            Self::AdmissionPlanMismatch => {
+                f.write_str("secret fallback admission launch-plan hash mismatch")
+            }
+            Self::AdmissionExecutorMismatch => {
+                f.write_str("secret fallback admission executor mismatch")
+            }
+            Self::AdmissionEgressNotAllowed => {
+                f.write_str("secret fallback admission carries egress authority")
+            }
+            Self::AdmissionDecisionNotFound => {
+                f.write_str("secret fallback admission decision does not exist")
+            }
+            Self::AdmissionDecisionMismatch => {
+                f.write_str("secret fallback admission decision is not usable authority")
+            }
             Self::PolicyMismatch => f.write_str("secret fallback active policy binding mismatch"),
             Self::LeaseNotFound => f.write_str("secret fallback capability lease does not exist"),
             Self::LeaseMismatch => f.write_str("secret fallback capability lease binding mismatch"),
             Self::LeaseInactive => f.write_str("secret fallback capability lease is inactive"),
             Self::LeaseRevoked => f.write_str("secret fallback capability lease is revoked"),
-            Self::LeaseNotYetValid => f.write_str("secret fallback capability lease is not yet valid"),
+            Self::LeaseNotYetValid => {
+                f.write_str("secret fallback capability lease is not yet valid")
+            }
             Self::LeaseExpired => f.write_str("secret fallback capability lease is expired"),
-            Self::LeaseScopeMismatch => f.write_str("secret fallback capability lease scope mismatch"),
+            Self::LeaseScopeMismatch => {
+                f.write_str("secret fallback capability lease scope mismatch")
+            }
             Self::LeaseParentCycle => f.write_str("secret fallback capability lease parent cycle"),
-            Self::LeaseParentTooDeep => f.write_str("secret fallback capability lease parent chain exceeds bound"),
+            Self::LeaseParentTooDeep => {
+                f.write_str("secret fallback capability lease parent chain exceeds bound")
+            }
             Self::HandleNotFound => f.write_str("secret fallback handle does not exist"),
-            Self::HandlePurposeMismatch => f.write_str("secret fallback handle purpose does not match"),
+            Self::HandlePurposeMismatch => {
+                f.write_str("secret fallback handle purpose does not match")
+            }
             Self::HandleExpired => f.write_str("secret fallback handle is expired"),
             Self::SecretNotFound => f.write_str("secret fallback secret does not exist"),
             Self::SecretRevoked => f.write_str("secret fallback secret is revoked"),
-            Self::StaleHandleVersion => f.write_str("secret fallback handle is pinned to a stale version"),
-            Self::SecretVersionNotFound => f.write_str("secret fallback selected secret version does not exist"),
-            Self::SecretVersionRetired => f.write_str("secret fallback selected secret version is retired"),
+            Self::StaleHandleVersion => {
+                f.write_str("secret fallback handle is pinned to a stale version")
+            }
+            Self::SecretVersionNotFound => {
+                f.write_str("secret fallback selected secret version does not exist")
+            }
+            Self::SecretVersionRetired => {
+                f.write_str("secret fallback selected secret version is retired")
+            }
             Self::EffectNotFound => f.write_str("secret fallback effect does not exist"),
-            Self::EffectMismatch => f.write_str("secret fallback effect is not exact authorized at-most-once work"),
+            Self::EffectMismatch => {
+                f.write_str("secret fallback effect is not exact authorized at-most-once work")
+            }
             Self::ApprovalNotFound => f.write_str("secret fallback approval does not exist"),
-            Self::ApprovalMismatch => f.write_str("secret fallback approval does not match exact fallback work"),
+            Self::ApprovalMismatch => {
+                f.write_str("secret fallback approval does not match exact fallback work")
+            }
             Self::ApprovalExpired => f.write_str("secret fallback approval is expired"),
             Self::ApprovalRevoked => f.write_str("secret fallback approval is revoked"),
-            Self::ApprovalAlreadyUsed => f.write_str("secret fallback one-shot approval is already used"),
+            Self::ApprovalAlreadyUsed => {
+                f.write_str("secret fallback one-shot approval is already used")
+            }
             Self::DuplicateUse => f.write_str("secret fallback use was already recorded"),
             Self::SecretPresentInLaunchField => {
                 f.write_str("secret fallback plaintext appears in a non-secret launch field")
             }
             Self::EmptySecret => f.write_str("secret fallback refuses an empty secret value"),
             Self::InjectorFailed(error) => write!(f, "secret fallback injector failed: {error}"),
-            Self::InvalidStoredRecord(reason) => write!(f, "secret fallback stored record is invalid: {reason}"),
+            Self::InvalidStoredRecord(reason) => {
+                write!(f, "secret fallback stored record is invalid: {reason}")
+            }
             Self::IntegerOverflow => f.write_str("secret fallback integer conversion overflow"),
         }
     }
@@ -392,12 +430,7 @@ impl<P: KeyProtector> SecretFallbackStore<P> {
             &resource,
             request.observed_at,
         )?;
-        verify_effect(
-            &transaction,
-            request.effect_id,
-            &resource,
-            intent_digest,
-        )?;
+        verify_effect(&transaction, request.effect_id, &resource, intent_digest)?;
         verify_approval(
             &transaction,
             request.approval_id,
@@ -433,10 +466,7 @@ impl<P: KeyProtector> SecretFallbackStore<P> {
 
         let vault = SecretVault::from_persisted_algorithm_metadata(
             protector,
-            material
-                .all_algorithm_metadata
-                .iter()
-                .map(Vec::as_slice),
+            material.all_algorithm_metadata.iter().map(Vec::as_slice),
         )?;
         let binding = VaultBinding::new(
             material.secret_id,
@@ -607,11 +637,7 @@ fn verify_admission(
         )
         .optional()?
         .ok_or(SecretFallbackError::AdmissionDecisionNotFound)?;
-    if decision.0 != principal
-        || decision.1 != "allow"
-        || decision.2 != "pass"
-        || decision.8 < 2
-    {
+    if decision.0 != principal || decision.1 != "allow" || decision.2 != "pass" || decision.8 < 2 {
         return Err(SecretFallbackError::AdmissionDecisionMismatch);
     }
     let decision_lease = decision
@@ -1056,7 +1082,9 @@ fn build_launch_plan(
         MAX_TEXT_BYTES,
         "executor id is empty, oversized or non-canonical",
     )?;
-    if request.args.len() > MAX_LAUNCH_ITEMS || request.explicit_environment.len() > MAX_LAUNCH_ITEMS {
+    if request.args.len() > MAX_LAUNCH_ITEMS
+        || request.explicit_environment.len() > MAX_LAUNCH_ITEMS
+    {
         return Err(SecretFallbackError::InvalidRequest(
             "launch item count exceeds bound",
         ));
@@ -1102,7 +1130,9 @@ fn launch_plan_hash(plan: &FallbackLaunchPlan) -> Result<[u8; 32], SecretFallbac
     let mut encoder = CanonicalEncoder::new();
     encoder.push_bytes(PLAN_DOMAIN)?;
     encoder.push_bytes(plan.executable.as_bytes())?;
-    encoder.push_u64(u64::try_from(plan.args.len()).map_err(|_| SecretFallbackError::IntegerOverflow)?);
+    encoder.push_u64(
+        u64::try_from(plan.args.len()).map_err(|_| SecretFallbackError::IntegerOverflow)?,
+    );
     for arg in &plan.args {
         encoder.push_bytes(arg.as_bytes())?;
     }
@@ -1202,7 +1232,10 @@ fn bound_scope_digest(
 
 fn secret_occurs_in_launch_fields(secret: &[u8], plan: &FallbackLaunchPlan) -> bool {
     contains_bytes(plan.executable.as_bytes(), secret)
-        || plan.args.iter().any(|arg| contains_bytes(arg.as_bytes(), secret))
+        || plan
+            .args
+            .iter()
+            .any(|arg| contains_bytes(arg.as_bytes(), secret))
         || plan.explicit_environment.iter().any(|(name, value)| {
             contains_bytes(name.as_bytes(), secret) || contains_bytes(value.as_bytes(), secret)
         })
@@ -1481,13 +1514,18 @@ mod tests {
             assert!(!plan.secret_in_environment());
             assert!(!plan.secret_inherited_by_descendants());
             assert_eq!(plan.channel(), FallbackInjectionChannel::Stdin);
-            assert!(!plan
-                .args()
-                .iter()
-                .any(|arg| contains_bytes(arg.as_bytes(), secret)));
-            assert!(!plan.explicit_environment().iter().any(|(_, value)| {
-                contains_bytes(value.as_bytes(), secret)
-            }));
+            assert!(
+                !plan
+                    .args()
+                    .iter()
+                    .any(|arg| contains_bytes(arg.as_bytes(), secret))
+            );
+            assert!(
+                !plan
+                    .explicit_environment()
+                    .iter()
+                    .any(|(_, value)| { contains_bytes(value.as_bytes(), secret) })
+            );
             let mut stdout = b"stdout-before:".to_vec();
             stdout.extend_from_slice(secret);
             stdout.extend_from_slice(b":stdout-after");
@@ -1526,7 +1564,11 @@ mod tests {
         protector: TestProtector,
     }
 
-    fn base_request<'a>(fixture: &'a Fixture, args: &'a [String]) -> FallbackSecretUseRequest<'a> {
+    fn base_request<'a>(
+        fixture: &'a Fixture,
+        args: &'a [String],
+        environment: &'a [(String, String)],
+    ) -> FallbackSecretUseRequest<'a> {
         FallbackSecretUseRequest {
             handle_id: fixture.handle_id,
             principal: "owner:owner",
@@ -1539,7 +1581,7 @@ mod tests {
             taint_digest: [0_u8; 32],
             executable: "test-helper",
             args,
-            explicit_environment: &[("GOLAM_TEST_MODE".to_owned(), "1".to_owned())],
+            explicit_environment: environment,
         }
     }
 
@@ -1557,6 +1599,7 @@ mod tests {
         let effect_id = EffectId(41);
         let protector = TestProtector { key: [42_u8; 32] };
         let empty_args: Vec<String> = Vec::new();
+        let environment = vec![("GOLAM_TEST_MODE".to_owned(), "1".to_owned())];
         let request = FallbackSecretUseRequest {
             handle_id,
             principal: "owner:owner",
@@ -1569,7 +1612,7 @@ mod tests {
             taint_digest: [0_u8; 32],
             executable: "test-helper",
             args: &empty_args,
-            explicit_environment: &[("GOLAM_TEST_MODE".to_owned(), "1".to_owned())],
+            explicit_environment: &environment,
         };
         let plan = build_launch_plan(&request, EXECUTOR_ID).unwrap();
         let resource = fallback_resource(
@@ -1625,9 +1668,7 @@ mod tests {
         drop(effects);
 
         let connection = Connection::open(authority.authority_db_path()).unwrap();
-        let transaction = connection
-            .unchecked_transaction()
-            .unwrap();
+        let transaction = connection.unchecked_transaction().unwrap();
         transaction
             .execute(
                 "INSERT INTO policy_bundles (policy_bundle_id, version, schema_version, canonical_policy_bytes, bundle_hash, created_by, created_global_seq, validation_status) VALUES (?1, 1, 1, X'01', ?2, 'owner:owner', 0, 'validated')",
@@ -1725,7 +1766,8 @@ mod tests {
             },
         )
         .unwrap();
-        append_authorization_decision_v2_snapshot(&transaction, &approval_parent_decision_id).unwrap();
+        append_authorization_decision_v2_snapshot(&transaction, &approval_parent_decision_id)
+            .unwrap();
         let scope_digest = bound_scope_digest(
             prepared.intent_digest(),
             approval_parent_decision_id,
@@ -1809,15 +1851,14 @@ mod tests {
     fn fallback_redacts_canary_and_consumes_exact_once_approval() {
         let (runtime, authority) = authority();
         let fixture = seed_fixture(&authority);
-        let mut store = SecretFallbackStore::open_with_protector(
-            &authority,
-            fixture.protector.clone(),
-        )
-        .unwrap();
+        let mut store =
+            SecretFallbackStore::open_with_protector(&authority, fixture.protector.clone())
+                .unwrap();
         let args: Vec<String> = Vec::new();
+        let environment = vec![("GOLAM_TEST_MODE".to_owned(), "1".to_owned())];
         let mut injector = RecordingInjector::qualified();
         let output = store
-            .execute_with_injector(base_request(&fixture, &args), &mut injector)
+            .execute_with_injector(base_request(&fixture, &args, &environment), &mut injector)
             .unwrap();
         assert_eq!(output.exit_code(), Some(0));
         assert!(!contains_bytes(output.stdout(), CANARY));
@@ -1844,7 +1885,7 @@ mod tests {
             .unwrap();
         assert_eq!(consumption_count, 1);
         assert!(matches!(
-            store.execute_with_injector(base_request(&fixture, &args), &mut injector),
+            store.execute_with_injector(base_request(&fixture, &args, &environment), &mut injector),
             Err(SecretFallbackError::ApprovalAlreadyUsed)
         ));
         crate::authority_security_v2::verify(&store.connection).unwrap();
@@ -1856,24 +1897,27 @@ mod tests {
     fn secret_in_argv_is_rejected_before_use_or_approval_consumption() {
         let (runtime, authority) = authority();
         let fixture = seed_fixture(&authority);
-        let mut store = SecretFallbackStore::open_with_protector(
-            &authority,
-            fixture.protector.clone(),
-        )
-        .unwrap();
+        let mut store =
+            SecretFallbackStore::open_with_protector(&authority, fixture.protector.clone())
+                .unwrap();
         let args = vec![String::from_utf8(CANARY.to_vec()).unwrap()];
+        let environment = vec![("GOLAM_TEST_MODE".to_owned(), "1".to_owned())];
         let mut injector = RecordingInjector::qualified();
         assert!(matches!(
-            store.execute_with_injector(base_request(&fixture, &args), &mut injector),
+            store.execute_with_injector(base_request(&fixture, &args, &environment), &mut injector),
             Err(SecretFallbackError::SecretPresentInLaunchField)
         ));
         let use_count: i64 = store
             .connection
-            .query_row("SELECT COUNT(*) FROM secret_use_records", [], |row| row.get(0))
+            .query_row("SELECT COUNT(*) FROM secret_use_records", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         let consumption_count: i64 = store
             .connection
-            .query_row("SELECT COUNT(*) FROM approval_consumptions", [], |row| row.get(0))
+            .query_row("SELECT COUNT(*) FROM approval_consumptions", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(use_count, 0);
         assert_eq!(consumption_count, 0);
@@ -1885,16 +1929,15 @@ mod tests {
     fn admission_plan_and_injector_capabilities_fail_closed() {
         let (runtime, authority) = authority();
         let fixture = seed_fixture(&authority);
-        let mut store = SecretFallbackStore::open_with_protector(
-            &authority,
-            fixture.protector.clone(),
-        )
-        .unwrap();
+        let mut store =
+            SecretFallbackStore::open_with_protector(&authority, fixture.protector.clone())
+                .unwrap();
         let args: Vec<String> = Vec::new();
+        let environment = vec![("GOLAM_TEST_MODE".to_owned(), "1".to_owned())];
         let mut weak = RecordingInjector::qualified();
         weak.capabilities.no_ambient_secret_inheritance = false;
         assert!(matches!(
-            store.execute_with_injector(base_request(&fixture, &args), &mut weak),
+            store.execute_with_injector(base_request(&fixture, &args, &environment), &mut weak),
             Err(SecretFallbackError::InjectorCapabilitiesUnavailable)
         ));
 
@@ -1912,7 +1955,7 @@ mod tests {
         transaction.commit().unwrap();
         let mut injector = RecordingInjector::qualified();
         assert!(matches!(
-            store.execute_with_injector(base_request(&fixture, &args), &mut injector),
+            store.execute_with_injector(base_request(&fixture, &args, &environment), &mut injector),
             Err(SecretFallbackError::AdmissionPlanMismatch)
         ));
         drop(store);
@@ -1929,7 +1972,8 @@ mod tests {
         assert!(!fixture.plan.secret_in_environment());
         assert!(!fixture.plan.secret_inherited_by_descendants());
         let changed_args = vec!["--different".to_owned()];
-        let request = base_request(&fixture, &changed_args);
+        let environment = vec![("GOLAM_TEST_MODE".to_owned(), "1".to_owned())];
+        let request = base_request(&fixture, &changed_args, &environment);
         let changed = build_launch_plan(&request, EXECUTOR_ID).unwrap();
         assert_ne!(fixture.plan.plan_hash(), changed.plan_hash());
         assert!(!fixture.resource.is_empty());
