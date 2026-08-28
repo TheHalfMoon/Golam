@@ -23,9 +23,7 @@ enum ProtectedMutationKind {
     ApprovalConsumption,
     TaintAttestation,
     VerifierRule,
-    #[cfg(test)]
     SecretRecord,
-    #[cfg(test)]
     SecretVersion,
     #[cfg(test)]
     SecretHandle,
@@ -43,9 +41,7 @@ impl ProtectedMutationKind {
             Self::ApprovalConsumption => "approval_consumption",
             Self::TaintAttestation => "taint_attestation",
             Self::VerifierRule => "verifier_rule",
-            #[cfg(test)]
             Self::SecretRecord => "secret_record",
-            #[cfg(test)]
             Self::SecretVersion => "secret_version",
             #[cfg(test)]
             Self::SecretHandle => "secret_handle",
@@ -232,7 +228,6 @@ pub(crate) fn append_verifier_rule_snapshot(
     append_snapshot(transaction, ProtectedMutationKind::VerifierRule, 1, &values)
 }
 
-#[cfg(test)]
 pub(crate) fn append_secret_record_snapshot(
     transaction: &Transaction<'_>,
     secret_id: &[u8],
@@ -245,7 +240,6 @@ pub(crate) fn append_secret_record_snapshot(
     append_snapshot(transaction, ProtectedMutationKind::SecretRecord, 1, &values)
 }
 
-#[cfg(test)]
 pub(crate) fn append_secret_version_snapshot(
     transaction: &Transaction<'_>,
     secret_id: &[u8],

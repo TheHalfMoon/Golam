@@ -33,6 +33,8 @@ pub mod recovery;
 pub mod run_preauthorization;
 #[allow(dead_code)]
 mod secret_vault;
+#[allow(dead_code)]
+pub(crate) mod secret_mutation;
 pub mod secrets;
 mod security_audit;
 pub mod session_read;
