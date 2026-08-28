@@ -32,6 +32,7 @@ pub mod protocol_audit;
 pub mod recovery;
 pub mod run_preauthorization;
 mod security_audit;
+pub mod secrets;
 pub mod session_read;
 pub mod storage;
 #[cfg(test)]
