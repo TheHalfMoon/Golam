@@ -63,37 +63,26 @@ Completed:
 - T003-040 qualified at `cb69d638107ca4fe0118c9a61f143ac3ba65a2d3` with CI #359 / run `33150969442` SUCCESS on Windows/macOS/Ubuntu. Evidence: `implementation/taint-baseline-qualification.md`.
 - T003-041 qualified at `76e1addf35c92a22d2c5826ca429278cacd598b3` with CI #366 / run `33151556481` SUCCESS on Windows/macOS/Ubuntu. Evidence: `implementation/taint-propagation-qualification.md`.
 - T003-042 qualified at `67f74c9b9b75e43b9fa00069050c97c041567184` with CI #373 / run `33152187952` SUCCESS on Windows/macOS/Ubuntu. Evidence: `implementation/verifier-registry-qualification.md`.
+- T003-043 qualified at `2f8655b5bdddd17bb9e6eab7bf00f11a210896cb` with CI #388 / run `33154505847` SUCCESS on Windows/macOS/Ubuntu. Evidence: `implementation/taint-downgrade-attestation-qualification.md`.
 
-Current canonical task: **T003-043** — human/deterministic-verifier downgrade attestations as new evidence rather than in-place source mutation.
+T003-043 qualification proves normal human/deterministic-verifier downgrade creates separately evidenced derived state rather than rewriting source provenance, requires exact protected authority/effect bindings, decodes registered downgrade rules fail-closed, and reserves `SECRET_DERIVED` removal for the later deterministic sanitizer path.
 
-Current T003-043 implementation shape:
+Current canonical task: **T003-044** — enforce `SECRET_DERIVED` rejection at the canonical long-term-memory admission boundary reserved for later memory integration.
 
-- reuses the already protected `taint_attestations` schema; no migration or new dependency is introduced;
-- adds strict fail-closed decoding for canonical `TaintSet` bytes so protected verifier-rule downgrade sets cannot be silently normalized when read;
-- preparation requires non-empty source provenance, a strict result-label subset, at least one removed label, bounded unique source artifact IDs, a distinct result artifact ID, a canonical principal, and non-empty evidence;
-- normal human/deterministic downgrade preparation rejects any attempt to remove `SECRET_DERIVED`; only the separately authorized secret-elimination sanitizer path in T003-045 may clear it;
-- source artifact IDs and source-label bytes are retained as immutable evidence; the path inserts a new `taint_attestations` row and does not update source provenance in place;
-- human downgrade requires an exact current `taint.downgrade` authorization decision, exact authorized at-most-once taint-authority effect, and exact ONCE approval bound to effect/action/resource/risk/source-taint digest; the approval is consumed atomically with the attestation and both receive authority-security coverage;
-- deterministic-verifier downgrade requires the same exact current protected decision/effect plus an active registered `deterministic_verifier` rule whose protected authority-source binding exactly matches the supplied verification context and whose decoded allowed-downgrade set covers every removed label;
-- deterministic verifier authority is supplied through the typed `DeterministicVerifierEvidence` boundary (`rule_id`, authority-source binding, evidence hash) rather than loosely ordered positional authority fields;
-- an unregistered/inactive/wrong-kind/wrong-binding/insufficient rule fails closed;
-- fresh `taint_attestation` authority-security evidence is appended before commit and the full authority-security chain is reverified transactionally;
-- the fixed non-null `rule_id` schema field carries the registered verifier rule ID for deterministic verification; for human approval it carries the exact consumed approval ID so the authority reference remains auditable without a schema migration;
-- T003-043 still does not implement the long-term-memory sink (T003-044) or secret-elimination execution (T003-045).
+Bounded T003-044 implementation intent:
 
-Qualification history while T003-043 remains ACTIVE:
-
-- CI #381 / run `33153295456` stopped at rustfmt before Clippy/tests; exact formatter output was applied.
-- CI #384 / run `33153791707` passed formatting and reached Clippy. The only Clippy finding was `too_many_arguments` on the public deterministic-verifier preparation function.
-- That finding was repaired structurally by introducing typed `DeterministicVerifierEvidence` rather than suppressing the lint.
-- Fresh exact-head CI is required before T003-043 may be marked PASS.
+- do not implement the Spec 005 memory product, retrieval, storage engine or model-facing memory workflow;
+- expose a small Rust trusted-path admission guard over canonical `TaintSet` state that future memory integration must call before canonical long-term-memory admission;
+- deny whenever `SECRET_DERIVED` is present, including when it appears through multi-source monotonic union or beside otherwise trusted labels;
+- allow non-secret-derived taint to remain admissible as provenance evidence rather than pretending it becomes trusted;
+- keep the decision deterministic, side-effect free and independent of model confidence, human assertion or ordinary downgrade APIs;
+- add focused tests proving `SECRET_DERIVED` dominance without introducing a new schema, dependency or product memory store.
 
 Remaining Phase E order:
 
-1. T003-043 downgrade attestations as new evidence;
-2. T003-044 `SECRET_DERIVED` long-term-memory admission denial boundary;
-3. T003-045 deterministic secret-elimination sanitizer evidence;
-4. T003-046 multi-hop/self-clear/unregistered-verifier/SECRET_DERIVED adversarial qualification.
+1. T003-044 `SECRET_DERIVED` long-term-memory admission denial boundary;
+2. T003-045 deterministic secret-elimination sanitizer evidence;
+3. T003-046 multi-hop/self-clear/unregistered-verifier/SECRET_DERIVED adversarial qualification.
 
 Do not begin Phase F until the Phase E predecessor tasks required by `tasks.md` are complete and qualified.
 
@@ -153,8 +142,11 @@ T003_041_CI_RUN=33151556481
 T003_042=PASS
 T003_042_QUALIFIED_HEAD=67f74c9b9b75e43b9fa00069050c97c041567184
 T003_042_CI_RUN=33152187952
-T003_043=ACTIVE
-NEXT_TASK=T003-043
+T003_043=PASS
+T003_043_QUALIFIED_HEAD=2f8655b5bdddd17bb9e6eab7bf00f11a210896cb
+T003_043_CI_RUN=33154505847
+T003_044=ACTIVE
+NEXT_TASK=T003-044
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO
 PR_READY=NO
