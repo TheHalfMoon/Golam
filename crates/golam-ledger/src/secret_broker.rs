@@ -169,7 +169,9 @@ impl fmt::Display for SecretBrokerError {
             Self::SecretVersionRetired => {
                 f.write_str("secret broker selected secret version is retired")
             }
-            Self::DecisionNotFound => f.write_str("secret broker authorization decision is missing"),
+            Self::DecisionNotFound => {
+                f.write_str("secret broker authorization decision is missing")
+            }
             Self::DecisionMismatch => {
                 f.write_str("secret broker authorization decision does not match exact use")
             }
@@ -185,7 +187,9 @@ impl fmt::Display for SecretBrokerError {
             Self::LeaseScopeMismatch => {
                 f.write_str("secret broker lease does not cover exact action/resource")
             }
-            Self::LeaseParentCycle => f.write_str("secret broker lease parent chain contains a cycle"),
+            Self::LeaseParentCycle => {
+                f.write_str("secret broker lease parent chain contains a cycle")
+            }
             Self::LeaseParentTooDeep => {
                 f.write_str("secret broker lease parent chain exceeds bounded depth")
             }
@@ -324,12 +328,8 @@ impl SecretBrokerStore {
             request.observed_at,
         )?;
 
-        let approval_id = verify_optional_approval(
-            &transaction,
-            decision.approval_id,
-            &request,
-            &resource,
-        )?;
+        let approval_id =
+            verify_optional_approval(&transaction, decision.approval_id, &request, &resource)?;
         let use_id = derive_use_id(
             request.handle_id,
             version,
@@ -366,12 +366,7 @@ impl SecretBrokerStore {
         append_secret_use_record_snapshot(&transaction, &use_id)
             .map_err(|error| SecretBrokerError::AuthoritySecurity(error.to_string()))?;
         if let Some(approval_id) = approval_id {
-            consume_approval(
-                &transaction,
-                approval_id,
-                use_id,
-                decision.global_seq,
-            )?;
+            consume_approval(&transaction, approval_id, use_id, decision.global_seq)?;
         }
         crate::authority_security_v2::verify(&transaction)
             .map_err(|error| SecretBrokerError::AuthoritySecurity(error.to_string()))?;
@@ -856,8 +851,10 @@ fn decode_approval_scope(
                 .map(|value| id16(value, "approval session id is invalid"))
                 .transpose()?
                 .map(|value| SessionId(u128::from_be_bytes(value)));
-            Ok(ApprovalScope::run_preauthorization(session_id, &actions()?, &resources()?)
-                .map_err(|_| SecretBrokerError::ApprovalMismatch)?)
+            Ok(
+                ApprovalScope::run_preauthorization(session_id, &actions()?, &resources()?)
+                    .map_err(|_| SecretBrokerError::ApprovalMismatch)?,
+            )
         }
     }
 }
@@ -936,7 +933,11 @@ fn consume_approval(
 }
 
 fn validate_request(request: &BrokerSecretUseRequest<'_>) -> Result<(), SecretBrokerError> {
-    validate_text(request.principal, MAX_PRINCIPAL_BYTES, "principal is invalid")?;
+    validate_text(
+        request.principal,
+        MAX_PRINCIPAL_BYTES,
+        "principal is invalid",
+    )?;
     validate_text(request.purpose, MAX_PURPOSE_BYTES, "purpose is invalid")?;
     validate_text(
         request.destination_or_process,
@@ -1181,8 +1182,9 @@ mod tests {
     use super::*;
     use crate::authority_security_write::{
         append_active_policy_snapshot, append_authorization_decision_v2_snapshot,
-        append_capability_lease_snapshot, append_policy_bundle_snapshot, append_secret_handle_snapshot,
-        append_secret_record_snapshot, append_secret_version_snapshot,
+        append_capability_lease_snapshot, append_policy_bundle_snapshot,
+        append_secret_handle_snapshot, append_secret_record_snapshot,
+        append_secret_version_snapshot,
     };
     use crate::security_audit::{AuthorizationAuditInput, append_authorization_decision};
     use golam_core::paths::RuntimeLayout;
@@ -1383,7 +1385,9 @@ mod tests {
         ));
         let count: i64 = store
             .connection
-            .query_row("SELECT COUNT(*) FROM secret_use_records", [], |row| row.get(0))
+            .query_row("SELECT COUNT(*) FROM secret_use_records", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(count, 0);
         drop(store);
