@@ -4,7 +4,7 @@ Status: `ACTIVE`
 
 This note records the implementation boundary for T003-054 before exact-head qualification. It is not qualification evidence and does not claim PASS.
 
-Current repaired candidate includes the bounded `AdmissionRequest` verification input refactor required by the repository's pinned Clippy gate and test-only sandbox profile/admission snapshot helpers matching the existing `authority-security-v2` coverage. Qualification remains pending fresh exact-head CI.
+Current repaired candidate includes the bounded `AdmissionRequest` verification input refactor required by the repository's pinned Clippy gate, test-only sandbox profile/admission snapshot helpers matching the existing `authority-security-v2` coverage, and an argv-canary fixture whose admission/effect/lease/approval authority is bound to the exact tested launch plan so the non-argv invariant is exercised directly. Qualification remains pending fresh exact-head CI.
 
 ## Authorized scope
 
