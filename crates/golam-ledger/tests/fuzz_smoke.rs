@@ -31,12 +31,15 @@ fn event_kind_decoder_exhaustive_byte_corpus_is_bounded() {
         EventKind::EffectTransitioned,
         EventKind::CheckpointCreated,
         EventKind::SessionForked,
+        EventKind::SecretEntryRedacted,
     ];
 
     for code in u8::MIN..=u8::MAX {
         let decoded = EventKind::from_code(code);
-        if (1..=6).contains(&code) {
-            assert_eq!(decoded, Some(expected[usize::from(code - 1)]));
+        if (1..=7).contains(&code) {
+            let kind = expected[usize::from(code - 1)];
+            assert_eq!(decoded, Some(kind));
+            assert_eq!(kind.code(), code);
         } else {
             assert_eq!(decoded, None);
         }
