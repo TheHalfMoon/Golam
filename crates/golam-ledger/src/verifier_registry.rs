@@ -680,8 +680,12 @@ mod tests {
     ) -> [u8; 16] {
         let approval = prepare_approval(
             "owner:owner",
-            ApprovalScope::once(effect_id, VERIFIER_RULE_REGISTER_ACTION, prepared.resource())
-                .unwrap(),
+            ApprovalScope::once(
+                effect_id,
+                VERIFIER_RULE_REGISTER_ACTION,
+                prepared.resource(),
+            )
+            .unwrap(),
             TAINT_AUTHORITY_MUTATION_RISK_CLASS,
             prepared.registration_taint_digest(),
             "2026-08-28T00:00:00Z",
@@ -791,7 +795,11 @@ mod tests {
         assert_eq!(record.rule_id, rule_id);
         assert_eq!(record.registered_by, "owner:owner");
         assert!(record.allowed_downgrades.contains(TaintLabel::WebUntrusted));
-        assert!(record.allowed_downgrades.contains(TaintLabel::ModelGenerated));
+        assert!(
+            record
+                .allowed_downgrades
+                .contains(TaintLabel::ModelGenerated)
+        );
         AuthorityStore::open(authority.authority_db_path()).unwrap();
 
         fs::remove_dir_all(runtime.root).unwrap();
