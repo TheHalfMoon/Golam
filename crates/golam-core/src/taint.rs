@@ -133,6 +133,56 @@ impl TaintSet {
         }
         Ok(encoder.finish())
     }
+
+    /// Strict inverse of `canonical_bytes` for protected-state reads.
+    ///
+    /// Non-canonical order, duplicate labels, unknown codes, wrong domain,
+    /// trailing bytes, and impossible counts fail closed rather than being
+    /// normalized on read.
+    pub fn from_canonical_bytes(bytes: &[u8]) -> Result<Self, CoreError> {
+        let prefix_len = 4_usize
+            .checked_add(TAINT_SET_DOMAIN.len())
+            .and_then(|value| value.checked_add(1))
+            .ok_or(CoreError::InvalidCanonicalTaintSet)?;
+        if bytes.len() < prefix_len {
+            return Err(CoreError::InvalidCanonicalTaintSet);
+        }
+
+        let domain_len = u32::from_be_bytes(
+            bytes[..4]
+                .try_into()
+                .map_err(|_| CoreError::InvalidCanonicalTaintSet)?,
+        );
+        if usize::try_from(domain_len).map_err(|_| CoreError::InvalidCanonicalTaintSet)?
+            != TAINT_SET_DOMAIN.len()
+            || &bytes[4..4 + TAINT_SET_DOMAIN.len()] != TAINT_SET_DOMAIN
+        {
+            return Err(CoreError::InvalidCanonicalTaintSet);
+        }
+
+        let count_index = 4 + TAINT_SET_DOMAIN.len();
+        let count = bytes[count_index];
+        if count > MAX_TAINT_LABELS
+            || bytes.len() != prefix_len + usize::from(count)
+        {
+            return Err(CoreError::InvalidCanonicalTaintSet);
+        }
+
+        let mut set = Self::empty();
+        let mut previous_code = 0_u8;
+        for code in &bytes[prefix_len..] {
+            if *code <= previous_code {
+                return Err(CoreError::InvalidCanonicalTaintSet);
+            }
+            let label = TaintLabel::from_code(*code).ok_or(CoreError::InvalidCanonicalTaintSet)?;
+            set.bits |= bit(label);
+            previous_code = *code;
+        }
+        if set.len() != count {
+            return Err(CoreError::InvalidCanonicalTaintSet);
+        }
+        Ok(set)
+    }
 }
 
 /// Carries provenance beside a value without changing the value's own identity
@@ -275,6 +325,41 @@ mod tests {
         let set = TaintSet::from_labels(TaintLabel::ALL);
         assert_eq!(set.len(), MAX_TAINT_LABELS);
         assert!(TaintLabel::ALL.into_iter().all(|label| set.contains(label)));
+    }
+
+    #[test]
+    fn canonical_decode_round_trips_and_rejects_noncanonical_bytes() {
+        let set = TaintSet::from_labels([
+            TaintLabel::WebUntrusted,
+            TaintLabel::ModelGenerated,
+            TaintLabel::SecretDerived,
+        ]);
+        let bytes = set.canonical_bytes().unwrap();
+        assert_eq!(TaintSet::from_canonical_bytes(&bytes).unwrap(), set);
+
+        let mut duplicate = bytes.clone();
+        let last = *duplicate.last().unwrap();
+        *duplicate.get_mut(4 + TAINT_SET_DOMAIN.len()).unwrap() = 4;
+        duplicate.push(last);
+        assert_eq!(
+            TaintSet::from_canonical_bytes(&duplicate),
+            Err(CoreError::InvalidCanonicalTaintSet)
+        );
+
+        let mut out_of_order = bytes.clone();
+        let labels_start = 5 + TAINT_SET_DOMAIN.len();
+        out_of_order.swap(labels_start, labels_start + 1);
+        assert_eq!(
+            TaintSet::from_canonical_bytes(&out_of_order),
+            Err(CoreError::InvalidCanonicalTaintSet)
+        );
+
+        let mut trailing = bytes;
+        trailing.push(0xff);
+        assert_eq!(
+            TaintSet::from_canonical_bytes(&trailing),
+            Err(CoreError::InvalidCanonicalTaintSet)
+        );
     }
 
     #[test]
