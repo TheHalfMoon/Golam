@@ -210,7 +210,10 @@ fn install_authorized_create(
 }
 
 fn contains(haystack: &[u8], needle: &[u8]) -> bool {
-    !needle.is_empty() && haystack.windows(needle.len()).any(|window| window == needle)
+    !needle.is_empty()
+        && haystack
+            .windows(needle.len())
+            .any(|window| window == needle)
 }
 
 fn durable_paths(root: &Path) -> Vec<PathBuf> {
@@ -233,7 +236,9 @@ fn durable_paths(root: &Path) -> Vec<PathBuf> {
 
 fn assert_no_canary_in_durable_authority(authority: &AuthorityLayout, canary: &[u8]) {
     let checkpoint = Connection::open(authority.authority_db_path()).unwrap();
-    checkpoint.execute_batch("PRAGMA wal_checkpoint(FULL);").unwrap();
+    checkpoint
+        .execute_batch("PRAGMA wal_checkpoint(FULL);")
+        .unwrap();
     drop(checkpoint);
 
     for path in durable_paths(authority.root()) {

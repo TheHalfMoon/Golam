@@ -234,7 +234,7 @@ impl<'a> SecretEntryStore<'a> {
     }
 
     #[cfg(test)]
-    fn commit_with_protector<P: crate::secret_vault::KeyProtector>(
+    pub(crate) fn commit_with_protector<P: crate::secret_vault::KeyProtector>(
         &self,
         prepared: PreparedDesignatedSecretEntry,
         authority_decision_id: [u8; 16],

@@ -33,6 +33,10 @@ pub mod recovery;
 pub mod run_preauthorization;
 #[allow(dead_code)]
 pub(crate) mod secret_broker;
+#[cfg(test)]
+mod secret_canary_qualification;
+#[allow(dead_code)]
+pub(crate) mod secret_detection;
 #[allow(dead_code)]
 pub(crate) mod secret_entry;
 #[allow(dead_code)]

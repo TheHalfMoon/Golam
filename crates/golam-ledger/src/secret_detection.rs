@@ -72,7 +72,10 @@ fn contains_aws_access_key_id(input: &[u8]) -> bool {
             window == PREFIX
                 && input
                     .get(start + PREFIX.len()..start + PREFIX.len() + TAIL_BYTES)
-                    .is_some_and(|tail| tail.iter().all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit()))
+                    .is_some_and(|tail| {
+                        tail.iter()
+                            .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit())
+                    })
         })
 }
 
@@ -91,8 +94,10 @@ mod tests {
             Some(RecognizedSecretKind::GitHubToken)
         );
         assert_eq!(
-            recognized_secret_kind(b"Authorization: Bearer sk-abcdefghijklmnopqrstuvwxyz0123456789")
-                .unwrap(),
+            recognized_secret_kind(
+                b"Authorization: Bearer sk-abcdefghijklmnopqrstuvwxyz0123456789"
+            )
+            .unwrap(),
             Some(RecognizedSecretKind::OpenAiKey)
         );
         assert_eq!(
@@ -104,8 +109,7 @@ mod tests {
     #[test]
     fn unknown_format_is_not_misrepresented_as_detectable() {
         assert_eq!(
-            recognized_secret_kind(b"orchid::seven-moons::unknown-secret-shape::T003-056")
-                .unwrap(),
+            recognized_secret_kind(b"orchid::seven-moons::unknown-secret-shape::T003-056").unwrap(),
             None
         );
     }
