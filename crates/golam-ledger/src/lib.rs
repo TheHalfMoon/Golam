@@ -34,6 +34,8 @@ pub mod run_preauthorization;
 #[allow(dead_code)]
 pub(crate) mod secret_broker;
 #[allow(dead_code)]
+pub(crate) mod secret_entry;
+#[allow(dead_code)]
 pub(crate) mod secret_fallback;
 #[allow(dead_code)]
 mod secret_vault;
@@ -62,6 +64,7 @@ pub enum EventKind {
     EffectTransitioned,
     CheckpointCreated,
     SessionForked,
+    SecretEntryRedacted,
 }
 
 impl EventKind {
@@ -73,6 +76,7 @@ impl EventKind {
             Self::EffectTransitioned => 4,
             Self::CheckpointCreated => 5,
             Self::SessionForked => 6,
+            Self::SecretEntryRedacted => 7,
         }
     }
 
@@ -84,6 +88,7 @@ impl EventKind {
             4 => Some(Self::EffectTransitioned),
             5 => Some(Self::CheckpointCreated),
             6 => Some(Self::SessionForked),
+            7 => Some(Self::SecretEntryRedacted),
             _ => None,
         }
     }

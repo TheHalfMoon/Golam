@@ -7,13 +7,13 @@ use golam_core::authority::AuthorityLayout;
 use golam_core::{CanonicalEncoder, CoreError, EffectId, EventId, SessionId};
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
+use crate::EventKind;
 use crate::authority_security_write::append_secret_handle_snapshot;
 use crate::secret_mutation::{
     PreparedSecretCreate, SecretMutationError, SecretMutationOutcome, SecretMutationStore,
     prepare_secret_create,
 };
 use crate::storage::{AppendEvent, AuthorityStore, StorageError};
-use crate::EventKind;
 
 const HANDLE_ID_BYTES: usize = 16;
 const MAX_ACTOR_BYTES: usize = 512;
@@ -106,9 +106,14 @@ impl fmt::Display for SecretEntryError {
             Self::Storage(error) => write!(f, "designated secret entry storage failed: {error}"),
             Self::Sqlite(error) => write!(f, "designated secret entry sqlite failed: {error}"),
             Self::Core(error) => write!(f, "designated secret entry encoding failed: {error}"),
-            Self::Random(error) => write!(f, "designated secret entry random source failed: {error}"),
+            Self::Random(error) => {
+                write!(f, "designated secret entry random source failed: {error}")
+            }
             Self::AuthoritySecurity(error) => {
-                write!(f, "designated secret entry authority-security failed: {error}")
+                write!(
+                    f,
+                    "designated secret entry authority-security failed: {error}"
+                )
             }
             Self::InvalidActor => f.write_str("designated secret entry actor is invalid"),
             Self::InvalidPurpose => f.write_str("designated secret entry purpose is invalid"),
@@ -519,10 +524,9 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let runtime = RuntimeLayout::initialize(std::env::temp_dir().join(format!(
-            "golam-secret-entry-{}-{t}-{n}",
-            std::process::id()
-        )))
+        let runtime = RuntimeLayout::initialize(
+            std::env::temp_dir().join(format!("golam-secret-entry-{}-{t}-{n}", std::process::id())),
+        )
         .unwrap();
         let authority = AuthorityLayout::initialize(&runtime).unwrap();
         (runtime, authority)
@@ -674,7 +678,9 @@ mod tests {
     }
 
     fn contains(haystack: &[u8], needle: &[u8]) -> bool {
-        haystack.windows(needle.len()).any(|window| window == needle)
+        haystack
+            .windows(needle.len())
+            .any(|window| window == needle)
     }
 
     #[test]
@@ -729,7 +735,9 @@ mod tests {
         assert_eq!(event_type, i64::from(EventKind::SecretEntryRedacted.code()));
 
         let ciphertext: Vec<u8> = connection
-            .query_row("SELECT ciphertext FROM secret_versions", [], |row| row.get(0))
+            .query_row("SELECT ciphertext FROM secret_versions", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert!(!contains(&ciphertext, UNKNOWN_FORMAT_CANARY));
         let handle_secret_count: i64 = connection

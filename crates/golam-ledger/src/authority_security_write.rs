@@ -30,7 +30,6 @@ enum ProtectedMutationKind {
     SandboxProfile,
     #[cfg(test)]
     SandboxAdmission,
-    #[cfg(test)]
     SecretHandle,
 }
 
@@ -53,7 +52,6 @@ impl ProtectedMutationKind {
             Self::SandboxProfile => "sandbox_profile",
             #[cfg(test)]
             Self::SandboxAdmission => "sandbox_admission",
-            #[cfg(test)]
             Self::SecretHandle => "secret_handle",
         }
     }
@@ -322,7 +320,6 @@ pub(crate) fn append_sandbox_admission_snapshot(
     )
 }
 
-#[cfg(test)]
 pub(crate) fn append_secret_handle_snapshot(
     transaction: &Transaction<'_>,
     handle_id: &[u8],

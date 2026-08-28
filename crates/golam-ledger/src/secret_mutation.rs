@@ -642,7 +642,7 @@ impl SecretMutationStore {
     }
 
     #[cfg(test)]
-    fn create_with_protector<P: KeyProtector>(
+    pub(crate) fn create_with_protector<P: KeyProtector>(
         &mut self,
         prepared: PreparedSecretCreate,
         authority_decision_id: [u8; 16],
