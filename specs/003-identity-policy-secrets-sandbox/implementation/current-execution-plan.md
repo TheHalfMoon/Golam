@@ -3,7 +3,7 @@
 **Status**: IMPLEMENTATION_ACTIVE — PHASE_F_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current task**: `T003-051`
+**Current task**: `T003-052`
 
 ## Authority
 
@@ -74,27 +74,35 @@ Evidence: `implementation/secret-interface-qualification.md`.
 
 The qualified boundary provides protected `SecretRecord` / `SecretVersion` metadata and opaque protected `SecretHandle` loading without generic plaintext reads, ciphertext access, or production secret mutation.
 
-### T003-051 — ACTIVE
+### T003-051 — COMPLETE
 
-Implement the already-qualified encrypted-at-rest vault storage and Golam-owned key-protection abstraction only.
+Qualified at exact implementation head `92acf59670024004e5fca1658021a99e3e7df913` by CI #424 / run `33161883864`, SUCCESS on Windows/macOS/Ubuntu.
+
+Evidence: `implementation/secret-vault-storage-qualification.md`.
+
+The qualified boundary provides AES-256-GCM encrypted-at-rest secret-value storage, fresh 96-bit nonces with hard nonce-reuse failure, associated-data binding across secret/version/classification/security-metadata/vault-format identity, and fail-closed OS-backed key protection on the exact dependency/platform set admitted by T003-004. No plaintext master-key fallback or generic public plaintext secret-read API is introduced.
+
+### T003-052 — ACTIVE
+
+Implement protected secret create/version/rotate/revoke transitions with atomic security evidence.
 
 Required boundaries:
 
-- exact admitted dependencies only: `aes-gcm = 0.11.0`, `zeroize = 1.9.0`, `keyring-core = 1.0.0`, macOS `apple-native-keyring-store = 1.0.2` with `keychain`, Windows `windows-native-keyring-store = 1.1.0` without defaults, Linux `zbus-secret-service-keyring-store = 1.0.1` with `crypto-rust`;
-- AES-256-GCM with a fresh 96-bit nonce for every encryption under a key; nonce reuse is a hard failure;
-- associated data binds secret identity, immutable version, classification/security metadata version, and vault format version;
-- OS-protected random vault master key; no plaintext file, environment, command-line, or silent in-process fallback;
-- unavailable, locked, corrupt, ambiguous, or unsupported production key protection fails closed;
-- the deterministic test `KeyProtector` exists only under test configuration and is not production-selectable;
-- deterministic canary material only; no real credentials;
-- zeroization is defense in depth and is not represented as complete memory-erasure proof;
-- do not implement T003-052 create/version/rotate/revoke transitions early.
+- use the T003-050 opaque secret metadata/handle interfaces and T003-051 vault/key-protection core rather than introducing parallel authority paths;
+- every create/version/rotate/revoke transition is typed elevated work under current durable Golam authority and exact effect/approval binding where required;
+- mutation and authenticated `authority-security` evidence commit atomically in one protected SQLite transaction;
+- durable secret values are encrypted before insertion into `secret_versions`; plaintext is never written to canonical/audit/event/error payloads;
+- secret versions are immutable; rotation creates a new version and retires the prior version rather than overwriting it;
+- revocation is monotonic and blocks future protected use without deleting or rewriting historical security evidence;
+- stale authority, stale version/current-version binding, replay, duplicate transition, integrity failure, vault failure, key-protection failure, and transaction failure all fail closed;
+- use deterministic canary values only in qualification; no real secrets;
+- do not implement T003-053 broker authorization semantics early.
 
-After exact-head T003-051 qualification, continue directly to T003-052.
+After exact-head T003-052 qualification, continue directly to T003-053.
 
 ### Remaining Phase F ordering
 
-T003-052 -> T003-053 -> T003-054 -> T003-055 -> T003-056 -> T003-057.
+T003-053 -> T003-054 -> T003-055 -> T003-056 -> T003-057.
 
 ## Later phases
 
@@ -121,8 +129,11 @@ T003_046_CI_RUN=33157139728
 T003_050=PASS
 T003_050_QUALIFIED_HEAD=9dc77f9ff565f0540b21feb4706e25cc36087be1
 T003_050_CI_RUN=33160722873
-T003_051=ACTIVE
-NEXT_TASK=T003-051
+T003_051=PASS
+T003_051_QUALIFIED_HEAD=92acf59670024004e5fca1658021a99e3e7df913
+T003_051_CI_RUN=33161883864
+T003_052=ACTIVE
+NEXT_TASK=T003-052
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO
