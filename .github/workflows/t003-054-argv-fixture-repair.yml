@@ -1,0 +1,52 @@
+name: t003-054-argv-fixture-repair
+on:
+  push:
+    branches:
+      - impl/003-identity-policy-secrets-sandbox
+permissions:
+  contents: write
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/003-identity-policy-secrets-sandbox
+          fetch-depth: 0
+      - name: Install pinned Rust formatter
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt
+      - name: Bind argv canary test fixture to exact launch plan
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('crates/golam-ledger/src/secret_fallback.rs')
+          s = p.read_text()
+          old_sig = '''    fn seed_fixture(authority: &AuthorityLayout) -> Fixture {'''
+          new_sig = '''    fn seed_fixture_with_launch(\n        authority: &AuthorityLayout,\n        launch_args: &[String],\n        launch_environment: &[(String, String)],\n    ) -> Fixture {'''
+          old_locals = '''        let protector = TestProtector { key: [42_u8; 32] };\n        let empty_args: Vec<String> = Vec::new();\n        let environment = vec![("GOLAM_TEST_MODE".to_owned(), "1".to_owned())];\n        let request = FallbackSecretUseRequest {'''
+          new_locals = '''        let protector = TestProtector { key: [42_u8; 32] };\n        let request = FallbackSecretUseRequest {'''
+          old_fields = '''            executable: "test-helper",\n            args: &empty_args,\n            explicit_environment: &environment,'''
+          new_fields = '''            executable: "test-helper",\n            args: launch_args,\n            explicit_environment: launch_environment,'''
+          insert_anchor = '''    #[test]\n    fn fallback_redacts_canary_and_consumes_exact_once_approval() {'''
+          wrapper = '''    fn seed_fixture(authority: &AuthorityLayout) -> Fixture {\n        let args: Vec<String> = Vec::new();\n        let environment = vec![("GOLAM_TEST_MODE".to_owned(), "1".to_owned())];\n        seed_fixture_with_launch(authority, &args, &environment)\n    }\n\n    #[test]\n    fn fallback_redacts_canary_and_consumes_exact_once_approval() {'''
+          old_test = '''    fn secret_in_argv_is_rejected_before_use_or_approval_consumption() {\n        let (runtime, authority) = authority();\n        let fixture = seed_fixture(&authority);\n        let mut store =\n            SecretFallbackStore::open_with_protector(&authority, fixture.protector.clone())\n                .unwrap();\n        let args = vec![String::from_utf8(CANARY.to_vec()).unwrap()];\n        let environment = vec![("GOLAM_TEST_MODE".to_owned(), "1".to_owned())];'''
+          new_test = '''    fn secret_in_argv_is_rejected_before_use_or_approval_consumption() {\n        let (runtime, authority) = authority();\n        let args = vec![String::from_utf8(CANARY.to_vec()).unwrap()];\n        let environment = vec![("GOLAM_TEST_MODE".to_owned(), "1".to_owned())];\n        let fixture = seed_fixture_with_launch(&authority, &args, &environment);\n        let mut store =\n            SecretFallbackStore::open_with_protector(&authority, fixture.protector.clone())\n                .unwrap();'''
+          for old in (old_sig, old_locals, old_fields, insert_anchor, old_test):
+              if old not in s:
+                  raise SystemExit(f'expected repair anchor missing: {old[:60]!r}')
+          s = s.replace(old_sig, new_sig, 1)
+          s = s.replace(old_locals, new_locals, 1)
+          s = s.replace(old_fields, new_fields, 1)
+          s = s.replace(insert_anchor, wrapper, 1)
+          s = s.replace(old_test, new_test, 1)
+          p.write_text(s)
+      - name: Format and commit
+        run: |
+          cargo +1.98.0 fmt --all
+          git rm .github/workflows/t003-054-argv-fixture-repair.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/golam-ledger/src/secret_fallback.rs
+          git commit -m 'test: bind fallback argv canary to admitted plan'
+          git push origin HEAD:impl/003-identity-policy-secrets-sandbox
