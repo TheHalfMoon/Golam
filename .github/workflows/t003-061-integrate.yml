@@ -76,37 +76,8 @@ jobs:
               '    require_latest_global_seq(transaction, global_seq, EgressPermitError::UseDecisionStale)?;',
               '    if latest_global_seq(transaction)? != global_seq {\n        return Err(EgressPermitError::UseDecisionStale);\n    }',
           )
-          old = '''fn require_latest_global_seq<E>(
-    transaction: &Transaction<'_>,
-    expected: u64,
-    error: E,
-) -> Result<(), E>
-where
-    E: Sized,
-{
-    let latest: i64 = transaction
-        .query_row(
-            "SELECT COALESCE(MAX(global_seq), 0) FROM (SELECT global_seq FROM session_events UNION ALL SELECT global_seq FROM effect_transitions UNION ALL SELECT global_seq FROM authorization_decisions)",
-            [],
-            |row| row.get(0),
-        )
-        .map_err(|_| error)?;
-    if u64::try_from(latest).ok() == Some(expected) {
-        Ok(())
-    } else {
-        Err(error)
-    }
-}
-'''
-          new = '''fn latest_global_seq(transaction: &Transaction<'_>) -> Result<u64, EgressPermitError> {
-    let latest: i64 = transaction.query_row(
-        "SELECT COALESCE(MAX(global_seq), 0) FROM (SELECT global_seq FROM session_events UNION ALL SELECT global_seq FROM effect_transitions UNION ALL SELECT global_seq FROM authorization_decisions)",
-        [],
-        |row| row.get(0),
-    )?;
-    nonnegative_u64(latest, "latest global sequence is invalid")
-}
-'''
+          old = base64.b64decode('Zm4gcmVxdWlyZV9sYXRlc3RfZ2xvYmFsX3NlcTxFPigKICAgIHRyYW5zYWN0aW9uOiAmVHJhbnNhY3Rpb248J18+LAogICAgZXhwZWN0ZWQ6IHU2NCwKICAgIGVycm9yOiBFLAopIC0+IFJlc3VsdDwoKSwgRT4Kd2hlcmUKICAgIEU6IFNpemVkLAp7CiAgICBsZXQgbGF0ZXN0OiBpNjQgPSB0cmFuc2FjdGlvbgogICAgICAgIC5xdWVyeV9yb3coCiAgICAgICAgICAgICJTRUxFQ1QgQ09BTEVTQ0UoTUFYKGdsb2JhbF9zZXEpLCAwKSBGUk9NIChTRUxFQ1QgZ2xvYmFsX3NlcSBGUk9NIHNlc3Npb25fZXZlbnRzIFVOSU9OIEFMTCBTRUxFQ1QgZ2xvYmFsX3NlcSBGUk9NIGVmZmVjdF90cmFuc2l0aW9ucyBVTklPTiBBTEwgU0VMRUNUIGdsb2JhbF9zZXEgRlJPTSBhdXRob3JpemF0aW9uX2RlY2lzaW9ucykiLAogICAgICAgICAgICBbXSwKICAgICAgICAgICAgfHJvd3wgcm93LmdldCgwKSwKICAgICAgICApCiAgICAgICAgLm1hcF9lcnIofF98IGVycm9yKT87CiAgICBpZiB1NjQ6OnRyeV9mcm9tKGxhdGVzdCkub2soKSA9PSBTb21lKGV4cGVjdGVkKSB7CiAgICAgICAgT2soKCkpCiAgICB9IGVsc2UgewogICAgICAgIEVycihlcnJvcikKICAgIH0KfQo=').decode()
+          new = base64.b64decode('Zm4gbGF0ZXN0X2dsb2JhbF9zZXEodHJhbnNhY3Rpb246ICZUcmFuc2FjdGlvbjwnXz4pIC0+IFJlc3VsdDx1NjQsIEVncmVzc1Blcm1pdEVycm9yPiB7CiAgICBsZXQgbGF0ZXN0OiBpNjQgPSB0cmFuc2FjdGlvbi5xdWVyeV9yb3coCiAgICAgICAgIlNFTEVDVCBDT0FMRVNDRShNQVgoZ2xvYmFsX3NlcSksIDApIEZST00gKFNFTEVDVCBnbG9iYWxfc2VxIEZST00gc2Vzc2lvbl9ldmVudHMgVU5JT04gQUxMIFNFTEVDVCBnbG9iYWxfc2VxIEZST00gZWZmZWN0X3RyYW5zaXRpb25zIFVOSU9OIEFMTCBTRUxFQ1QgZ2xvYmFsX3NlcSBGUk9NIGF1dGhvcml6YXRpb25fZGVjaXNpb25zKSIsCiAgICAgICAgW10sCiAgICAgICAgfHJvd3wgcm93LmdldCgwKSwKICAgICk/OwogICAgbm9ubmVnYXRpdmVfdTY0KGxhdGVzdCwgImxhdGVzdCBnbG9iYWwgc2VxdWVuY2UgaXMgaW52YWxpZCIpCn0K').decode()
           replace_once(egress, old, new)
       - name: Format and run focused T003-061 qualification
         run: |
