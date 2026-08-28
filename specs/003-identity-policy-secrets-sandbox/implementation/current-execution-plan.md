@@ -64,24 +64,27 @@ Completed:
 - T003-041 qualified at `76e1addf35c92a22d2c5826ca429278cacd598b3` with CI #366 / run `33151556481` SUCCESS on Windows/macOS/Ubuntu. Evidence: `implementation/taint-propagation-qualification.md`.
 - T003-042 qualified at `67f74c9b9b75e43b9fa00069050c97c041567184` with CI #373 / run `33152187952` SUCCESS on Windows/macOS/Ubuntu. Evidence: `implementation/verifier-registry-qualification.md`.
 
-T003-041 established monotonic `TaintSet::union`, a provenance carrier that does not alter the wrapped value's identity, derived-artifact propagation tests, and typed authority-context provenance tests. There is still no downgrade/removal API.
+T003-041 established monotonic `TaintSet::union`, a provenance carrier that does not alter the wrapped value's identity, derived-artifact propagation tests, and typed authority-context provenance tests. There is still no un-attested downgrade/removal API.
 
 T003-042 established a protected verifier/sanitizer registry over the existing `verifier_rules` schema. Registration is bounded/canonical, rejects untrusted/generated/secret-derived registration provenance before mutation, and requires exact current authorization, exact at-most-once elevated effect, exact ONCE approval with registration taint digest, atomic approval consumption, and fresh `authority-security-v2` coverage. The registry stores authority; it does not itself perform a downgrade.
 
-Next canonical task: **T003-043** — implement human/deterministic-verifier downgrade attestations as new evidence rather than in-place source mutation.
+Current canonical task: **T003-043** — human/deterministic-verifier downgrade attestations as new evidence rather than in-place source mutation.
 
-T003-043 bounded design constraints:
+Current T003-043 implementation shape:
 
-- reuse the already-created protected `taint_attestations` schema unless a proven invariant requires a migration;
-- a downgrade must create a new attestation/derived-artifact evidence record; source provenance is immutable;
-- human downgrade and deterministic-verifier downgrade are distinct mechanisms;
-- deterministic-verifier downgrade must reference an active registered rule whose allowed downgrade set covers the requested label removal;
-- the verifier/rule evidence must be independent of the tainted source and cannot be supplied as self-authenticating model/channel/MCP/plugin content;
-- human downgrade must be exact protected authority work under current authorization and approval scope; a free-form content assertion is not approval;
-- `SECRET_DERIVED` is not cleared by the normal human/deterministic-verifier path; its separately authorized deterministic secret-elimination path remains T003-045;
-- result labels are a separately evidenced set and source labels/rows remain unchanged;
-- the attestation row and fresh `authority-security` evidence commit atomically;
-- this task does not yet implement the canonical long-term-memory sink (T003-044) or secret-elimination sanitizer execution (T003-045).
+- reuses the already protected `taint_attestations` schema; no migration or new dependency is introduced;
+- adds strict fail-closed decoding for canonical `TaintSet` bytes so protected verifier-rule downgrade sets cannot be silently normalized when read;
+- preparation requires non-empty source provenance, a strict result-label subset, at least one removed label, bounded unique source artifact IDs, a distinct result artifact ID, a canonical principal, and non-empty evidence;
+- normal human/deterministic downgrade preparation rejects any attempt to remove `SECRET_DERIVED`; only the separately authorized secret-elimination sanitizer path in T003-045 may clear it;
+- source artifact IDs and source-label bytes are retained as immutable evidence; the path inserts a new `taint_attestations` row and does not update source provenance in place;
+- human downgrade requires an exact current `taint.downgrade` authorization decision, exact authorized at-most-once taint-authority effect, and exact ONCE approval bound to effect/action/resource/risk/source-taint digest; the approval is consumed atomically with the attestation and both receive authority-security coverage;
+- deterministic-verifier downgrade requires the same exact current protected decision/effect plus an active registered `deterministic_verifier` rule whose protected authority-source binding exactly matches the supplied verification context and whose decoded allowed-downgrade set covers every removed label;
+- an unregistered/inactive/wrong-kind/wrong-binding/insufficient rule fails closed;
+- fresh `taint_attestation` authority-security evidence is appended before commit and the full authority-security chain is reverified transactionally;
+- the fixed non-null `rule_id` schema field carries the registered verifier rule ID for deterministic verification; for human approval it carries the exact consumed approval ID so the authority reference remains auditable without a schema migration;
+- T003-043 still does not implement the long-term-memory sink (T003-044) or secret-elimination execution (T003-045).
+
+The first CI attempt for T003-043, CI #381 / run `33153295456` at `e9cb62b165b6c4dcc8c35fe7916ec8863171349f`, stopped at formatting before Clippy/tests. Those rustfmt-only findings were repaired. Fresh exact-head CI is required before T003-043 may be marked PASS.
 
 Remaining Phase E order:
 
@@ -148,6 +151,7 @@ T003_041_CI_RUN=33151556481
 T003_042=PASS
 T003_042_QUALIFIED_HEAD=67f74c9b9b75e43b9fa00069050c97c041567184
 T003_042_CI_RUN=33152187952
+T003_043=ACTIVE
 NEXT_TASK=T003-043
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO
