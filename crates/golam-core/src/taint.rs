@@ -1,5 +1,7 @@
 #![forbid(unsafe_code)]
 
+use core::fmt;
+
 use crate::{CanonicalEncoder, CoreError};
 
 const TAINT_SET_DOMAIN: &[u8] = b"golam:taint-label-set:v1";
@@ -180,6 +182,43 @@ impl TaintSet {
             return Err(CoreError::InvalidCanonicalTaintSet);
         }
         Ok(set)
+    }
+}
+
+/// Fail-closed reason for the canonical long-term-memory sink boundary.
+///
+/// This is intentionally a small policy guard rather than a memory product or
+/// storage API. Later memory integration must call this boundary before a
+/// value can become canonical long-term memory.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CanonicalMemoryAdmissionError {
+    SecretDerived,
+}
+
+impl fmt::Display for CanonicalMemoryAdmissionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::SecretDerived => {
+                f.write_str("SECRET_DERIVED provenance is forbidden from canonical long-term memory")
+            }
+        }
+    }
+}
+
+impl std::error::Error for CanonicalMemoryAdmissionError {}
+
+/// Validates the Spec 003 canonical long-term-memory sink invariant.
+///
+/// Non-secret provenance remains intact and may be admitted by later memory
+/// policy. `SECRET_DERIVED` is a hard sink denial regardless of any other
+/// trusted or untrusted label present in the same set.
+pub const fn validate_canonical_long_term_memory_admission(
+    taint: TaintSet,
+) -> Result<(), CanonicalMemoryAdmissionError> {
+    if taint.contains(TaintLabel::SecretDerived) {
+        Err(CanonicalMemoryAdmissionError::SecretDerived)
+    } else {
+        Ok(())
     }
 }
 
@@ -390,5 +429,47 @@ mod tests {
             derived.taint().canonical_bytes().unwrap(),
             reordered.taint().canonical_bytes().unwrap()
         );
+    }
+
+    #[test]
+    fn canonical_long_term_memory_rejects_secret_derived_even_with_trusted_labels() {
+        let secret = TaintSet::from_labels([
+            TaintLabel::UserTrusted,
+            TaintLabel::LocalTrusted,
+            TaintLabel::SecretDerived,
+        ]);
+
+        assert_eq!(
+            validate_canonical_long_term_memory_admission(secret),
+            Err(CanonicalMemoryAdmissionError::SecretDerived)
+        );
+    }
+
+    #[test]
+    fn derived_secret_taint_remains_rejected_after_multi_source_union() {
+        let secret_source = TaintSet::from_labels([TaintLabel::SecretDerived]);
+        let web_source = TaintSet::from_labels([TaintLabel::WebUntrusted]);
+        let generated = TaintSet::from_labels([TaintLabel::ModelGenerated]);
+        let derived = Provenanced::derive("memory candidate", [secret_source, web_source], generated);
+
+        assert!(derived.taint().contains(TaintLabel::SecretDerived));
+        assert_eq!(
+            validate_canonical_long_term_memory_admission(derived.taint()),
+            Err(CanonicalMemoryAdmissionError::SecretDerived)
+        );
+    }
+
+    #[test]
+    fn canonical_long_term_memory_allows_non_secret_provenance_without_clearing_it() {
+        let non_secret = TaintSet::from_labels([
+            TaintLabel::WebUntrusted,
+            TaintLabel::ModelGenerated,
+            TaintLabel::LocalUnverified,
+        ]);
+
+        assert_eq!(validate_canonical_long_term_memory_admission(non_secret), Ok(()));
+        assert!(non_secret.contains(TaintLabel::WebUntrusted));
+        assert!(non_secret.contains(TaintLabel::ModelGenerated));
+        assert!(non_secret.contains(TaintLabel::LocalUnverified));
     }
 }
