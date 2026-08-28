@@ -198,9 +198,9 @@ pub enum CanonicalMemoryAdmissionError {
 impl fmt::Display for CanonicalMemoryAdmissionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::SecretDerived => {
-                f.write_str("SECRET_DERIVED provenance is forbidden from canonical long-term memory")
-            }
+            Self::SecretDerived => f.write_str(
+                "SECRET_DERIVED provenance is forbidden from canonical long-term memory",
+            ),
         }
     }
 }
@@ -450,7 +450,8 @@ mod tests {
         let secret_source = TaintSet::from_labels([TaintLabel::SecretDerived]);
         let web_source = TaintSet::from_labels([TaintLabel::WebUntrusted]);
         let generated = TaintSet::from_labels([TaintLabel::ModelGenerated]);
-        let derived = Provenanced::derive("memory candidate", [secret_source, web_source], generated);
+        let derived =
+            Provenanced::derive("memory candidate", [secret_source, web_source], generated);
 
         assert!(derived.taint().contains(TaintLabel::SecretDerived));
         assert_eq!(
@@ -467,7 +468,10 @@ mod tests {
             TaintLabel::LocalUnverified,
         ]);
 
-        assert_eq!(validate_canonical_long_term_memory_admission(non_secret), Ok(()));
+        assert_eq!(
+            validate_canonical_long_term_memory_admission(non_secret),
+            Ok(())
+        );
         assert!(non_secret.contains(TaintLabel::WebUntrusted));
         assert!(non_secret.contains(TaintLabel::ModelGenerated));
         assert!(non_secret.contains(TaintLabel::LocalUnverified));
