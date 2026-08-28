@@ -579,6 +579,7 @@ mod tests {
         (runtime, authority)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn create_effect(
         authority: &AuthorityLayout,
         effect_id: EffectId,
