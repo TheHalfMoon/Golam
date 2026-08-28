@@ -3,7 +3,7 @@
 **Status**: IMPLEMENTATION_ACTIVE — PHASE_F_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current task**: `T003-056`
+**Current task**: `T003-057`
 
 ## Authority
 
@@ -114,19 +114,27 @@ Evidence: `implementation/secret-entry-qualification.md`.
 
 The qualified boundary treats the entire explicit submitted value as secret without detector dependence, routes raw bytes only into protected vault mutation, creates an authenticated opaque `SecretHandle`, and emits only a dedicated redacted canonical projection with bounded non-secret metadata before model-visible history.
 
-### T003-056 — ACTIVE
+### T003-056 — COMPLETE
 
-Add deterministic recognized- and unknown-format canary leakage qualification for the explicit secret-entry path.
+Qualified at exact implementation head `b1a47898515dc06237a0d71cea00e81b19cddd0a` by CI #484 / run `33169107060`, SUCCESS on Windows/macOS/Ubuntu.
+
+Evidence: `implementation/secret-canary-qualification.md`.
+
+The qualified suite exercises recognized and deliberately unknown-format deterministic canaries through the same explicit-entry path, scans durable authority files and canonical model-visible event payloads, checks rendered errors, and proves an environment-cleared unauthorized subprocess cannot recover the plaintext from durable authority bytes. Free-text recognition remains bounded defense in depth only.
+
+### T003-057 — ACTIVE
+
+Add crash/disk-full/rotation/revocation qualification and prove no acknowledged half-transition exposes stale secret authority.
 
 Required boundaries:
 
-- prove raw canaries are absent from durable vault bytes outside ciphertext, canonical event/audit/log/error/prompt paths, and unauthorized subprocess output;
-- exercise both recognized and deliberately unknown-format deterministic values through the same explicit-entry guarantee;
-- keep free-text detector tests separate and explicitly defense in depth rather than the source of secrecy;
-- use deterministic canaries only and no real secrets;
-- preserve the no-generic-plaintext-read boundary and existing protected mutation authority requirements.
+- injected pre-commit failures must roll back secret record/version/handle and approval-consumption state atomically;
+- crash/restart evidence must show only fully committed protected transitions survive;
+- rotation must leave exactly one active current version while retired versions remain immutable and stale handles deny;
+- revocation must immediately block broker/fallback use without deleting prior encrypted versions or weakening audit integrity;
+- no failure mode may acknowledge success while leaving old secret authority usable as current.
 
-After exact-head T003-056 qualification, continue directly to T003-057.
+After exact-head T003-057 qualification, close Phase F and continue directly to T003-060.
 
 ### Remaining Phase F ordering
 
@@ -172,8 +180,11 @@ T003_054_CI_RUN=33166659638
 T003_055=PASS
 T003_055_QUALIFIED_HEAD=b434da7c675fecf41d3f3aed2104559f959e8310
 T003_055_CI_RUN=33167705734
-T003_056=ACTIVE
-NEXT_TASK=T003-056
+T003_056=PASS
+T003_056_QUALIFIED_HEAD=b1a47898515dc06237a0d71cea00e81b19cddd0a
+T003_056_CI_RUN=33169107060
+T003_057=ACTIVE
+NEXT_TASK=T003-057
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO
