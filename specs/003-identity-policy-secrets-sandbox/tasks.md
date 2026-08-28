@@ -47,7 +47,7 @@ Legend:
 
 ## Phase E — Taint and verifier state
 
-- [ ] **T003-040** Implement baseline taint-label set and deterministic canonical encoding.
+- [x] **T003-040** Implement baseline taint-label set and deterministic canonical encoding. Exact-head qualification: CI #359 (`33150969442`) SUCCESS at `cb69d638107ca4fe0118c9a61f143ac3ba65a2d3` on Windows/macOS/Ubuntu. Evidence: `implementation/taint-baseline-qualification.md`.
 - [ ] **T003-041** Implement monotonic union propagation for derived artifacts/authority context.
 - [ ] **T003-042** Implement protected verifier/sanitizer registry; tainted sources cannot register their own downgrade rule.
 - [ ] **T003-043** Implement human/deterministic-verifier downgrade attestations as new evidence rather than in-place source mutation.
@@ -130,11 +130,14 @@ T003_034_CI_RUN=33149069868
 T003_035=PASS
 T003_035_QUALIFIED_HEAD=ffc8a66c881b1a34dafe32f79beebe03cceba939
 T003_035_CI_RUN=33149715031
+T003_040=PASS
+T003_040_QUALIFIED_HEAD=cb69d638107ca4fe0118c9a61f143ac3ba65a2d3
+T003_040_CI_RUN=33150969442
 CEDAR_POLICY_ADMITTED_EXACT=4.12.0
 SECRET_CRYPTO_AND_OS_KEY_PROTECTORS_QUALIFIED=YES
 WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED
 Golam-Research=REFERENCE_ONLY
 DONOR_CODE_ADMITTED=NO
 REAL_SECRETS_USED=NO
-NEXT_TASK=T003-040
+NEXT_TASK=T003-041
 ```
