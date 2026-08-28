@@ -241,11 +241,12 @@ impl RunPreauthorizationStore {
         if current_uses >= evidence.max_uses() {
             return Err(RunPreauthorizationError::UsageLimitReached);
         }
-        let use_number = current_uses.checked_add(1).ok_or(
-            RunPreauthorizationError::InvalidStoredRecord(
-                "run preauthorization use count overflow",
-            ),
-        )?;
+        let use_number =
+            current_uses
+                .checked_add(1)
+                .ok_or(RunPreauthorizationError::InvalidStoredRecord(
+                    "run preauthorization use count overflow",
+                ))?;
         transaction.execute(
             "INSERT INTO approval_consumptions (consumption_id, approval_id, effect_or_operation_id, reserved_global_seq, consumed_global_seq, state) VALUES (?1, ?2, ?3, ?4, ?5, 'consumed')",
             params![
@@ -469,11 +470,12 @@ fn current_usage_count(
     for state in states {
         match state?.as_str() {
             "reserved" | "consumed" => {
-                count = count.checked_add(1).ok_or(
-                    RunPreauthorizationError::InvalidStoredRecord(
-                        "RUN_PREAUTHORIZATION usage count overflow",
-                    ),
-                )?;
+                count =
+                    count
+                        .checked_add(1)
+                        .ok_or(RunPreauthorizationError::InvalidStoredRecord(
+                            "RUN_PREAUTHORIZATION usage count overflow",
+                        ))?;
             }
             "released" => {
                 return Err(RunPreauthorizationError::InvalidStoredRecord(
@@ -652,9 +654,8 @@ mod tests {
             max_uses,
         )
         .unwrap();
-        let issue_effect = EffectId(
-            50_000 + u128::from(ISSUE_EFFECT_N.fetch_add(1, Ordering::Relaxed)) * 1_000,
-        );
+        let issue_effect =
+            EffectId(50_000 + u128::from(ISSUE_EFFECT_N.fetch_add(1, Ordering::Relaxed)) * 1_000);
         authorize_issue_effect(authority, &prepared, issue_effect);
         let mut log = AuthorizationAuditLog::open(authority).unwrap();
         let decision = log
@@ -806,11 +807,7 @@ mod tests {
 
         let mut store = RunPreauthorizationStore::open(&authority).unwrap();
         store
-            .claim_unattended_irreversible(request(
-                normal,
-                EffectId(720),
-                "2026-08-27T00:30:00Z",
-            ))
+            .claim_unattended_irreversible(request(normal, EffectId(720), "2026-08-27T00:30:00Z"))
             .unwrap();
         assert!(matches!(
             store.claim_unattended_irreversible(request(
