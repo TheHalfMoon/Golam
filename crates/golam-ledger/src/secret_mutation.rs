@@ -420,6 +420,8 @@ impl SecretMutationStore {
         consume_once_approval(&transaction, approval_id, effect_id, authority.global_seq)?;
         crate::authority_security_v2::verify(&transaction)
             .map_err(|error| SecretMutationError::AuthoritySecurity(error.to_string()))?;
+        #[cfg(test)]
+        test_pause_before_secret_commit("revoke");
         transaction.commit()?;
         Ok(SecretMutationOutcome {
             secret_id: prepared.secret_id,
@@ -518,6 +520,8 @@ impl SecretMutationStore {
         consume_once_approval(&transaction, approval_id, effect_id, authority.global_seq)?;
         crate::authority_security_v2::verify(&transaction)
             .map_err(|error| SecretMutationError::AuthoritySecurity(error.to_string()))?;
+        #[cfg(test)]
+        test_pause_before_secret_commit("create");
         transaction.commit()?;
         Ok(SecretMutationOutcome {
             secret_id,
@@ -634,6 +638,8 @@ impl SecretMutationStore {
         consume_once_approval(&transaction, approval_id, effect_id, authority.global_seq)?;
         crate::authority_security_v2::verify(&transaction)
             .map_err(|error| SecretMutationError::AuthoritySecurity(error.to_string()))?;
+        #[cfg(test)]
+        test_pause_before_secret_commit("rotate");
         transaction.commit()?;
         Ok(SecretMutationOutcome {
             secret_id: prepared.secret_id,
@@ -1052,6 +1058,26 @@ fn seq_from_i64(value: i64) -> Result<u64, SecretMutationError> {
 
 fn to_i64(value: u64) -> Result<i64, SecretMutationError> {
     i64::try_from(value).map_err(|_| SecretMutationError::IntegerOverflow)
+}
+
+#[cfg(test)]
+fn test_pause_before_secret_commit(operation: &str) {
+    const OP_ENV: &str = "GOLAM_T003_057_CRASH_OPERATION";
+    const ROOT_ENV: &str = "GOLAM_T003_057_CRASH_ROOT";
+    if std::env::var(OP_ENV).ok().as_deref() != Some(operation) {
+        return;
+    }
+    let root = std::path::PathBuf::from(
+        std::env::var_os(ROOT_ENV).expect("T003-057 crash root must be provided"),
+    );
+    std::fs::write(
+        root.join(format!("secret-{operation}-before-commit.marker")),
+        b"mutation-pending-not-committed",
+    )
+    .expect("T003-057 crash marker must be writable");
+    loop {
+        std::thread::park_timeout(std::time::Duration::from_secs(60));
+    }
 }
 
 #[cfg(test)]
@@ -1491,6 +1517,328 @@ mod tests {
             )
             .unwrap();
         assert_eq!(current, 1);
+        drop(store);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    fn seed_t003_057_secret() -> (RuntimeLayout, AuthorityLayout, [u8; 16]) {
+        let (runtime, authority) = authority();
+        let mut store = SecretMutationStore::open(&authority).unwrap();
+        let create =
+            prepare_secret_create("api_credential", "owner:owner", CANARY_ONE.to_vec()).unwrap();
+        let work = install_authorized_work(
+            &mut store.connection,
+            1,
+            70,
+            SECRET_CREATE_ACTION,
+            create.resource(),
+            create.intent_digest(),
+        );
+        let created = store
+            .create_with_protector(
+                create,
+                work.decision,
+                work.approval,
+                work.effect,
+                FakeKeyProtector::available(5),
+            )
+            .unwrap();
+        let secret_id = created.secret_id();
+        drop(store);
+        (runtime, authority, secret_id)
+    }
+
+    #[test]
+    fn disk_full_rotation_rolls_back_retirement_version_and_approval() {
+        let (runtime, authority, secret_id) = seed_t003_057_secret();
+        let mut store = SecretMutationStore::open(&authority).unwrap();
+        let rotate = prepare_secret_rotate(
+            secret_id,
+            1,
+            vec![b'R'; MAX_SECRET_BYTES],
+            "2026-08-28T04:00:00Z",
+        )
+        .unwrap();
+        let work = install_authorized_work(
+            &mut store.connection,
+            3,
+            71,
+            SECRET_ROTATE_ACTION,
+            rotate.resource(),
+            rotate.intent_digest(),
+        );
+
+        store
+            .connection
+            .execute_batch("PRAGMA wal_checkpoint(TRUNCATE); VACUUM;")
+            .unwrap();
+        let page_count: i64 = store
+            .connection
+            .query_row("PRAGMA page_count", [], |row| row.get(0))
+            .unwrap();
+        store
+            .connection
+            .execute_batch(&format!("PRAGMA max_page_count = {page_count};"))
+            .unwrap();
+
+        let error = store
+            .rotate_with_protector(
+                rotate,
+                work.decision,
+                work.approval,
+                work.effect,
+                FakeKeyProtector::available(5),
+            )
+            .expect_err("bounded database must report SQLITE_FULL before rotation commit");
+        assert!(matches!(
+            error,
+            SecretMutationError::Sqlite(rusqlite::Error::SqliteFailure(ref code, _))
+                if code.extended_code == rusqlite::ffi::SQLITE_FULL
+        ));
+        store
+            .connection
+            .execute_batch("PRAGMA max_page_count = 1073741823;")
+            .unwrap();
+
+        let state: (i64, Option<String>, i64) = store
+            .connection
+            .query_row(
+                "SELECT r.current_version, v.retired_at, (SELECT COUNT(*) FROM secret_versions v2 WHERE v2.secret_id = r.secret_id) FROM secret_records r JOIN secret_versions v ON v.secret_id = r.secret_id AND v.version = 1 WHERE r.secret_id = ?1",
+                params![&secret_id[..]],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(state, (1, None, 1));
+        let used: i64 = store
+            .connection
+            .query_row(
+                "SELECT COUNT(*) FROM approval_consumptions WHERE approval_id = ?1",
+                params![&work.approval[..]],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(used, 0);
+        crate::integrity::verify(&store.connection).unwrap();
+        crate::authority_security_v2::verify(&store.connection).unwrap();
+        drop(store);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn crash_before_secret_commit_child() {
+        const OP_ENV: &str = "GOLAM_T003_057_CRASH_OPERATION";
+        const ROOT_ENV: &str = "GOLAM_T003_057_CRASH_ROOT";
+        let Some(operation) = std::env::var_os(OP_ENV) else {
+            return;
+        };
+        let operation = operation.to_string_lossy();
+        let root = std::path::PathBuf::from(
+            std::env::var_os(ROOT_ENV).expect("T003-057 child root must be present"),
+        );
+        let runtime = RuntimeLayout::initialize(&root).unwrap();
+        let authority = AuthorityLayout::initialize(&runtime).unwrap();
+        let mut store = SecretMutationStore::open(&authority).unwrap();
+        let secret_id: Vec<u8> = store
+            .connection
+            .query_row("SELECT secret_id FROM secret_records LIMIT 1", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        let secret_id: [u8; 16] = secret_id.try_into().unwrap();
+
+        match operation.as_ref() {
+            "rotate" => {
+                let rotate = prepare_secret_rotate(
+                    secret_id,
+                    1,
+                    CANARY_TWO.to_vec(),
+                    "2026-08-28T05:00:00Z",
+                )
+                .unwrap();
+                let work = install_authorized_work(
+                    &mut store.connection,
+                    3,
+                    72,
+                    SECRET_ROTATE_ACTION,
+                    rotate.resource(),
+                    rotate.intent_digest(),
+                );
+                let _ = store.rotate_with_protector(
+                    rotate,
+                    work.decision,
+                    work.approval,
+                    work.effect,
+                    FakeKeyProtector::available(5),
+                );
+            }
+            "revoke" => {
+                let revoke = prepare_secret_revoke(secret_id, 1, "2026-08-28T06:00:00Z").unwrap();
+                let work = install_authorized_work(
+                    &mut store.connection,
+                    3,
+                    73,
+                    SECRET_REVOKE_ACTION,
+                    revoke.resource(),
+                    revoke.intent_digest(),
+                );
+                let _ = store.revoke(revoke, work.decision, work.approval, work.effect);
+            }
+            other => panic!("unexpected T003-057 crash operation: {other}"),
+        }
+        panic!("T003-057 child mutation returned instead of pausing before commit");
+    }
+
+    fn kill_precommit_child(runtime: &RuntimeLayout, operation: &str) {
+        let marker = runtime
+            .root
+            .join(format!("secret-{operation}-before-commit.marker"));
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+            .arg("--exact")
+            .arg("secret_mutation::tests::crash_before_secret_commit_child")
+            .arg("--nocapture")
+            .env("GOLAM_T003_057_CRASH_OPERATION", operation)
+            .env("GOLAM_T003_057_CRASH_ROOT", &runtime.root)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+        while !marker.exists() {
+            if let Some(status) = child.try_wait().unwrap() {
+                panic!("T003-057 {operation} child exited before pre-commit marker: {status}");
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "T003-057 {operation} child did not reach pre-commit marker"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        child.kill().unwrap();
+        let _ = child.wait().unwrap();
+        fs::remove_file(marker).unwrap();
+    }
+
+    #[test]
+    fn process_kill_before_rotation_commit_preserves_old_current_authority() {
+        let (runtime, authority, secret_id) = seed_t003_057_secret();
+        kill_precommit_child(&runtime, "rotate");
+
+        let mut store = SecretMutationStore::open(&authority).unwrap();
+        let state: (i64, Option<String>, i64) = store
+            .connection
+            .query_row(
+                "SELECT r.current_version, v.retired_at, (SELECT COUNT(*) FROM secret_versions v2 WHERE v2.secret_id = r.secret_id) FROM secret_records r JOIN secret_versions v ON v.secret_id = r.secret_id AND v.version = 1 WHERE r.secret_id = ?1",
+                params![&secret_id[..]],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(state, (1, None, 1));
+        let crashed_approval = [72_u8.wrapping_add(80); 16];
+        let used: i64 = store
+            .connection
+            .query_row(
+                "SELECT COUNT(*) FROM approval_consumptions WHERE approval_id = ?1",
+                params![&crashed_approval[..]],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(used, 0);
+        crate::integrity::verify(&store.connection).unwrap();
+        crate::authority_security_v2::verify(&store.connection).unwrap();
+
+        let rotate =
+            prepare_secret_rotate(secret_id, 1, CANARY_TWO.to_vec(), "2026-08-28T05:01:00Z")
+                .unwrap();
+        let work = install_authorized_work(
+            &mut store.connection,
+            5,
+            74,
+            SECRET_ROTATE_ACTION,
+            rotate.resource(),
+            rotate.intent_digest(),
+        );
+        let committed = store
+            .rotate_with_protector(
+                rotate,
+                work.decision,
+                work.approval,
+                work.effect,
+                FakeKeyProtector::available(5),
+            )
+            .unwrap();
+        assert_eq!(committed.version(), 2);
+        let current: i64 = store
+            .connection
+            .query_row(
+                "SELECT current_version FROM secret_records WHERE secret_id = ?1",
+                params![&secret_id[..]],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(current, 2);
+        drop(store);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn process_kill_before_revocation_commit_preserves_active_then_commit_revokes() {
+        let (runtime, authority, secret_id) = seed_t003_057_secret();
+        kill_precommit_child(&runtime, "revoke");
+
+        let mut store = SecretMutationStore::open(&authority).unwrap();
+        let state: (String, Option<String>, i64) = store
+            .connection
+            .query_row(
+                "SELECT status, revoked_at, (SELECT COUNT(*) FROM secret_versions v WHERE v.secret_id = r.secret_id) FROM secret_records r WHERE secret_id = ?1",
+                params![&secret_id[..]],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(state, ("active".to_owned(), None, 1));
+        let crashed_approval = [73_u8.wrapping_add(80); 16];
+        let used: i64 = store
+            .connection
+            .query_row(
+                "SELECT COUNT(*) FROM approval_consumptions WHERE approval_id = ?1",
+                params![&crashed_approval[..]],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(used, 0);
+        crate::integrity::verify(&store.connection).unwrap();
+        crate::authority_security_v2::verify(&store.connection).unwrap();
+
+        let revoke = prepare_secret_revoke(secret_id, 1, "2026-08-28T06:01:00Z").unwrap();
+        let work = install_authorized_work(
+            &mut store.connection,
+            5,
+            75,
+            SECRET_REVOKE_ACTION,
+            revoke.resource(),
+            revoke.intent_digest(),
+        );
+        store
+            .revoke(revoke, work.decision, work.approval, work.effect)
+            .unwrap();
+        let committed: (String, Option<String>, i64) = store
+            .connection
+            .query_row(
+                "SELECT status, revoked_at, (SELECT COUNT(*) FROM secret_versions v WHERE v.secret_id = r.secret_id) FROM secret_records r WHERE secret_id = ?1",
+                params![&secret_id[..]],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            committed,
+            (
+                "revoked".to_owned(),
+                Some("2026-08-28T06:01:00Z".to_owned()),
+                1
+            )
+        );
+        crate::integrity::verify(&store.connection).unwrap();
+        crate::authority_security_v2::verify(&store.connection).unwrap();
         drop(store);
         fs::remove_dir_all(runtime.root).unwrap();
     }
