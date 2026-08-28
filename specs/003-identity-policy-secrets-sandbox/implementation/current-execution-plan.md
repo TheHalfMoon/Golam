@@ -3,7 +3,7 @@
 **Status**: IMPLEMENTATION_ACTIVE — PHASE_F_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current task**: `T003-055`
+**Current task**: `T003-056`
 
 ## Authority
 
@@ -106,20 +106,27 @@ Evidence: `implementation/secret-fallback-qualification.md`.
 
 The qualified boundary provides a bounded trusted stdin-only fallback consuming exact pre-existing admission/policy/lease/effect/ONCE-approval authority, with a cleared environment, no secret argv/environment, no ambient descendant inheritance, callback-only vault plaintext exposure and exact-value output/error redaction. It creates no sandbox or egress authority and uses deterministic canaries only.
 
-### T003-055 — ACTIVE
+### T003-055 — COMPLETE
 
-Implement the explicit user-designated secret-entry boundary.
+Qualified at exact implementation head `b434da7c675fecf41d3f3aed2104559f959e8310` by CI #473 / run `33167705734`, SUCCESS on Windows/macOS/Ubuntu.
+
+Evidence: `implementation/secret-entry-qualification.md`.
+
+The qualified boundary treats the entire explicit submitted value as secret without detector dependence, routes raw bytes only into protected vault mutation, creates an authenticated opaque `SecretHandle`, and emits only a dedicated redacted canonical projection with bounded non-secret metadata before model-visible history.
+
+### T003-056 — ACTIVE
+
+Add deterministic recognized- and unknown-format canary leakage qualification for the explicit secret-entry path.
 
 Required boundaries:
 
-- treat the complete submitted value as secret independent of syntax or detector recognition;
-- raw submitted bytes may enter only the qualified protected vault mutation path and must never become canonical/model-visible plaintext;
-- before any model-visible canonical append, persist only an opaque handle, tombstone/redaction marker and bounded non-secret metadata;
-- recognized-format/free-text detection remains defense in depth and is not the source of the explicit-entry guarantee;
-- keep generic plaintext/ciphertext reads unavailable and preserve exact protected-mutation authority requirements;
-- use deterministic canaries only in tests.
+- prove raw canaries are absent from durable vault bytes outside ciphertext, canonical event/audit/log/error/prompt paths, and unauthorized subprocess output;
+- exercise both recognized and deliberately unknown-format deterministic values through the same explicit-entry guarantee;
+- keep free-text detector tests separate and explicitly defense in depth rather than the source of secrecy;
+- use deterministic canaries only and no real secrets;
+- preserve the no-generic-plaintext-read boundary and existing protected mutation authority requirements.
 
-After exact-head T003-055 qualification, continue directly to T003-056.
+After exact-head T003-056 qualification, continue directly to T003-057.
 
 ### Remaining Phase F ordering
 
@@ -162,8 +169,11 @@ T003_053_CI_RUN=33165034463
 T003_054=PASS
 T003_054_QUALIFIED_HEAD=f2cef061f4a6847a2eedf7b867b8b94e4ccadd8f
 T003_054_CI_RUN=33166659638
-T003_055=ACTIVE
-NEXT_TASK=T003-055
+T003_055=PASS
+T003_055_QUALIFIED_HEAD=b434da7c675fecf41d3f3aed2104559f959e8310
+T003_055_CI_RUN=33167705734
+T003_056=ACTIVE
+NEXT_TASK=T003-056
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO
