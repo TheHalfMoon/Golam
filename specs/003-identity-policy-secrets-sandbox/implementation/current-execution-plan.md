@@ -64,27 +64,30 @@ Completed:
 - T003-041 qualified at `76e1addf35c92a22d2c5826ca429278cacd598b3` with CI #366 / run `33151556481` SUCCESS on Windows/macOS/Ubuntu. Evidence: `implementation/taint-propagation-qualification.md`.
 - T003-042 qualified at `67f74c9b9b75e43b9fa00069050c97c041567184` with CI #373 / run `33152187952` SUCCESS on Windows/macOS/Ubuntu. Evidence: `implementation/verifier-registry-qualification.md`.
 - T003-043 qualified at `2f8655b5bdddd17bb9e6eab7bf00f11a210896cb` with CI #388 / run `33154505847` SUCCESS on Windows/macOS/Ubuntu. Evidence: `implementation/taint-downgrade-attestation-qualification.md`.
+- T003-044 qualified at `1a9fcddff4c4dd6a6161547cf89a502750f9bc71` with CI #393 / run `33155122088` SUCCESS on Windows/macOS/Ubuntu. Evidence: `implementation/secret-derived-memory-admission-qualification.md`.
 
-T003-043 qualification proves normal human/deterministic-verifier downgrade creates separately evidenced derived state rather than rewriting source provenance, requires exact protected authority/effect bindings, decodes registered downgrade rules fail-closed, and reserves `SECRET_DERIVED` removal for the later deterministic sanitizer path.
+T003-044 freezes a small side-effect-free trusted-path guard for future canonical long-term-memory admission. Any `TaintSet` containing `SECRET_DERIVED` denies, including after multi-source monotonic derivation or alongside trusted labels. The task does not implement the Spec 005 memory product.
 
-Current canonical task: **T003-044** — enforce `SECRET_DERIVED` rejection at the canonical long-term-memory admission boundary reserved for later memory integration.
+Current canonical task: **T003-045** — deterministic secret-elimination sanitizer evidence path producing a separately evidenced non-secret-derived artifact.
 
-Bounded T003-044 implementation intent:
+Bounded T003-045 implementation intent:
 
-- do not implement the Spec 005 memory product, retrieval, storage engine or model-facing memory workflow;
-- expose a small Rust trusted-path admission guard over canonical `TaintSet` state that future memory integration must call before canonical long-term-memory admission;
-- deny whenever `SECRET_DERIVED` is present, including when it appears through multi-source monotonic union or beside otherwise trusted labels;
-- allow non-secret-derived taint to remain admissible as provenance evidence rather than pretending it becomes trusted;
-- keep the decision deterministic, side-effect free and independent of model confidence, human assertion or ordinary downgrade APIs;
-- add focused tests proving `SECRET_DERIVED` dominance without introducing a new schema, dependency or product memory store.
+- reuse the protected verifier/sanitizer registry already qualified by T003-042 and the `taint_attestations` schema already qualified by T003-043; no schema or dependency expansion is expected;
+- add the data-model-reserved `secret_elimination_sanitizer` attestation mechanism and a typed sanitizer evidence boundary;
+- require source provenance to contain `SECRET_DERIVED` and require the result to be a distinct derived artifact whose result labels no longer contain `SECRET_DERIVED`;
+- preserve every source artifact ID and source label as immutable evidence; the sanitizer never edits source provenance in place;
+- bind execution to a current exact protected authorization decision and exact authorized at-most-once taint-authority effect;
+- require an active registered `secret_elimination_sanitizer` rule, exact authority-source binding and a canonical allowed-downgrade set covering every removed label;
+- a normal deterministic verifier cannot act as a secret-elimination sanitizer and a sanitizer cannot silently remove unrelated labels beyond its registered downgrade scope;
+- the separately evidenced sanitizer result should pass the T003-044 canonical-memory sink guard only because its own result provenance no longer contains `SECRET_DERIVED`, never because the source was mutated or the sink guard was bypassed;
+- keep T003-046 adversarial multi-hop/self-clear qualification separate.
 
 Remaining Phase E order:
 
-1. T003-044 `SECRET_DERIVED` long-term-memory admission denial boundary;
-2. T003-045 deterministic secret-elimination sanitizer evidence;
-3. T003-046 multi-hop/self-clear/unregistered-verifier/SECRET_DERIVED adversarial qualification.
+1. T003-045 deterministic secret-elimination sanitizer evidence;
+2. T003-046 multi-hop/self-clear/unregistered-verifier/SECRET_DERIVED adversarial qualification.
 
-Do not begin Phase F until the Phase E predecessor tasks required by `tasks.md` are complete and qualified.
+Do not begin Phase F until Phase E predecessor tasks are complete and exact-head qualified.
 
 ### Phase F — Secret vault and broker
 
@@ -145,8 +148,11 @@ T003_042_CI_RUN=33152187952
 T003_043=PASS
 T003_043_QUALIFIED_HEAD=2f8655b5bdddd17bb9e6eab7bf00f11a210896cb
 T003_043_CI_RUN=33154505847
-T003_044=ACTIVE
-NEXT_TASK=T003-044
+T003_044=PASS
+T003_044_QUALIFIED_HEAD=1a9fcddff4c4dd6a6161547cf89a502750f9bc71
+T003_044_CI_RUN=33155122088
+T003_045=ACTIVE
+NEXT_TASK=T003-045
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO
 PR_READY=NO
