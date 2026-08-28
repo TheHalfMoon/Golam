@@ -69,7 +69,7 @@ Legend:
 ## Phase G — Egress permits
 
 - [x] **T003-060** Keep strict-local external egress as an unconditional hard guard before policy/permit evaluation. Exact-head qualification: CI #502 (`33196075286`) SUCCESS at `50941a6d68a7920aca3666eb786f05d8b2c145b2` on Windows/macOS/Ubuntu. Evidence: `implementation/strict-local-hard-guard-qualification.md`.
-- [ ] **T003-061** Implement non-strict EgressPermit scope and protected issuance/revocation/use accounting.
+- [x] **T003-061** Implement non-strict EgressPermit scope and protected issuance/revocation/use accounting. Exact-head qualification: CI #514 (`33198112325`) SUCCESS at `94d1482f8963ea4d5630a1ba4d2bdaba0e12e7ef` on Windows/macOS/Ubuntu. Evidence: `implementation/egress-permit-qualification.md`.
 - [ ] **T003-062** Implement mandatory reauthorization of every effective destination before connect/follow whenever DNS resolution, redirect, rebinding, protocol/port, or private/link-local/loopback target changes; hostname authority never transfers implicitly to a changed effective target.
 - [ ] **T003-063** Bind relevant taint and secret-handle context into egress authorization/evidence.
 - [ ] **T003-064** Add strict-local dominance plus external sinkhole/no-egress qualification covering `golamd` and every Golam-managed descendant, proving permits and child processes cannot bypass the hard guard.
@@ -180,11 +180,14 @@ T003_057_CI_RUN=33195054055
 T003_060=PASS
 T003_060_QUALIFIED_HEAD=50941a6d68a7920aca3666eb786f05d8b2c145b2
 T003_060_CI_RUN=33196075286
+T003_061=PASS
+T003_061_QUALIFIED_HEAD=94d1482f8963ea4d5630a1ba4d2bdaba0e12e7ef
+T003_061_CI_RUN=33198112325
 CEDAR_POLICY_ADMITTED_EXACT=4.12.0
 SECRET_CRYPTO_AND_OS_KEY_PROTECTORS_QUALIFIED=YES
 WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED
 Golam-Research=REFERENCE_ONLY
 DONOR_CODE_ADMITTED=NO
 REAL_SECRETS_USED=NO
-NEXT_TASK=T003-061
+NEXT_TASK=T003-062
 ```

@@ -3,7 +3,7 @@
 **Status**: IMPLEMENTATION_ACTIVE — PHASE_F_COMPLETE — PHASE_G_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current task**: `T003-061`
+**Current task**: `T003-062`
 
 ## Authority
 
@@ -138,7 +138,7 @@ Required boundaries:
 - revocation must immediately block broker/fallback use without deleting prior encrypted versions or weakening audit integrity;
 - no failure mode may acknowledge success while leaving old secret authority usable as current.
 
-Phase F is closed at the task-qualified head above. Phase G is active at T003-061.
+Phase F is closed at the task-qualified head above. Phase G is active at T003-062.
 
 ### Remaining Phase F ordering
 
@@ -156,13 +156,21 @@ Evidence: `implementation/strict-local-hard-guard-qualification.md`.
 
 The qualified regression proves strict-local external egress denies before downstream policy/permit evaluation, produces no grant, and records no policy evidence because the downstream permit-like policy is never invoked.
 
-### T003-061 — ACTIVE
+### T003-061 — COMPLETE
 
-Implement non-strict `EgressPermit` scope plus protected issuance, revocation, and bounded use accounting while preserving T003-060 hard-guard dominance.
+Qualified at exact implementation head `94d1482f8963ea4d5630a1ba4d2bdaba0e12e7ef` by CI #514 / run `33198112325`, SUCCESS on Windows/macOS/Ubuntu.
+
+Evidence: `implementation/egress-permit-qualification.md`.
+
+The qualified boundary implements protected permit issuance/revocation, exact scope and lifetime checks, active-policy and parent-lease validation, atomic bounded use accounting, schema-v4 `uses_consumed`, and `authority-security-v2` snapshots while preserving strict-local dominance.
+
+### T003-062 — ACTIVE
+
+Implement mandatory reauthorization of every changed effective destination before connect/follow for DNS resolution, redirect, rebinding, protocol/port, and private/link-local/loopback transitions.
 
 ## Later phases
 
-- Remaining Phase G: T003-061..T003-064, strict-local hard denial remains dominant.
+- Remaining Phase G: T003-062..T003-064, strict-local hard denial remains dominant.
 - Phase H: T003-070..T003-076, with descendant-capturing no-egress predecessor before network-capable native managed children.
 - Phase I: T003-080..T003-084.
 - Phase J: T003-090..T003-098, including fresh exact-head multi-platform CI, convergence, authorized Qodo review, merge, and post-merge canonical-main evidence.
@@ -210,7 +218,10 @@ T003_057_CI_RUN=33195054055
 T003_060=PASS
 T003_060_QUALIFIED_HEAD=50941a6d68a7920aca3666eb786f05d8b2c145b2
 T003_060_CI_RUN=33196075286
-NEXT_TASK=T003-061
+T003_061=PASS
+T003_061_QUALIFIED_HEAD=94d1482f8963ea4d5630a1ba4d2bdaba0e12e7ef
+T003_061_CI_RUN=33198112325
+NEXT_TASK=T003-062
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO
