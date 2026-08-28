@@ -34,9 +34,9 @@ pub mod run_preauthorization;
 mod security_audit;
 pub mod session_read;
 pub mod storage;
-pub mod taint_attestation;
 #[cfg(test)]
 mod taint_adversarial;
+pub mod taint_attestation;
 pub mod verifier_registry;
 
 use golam_core::{CanonicalEncoder, CoreError, EventId, SessionId};
