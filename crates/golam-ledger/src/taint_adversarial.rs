@@ -151,10 +151,7 @@ fn property_memory_sink_rejects_exactly_every_secret_derived_combination() {
 
 #[test]
 fn multi_hop_derivation_preserves_all_sources_and_secret_dominance() {
-    let web_secret = TaintSet::from_labels([
-        TaintLabel::WebUntrusted,
-        TaintLabel::SecretDerived,
-    ]);
+    let web_secret = TaintSet::from_labels([TaintLabel::WebUntrusted, TaintLabel::SecretDerived]);
     let local = TaintSet::from_labels([TaintLabel::LocalTrusted]);
     let generated = TaintSet::from_labels([TaintLabel::ModelGenerated]);
     let plugin = TaintSet::from_labels([TaintLabel::PluginUnverified]);
@@ -172,21 +169,11 @@ fn multi_hop_derivation_preserves_all_sources_and_secret_dominance() {
 
 #[test]
 fn normal_human_and_verifier_paths_cannot_self_clear_secret_derived() {
-    let source = TaintSet::from_labels([
-        TaintLabel::SecretDerived,
-        TaintLabel::ModelGenerated,
-    ]);
+    let source = TaintSet::from_labels([TaintLabel::SecretDerived, TaintLabel::ModelGenerated]);
     let result = TaintSet::from_labels([TaintLabel::ModelGenerated]);
 
     assert!(matches!(
-        prepare_human_downgrade(
-            [[1; 32]],
-            source,
-            [2; 32],
-            result,
-            "owner:owner",
-            [3; 32],
-        ),
+        prepare_human_downgrade([[1; 32]], source, [2; 32], result, "owner:owner", [3; 32],),
         Err(TaintAttestationError::SecretDerivedRequiresSanitizer)
     ));
     assert!(matches!(
@@ -209,10 +196,7 @@ fn normal_human_and_verifier_paths_cannot_self_clear_secret_derived() {
 #[test]
 fn unregistered_sanitizer_cannot_commit_even_with_exact_effect_and_allow() {
     let (runtime, authority) = authority();
-    let source = TaintSet::from_labels([
-        TaintLabel::SecretDerived,
-        TaintLabel::WebUntrusted,
-    ]);
+    let source = TaintSet::from_labels([TaintLabel::SecretDerived, TaintLabel::WebUntrusted]);
     let prepared = prepare_secret_elimination_sanitizer(
         [[10; 32]],
         source,
@@ -265,10 +249,8 @@ fn successful_sanitizer_never_rewrites_or_admits_the_original_source() {
 
     let source_artifact = [21; 32];
     let result_artifact = [22; 32];
-    let source_labels = TaintSet::from_labels([
-        TaintLabel::SecretDerived,
-        TaintLabel::ModelGenerated,
-    ]);
+    let source_labels =
+        TaintSet::from_labels([TaintLabel::SecretDerived, TaintLabel::ModelGenerated]);
     let result_labels = TaintSet::from_labels([TaintLabel::ModelGenerated]);
     let prepared = prepare_secret_elimination_sanitizer(
         [source_artifact],
