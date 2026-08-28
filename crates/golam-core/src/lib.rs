@@ -59,6 +59,7 @@ pub enum CoreError {
     InvalidProtocolVersion,
     ResourceLimitExceeded,
     CanonicalLengthOverflow,
+    InvalidCanonicalTaintSet,
 }
 
 impl fmt::Display for CoreError {
@@ -67,6 +68,7 @@ impl fmt::Display for CoreError {
             Self::InvalidProtocolVersion => f.write_str("invalid protocol version"),
             Self::ResourceLimitExceeded => f.write_str("resource limit exceeded"),
             Self::CanonicalLengthOverflow => f.write_str("canonical field length exceeds u32"),
+            Self::InvalidCanonicalTaintSet => f.write_str("invalid canonical taint set"),
         }
     }
 }
