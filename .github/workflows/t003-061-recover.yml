@@ -58,7 +58,7 @@ jobs:
           egress = Path('crates/golam-ledger/src/egress_permit.rs')
           replace_once(egress, '    reason_code: String,\n    intent_digest:', '    intent_digest:')
           replace_once(egress, '        reason_code: reason_code.to_owned(),\n        intent_digest,', '        intent_digest,')
-          replace_once(egress, '            None,\n        ),\n    )\n}\n\nfn verify_lease_chain(', '            Some(observed_at),\n        ),\n    )\n}\n\nfn verify_lease_chain(')
+          replace_once(egress, '        observed_at,\n        None,\n    )\n}\n\nfn verify_lease_chain(', '        observed_at,\n        Some(observed_at),\n    )\n}\n\nfn verify_lease_chain(')
           replace_once(egress, '            } else if permit_expires_at.is_none() && depth == 0 {', '            } else if permit_expires_at.is_none() {')
           replace_once(egress, '        if row.8 >= *expires_at {', '        if row.8.as_str() >= expires_at {')
           replace_once(
