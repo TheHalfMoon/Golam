@@ -1720,6 +1720,122 @@ mod tests {
     }
 
     #[test]
+    fn disk_full_revocation_rolls_back_status_snapshot_and_approval() {
+        let (runtime, authority, secret_id) = seed_t003_057_secret();
+        let mut store = SecretMutationStore::open(&authority).unwrap();
+        let revoke = prepare_secret_revoke(secret_id, 1, "2026-08-28T04:30:00Z").unwrap();
+        let work = install_authorized_work(
+            &mut store.connection,
+            3,
+            75,
+            SECRET_REVOKE_ACTION,
+            revoke.resource(),
+            revoke.intent_digest(),
+        );
+
+        store
+            .connection
+            .execute_batch(
+                "PRAGMA wal_checkpoint(TRUNCATE); VACUUM;
+                 CREATE TABLE t003_057_disk_fill (
+                     id INTEGER PRIMARY KEY,
+                     payload BLOB NOT NULL
+                 );
+                 CREATE TRIGGER t003_057_full_before_approval
+                 BEFORE INSERT ON approval_consumptions
+                 BEGIN
+                     INSERT INTO t003_057_disk_fill(payload) VALUES (zeroblob(4194304));
+                 END;",
+            )
+            .unwrap();
+        let page_count: i64 = store
+            .connection
+            .query_row("PRAGMA page_count", [], |row| row.get(0))
+            .unwrap();
+        store
+            .connection
+            .execute_batch(&format!("PRAGMA max_page_count = {page_count};"))
+            .unwrap();
+
+        let error = store
+            .revoke(revoke, work.decision, work.approval, work.effect)
+            .expect_err("bounded database must report SQLITE_FULL before approval consumption");
+        assert!(matches!(
+            error,
+            SecretMutationError::Sqlite(rusqlite::Error::SqliteFailure(ref code, _))
+                if code.extended_code == rusqlite::ffi::SQLITE_FULL
+        ));
+
+        store
+            .connection
+            .execute_batch(
+                "PRAGMA max_page_count = 1073741823;
+                 DROP TRIGGER t003_057_full_before_approval;
+                 DROP TABLE t003_057_disk_fill;",
+            )
+            .unwrap();
+
+        let state: (String, Option<String>) = store
+            .connection
+            .query_row(
+                "SELECT status, revoked_at FROM secret_records WHERE secret_id = ?1",
+                params![&secret_id[..]],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(state, ("active".to_owned(), None));
+        let used: i64 = store
+            .connection
+            .query_row(
+                "SELECT COUNT(*) FROM approval_consumptions WHERE approval_id = ?1",
+                params![&work.approval[..]],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(used, 0);
+        crate::integrity::verify(&store.connection).unwrap();
+        crate::authority_security_v2::verify(&store.connection).unwrap();
+
+        let committed_revoke = prepare_secret_revoke(secret_id, 1, "2026-08-28T04:31:00Z").unwrap();
+        let committed_work = install_authorized_work(
+            &mut store.connection,
+            5,
+            76,
+            SECRET_REVOKE_ACTION,
+            committed_revoke.resource(),
+            committed_revoke.intent_digest(),
+        );
+        let committed = store
+            .revoke(
+                committed_revoke,
+                committed_work.decision,
+                committed_work.approval,
+                committed_work.effect,
+            )
+            .unwrap();
+        assert_eq!(committed.version(), 1);
+        let committed_state: (String, Option<String>) = store
+            .connection
+            .query_row(
+                "SELECT status, revoked_at FROM secret_records WHERE secret_id = ?1",
+                params![&secret_id[..]],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            committed_state,
+            (
+                "revoked".to_owned(),
+                Some("2026-08-28T04:31:00Z".to_owned())
+            )
+        );
+        crate::integrity::verify(&store.connection).unwrap();
+        crate::authority_security_v2::verify(&store.connection).unwrap();
+        drop(store);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
     fn process_kill_before_rotation_commit_preserves_old_current_authority() {
         let (runtime, authority, secret_id) = seed_t003_057_secret();
         kill_precommit_child(&runtime, "rotate");
