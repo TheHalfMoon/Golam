@@ -1,0 +1,46 @@
+name: t003-054-sandbox-snapshot-repair
+on:
+  push:
+    branches:
+      - impl/003-identity-policy-secrets-sandbox
+permissions:
+  contents: write
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/003-identity-policy-secrets-sandbox
+          fetch-depth: 0
+      - name: Install pinned Rust formatter
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt
+      - name: Add test-only sandbox snapshot writers
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('crates/golam-ledger/src/authority_security_write.rs')
+          s = p.read_text()
+          old_variants = '''    SecretUseRecord,\n    #[cfg(test)]\n    SecretHandle,'''
+          new_variants = '''    SecretUseRecord,\n    #[cfg(test)]\n    SandboxProfile,\n    #[cfg(test)]\n    SandboxAdmission,\n    #[cfg(test)]\n    SecretHandle,'''
+          old_arms = '''            Self::SecretUseRecord => "secret_use_record",\n            #[cfg(test)]\n            Self::SecretHandle => "secret_handle",'''
+          new_arms = '''            Self::SecretUseRecord => "secret_use_record",\n            #[cfg(test)]\n            Self::SandboxProfile => "sandbox_profile",\n            #[cfg(test)]\n            Self::SandboxAdmission => "sandbox_admission",\n            #[cfg(test)]\n            Self::SecretHandle => "secret_handle",'''
+          anchor = '''#[cfg(test)]\npub(crate) fn append_secret_handle_snapshot(\n'''
+          funcs = '''#[cfg(test)]\npub(crate) fn append_sandbox_profile_snapshot(\n    transaction: &Transaction<'_>,\n    profile_id: &[u8],\n    version: i64,\n) -> Result<(), AuthoritySecurityWriteError> {\n    let values = query_values(\n        transaction,\n        "SELECT profile_id, version, class, filesystem_read_roots, filesystem_write_roots, network_rule, environment_allowlist, spawn_rule, cpu_limit, memory_limit, time_limit, output_limit, device_allowlist, ipc_allowlist, inherited_handle_rules, platform_requirements, status FROM sandbox_profiles WHERE profile_id = ?1 AND version = ?2",\n        params![profile_id, version],\n    )?;\n    append_snapshot(\n        transaction,\n        ProtectedMutationKind::SandboxProfile,\n        2,\n        &values,\n    )\n}\n\n#[cfg(test)]\npub(crate) fn append_sandbox_admission_snapshot(\n    transaction: &Transaction<'_>,\n    admission_id: &[u8],\n) -> Result<(), AuthoritySecurityWriteError> {\n    let values = query_values(\n        transaction,\n        "SELECT admission_id, profile_id, profile_version, principal_or_process, lease_id, decision_id, egress_permit_id, resolved_launch_plan_hash, platform_executor, created_global_seq FROM sandbox_admissions WHERE admission_id = ?1",\n        params![admission_id],\n    )?;\n    append_snapshot(\n        transaction,\n        ProtectedMutationKind::SandboxAdmission,\n        1,\n        &values,\n    )\n}\n\n#[cfg(test)]\npub(crate) fn append_secret_handle_snapshot(\n'''
+          for old in (old_variants, old_arms, anchor):
+              if old not in s:
+                  raise SystemExit(f'expected repair anchor missing: {old[:40]}')
+          s = s.replace(old_variants, new_variants, 1)
+          s = s.replace(old_arms, new_arms, 1)
+          s = s.replace(anchor, funcs, 1)
+          p.write_text(s)
+      - name: Format and commit
+        run: |
+          cargo +1.98.0 fmt --all
+          git rm .github/workflows/t003-054-sandbox-snapshot-repair.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/golam-ledger/src/authority_security_write.rs
+          git commit -m 'test: add sandbox authority snapshot helpers'
+          git push origin HEAD:impl/003-identity-policy-secrets-sandbox
