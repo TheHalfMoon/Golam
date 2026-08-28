@@ -15,6 +15,7 @@ use crate::storage::{AuthorityStore, StorageError};
 use crate::verifier_registry::TAINT_AUTHORITY_MUTATION_RISK_CLASS;
 
 pub const TAINT_DOWNGRADE_ACTION: &str = "taint.downgrade";
+pub const TAINT_SECRET_ELIMINATION_ACTION: &str = "taint.secret_eliminate";
 
 const MAX_SOURCE_ARTIFACTS: usize = 64;
 const MAX_PRINCIPAL_BYTES: usize = 512;
@@ -28,6 +29,7 @@ const APPROVAL_CONSUMPTION_DOMAIN: &[u8] = b"golam:taint-downgrade-approval-cons
 pub enum TaintDowngradeMechanism {
     HumanApproval,
     DeterministicVerifier,
+    SecretEliminationSanitizer,
 }
 
 impl TaintDowngradeMechanism {
@@ -35,6 +37,7 @@ impl TaintDowngradeMechanism {
         match self {
             Self::HumanApproval => 1,
             Self::DeterministicVerifier => 2,
+            Self::SecretEliminationSanitizer => 3,
         }
     }
 
@@ -42,12 +45,27 @@ impl TaintDowngradeMechanism {
         match self {
             Self::HumanApproval => "human_approval",
             Self::DeterministicVerifier => "deterministic_verifier",
+            Self::SecretEliminationSanitizer => "secret_elimination_sanitizer",
+        }
+    }
+
+    const fn action(self) -> &'static str {
+        match self {
+            Self::HumanApproval | Self::DeterministicVerifier => TAINT_DOWNGRADE_ACTION,
+            Self::SecretEliminationSanitizer => TAINT_SECRET_ELIMINATION_ACTION,
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DeterministicVerifierEvidence<'a> {
+    pub rule_id: [u8; 16],
+    pub authority_source_binding: &'a [u8],
+    pub evidence_hash: [u8; 32],
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct SecretEliminationSanitizerEvidence<'a> {
     pub rule_id: [u8; 16],
     pub authority_source_binding: &'a [u8],
     pub evidence_hash: [u8; 32],
@@ -104,9 +122,9 @@ pub struct TaintAttestationRecord {
     pub result_artifact_id: [u8; 32],
     pub result_labels: TaintSet,
     pub mechanism: TaintDowngradeMechanism,
-    /// For deterministic verification this is the registered verifier rule ID.
-    /// For human approval the fixed schema field carries the exact consumed
-    /// approval ID so the authority reference remains directly auditable.
+    /// For deterministic mechanisms this is the registered rule ID. For human
+    /// approval the fixed schema field carries the exact consumed approval ID
+    /// so the authority reference remains directly auditable.
     pub rule_id: [u8; 16],
     pub principal: Option<String>,
     pub evidence_hash: [u8; 32],
@@ -129,6 +147,8 @@ pub enum TaintAttestationError {
     ResultLabelsNotSubset,
     NoDowngrade,
     SecretDerivedRequiresSanitizer,
+    SanitizerSourceMustBeSecretDerived,
+    SanitizerResultStillSecretDerived,
     MissingEvidence,
     InvalidAuthoritySourceBinding,
     WrongMechanism,
@@ -162,7 +182,9 @@ impl fmt::Display for TaintAttestationError {
             }
             Self::InvalidPrincipal => f.write_str("taint attestation principal is not canonical"),
             Self::EmptySourceArtifacts => f.write_str("taint attestation requires a source artifact"),
-            Self::TooManySourceArtifacts => f.write_str("taint attestation source artifact set is too large"),
+            Self::TooManySourceArtifacts => {
+                f.write_str("taint attestation source artifact set is too large")
+            }
             Self::DuplicateSourceArtifact => {
                 f.write_str("taint attestation source artifacts contain a duplicate")
             }
@@ -177,9 +199,15 @@ impl fmt::Display for TaintAttestationError {
             Self::SecretDerivedRequiresSanitizer => f.write_str(
                 "SECRET_DERIVED can only be removed by the separately authorized secret-elimination sanitizer path",
             ),
+            Self::SanitizerSourceMustBeSecretDerived => f.write_str(
+                "secret-elimination sanitizer source must carry SECRET_DERIVED provenance",
+            ),
+            Self::SanitizerResultStillSecretDerived => f.write_str(
+                "secret-elimination sanitizer result must not carry SECRET_DERIVED provenance",
+            ),
             Self::MissingEvidence => f.write_str("taint downgrade requires non-empty evidence"),
             Self::InvalidAuthoritySourceBinding => {
-                f.write_str("deterministic verifier source binding is invalid or too large")
+                f.write_str("deterministic authority-source binding is invalid or too large")
             }
             Self::WrongMechanism => {
                 f.write_str("taint attestation commit method does not match prepared mechanism")
@@ -205,20 +233,16 @@ impl fmt::Display for TaintAttestationError {
             Self::ApprovalAlreadyUsed => {
                 f.write_str("human taint downgrade one-shot approval was already consumed")
             }
-            Self::VerifierRuleNotFound => {
-                f.write_str("deterministic verifier rule does not exist")
-            }
-            Self::VerifierRuleInactive => {
-                f.write_str("deterministic verifier rule is not active")
-            }
+            Self::VerifierRuleNotFound => f.write_str("registered taint authority rule does not exist"),
+            Self::VerifierRuleInactive => f.write_str("registered taint authority rule is not active"),
             Self::VerifierRuleKindMismatch => {
-                f.write_str("registered rule is not a deterministic verifier")
+                f.write_str("registered taint authority rule has the wrong mechanism kind")
             }
             Self::VerifierSourceBindingMismatch => f.write_str(
                 "verification evidence is not bound to the registered authoritative source",
             ),
             Self::VerifierRuleDoesNotAuthorizeDowngrade => f.write_str(
-                "registered verifier rule does not authorize every requested label removal",
+                "registered taint authority rule does not authorize every requested label removal",
             ),
             Self::DuplicateAttestation => f.write_str("taint attestation already exists"),
             Self::InvalidStoredRecord(reason) => {
@@ -257,6 +281,12 @@ impl From<CoreError> for TaintAttestationError {
     }
 }
 
+#[derive(Clone, Copy)]
+enum SecretDerivedRemovalPolicy {
+    Forbid,
+    RequireElimination,
+}
+
 pub fn prepare_human_downgrade(
     source_artifact_ids: impl IntoIterator<Item = [u8; 32]>,
     source_labels: TaintSet,
@@ -272,6 +302,7 @@ pub fn prepare_human_downgrade(
         result_labels,
         requested_by_principal,
         TaintDowngradeMechanism::HumanApproval,
+        SecretDerivedRemovalPolicy::Forbid,
         None,
         None,
         evidence_hash,
@@ -286,11 +317,7 @@ pub fn prepare_deterministic_verifier_downgrade(
     requested_by_principal: &str,
     verifier_evidence: DeterministicVerifierEvidence<'_>,
 ) -> Result<PreparedTaintAttestation, TaintAttestationError> {
-    if verifier_evidence.authority_source_binding.is_empty()
-        || verifier_evidence.authority_source_binding.len() > MAX_AUTHORITY_SOURCE_BINDING_BYTES
-    {
-        return Err(TaintAttestationError::InvalidAuthoritySourceBinding);
-    }
+    validate_authority_source_binding(verifier_evidence.authority_source_binding)?;
     prepare(
         source_artifact_ids,
         source_labels,
@@ -298,9 +325,33 @@ pub fn prepare_deterministic_verifier_downgrade(
         result_labels,
         requested_by_principal,
         TaintDowngradeMechanism::DeterministicVerifier,
+        SecretDerivedRemovalPolicy::Forbid,
         Some(verifier_evidence.rule_id),
         Some(verifier_evidence.authority_source_binding.to_vec()),
         verifier_evidence.evidence_hash,
+    )
+}
+
+pub fn prepare_secret_elimination_sanitizer(
+    source_artifact_ids: impl IntoIterator<Item = [u8; 32]>,
+    source_labels: TaintSet,
+    result_artifact_id: [u8; 32],
+    result_labels: TaintSet,
+    requested_by_principal: &str,
+    sanitizer_evidence: SecretEliminationSanitizerEvidence<'_>,
+) -> Result<PreparedTaintAttestation, TaintAttestationError> {
+    validate_authority_source_binding(sanitizer_evidence.authority_source_binding)?;
+    prepare(
+        source_artifact_ids,
+        source_labels,
+        result_artifact_id,
+        result_labels,
+        requested_by_principal,
+        TaintDowngradeMechanism::SecretEliminationSanitizer,
+        SecretDerivedRemovalPolicy::RequireElimination,
+        Some(sanitizer_evidence.rule_id),
+        Some(sanitizer_evidence.authority_source_binding.to_vec()),
+        sanitizer_evidence.evidence_hash,
     )
 }
 
@@ -312,6 +363,7 @@ fn prepare(
     result_labels: TaintSet,
     requested_by_principal: &str,
     mechanism: TaintDowngradeMechanism,
+    secret_derived_policy: SecretDerivedRemovalPolicy,
     verifier_rule_id: Option<[u8; 16]>,
     authority_source_binding: Option<Vec<u8>>,
     evidence_hash: [u8; 32],
@@ -327,8 +379,20 @@ fn prepare(
     if removed_labels.is_empty() {
         return Err(TaintAttestationError::NoDowngrade);
     }
-    if removed_labels.contains(TaintLabel::SecretDerived) {
-        return Err(TaintAttestationError::SecretDerivedRequiresSanitizer);
+    match secret_derived_policy {
+        SecretDerivedRemovalPolicy::Forbid => {
+            if removed_labels.contains(TaintLabel::SecretDerived) {
+                return Err(TaintAttestationError::SecretDerivedRequiresSanitizer);
+            }
+        }
+        SecretDerivedRemovalPolicy::RequireElimination => {
+            if !source_labels.contains(TaintLabel::SecretDerived) {
+                return Err(TaintAttestationError::SanitizerSourceMustBeSecretDerived);
+            }
+            if result_labels.contains(TaintLabel::SecretDerived) {
+                return Err(TaintAttestationError::SanitizerResultStillSecretDerived);
+            }
+        }
     }
     if evidence_hash == [0; 32] {
         return Err(TaintAttestationError::MissingEvidence);
@@ -458,6 +522,26 @@ impl TaintAttestationStore {
         )
     }
 
+    pub fn attest_secret_elimination_sanitizer(
+        &mut self,
+        prepared: PreparedTaintAttestation,
+        authority_decision_id: [u8; 16],
+        effect_id: EffectId,
+    ) -> Result<TaintAttestationRecord, TaintAttestationError> {
+        if prepared.mechanism != TaintDowngradeMechanism::SecretEliminationSanitizer {
+            return Err(TaintAttestationError::WrongMechanism);
+        }
+        let rule_id = prepared
+            .verifier_rule_id
+            .ok_or(TaintAttestationError::WrongMechanism)?;
+        self.commit(
+            prepared,
+            authority_decision_id,
+            effect_id,
+            MechanismAuthority::SecretEliminationSanitizer(rule_id),
+        )
+    }
+
     fn commit(
         &mut self,
         prepared: PreparedTaintAttestation,
@@ -469,15 +553,18 @@ impl TaintAttestationStore {
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         verify_transaction_integrity(&transaction)?;
+        let expected_action = prepared.mechanism.action();
         let authority = verify_current_authority(
             &transaction,
             authority_decision_id,
             &prepared.requested_by_principal,
+            expected_action,
             &prepared.resource,
         )?;
-        verify_downgrade_effect(
+        verify_taint_effect(
             &transaction,
             effect_id,
+            expected_action,
             &prepared.resource,
             prepared.intent_digest,
         )?;
@@ -503,9 +590,24 @@ impl TaintAttestationStore {
                     .authority_source_binding
                     .as_deref()
                     .ok_or(TaintAttestationError::WrongMechanism)?;
-                verify_active_deterministic_rule(
+                verify_active_registered_rule(
                     &transaction,
                     rule_id,
+                    "deterministic_verifier",
+                    expected_binding,
+                    prepared.removed_labels,
+                )?;
+                (rule_id, None, None)
+            }
+            MechanismAuthority::SecretEliminationSanitizer(rule_id) => {
+                let expected_binding = prepared
+                    .authority_source_binding
+                    .as_deref()
+                    .ok_or(TaintAttestationError::WrongMechanism)?;
+                verify_active_registered_rule(
+                    &transaction,
+                    rule_id,
+                    "secret_elimination_sanitizer",
                     expected_binding,
                     prepared.removed_labels,
                 )?;
@@ -568,6 +670,7 @@ impl TaintAttestationStore {
 enum MechanismAuthority {
     HumanApproval([u8; 16]),
     DeterministicVerifier([u8; 16]),
+    SecretEliminationSanitizer([u8; 16]),
 }
 
 struct AuthorityEvidence {
@@ -588,6 +691,7 @@ fn verify_current_authority(
     transaction: &Transaction<'_>,
     decision_id: [u8; 16],
     expected_principal: &str,
+    expected_action: &str,
     expected_resource: &str,
 ) -> Result<AuthorityEvidence, TaintAttestationError> {
     let row = transaction
@@ -607,13 +711,13 @@ fn verify_current_authority(
         .optional()?
         .ok_or(TaintAttestationError::MissingAuthorityDecision)?;
     if row.0 != expected_principal
-        || row.1 != TAINT_DOWNGRADE_ACTION
+        || row.1 != expected_action
         || row.2 != expected_resource
         || row.3 != "allow"
     {
         return Err(TaintAttestationError::AuthorityDecisionMismatch);
     }
-    let global_seq = from_i64(row.4, "taint downgrade decision sequence is negative")?;
+    let global_seq = from_i64(row.4, "taint authority decision sequence is negative")?;
     let latest: i64 = transaction.query_row(
         "SELECT COALESCE(MAX(global_seq), 0) FROM (SELECT global_seq FROM session_events UNION ALL SELECT global_seq FROM effect_transitions UNION ALL SELECT global_seq FROM authorization_decisions)",
         [],
@@ -628,9 +732,10 @@ fn verify_current_authority(
     })
 }
 
-fn verify_downgrade_effect(
+fn verify_taint_effect(
     transaction: &Transaction<'_>,
     effect_id: EffectId,
+    expected_action: &str,
     expected_resource: &str,
     expected_payload_hash: [u8; 32],
 ) -> Result<(), TaintAttestationError> {
@@ -651,7 +756,7 @@ fn verify_downgrade_effect(
         )
         .optional()?
         .ok_or(TaintAttestationError::EffectNotFound)?;
-    if row.0 != TAINT_DOWNGRADE_ACTION
+    if row.0 != expected_action
         || row.1 != expected_resource
         || row.2 != TAINT_AUTHORITY_MUTATION_RISK_CLASS
         || row.3 != "at_most_once"
@@ -721,9 +826,10 @@ fn verify_once_human_approval(
     Ok(())
 }
 
-fn verify_active_deterministic_rule(
+fn verify_active_registered_rule(
     transaction: &Transaction<'_>,
     rule_id: [u8; 16],
+    expected_kind: &str,
     expected_authority_source_binding: &[u8],
     removed_labels: TaintSet,
 ) -> Result<(), TaintAttestationError> {
@@ -745,7 +851,7 @@ fn verify_active_deterministic_rule(
     if row.3 != "active" {
         return Err(TaintAttestationError::VerifierRuleInactive);
     }
-    if row.0 != "deterministic_verifier" {
+    if row.0 != expected_kind {
         return Err(TaintAttestationError::VerifierRuleKindMismatch);
     }
     if row.1.as_slice() != expected_authority_source_binding {
@@ -838,6 +944,13 @@ fn validate_principal(value: &str) -> Result<(), TaintAttestationError> {
     Ok(())
 }
 
+fn validate_authority_source_binding(value: &[u8]) -> Result<(), TaintAttestationError> {
+    if value.is_empty() || value.len() > MAX_AUTHORITY_SOURCE_BINDING_BYTES {
+        return Err(TaintAttestationError::InvalidAuthoritySourceBinding);
+    }
+    Ok(())
+}
+
 fn from_i64(value: i64, reason: &'static str) -> Result<u64, TaintAttestationError> {
     u64::try_from(value).map_err(|_| TaintAttestationError::InvalidStoredRecord(reason))
 }
@@ -871,6 +984,9 @@ mod tests {
     use crate::dispatch::encode_effect_dependencies;
     use crate::effects::{CompareAndSwapEffect, EffectStore, ProposeEffect};
     use golam_core::paths::RuntimeLayout;
+    use golam_core::taint::{
+        CanonicalMemoryAdmissionError, validate_canonical_long_term_memory_admission,
+    };
     use golam_core::{EffectTransitionId, EventId, SessionId};
     use rusqlite::TransactionBehavior;
     use std::fs;
@@ -1006,6 +1122,7 @@ mod tests {
     fn install_active_verifier_rule(
         authority: &AuthorityLayout,
         rule_id: [u8; 16],
+        kind: &str,
         binding: &[u8],
         allowed: TaintSet,
     ) {
@@ -1017,8 +1134,13 @@ mod tests {
             .unwrap();
         transaction
             .execute(
-                "INSERT INTO verifier_rules (rule_id, kind, version, authority_source_binding, allowed_downgrades, registered_by, status, created_global_seq) VALUES (?1, 'deterministic_verifier', 1, ?2, ?3, 'owner:owner', 'active', 1)",
-                params![&rule_id[..], binding, allowed.canonical_bytes().unwrap()],
+                "INSERT INTO verifier_rules (rule_id, kind, version, authority_source_binding, allowed_downgrades, registered_by, status, created_global_seq) VALUES (?1, ?2, 1, ?3, ?4, 'owner:owner', 'active', 1)",
+                params![
+                    &rule_id[..],
+                    kind,
+                    binding,
+                    allowed.canonical_bytes().unwrap()
+                ],
             )
             .unwrap();
         append_verifier_rule_snapshot(&transaction, &rule_id).unwrap();
@@ -1129,6 +1251,7 @@ mod tests {
         install_active_verifier_rule(
             &authority,
             rule_id,
+            "deterministic_verifier",
             binding,
             TaintSet::from_labels([TaintLabel::WebUntrusted]),
         );
@@ -1208,6 +1331,247 @@ mod tests {
             TaintAttestationStore::open(&authority)
                 .unwrap()
                 .attest_deterministic_verifier(overreach, overreach_decision, overreach_effect,),
+            Err(TaintAttestationError::VerifierRuleDoesNotAuthorizeDowngrade)
+        ));
+        AuthorityStore::open(authority.authority_db_path()).unwrap();
+
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn sanitizer_preparation_requires_actual_secret_elimination() {
+        let evidence = SecretEliminationSanitizerEvidence {
+            rule_id: [31; 16],
+            authority_source_binding: b"secret-schema:v1",
+            evidence_hash: [32; 32],
+        };
+        assert!(matches!(
+            prepare_secret_elimination_sanitizer(
+                [[30; 32]],
+                TaintSet::from_labels([TaintLabel::WebUntrusted]),
+                [31; 32],
+                TaintSet::empty(),
+                "owner:owner",
+                evidence,
+            ),
+            Err(TaintAttestationError::SanitizerSourceMustBeSecretDerived)
+        ));
+
+        assert!(matches!(
+            prepare_secret_elimination_sanitizer(
+                [[32; 32]],
+                TaintSet::from_labels([
+                    TaintLabel::SecretDerived,
+                    TaintLabel::ModelGenerated,
+                ]),
+                [33; 32],
+                TaintSet::from_labels([
+                    TaintLabel::SecretDerived,
+                    TaintLabel::ModelGenerated,
+                ]),
+                "owner:owner",
+                evidence,
+            ),
+            Err(TaintAttestationError::NoDowngrade)
+        ));
+
+        assert!(matches!(
+            prepare_secret_elimination_sanitizer(
+                [[34; 32]],
+                TaintSet::from_labels([
+                    TaintLabel::SecretDerived,
+                    TaintLabel::ModelGenerated,
+                    TaintLabel::WebUntrusted,
+                ]),
+                [35; 32],
+                TaintSet::from_labels([
+                    TaintLabel::SecretDerived,
+                    TaintLabel::ModelGenerated,
+                ]),
+                "owner:owner",
+                evidence,
+            ),
+            Err(TaintAttestationError::SanitizerResultStillSecretDerived)
+        ));
+    }
+
+    #[test]
+    fn secret_elimination_sanitizer_creates_separate_memory_admissible_evidence() {
+        let (runtime, authority) = authority();
+        let rule_id = [40; 16];
+        let binding = b"secret-schema:v1";
+        install_active_verifier_rule(
+            &authority,
+            rule_id,
+            "secret_elimination_sanitizer",
+            binding,
+            TaintSet::from_labels([TaintLabel::SecretDerived]),
+        );
+
+        let source_labels = TaintSet::from_labels([
+            TaintLabel::SecretDerived,
+            TaintLabel::ModelGenerated,
+        ]);
+        let result_labels = TaintSet::from_labels([TaintLabel::ModelGenerated]);
+        assert_eq!(
+            validate_canonical_long_term_memory_admission(source_labels),
+            Err(CanonicalMemoryAdmissionError::SecretDerived)
+        );
+        let prepared = prepare_secret_elimination_sanitizer(
+            [[40; 32]],
+            source_labels,
+            [41; 32],
+            result_labels,
+            "owner:owner",
+            SecretEliminationSanitizerEvidence {
+                rule_id,
+                authority_source_binding: binding,
+                evidence_hash: [42; 32],
+            },
+        )
+        .unwrap();
+        let effect_id = EffectId(next_id());
+        create_authorized_effect(
+            &authority,
+            effect_id,
+            TAINT_SECRET_ELIMINATION_ACTION,
+            prepared.resource(),
+            TAINT_AUTHORITY_MUTATION_RISK_CLASS,
+            prepared.intent_digest(),
+            "owner:owner",
+            "test_secret_elimination_sanitizer",
+        );
+        let decision = append_allow(
+            &authority,
+            TAINT_SECRET_ELIMINATION_ACTION,
+            prepared.resource(),
+            "test_secret_elimination_sanitizer_authority",
+        );
+        let record = TaintAttestationStore::open(&authority)
+            .unwrap()
+            .attest_secret_elimination_sanitizer(prepared, decision, effect_id)
+            .unwrap();
+
+        assert_eq!(
+            record.mechanism,
+            TaintDowngradeMechanism::SecretEliminationSanitizer
+        );
+        assert_eq!(record.rule_id, rule_id);
+        assert_eq!(record.principal, None);
+        assert!(record.source_labels.contains(TaintLabel::SecretDerived));
+        assert!(!record.result_labels.contains(TaintLabel::SecretDerived));
+        assert_eq!(
+            validate_canonical_long_term_memory_admission(record.result_labels),
+            Ok(())
+        );
+        AuthorityStore::open(authority.authority_db_path()).unwrap();
+
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn sanitizer_requires_sanitizer_kind_and_cannot_overremove_labels() {
+        let (runtime, authority) = authority();
+        let binding = b"secret-schema:v1";
+        let wrong_kind_rule = [50; 16];
+        install_active_verifier_rule(
+            &authority,
+            wrong_kind_rule,
+            "deterministic_verifier",
+            binding,
+            TaintSet::from_labels([TaintLabel::SecretDerived]),
+        );
+        let source_labels = TaintSet::from_labels([
+            TaintLabel::SecretDerived,
+            TaintLabel::WebUntrusted,
+        ]);
+        let wrong_kind = prepare_secret_elimination_sanitizer(
+            [[50; 32]],
+            source_labels,
+            [51; 32],
+            TaintSet::from_labels([TaintLabel::WebUntrusted]),
+            "owner:owner",
+            SecretEliminationSanitizerEvidence {
+                rule_id: wrong_kind_rule,
+                authority_source_binding: binding,
+                evidence_hash: [52; 32],
+            },
+        )
+        .unwrap();
+        let wrong_kind_effect = EffectId(next_id());
+        create_authorized_effect(
+            &authority,
+            wrong_kind_effect,
+            TAINT_SECRET_ELIMINATION_ACTION,
+            wrong_kind.resource(),
+            TAINT_AUTHORITY_MUTATION_RISK_CLASS,
+            wrong_kind.intent_digest(),
+            "owner:owner",
+            "test_secret_elimination_wrong_kind",
+        );
+        let wrong_kind_decision = append_allow(
+            &authority,
+            TAINT_SECRET_ELIMINATION_ACTION,
+            wrong_kind.resource(),
+            "test_secret_elimination_wrong_kind_authority",
+        );
+        assert!(matches!(
+            TaintAttestationStore::open(&authority)
+                .unwrap()
+                .attest_secret_elimination_sanitizer(
+                    wrong_kind,
+                    wrong_kind_decision,
+                    wrong_kind_effect,
+                ),
+            Err(TaintAttestationError::VerifierRuleKindMismatch)
+        ));
+
+        let sanitizer_rule = [53; 16];
+        install_active_verifier_rule(
+            &authority,
+            sanitizer_rule,
+            "secret_elimination_sanitizer",
+            binding,
+            TaintSet::from_labels([TaintLabel::SecretDerived]),
+        );
+        let overreach = prepare_secret_elimination_sanitizer(
+            [[53; 32]],
+            source_labels,
+            [54; 32],
+            TaintSet::empty(),
+            "owner:owner",
+            SecretEliminationSanitizerEvidence {
+                rule_id: sanitizer_rule,
+                authority_source_binding: binding,
+                evidence_hash: [55; 32],
+            },
+        )
+        .unwrap();
+        let overreach_effect = EffectId(next_id());
+        create_authorized_effect(
+            &authority,
+            overreach_effect,
+            TAINT_SECRET_ELIMINATION_ACTION,
+            overreach.resource(),
+            TAINT_AUTHORITY_MUTATION_RISK_CLASS,
+            overreach.intent_digest(),
+            "owner:owner",
+            "test_secret_elimination_overreach",
+        );
+        let overreach_decision = append_allow(
+            &authority,
+            TAINT_SECRET_ELIMINATION_ACTION,
+            overreach.resource(),
+            "test_secret_elimination_overreach_authority",
+        );
+        assert!(matches!(
+            TaintAttestationStore::open(&authority)
+                .unwrap()
+                .attest_secret_elimination_sanitizer(
+                    overreach,
+                    overreach_decision,
+                    overreach_effect,
+                ),
             Err(TaintAttestationError::VerifierRuleDoesNotAuthorizeDowngrade)
         ));
         AuthorityStore::open(authority.authority_db_path()).unwrap();
