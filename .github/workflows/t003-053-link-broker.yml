@@ -56,6 +56,7 @@ jobs:
               text = text.replace(anchor, function + anchor, 1)
           path.write_text(text)
           PY
+          rustup component add --toolchain 1.98.0-x86_64-unknown-linux-gnu rustfmt
           cargo +1.98.0 fmt --all
           git rm .github/workflows/t003-053-link-broker.yml
           git config user.name 'github-actions[bot]'
