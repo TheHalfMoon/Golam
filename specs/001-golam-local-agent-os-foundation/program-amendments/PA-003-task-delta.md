@@ -2,6 +2,7 @@
 
 **Status**: PROPOSED_FOR_REVIEW  
 **Parent amendment**: `PA-003-product-spine-golden-loop.md`  
+**Companion closure**: `PA-003B-task-lifecycle-verification.md` + `../contracts/task-verification-contract.md` close the Task-vs-Run lifecycle and criterion-verification gaps found during the PA-003 consistency review.  
 **Purpose**: make the PA-003 execution implications explicit without rewriting or renumbering the frozen historical Spec 001 task graph in place.
 
 These are **additional future owning-spec requirements**, not authorization to execute them now.
@@ -17,8 +18,9 @@ Before Spec 004 closes, its bounded Spec Kit package MUST include tasks that pro
 - **PA003-004-C — Capability truth**: publish machine-readable model/harness/provider capability descriptors and conformance evidence; unsupported features fail honestly.
 - **PA003-004-D — Locality projection**: expose strict-local/local-preferred/cloud-allowed style user posture without hidden provider fallback.
 - **PA003-004-E — Run failure taxonomy**: preserve blocked-policy, blocked-environment, verification failure, unknown-effect, budget exhaustion, interruption, and crash/recovery distinctions.
+- **PA003-004-F — Task lifecycle + Verification Plan**: implement durable Task states distinct from Run states, version Task Contract changes, and maintain criterion-level verification plans/states. A failed Run cannot silently fail the Task; a successful Run cannot silently satisfy the Task; steering/material state changes invalidate stale verification.
 
-**Spec 004 product-spine exit gate**: a Task survives model switch and process restart; a user can inspect and steer a running task; resume revalidates live/protected state; provider claims are conformance-backed.
+**Spec 004 product-spine exit gate**: a Task survives model switch and process restart; a user can inspect and steer a running task; resume revalidates live/protected state; provider claims are conformance-backed; and Task satisfaction is impossible while a current required criterion remains unverified/stale/failed/blocked/unverifiable.
 
 ---
 
@@ -30,7 +32,7 @@ Before Spec 005 closes, its bounded Spec Kit package MUST include tasks that pro
 - **PA003-005-B — UserModel baseline**: separate compact governed stable user preferences from general memory; retain provenance/supersession; no silent sensitive profiling.
 - **PA003-005-C — Migration staging**: safely detect/import supported portable Markdown memory from selected external assistants into quarantined provenance-preserving staging; no credentials, protected authority, or silent auto-promotion.
 - **PA003-005-D — Export/portability**: export user-owned Markdown and stable machine-readable task/evidence/receipt records where the owning spec freezes a format.
-- **PA003-005-E — CLI/TUI Golden Loop UX**: expose current task/goal, evidence, running state, pause/stop/steer/inspect/resume, approvals, unresolved blockers, and final Trust Receipt without requiring Desktop.
+- **PA003-005-E — CLI/TUI Golden Loop UX**: expose current task/goal, evidence, running state, pause/stop/steer/inspect/resume, approvals, unresolved blockers, criterion verification state, and final Trust Receipt without requiring Desktop.
 - **PA003-005-F — Core Alpha repository scenario**: inspect/edit/verify a real local repository through governed tools and report exact evidence.
 - **PA003-005-G — Core Alpha research scenario**: combine permitted local/web evidence with provenance/taint and produce an attributable result/artifact.
 - **PA003-005-H — Core Alpha filesystem/document scenario**: transform local artifacts without destructive source mutation unless authorized; produce exact receipt.
@@ -38,6 +40,8 @@ Before Spec 005 closes, its bounded Spec Kit package MUST include tasks that pro
 - **PA003-005-J — Core Alpha interrupt/recovery scenario**: pause/steer/stop/resume/restart a non-trivial task without losing goal/evidence or duplicating protected effects.
 - **PA003-005-K — Core Alpha strict-local scenario**: useful end-to-end task with externally observed zero unauthorized external egress and no hidden remote model/vector/eval/telemetry fallback.
 - **PA003-005-L — Core Alpha report**: report baseline task quality, false-success/verification failure, time to first useful action, interruption/recovery, approval repetition, tokens/resources, egress, unresolved outcomes and memory correctness without inventing target thresholds before measurement.
+- **PA003-005-M — Task/Run continuity scenario**: prove one Run can fail and a later Run continue the same Task; prove a Run can finish its bounded work while the Task remains unsatisfied because a required criterion is not verified; prove user acceptance of incomplete verification is `CLOSED_UNVERIFIED`/equivalent rather than verified satisfaction.
+- **PA003-005-N — Verification invalidation and receipt scenario**: prove Task Contract/steering or material source-state change invalidates stale criterion proof, an independent deterministic verifier catches an action-path false success, and the Trust Receipt criterion summary matches canonical evidence/verification state.
 
 **Mandatory product checkpoint**: Spec 006 MUST NOT become the next release blocker until the owning program review records whether **Golam Core Alpha** passed or failed on the exact Spec 005 close head.
 
@@ -50,6 +54,7 @@ A failed Core Alpha gate does not authorize skipping required architecture/secur
 - **PA003-006-A**: Desktop projects the same Task/Run/Goal/Trust state; it does not maintain a separate agent truth.
 - **PA003-006-B**: expose Inspect/Pause/Steer/Stop/TakeOver/Resume in the desktop experience.
 - **PA003-006-C**: Trust Center baseline shows devices, active leases/approvals, egress/provider posture, sandbox posture, memory/learning changes, scheduled work and recent Trust Receipts without exposing secret plaintext.
+- **PA003-006-D**: Desktop shows Task state separately from current Run state and exposes current completion-criterion verification without presenting `CLOSED_UNVERIFIED`, stale evidence, or worker completion as verified Task success.
 
 ---
 
@@ -58,6 +63,7 @@ A failed Core Alpha gate does not authorize skipping required architecture/secur
 - **PA003-007-A**: Native Mobile continues an existing Task/Run rather than cloning a conversation-only state.
 - **PA003-007-B**: channel messages can navigate/create/steer tasks only through stable binding and normal authority rules; channel identity never equals Task identity.
 - **PA003-007-C**: mobile/channel receipt views preserve what changed/data-egress/approval/unknown state appropriate to the surface.
+- **PA003-007-D**: device/surface reconnect projects current Task and verification truth from the Authority Host; cached/stale mobile/channel state cannot upgrade a criterion to VERIFIED or a Task to SATISFIED.
 
 ---
 
@@ -67,6 +73,7 @@ A failed Core Alpha gate does not authorize skipping required architecture/secur
 - **PA003-008-B — AttentionBudget**: define notify/quiet/batch/dedupe/urgency/surface-routing controls independently from effect authority.
 - **PA003-008-C — Proactive receipt**: unattended work produces the same causal/effect/evidence/receipt trail as attended work.
 - **PA003-008-D — User feedback**: mute/defer/reduce-priority/never-notify-for-class feedback changes future attention behavior without silently altering unrelated capability authority.
+- **PA003-008-E — Worker criterion mapping**: every worker/subgoal completion maps explicitly to parent Task criteria/evidence where relevant; worker success cannot directly mark the parent Task SATISFIED.
 
 ---
 
@@ -74,6 +81,7 @@ A failed Core Alpha gate does not authorize skipping required architecture/secur
 
 - **PA003-009-A**: public parity scenarios explicitly score Golam Trust Receipts, locality, in-flight control, governed memory and recovery as candidate `VERIFIED_SUPERSET` dimensions where supported by evidence.
 - **PA003-009-B**: no parity claim may be closed by bypassing Golam security/durability/product-spine invariants.
+- **PA003-009-C**: parity/superset claims distinguish a successful execution attempt from verified Task satisfaction and preserve any incomplete/stale criterion state.
 
 ---
 
@@ -87,6 +95,8 @@ A failed Core Alpha gate does not authorize skipping required architecture/secur
 - **PA003-010-F**: verify Trust Receipt completeness against canonical event/effect/evidence state.
 - **PA003-010-G**: verify capability truth matrices against real claimed provider/platform behavior.
 - **PA003-010-H**: produce exact-head product ladder evidence for Core Alpha, Desktop, Everywhere, Persistent Team, Parity/Superset and release qualification claims.
+- **PA003-010-I**: verify Task terminal state independently from individual Run terminal states, including failed-Run/new-Run continuation and operationally successful Runs that leave required criteria unresolved.
+- **PA003-010-J**: verify criterion-state freshness/invalidation and recompute Trust Receipt verification summaries from canonical evidence; no stale or unverified criterion may be reported as verified success.
 
 ---
 
