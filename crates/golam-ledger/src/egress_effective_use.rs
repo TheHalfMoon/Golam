@@ -30,7 +30,7 @@ pub fn authorize_effective_use(
     }
 
     let transaction = store
-        .connection_mut()
+        .connection
         .transaction_with_behavior(TransactionBehavior::Immediate)?;
     crate::integrity::verify(&transaction)
         .map_err(|error| EgressPermitError::Integrity(error.to_string()))?;
@@ -292,7 +292,7 @@ mod tests {
         let context_hash =
             effective.decision_context_hash(permit.permit_id, &permit.destination_scope);
         let transaction = store
-            .connection_mut()
+            .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .unwrap();
         transaction
@@ -429,7 +429,8 @@ mod tests {
             ),
             Err(EgressPermitError::UseDecisionMismatch)
         ));
-        let rebound_decision = install_effective_use_decision(&mut store, 5, 103, &permit, &rebound);
+        let rebound_decision =
+            install_effective_use_decision(&mut store, 5, 103, &permit, &rebound);
         assert_eq!(
             authorize_effective_use(
                 &mut store,
@@ -446,13 +447,9 @@ mod tests {
             3
         );
 
-        let private = EffectiveDestination::new(
-            "other.invalid",
-            "10.0.0.7".parse().unwrap(),
-            "https",
-            443,
-        )
-        .unwrap();
+        let private =
+            EffectiveDestination::new("other.invalid", "10.0.0.7".parse().unwrap(), "https", 443)
+                .unwrap();
         assert_eq!(private.class(), EffectiveNetworkClass::Private);
         assert!(matches!(
             authorize_effective_use(
@@ -467,7 +464,8 @@ mod tests {
             ),
             Err(EgressPermitError::UseDecisionMismatch)
         ));
-        let private_decision = install_effective_use_decision(&mut store, 6, 104, &permit, &private);
+        let private_decision =
+            install_effective_use_decision(&mut store, 6, 104, &permit, &private);
         assert_eq!(
             authorize_effective_use(
                 &mut store,
@@ -484,13 +482,9 @@ mod tests {
             4
         );
 
-        let changed_protocol = EffectiveDestination::new(
-            "other.invalid",
-            "10.0.0.7".parse().unwrap(),
-            "http",
-            80,
-        )
-        .unwrap();
+        let changed_protocol =
+            EffectiveDestination::new("other.invalid", "10.0.0.7".parse().unwrap(), "http", 80)
+                .unwrap();
         assert!(matches!(
             authorize_effective_use(
                 &mut store,

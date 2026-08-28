@@ -395,7 +395,7 @@ pub fn egress_permit_resource(permit_id: [u8; 16]) -> String {
 }
 
 pub struct EgressPermitStore {
-    connection: Connection,
+    pub(crate) connection: Connection,
 }
 
 impl EgressPermitStore {
@@ -681,10 +681,10 @@ struct AuthorityEvidence {
     global_seq: u64,
 }
 
-struct UseDecisionEvidence {
-    lease_generation: u64,
-    policy_bundle_id: [u8; 16],
-    policy_bundle_hash: [u8; 32],
+pub(crate) struct UseDecisionEvidence {
+    pub(crate) lease_generation: u64,
+    pub(crate) policy_bundle_id: [u8; 16],
+    pub(crate) policy_bundle_hash: [u8; 32],
 }
 
 fn verify_transaction_integrity(transaction: &Transaction<'_>) -> Result<(), EgressPermitError> {
@@ -858,7 +858,7 @@ fn verify_parent_lease_for_issue(
     )
 }
 
-fn verify_lease_chain_for_use(
+pub(crate) fn verify_lease_chain_for_use(
     transaction: &Transaction<'_>,
     lease_id: [u8; 16],
     expected_generation: u64,
@@ -989,7 +989,7 @@ fn load_lease_digest(
     hash32(value, "lease authority digest is invalid")
 }
 
-fn load_permit(
+pub(crate) fn load_permit(
     transaction: &Transaction<'_>,
     permit_id: [u8; 16],
 ) -> Result<EgressPermitRecord, EgressPermitError> {
@@ -1136,7 +1136,7 @@ fn load_current_use_decision(
     })
 }
 
-fn verify_active_policy(
+pub(crate) fn verify_active_policy(
     transaction: &Transaction<'_>,
     decision: &UseDecisionEvidence,
 ) -> Result<(), EgressPermitError> {
@@ -1167,7 +1167,7 @@ fn verify_active_policy(
     Ok(())
 }
 
-fn latest_global_seq(transaction: &Transaction<'_>) -> Result<u64, EgressPermitError> {
+pub(crate) fn latest_global_seq(transaction: &Transaction<'_>) -> Result<u64, EgressPermitError> {
     let latest: i64 = transaction.query_row(
         "SELECT COALESCE(MAX(global_seq), 0) FROM (SELECT global_seq FROM session_events UNION ALL SELECT global_seq FROM effect_transitions UNION ALL SELECT global_seq FROM authorization_decisions)",
         [],
@@ -1451,7 +1451,7 @@ fn hex_bytes(bytes: &[u8]) -> String {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::authority_security_write::{
         append_active_policy_snapshot, append_approval_snapshot,
@@ -1468,17 +1468,17 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     static N: AtomicU64 = AtomicU64::new(0);
-    const PRINCIPAL: &str = "owner:owner";
-    const ACTION: &str = "network.egress.connect";
+    pub(crate) const PRINCIPAL: &str = "owner:owner";
+    pub(crate) const ACTION: &str = "network.egress.connect";
     const DESTINATION: &str = "https://example.invalid";
     const PROTOCOL_PORT: &str = "https:443";
-    const PURPOSE: &str = "fixture-fetch";
-    const POLICY_ID: [u8; 16] = [31; 16];
-    const POLICY_HASH: [u8; 32] = [32; 32];
-    const LEASE_ID: [u8; 16] = [41; 16];
+    pub(crate) const PURPOSE: &str = "fixture-fetch";
+    pub(crate) const POLICY_ID: [u8; 16] = [31; 16];
+    pub(crate) const POLICY_HASH: [u8; 32] = [32; 32];
+    pub(crate) const LEASE_ID: [u8; 16] = [41; 16];
     const LEASE_DIGEST: [u8; 32] = [42; 32];
 
-    fn authority() -> (RuntimeLayout, AuthorityLayout) {
+    pub(crate) fn authority() -> (RuntimeLayout, AuthorityLayout) {
         let n = N.fetch_add(1, Ordering::Relaxed);
         let t = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -1493,10 +1493,13 @@ mod tests {
         (runtime, authority)
     }
 
-    fn install_policy_and_parent_lease(connection: &mut Connection) {
+    pub(crate) fn install_policy_and_parent_lease(connection: &mut Connection) {
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
             .unwrap();
+        let resources_scope = format!(
+            "{DESTINATION}\nhttps://203.0.113.10:443\nhttps://203.0.113.11:443\nhttps://10.0.0.7:443"
+        );
         transaction
             .execute(
                 "INSERT INTO policy_bundles (policy_bundle_id, version, schema_version, canonical_policy_bytes, bundle_hash, created_by, created_global_seq, validation_status) VALUES (?1, 1, 1, X'01', ?2, ?3, 1, 'validated')",
@@ -1514,7 +1517,7 @@ mod tests {
         transaction
             .execute(
                 "INSERT INTO capability_leases (lease_id, principal_id, parent_lease_id, actions_scope, resources_scope, context_constraints, issued_by, issued_global_seq, not_before, expires_at, generation, status, authority_digest) VALUES (?1, ?2, NULL, ?3, ?4, X'', ?2, 1, NULL, '2026-08-30T00:00:00Z', 1, 'active', ?5)",
-                params![&LEASE_ID[..], PRINCIPAL, ACTION.as_bytes(), DESTINATION.as_bytes(), &LEASE_DIGEST[..]],
+                params![&LEASE_ID[..], PRINCIPAL, ACTION.as_bytes(), resources_scope.as_bytes(), &LEASE_DIGEST[..]],
             )
             .unwrap();
         append_capability_lease_snapshot(&transaction, &LEASE_ID).unwrap();
@@ -1522,13 +1525,13 @@ mod tests {
         transaction.commit().unwrap();
     }
 
-    struct WorkIds {
-        effect: EffectId,
-        decision: [u8; 16],
-        approval: [u8; 16],
+    pub(crate) struct WorkIds {
+        pub(crate) effect: EffectId,
+        pub(crate) decision: [u8; 16],
+        pub(crate) approval: [u8; 16],
     }
 
-    fn install_mutation_work(
+    pub(crate) fn install_mutation_work(
         connection: &mut Connection,
         base_global_seq: u64,
         discriminator: u8,
@@ -1665,7 +1668,7 @@ mod tests {
         decision
     }
 
-    fn prepared(limit: Option<u64>) -> PreparedEgressPermitIssue {
+    pub(crate) fn prepared(limit: Option<u64>) -> PreparedEgressPermitIssue {
         prepare_egress_permit_issue(
             PRINCIPAL,
             ACTION,

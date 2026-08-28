@@ -151,9 +151,9 @@ fn normalize_authority(value: &str) -> Result<String, EffectiveDestinationError>
         || value.starts_with('.')
         || value.ends_with('.')
         || value.contains("..")
-        || value.bytes().any(|byte| {
-            !(byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-'))
-        })
+        || value
+            .bytes()
+            .any(|byte| !(byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-')))
     {
         return Err(EffectiveDestinationError::InvalidAuthority);
     }
@@ -169,9 +169,10 @@ fn normalize_protocol(value: &str) -> Result<String, EffectiveDestinationError> 
         return Err(EffectiveDestinationError::InvalidProtocol);
     }
     let normalized = value.to_ascii_lowercase();
-    if normalized.bytes().any(|byte| {
-        !(byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
-    }) {
+    if normalized
+        .bytes()
+        .any(|byte| !(byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-'))
+    {
         return Err(EffectiveDestinationError::InvalidProtocol);
     }
     Ok(normalized)
@@ -322,12 +323,7 @@ mod tests {
             EffectiveNetworkClass::Loopback
         );
         assert!(matches!(
-            EffectiveDestination::new(
-                "invalid.invalid",
-                "0.0.0.0".parse().unwrap(),
-                "https",
-                443,
-            ),
+            EffectiveDestination::new("invalid.invalid", "0.0.0.0".parse().unwrap(), "https", 443,),
             Err(EffectiveDestinationError::UnsupportedAddressClass)
         ));
     }
