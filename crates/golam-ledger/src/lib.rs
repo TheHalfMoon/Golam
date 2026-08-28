@@ -3,6 +3,7 @@
 pub mod active_policy_integrity;
 pub mod approval_binding;
 pub mod approval_consumption;
+pub mod approval_revocation;
 pub mod approval_runtime;
 pub mod approvals;
 pub mod artifacts;
