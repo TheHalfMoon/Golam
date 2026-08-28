@@ -21,6 +21,7 @@ enum ProtectedMutationKind {
     AuthorizationDecisionV2,
     Approval,
     ApprovalConsumption,
+    TaintAttestation,
     VerifierRule,
 }
 
@@ -34,6 +35,7 @@ impl ProtectedMutationKind {
             Self::AuthorizationDecisionV2 => "authorization_decision_v2",
             Self::Approval => "approval",
             Self::ApprovalConsumption => "approval_consumption",
+            Self::TaintAttestation => "taint_attestation",
             Self::VerifierRule => "verifier_rule",
         }
     }
@@ -184,6 +186,23 @@ pub(crate) fn append_approval_consumption_snapshot(
     append_snapshot(
         transaction,
         ProtectedMutationKind::ApprovalConsumption,
+        1,
+        &values,
+    )
+}
+
+pub(crate) fn append_taint_attestation_snapshot(
+    transaction: &Transaction<'_>,
+    attestation_id: &[u8],
+) -> Result<(), AuthoritySecurityWriteError> {
+    let values = query_values(
+        transaction,
+        "SELECT attestation_id, source_artifact_ids, source_labels, result_artifact_id, result_labels, mechanism, rule_id, principal, evidence_hash, created_global_seq FROM taint_attestations WHERE attestation_id = ?1",
+        params![attestation_id],
+    )?;
+    append_snapshot(
+        transaction,
+        ProtectedMutationKind::TaintAttestation,
         1,
         &values,
     )
