@@ -1,0 +1,69 @@
+name: t003-062-record
+on:
+  push:
+    branches:
+      - impl/003-identity-policy-secrets-sandbox
+permissions:
+  contents: write
+jobs:
+  record:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/003-identity-policy-secrets-sandbox
+          fetch-depth: 0
+      - name: Record T003-062 and activate T003-063
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              text = path.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: replacement count {count} for {old!r}')
+              path.write_text(text.replace(old, new, 1))
+
+          tasks = Path('specs/003-identity-policy-secrets-sandbox/tasks.md')
+          replace_once(
+              tasks,
+              '- [ ] **T003-062** Implement mandatory reauthorization of every effective destination before connect/follow whenever DNS resolution, redirect, rebinding, protocol/port, or private/link-local/loopback target changes; hostname authority never transfers implicitly to a changed effective target.',
+              '- [x] **T003-062** Implement mandatory reauthorization of every effective destination before connect/follow whenever DNS resolution, redirect, rebinding, protocol/port, or private/link-local/loopback target changes; hostname authority never transfers implicitly to a changed effective target. Exact-head qualification: CI #525 (`33200261387`) SUCCESS at `4d730e894ebde948185597f5fe4296a142fd9ac6` on Windows/macOS/Ubuntu. Evidence: `implementation/egress-effective-destination-qualification.md`.',
+          )
+          replace_once(
+              tasks,
+              'T003_061_CI_RUN=33198112325\nCEDAR_POLICY_ADMITTED_EXACT=4.12.0',
+              'T003_061_CI_RUN=33198112325\nT003_062=PASS\nT003_062_QUALIFIED_HEAD=4d730e894ebde948185597f5fe4296a142fd9ac6\nT003_062_CI_RUN=33200261387\nCEDAR_POLICY_ADMITTED_EXACT=4.12.0',
+          )
+          replace_once(tasks, 'NEXT_TASK=T003-062', 'NEXT_TASK=T003-063')
+
+          plan = Path('specs/003-identity-policy-secrets-sandbox/implementation/current-execution-plan.md')
+          replace_once(plan, '**Current task**: `T003-062`', '**Current task**: `T003-063`')
+          replace_once(plan, 'Phase G is active at T003-062.', 'Phase G is active at T003-063.')
+          replace_once(
+              plan,
+              '### T003-062 — ACTIVE\n\nImplement mandatory reauthorization of every changed effective destination before connect/follow for DNS resolution, redirect, rebinding, protocol/port, and private/link-local/loopback transitions.',
+              '### T003-062 — COMPLETE\n\nQualified at exact implementation head `4d730e894ebde948185597f5fe4296a142fd9ac6` by CI #525 / run `33200261387`, SUCCESS on Windows/macOS/Ubuntu.\n\nEvidence: `implementation/egress-effective-destination-qualification.md`.\n\nThe qualified boundary binds normalized effective authority, resolved IP endpoint, protocol/port, address class, permit identity and original destination-scope digest into fresh authorization evidence before connect/follow. Redirect, rebinding and private-target changes reject reused decisions, while protocol/port widening denies. No DNS or socket operation is added to the trusted authority store.\n\n### T003-063 — ACTIVE\n\nBind relevant taint and optional secret-handle context into egress authorization and evidence without exposing secret plaintext.',
+          )
+          replace_once(plan, '- Remaining Phase G: T003-062..T003-064, strict-local hard denial remains dominant.', '- Remaining Phase G: T003-063..T003-064, strict-local hard denial remains dominant.')
+          replace_once(
+              plan,
+              'T003_061_CI_RUN=33198112325\nNEXT_TASK=T003-062',
+              'T003_061_CI_RUN=33198112325\nT003_062=PASS\nT003_062_QUALIFIED_HEAD=4d730e894ebde948185597f5fe4296a142fd9ac6\nT003_062_CI_RUN=33200261387\nNEXT_TASK=T003-063',
+          )
+      - name: Verify record
+        run: |
+          grep -F 'T003_062=PASS' specs/003-identity-policy-secrets-sandbox/tasks.md
+          grep -F 'NEXT_TASK=T003-063' specs/003-identity-policy-secrets-sandbox/tasks.md
+          grep -F '### T003-063 — ACTIVE' specs/003-identity-policy-secrets-sandbox/implementation/current-execution-plan.md
+      - name: Commit record
+        run: |
+          git rm .github/workflows/t003-062-record.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add specs/003-identity-policy-secrets-sandbox/tasks.md
+          git add specs/003-identity-policy-secrets-sandbox/implementation/current-execution-plan.md
+          git commit -m 'docs: activate T003-063 egress context binding'
+          git push origin HEAD:impl/003-identity-policy-secrets-sandbox
