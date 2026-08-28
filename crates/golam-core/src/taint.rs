@@ -161,9 +161,7 @@ impl<T> Provenanced<T> {
         source_taint: impl IntoIterator<Item = TaintSet>,
         introduced: TaintSet,
     ) -> Self {
-        let taint = source_taint
-            .into_iter()
-            .fold(introduced, TaintSet::union);
+        let taint = source_taint.into_iter().fold(introduced, TaintSet::union);
         Self { value, taint }
     }
 
