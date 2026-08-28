@@ -19,8 +19,9 @@ jobs:
           ref: impl/003-identity-policy-secrets-sandbox
           fetch-depth: 0
       - name: Advance T003-055 to T003-056
-        shell: python
+        shell: bash
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           tasks = Path('specs/003-identity-policy-secrets-sandbox/tasks.md')
@@ -86,6 +87,7 @@ After exact-head T003-056 qualification, continue directly to T003-057.
           plan.write_text(p.replace(gate, gate_new, 1))
 
           Path('.github/workflows/t003-055-ledger.yml').unlink()
+          PY
       - name: Commit ledger advance
         run: |
           git config user.name "github-actions[bot]"
