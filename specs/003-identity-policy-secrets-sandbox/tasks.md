@@ -52,8 +52,8 @@ Legend:
 - [x] **T003-042** Implement protected verifier/sanitizer registry; tainted sources cannot register their own downgrade rule. Exact-head qualification: CI #373 (`33152187952`) SUCCESS at `67f74c9b9b75e43b9fa00069050c97c041567184` on Windows/macOS/Ubuntu. Evidence: `implementation/verifier-registry-qualification.md`.
 - [x] **T003-043** Implement human/deterministic-verifier downgrade attestations as new evidence rather than in-place source mutation. Exact-head qualification: CI #388 (`33154505847`) SUCCESS at `2f8655b5bdddd17bb9e6eab7bf00f11a210896cb` on Windows/macOS/Ubuntu. Evidence: `implementation/taint-downgrade-attestation-qualification.md`.
 - [x] **T003-044** Enforce `SECRET_DERIVED` rejection at canonical long-term-memory admission boundary reserved for later memory integration tests. Exact-head qualification: CI #393 (`33155122088`) SUCCESS at `1a9fcddff4c4dd6a6161547cf89a502750f9bc71` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-derived-memory-admission-qualification.md`.
-- [ ] **T003-045** ACTIVE — Implement deterministic secret-elimination sanitizer evidence path for creating a separately non-secret-derived artifact.
-- [ ] **T003-046** Add multi-hop/self-clear/unregistered-verifier/SECRET_DERIVED property and adversarial tests.
+- [x] **T003-045** Implement deterministic secret-elimination sanitizer evidence path for creating a separately non-secret-derived artifact. Exact-head qualification: CI #398 (`33155929307`) SUCCESS at `e3b91dcecf0048b183c4c333cd9afda43ee25671` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-elimination-sanitizer-qualification.md`.
+- [ ] **T003-046** ACTIVE — Add multi-hop/self-clear/unregistered-verifier/SECRET_DERIVED property and adversarial tests.
 
 ## Phase F — Secret vault and broker
 
@@ -145,12 +145,15 @@ T003_043_CI_RUN=33154505847
 T003_044=PASS
 T003_044_QUALIFIED_HEAD=1a9fcddff4c4dd6a6161547cf89a502750f9bc71
 T003_044_CI_RUN=33155122088
-T003_045=ACTIVE
+T003_045=PASS
+T003_045_QUALIFIED_HEAD=e3b91dcecf0048b183c4c333cd9afda43ee25671
+T003_045_CI_RUN=33155929307
+T003_046=ACTIVE
 CEDAR_POLICY_ADMITTED_EXACT=4.12.0
 SECRET_CRYPTO_AND_OS_KEY_PROTECTORS_QUALIFIED=YES
 WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED
 Golam-Research=REFERENCE_ONLY
 DONOR_CODE_ADMITTED=NO
 REAL_SECRETS_USED=NO
-NEXT_TASK=T003-045
+NEXT_TASK=T003-046
 ```
