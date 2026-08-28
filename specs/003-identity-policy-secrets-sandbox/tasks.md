@@ -1,6 +1,6 @@
 # Tasks — Spec 003 Identity, Policy, Secrets & Sandbox
 
-**Status**: IMPLEMENTATION_ACTIVE — PHASE_B_COMPLETE — PHASE_C_COMPLETE — PHASE_D_ACTIVE  
+**Status**: IMPLEMENTATION_ACTIVE — PHASE_B_COMPLETE — PHASE_C_COMPLETE — PHASE_D_COMPLETE — PHASE_E_ACTIVE  
 **Canonical implementation base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`
 
 Legend:
@@ -43,7 +43,7 @@ Legend:
 - [x] **T003-032** Revalidate approval freshness/scope immediately before protected execution. Exact-head regression evidence: CI #326 (`33105526713`) SUCCESS at `bc2b0580afc20125331b8c4f75d1ed796b8bff1d` on Windows/macOS/Ubuntu.
 - [x] **T003-033** Implement durable atomic ONCE reservation/consumption with concurrency and crash/retry safety. Exact-head regression evidence: CI #330 (`33106765798`) SUCCESS at `2cd685098e92d34485636d11a1e3b9df59a2205b` on Windows/macOS/Ubuntu.
 - [x] **T003-034** Enforce bounded RUN_PREAUTHORIZATION for unattended irreversible effects and deny generic always-allow behavior. Exact-head qualification: CI #349 (`33149069868`) SUCCESS at `0bcaffb231070082be411e2e37959004ce359ad6` on Windows/macOS/Ubuntu. Evidence: `implementation/run-preauthorization-qualification.md`.
-- [ ] **T003-035** Add approval expiry/revocation/replay/double-use/scope-overreach/taint-mismatch tests.
+- [x] **T003-035** Add approval expiry/revocation/replay/double-use/scope-overreach/taint-mismatch tests. Exact-head qualification: CI #354 (`33149715031`) SUCCESS at `ffc8a66c881b1a34dafe32f79beebe03cceba939` on Windows/macOS/Ubuntu. Coverage includes the production typed monotonic approval-revocation mutation plus immediate use-time revocation denial; evidence is recorded in `implementation/current-execution-plan.md` and the exact-head CI run.
 
 ## Phase E — Taint and verifier state
 
@@ -113,6 +113,8 @@ SPEC_003_IMPLEMENTATION_AUTHORIZED=YES
 PHASE_A_COMPLETE=YES
 PHASE_B_COMPLETE=YES
 PHASE_C_COMPLETE=YES
+PHASE_D_COMPLETE=YES
+PHASE_E_ACTIVE=YES
 T003_020=PASS
 T003_021=PASS
 T003_022=PASS
@@ -125,11 +127,14 @@ T003_033=PASS
 T003_034=PASS
 T003_034_QUALIFIED_HEAD=0bcaffb231070082be411e2e37959004ce359ad6
 T003_034_CI_RUN=33149069868
+T003_035=PASS
+T003_035_QUALIFIED_HEAD=ffc8a66c881b1a34dafe32f79beebe03cceba939
+T003_035_CI_RUN=33149715031
 CEDAR_POLICY_ADMITTED_EXACT=4.12.0
 SECRET_CRYPTO_AND_OS_KEY_PROTECTORS_QUALIFIED=YES
 WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED
 Golam-Research=REFERENCE_ONLY
 DONOR_CODE_ADMITTED=NO
 REAL_SECRETS_USED=NO
-NEXT_TASK=T003-035
+NEXT_TASK=T003-040
 ```
