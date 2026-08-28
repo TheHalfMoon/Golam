@@ -3,7 +3,7 @@
 **Status**: IMPLEMENTATION_ACTIVE — PHASE_F_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current task**: `T003-054`
+**Current task**: `T003-055`
 
 ## Authority
 
@@ -98,23 +98,28 @@ Evidence: `implementation/secret-broker-qualification.md`.
 
 The qualified boundary provides protected metadata-only `BrokerSecretUse` authorization with exact handle/purpose/destination, strict-local, current decision, active policy, complete lease-chain and optional approval binding. Approval-bound uses are atomically consumed. No generic plaintext/ciphertext read API, egress authority or fallback injection is exposed.
 
-### T003-054 — ACTIVE
+### T003-054 — COMPLETE
 
-Implement the bounded unbrokerable fallback only when brokered credential application is impossible.
+Qualified at exact implementation head `f2cef061f4a6847a2eedf7b867b8b94e4ccadd8f` by CI #464 / run `33166659638`, SUCCESS on Windows/macOS/Ubuntu.
+
+Evidence: `implementation/secret-fallback-qualification.md`.
+
+The qualified boundary provides a bounded trusted stdin-only fallback consuming exact pre-existing admission/policy/lease/effect/ONCE-approval authority, with a cleared environment, no secret argv/environment, no ambient descendant inheritance, callback-only vault plaintext exposure and exact-value output/error redaction. It creates no sandbox or egress authority and uses deterministic canaries only.
+
+### T003-055 — ACTIVE
+
+Implement the explicit user-designated secret-entry boundary.
 
 Required boundaries:
 
-- require explicit bounded approval and an already-authenticated sandbox/process admission authorizing the exact injection channel;
-- never inject secret material into argv;
-- construct execution from a cleared ambient environment and add only the exact authorized injection value plus explicitly admitted non-secret variables;
-- prevent implicit child/grandchild secret inheritance;
-- minimize plaintext lifetime and keep any decrypted bytes inside the trusted fallback boundary;
-- apply value-aware redaction to captured stdout/stderr/log/error surfaces before they can reach model-visible or durable ordinary paths;
-- use deterministic canaries only; no real credentials;
-- fail closed when admission, approval, channel, process inheritance control, redaction, key protection or locality state is unavailable/ambiguous;
-- do not create sandbox admission or egress authority in this task; those remain owned by their later lifecycle tasks.
+- treat the complete submitted value as secret independent of syntax or detector recognition;
+- raw submitted bytes may enter only the qualified protected vault mutation path and must never become canonical/model-visible plaintext;
+- before any model-visible canonical append, persist only an opaque handle, tombstone/redaction marker and bounded non-secret metadata;
+- recognized-format/free-text detection remains defense in depth and is not the source of the explicit-entry guarantee;
+- keep generic plaintext/ciphertext reads unavailable and preserve exact protected-mutation authority requirements;
+- use deterministic canaries only in tests.
 
-After exact-head T003-054 qualification, continue directly to T003-055.
+After exact-head T003-055 qualification, continue directly to T003-056.
 
 ### Remaining Phase F ordering
 
@@ -154,8 +159,11 @@ T003_052_CI_RUN=33163396509
 T003_053=PASS
 T003_053_QUALIFIED_HEAD=6f24182e1d810bc4fe6e437117149c4479241034
 T003_053_CI_RUN=33165034463
-T003_054=ACTIVE
-NEXT_TASK=T003-054
+T003_054=PASS
+T003_054_QUALIFIED_HEAD=f2cef061f4a6847a2eedf7b867b8b94e4ccadd8f
+T003_054_CI_RUN=33166659638
+T003_055=ACTIVE
+NEXT_TASK=T003-055
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO
