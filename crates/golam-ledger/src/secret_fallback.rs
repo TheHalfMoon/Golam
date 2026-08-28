@@ -1600,7 +1600,11 @@ mod tests {
         }
     }
 
-    fn seed_fixture(authority: &AuthorityLayout) -> Fixture {
+    fn seed_fixture_with_launch(
+        authority: &AuthorityLayout,
+        launch_args: &[String],
+        launch_environment: &[(String, String)],
+    ) -> Fixture {
         let handle_id = [31_u8; 16];
         let secret_id = [32_u8; 16];
         let lease_id = [33_u8; 16];
@@ -1613,8 +1617,6 @@ mod tests {
         let approval_id = [40_u8; 16];
         let effect_id = EffectId(41);
         let protector = TestProtector { key: [42_u8; 32] };
-        let empty_args: Vec<String> = Vec::new();
-        let environment = vec![("GOLAM_TEST_MODE".to_owned(), "1".to_owned())];
         let request = FallbackSecretUseRequest {
             handle_id,
             principal: "owner:owner",
@@ -1626,8 +1628,8 @@ mod tests {
             observed_at: "2026-08-28T12:00:00Z",
             taint_digest: [0_u8; 32],
             executable: "test-helper",
-            args: &empty_args,
-            explicit_environment: &environment,
+            args: launch_args,
+            explicit_environment: launch_environment,
         };
         let plan = build_launch_plan(&request, EXECUTOR_ID).unwrap();
         let resource = fallback_resource(
@@ -1862,6 +1864,12 @@ mod tests {
         }
     }
 
+    fn seed_fixture(authority: &AuthorityLayout) -> Fixture {
+        let args: Vec<String> = Vec::new();
+        let environment = vec![("GOLAM_TEST_MODE".to_owned(), "1".to_owned())];
+        seed_fixture_with_launch(authority, &args, &environment)
+    }
+
     #[test]
     fn fallback_redacts_canary_and_consumes_exact_once_approval() {
         let (runtime, authority) = authority();
@@ -1911,12 +1919,12 @@ mod tests {
     #[test]
     fn secret_in_argv_is_rejected_before_use_or_approval_consumption() {
         let (runtime, authority) = authority();
-        let fixture = seed_fixture(&authority);
+        let args = vec![String::from_utf8(CANARY.to_vec()).unwrap()];
+        let environment = vec![("GOLAM_TEST_MODE".to_owned(), "1".to_owned())];
+        let fixture = seed_fixture_with_launch(&authority, &args, &environment);
         let mut store =
             SecretFallbackStore::open_with_protector(&authority, fixture.protector.clone())
                 .unwrap();
-        let args = vec![String::from_utf8(CANARY.to_vec()).unwrap()];
-        let environment = vec![("GOLAM_TEST_MODE".to_owned(), "1".to_owned())];
         let mut injector = RecordingInjector::qualified();
         assert!(matches!(
             store.execute_with_injector(base_request(&fixture, &args, &environment), &mut injector),
