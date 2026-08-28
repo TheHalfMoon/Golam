@@ -192,7 +192,10 @@ mod tests {
         ]);
 
         assert_eq!(first, second);
-        assert_eq!(first.canonical_bytes().unwrap(), second.canonical_bytes().unwrap());
+        assert_eq!(
+            first.canonical_bytes().unwrap(),
+            second.canonical_bytes().unwrap()
+        );
 
         let mut expected = Vec::new();
         expected.extend_from_slice(&(TAINT_SET_DOMAIN.len() as u32).to_be_bytes());
