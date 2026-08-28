@@ -36,6 +36,9 @@ jobs:
                   if line.endswith("}'''"):
                       in_raw_rust = False
                   continue
+              if line == '':
+                  script_lines.append('')
+                  continue
               if not line.startswith('          '):
                   raise SystemExit(f'unexpected Python indentation before raw Rust block: {line!r}')
               logical = line[10:]
