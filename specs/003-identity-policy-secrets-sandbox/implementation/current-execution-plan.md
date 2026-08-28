@@ -3,7 +3,7 @@
 **Status**: IMPLEMENTATION_ACTIVE — PHASE_F_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current task**: `T003-053`
+**Current task**: `T003-054`
 
 ## Authority
 
@@ -90,22 +90,31 @@ Evidence: `implementation/secret-mutation-qualification.md`.
 
 The qualified boundary implements atomic Golam-owned create, immutable rotation/versioning, and monotonic revocation transitions with exact durable authorization/effect/ONCE-approval binding, encrypted-before-persist storage, authenticated security snapshots, stale-version/replay rejection, and rollback on vault/key-protection failure.
 
-### T003-053 — ACTIVE
+### T003-053 — COMPLETE
 
-Implement `BrokerSecretUse` authorization around opaque handle, purpose, destination/process, lease/policy/approval and locality state.
+Qualified at exact implementation head `6f24182e1d810bc4fe6e437117149c4479241034` by CI #448 / run `33165034463`, SUCCESS on Windows/macOS/Ubuntu.
+
+Evidence: `implementation/secret-broker-qualification.md`.
+
+The qualified boundary provides protected metadata-only `BrokerSecretUse` authorization with exact handle/purpose/destination, strict-local, current decision, active policy, complete lease-chain and optional approval binding. Approval-bound uses are atomically consumed. No generic plaintext/ciphertext read API, egress authority or fallback injection is exposed.
+
+### T003-054 — ACTIVE
+
+Implement the bounded unbrokerable fallback only when brokered credential application is impossible.
 
 Required boundaries:
 
-- resolve only an authenticated protected `SecretHandle`; never accept caller-constructed secret identity as authority;
-- require an active non-revoked secret/version and validate handle purpose/expiry/version constraint;
-- bind broker authorization to the authenticated principal, exact purpose, destination/process, active lease, current policy decision and required approval state;
-- strict-local and other hard denials remain dominant; broker binding cannot mint or widen egress/network authority;
-- record metadata-only `SecretUseRecord` evidence with handle/version/principal/purpose/destination/mode/approval/decision/global sequence and no plaintext;
-- keep plaintext decryption/application inside the trusted broker boundary only; do not expose a generic plaintext-return API;
-- do not implement the T003-054 unbrokerable argv/environment/process injection fallback early;
-- fail closed on stale handle, revoked/retired secret state, stale lease/policy/approval/decision, locality mismatch, integrity ambiguity or storage failure.
+- require explicit bounded approval and an already-authenticated sandbox/process admission authorizing the exact injection channel;
+- never inject secret material into argv;
+- construct execution from a cleared ambient environment and add only the exact authorized injection value plus explicitly admitted non-secret variables;
+- prevent implicit child/grandchild secret inheritance;
+- minimize plaintext lifetime and keep any decrypted bytes inside the trusted fallback boundary;
+- apply value-aware redaction to captured stdout/stderr/log/error surfaces before they can reach model-visible or durable ordinary paths;
+- use deterministic canaries only; no real credentials;
+- fail closed when admission, approval, channel, process inheritance control, redaction, key protection or locality state is unavailable/ambiguous;
+- do not create sandbox admission or egress authority in this task; those remain owned by their later lifecycle tasks.
 
-After exact-head T003-053 qualification, continue directly to T003-054.
+After exact-head T003-054 qualification, continue directly to T003-055.
 
 ### Remaining Phase F ordering
 
@@ -142,8 +151,11 @@ T003_051_CI_RUN=33161883864
 T003_052=PASS
 T003_052_QUALIFIED_HEAD=b70689c1e4836f1540541f45d66cdd5a3f514dec
 T003_052_CI_RUN=33163396509
-T003_053=ACTIVE
-NEXT_TASK=T003-053
+T003_053=PASS
+T003_053_QUALIFIED_HEAD=6f24182e1d810bc4fe6e437117149c4479241034
+T003_053_CI_RUN=33165034463
+T003_054=ACTIVE
+NEXT_TASK=T003-054
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO
