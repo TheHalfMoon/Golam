@@ -615,12 +615,8 @@ impl SecretMutationStore {
                 to_i64(prepared.expected_current_version)?,
             ],
         )?;
-        append_secret_version_snapshot(
-            &transaction,
-            &prepared.secret_id,
-            to_i64(next_version)?,
-        )
-        .map_err(|error| SecretMutationError::AuthoritySecurity(error.to_string()))?;
+        append_secret_version_snapshot(&transaction, &prepared.secret_id, to_i64(next_version)?)
+            .map_err(|error| SecretMutationError::AuthoritySecurity(error.to_string()))?;
 
         let changed = transaction.execute(
             "UPDATE secret_records SET current_version = ?2 WHERE secret_id = ?1 AND current_version = ?3 AND status = 'active' AND revoked_at IS NULL",
@@ -691,9 +687,7 @@ struct StoredSecret {
     current_version: u64,
 }
 
-fn verify_transaction_integrity(
-    transaction: &Transaction<'_>,
-) -> Result<(), SecretMutationError> {
+fn verify_transaction_integrity(transaction: &Transaction<'_>) -> Result<(), SecretMutationError> {
     crate::integrity::verify(transaction)
         .map_err(|error| SecretMutationError::Integrity(error.to_string()))?;
     crate::authority_security_v2::verify(transaction)
@@ -1273,12 +1267,8 @@ mod tests {
         let (runtime, authority) = authority();
         let mut store = SecretMutationStore::open(&authority).unwrap();
 
-        let create = prepare_secret_create(
-            "api_credential",
-            "owner:owner",
-            CANARY_ONE.to_vec(),
-        )
-        .unwrap();
+        let create =
+            prepare_secret_create("api_credential", "owner:owner", CANARY_ONE.to_vec()).unwrap();
         let create_work = install_authorized_work(
             &mut store.connection,
             1,
@@ -1305,7 +1295,10 @@ mod tests {
                 |row| row.get(0),
             )
             .unwrap();
-        assert!(!raw.windows(CANARY_ONE.len()).any(|window| window == CANARY_ONE));
+        assert!(
+            !raw.windows(CANARY_ONE.len())
+                .any(|window| window == CANARY_ONE)
+        );
 
         let rotate = prepare_secret_rotate(
             created.secret_id(),
@@ -1352,12 +1345,7 @@ mod tests {
             .unwrap();
         assert_eq!(current, 2);
 
-        let revoke = prepare_secret_revoke(
-            created.secret_id(),
-            2,
-            "2026-08-28T02:00:00Z",
-        )
-        .unwrap();
+        let revoke = prepare_secret_revoke(created.secret_id(), 2, "2026-08-28T02:00:00Z").unwrap();
         let revoke_work = install_authorized_work(
             &mut store.connection,
             5,
@@ -1396,12 +1384,8 @@ mod tests {
     fn vault_failure_rolls_back_secret_rows_and_approval_consumption() {
         let (runtime, authority) = authority();
         let mut store = SecretMutationStore::open(&authority).unwrap();
-        let create = prepare_secret_create(
-            "api_credential",
-            "owner:owner",
-            CANARY_ONE.to_vec(),
-        )
-        .unwrap();
+        let create =
+            prepare_secret_create("api_credential", "owner:owner", CANARY_ONE.to_vec()).unwrap();
         let work = install_authorized_work(
             &mut store.connection,
             1,
@@ -1428,7 +1412,9 @@ mod tests {
             .unwrap();
         let consumption_count: i64 = store
             .connection
-            .query_row("SELECT COUNT(*) FROM approval_consumptions", [], |row| row.get(0))
+            .query_row("SELECT COUNT(*) FROM approval_consumptions", [], |row| {
+                row.get(0)
+            })
             .unwrap();
         assert_eq!(secret_count, 0);
         assert_eq!(consumption_count, 0);
@@ -1442,12 +1428,8 @@ mod tests {
     fn stale_rotation_fails_before_consuming_approval() {
         let (runtime, authority) = authority();
         let mut store = SecretMutationStore::open(&authority).unwrap();
-        let create = prepare_secret_create(
-            "api_credential",
-            "owner:owner",
-            CANARY_ONE.to_vec(),
-        )
-        .unwrap();
+        let create =
+            prepare_secret_create("api_credential", "owner:owner", CANARY_ONE.to_vec()).unwrap();
         let create_work = install_authorized_work(
             &mut store.connection,
             1,
