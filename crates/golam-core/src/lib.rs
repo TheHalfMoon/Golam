@@ -3,6 +3,7 @@
 pub mod authority;
 pub mod paths;
 pub mod runtime_home;
+pub mod taint;
 
 use core::fmt;
 
