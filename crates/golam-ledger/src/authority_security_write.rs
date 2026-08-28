@@ -27,6 +27,10 @@ enum ProtectedMutationKind {
     SecretVersion,
     SecretUseRecord,
     #[cfg(test)]
+    SandboxProfile,
+    #[cfg(test)]
+    SandboxAdmission,
+    #[cfg(test)]
     SecretHandle,
 }
 
@@ -45,6 +49,10 @@ impl ProtectedMutationKind {
             Self::SecretRecord => "secret_record",
             Self::SecretVersion => "secret_version",
             Self::SecretUseRecord => "secret_use_record",
+            #[cfg(test)]
+            Self::SandboxProfile => "sandbox_profile",
+            #[cfg(test)]
+            Self::SandboxAdmission => "sandbox_admission",
             #[cfg(test)]
             Self::SecretHandle => "secret_handle",
         }
@@ -272,6 +280,43 @@ pub(crate) fn append_secret_use_record_snapshot(
     append_snapshot(
         transaction,
         ProtectedMutationKind::SecretUseRecord,
+        1,
+        &values,
+    )
+}
+
+#[cfg(test)]
+pub(crate) fn append_sandbox_profile_snapshot(
+    transaction: &Transaction<'_>,
+    profile_id: &[u8],
+    version: i64,
+) -> Result<(), AuthoritySecurityWriteError> {
+    let values = query_values(
+        transaction,
+        "SELECT profile_id, version, class, filesystem_read_roots, filesystem_write_roots, network_rule, environment_allowlist, spawn_rule, cpu_limit, memory_limit, time_limit, output_limit, device_allowlist, ipc_allowlist, inherited_handle_rules, platform_requirements, status FROM sandbox_profiles WHERE profile_id = ?1 AND version = ?2",
+        params![profile_id, version],
+    )?;
+    append_snapshot(
+        transaction,
+        ProtectedMutationKind::SandboxProfile,
+        2,
+        &values,
+    )
+}
+
+#[cfg(test)]
+pub(crate) fn append_sandbox_admission_snapshot(
+    transaction: &Transaction<'_>,
+    admission_id: &[u8],
+) -> Result<(), AuthoritySecurityWriteError> {
+    let values = query_values(
+        transaction,
+        "SELECT admission_id, profile_id, profile_version, principal_or_process, lease_id, decision_id, egress_permit_id, resolved_launch_plan_hash, platform_executor, created_global_seq FROM sandbox_admissions WHERE admission_id = ?1",
+        params![admission_id],
+    )?;
+    append_snapshot(
+        transaction,
+        ProtectedMutationKind::SandboxAdmission,
         1,
         &values,
     )
