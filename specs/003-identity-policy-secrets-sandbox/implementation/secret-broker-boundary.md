@@ -4,6 +4,8 @@ Status: `ACTIVE`
 
 This note records the implementation boundary for T003-053 before exact-head qualification. It is not qualification evidence and does not claim PASS.
 
+The broker source is now production-linked in `golam-ledger`, and `SecretUseRecord` writes are covered by the production authority-security snapshot writer. Exact-head qualification remains required before T003-053 can be marked complete.
+
 ## Authorized scope
 
 T003-053 implements authorization and protected evidence for `BrokerSecretUse` around an existing opaque secret handle. A successful broker authorization may return only bounded internal authority metadata: use ID, handle ID, secret ID, selected immutable version, lease ID/generation, authorization decision ID, and optional approval ID.
