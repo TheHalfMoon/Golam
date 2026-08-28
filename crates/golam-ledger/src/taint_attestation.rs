@@ -46,6 +46,13 @@ impl TaintDowngradeMechanism {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DeterministicVerifierEvidence<'a> {
+    pub rule_id: [u8; 16],
+    pub authority_source_binding: &'a [u8],
+    pub evidence_hash: [u8; 32],
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PreparedTaintAttestation {
     attestation_id: [u8; 16],
@@ -243,12 +250,10 @@ pub fn prepare_deterministic_verifier_downgrade(
     result_artifact_id: [u8; 32],
     result_labels: TaintSet,
     requested_by_principal: &str,
-    verifier_rule_id: [u8; 16],
-    authority_source_binding: &[u8],
-    evidence_hash: [u8; 32],
+    verifier_evidence: DeterministicVerifierEvidence<'_>,
 ) -> Result<PreparedTaintAttestation, TaintAttestationError> {
-    if authority_source_binding.is_empty()
-        || authority_source_binding.len() > MAX_AUTHORITY_SOURCE_BINDING_BYTES
+    if verifier_evidence.authority_source_binding.is_empty()
+        || verifier_evidence.authority_source_binding.len() > MAX_AUTHORITY_SOURCE_BINDING_BYTES
     {
         return Err(TaintAttestationError::InvalidAuthoritySourceBinding);
     }
@@ -259,9 +264,9 @@ pub fn prepare_deterministic_verifier_downgrade(
         result_labels,
         requested_by_principal,
         TaintDowngradeMechanism::DeterministicVerifier,
-        Some(verifier_rule_id),
-        Some(authority_source_binding.to_vec()),
-        evidence_hash,
+        Some(verifier_evidence.rule_id),
+        Some(verifier_evidence.authority_source_binding.to_vec()),
+        verifier_evidence.evidence_hash,
     )
 }
 
@@ -1100,9 +1105,11 @@ mod tests {
             [11; 32],
             TaintSet::from_labels([TaintLabel::ModelGenerated]),
             "owner:owner",
-            rule_id,
-            binding,
-            [12; 32],
+            DeterministicVerifierEvidence {
+                rule_id,
+                authority_source_binding: binding,
+                evidence_hash: [12; 32],
+            },
         )
         .unwrap();
         let effect_id = EffectId(next_id());
@@ -1137,9 +1144,11 @@ mod tests {
             [21; 32],
             TaintSet::empty(),
             "owner:owner",
-            rule_id,
-            binding,
-            [22; 32],
+            DeterministicVerifierEvidence {
+                rule_id,
+                authority_source_binding: binding,
+                evidence_hash: [22; 32],
+            },
         )
         .unwrap();
         let overreach_effect = EffectId(next_id());
