@@ -422,13 +422,15 @@ impl<P: KeyProtector> SecretFallbackStore<P> {
         verify_transaction_integrity(&transaction)?;
         let admission = verify_admission(
             &transaction,
-            request.admission_id,
-            request.principal,
-            request.destination_or_process,
-            plan.plan_hash,
-            injector.executor_id(),
-            &resource,
-            request.observed_at,
+            AdmissionRequest {
+                admission_id: request.admission_id,
+                principal: request.principal,
+                destination: request.destination_or_process,
+                plan_hash: plan.plan_hash,
+                executor_id: injector.executor_id(),
+                resource: &resource,
+                observed_at: request.observed_at,
+            },
         )?;
         verify_effect(&transaction, request.effect_id, &resource, intent_digest)?;
         verify_approval(
@@ -558,16 +560,29 @@ fn verify_transaction_integrity(transaction: &Transaction<'_>) -> Result<(), Sec
         .map_err(|error| SecretFallbackError::AuthoritySecurity(error.to_string()))
 }
 
+struct AdmissionRequest<'a> {
+    admission_id: [u8; 16],
+    principal: &'a str,
+    destination: &'a str,
+    plan_hash: [u8; 32],
+    executor_id: &'a str,
+    resource: &'a str,
+    observed_at: &'a str,
+}
+
 fn verify_admission(
     transaction: &Transaction<'_>,
-    admission_id: [u8; 16],
-    principal: &str,
-    destination: &str,
-    plan_hash: [u8; 32],
-    executor_id: &str,
-    resource: &str,
-    observed_at: &str,
+    request: AdmissionRequest<'_>,
 ) -> Result<AdmissionEvidence, SecretFallbackError> {
+    let AdmissionRequest {
+        admission_id,
+        principal,
+        destination,
+        plan_hash,
+        executor_id,
+        resource,
+        observed_at,
+    } = request;
     let row = transaction
         .query_row(
             "SELECT profile_id, profile_version, principal_or_process, lease_id, decision_id, egress_permit_id, resolved_launch_plan_hash, platform_executor, created_global_seq FROM sandbox_admissions WHERE admission_id = ?1",
