@@ -1,0 +1,47 @@
+name: t003-056-link-canary
+on:
+  push:
+    branches:
+      - impl/003-identity-policy-secrets-sandbox
+permissions:
+  contents: write
+jobs:
+  integrate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/003-identity-policy-secrets-sandbox
+          fetch-depth: 0
+      - name: Install pinned Rust formatter
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt
+      - name: Link T003-056 qualification modules
+        shell: python
+        run: |
+          from pathlib import Path
+
+          lib = Path('crates/golam-ledger/src/lib.rs')
+          s = lib.read_text()
+          anchor = '''#[allow(dead_code)]\npub(crate) mod secret_entry;\n#[allow(dead_code)]\npub(crate) mod secret_fallback;'''
+          repl = '''#[allow(dead_code)]\npub(crate) mod secret_entry;\n#[allow(dead_code)]\npub(crate) mod secret_detection;\n#[cfg(test)]\nmod secret_canary_qualification;\n#[allow(dead_code)]\npub(crate) mod secret_fallback;'''
+          if anchor not in s:
+              raise SystemExit('lib secret module anchor missing')
+          lib.write_text(s.replace(anchor, repl, 1))
+
+          entry = Path('crates/golam-ledger/src/secret_entry.rs')
+          e = entry.read_text()
+          old = '''    #[cfg(test)]\n    fn commit_with_protector<P: crate::secret_vault::KeyProtector>('''
+          new = '''    #[cfg(test)]\n    pub(crate) fn commit_with_protector<P: crate::secret_vault::KeyProtector>('''
+          if old not in e:
+              raise SystemExit('secret entry test protector anchor missing')
+          entry.write_text(e.replace(old, new, 1))
+      - name: Format and commit
+        run: |
+          cargo +1.98.0 fmt --all
+          git rm .github/workflows/t003-056-link-canary.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/golam-ledger/src/lib.rs crates/golam-ledger/src/secret_entry.rs crates/golam-ledger/src/secret_detection.rs crates/golam-ledger/src/secret_canary_qualification.rs
+          git commit -m 'test: link T003-056 secret canary qualification'
+          git push origin HEAD:impl/003-identity-policy-secrets-sandbox
