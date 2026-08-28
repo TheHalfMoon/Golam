@@ -162,9 +162,7 @@ impl TaintSet {
 
         let count_index = 4 + TAINT_SET_DOMAIN.len();
         let count = bytes[count_index];
-        if count > MAX_TAINT_LABELS
-            || bytes.len() != prefix_len + usize::from(count)
-        {
+        if count > MAX_TAINT_LABELS || bytes.len() != prefix_len + usize::from(count) {
             return Err(CoreError::InvalidCanonicalTaintSet);
         }
 
