@@ -322,7 +322,11 @@ type SecretHandleRow = (Vec<u8>, Vec<u8>, Option<i64>, Vec<u8>, Option<String>);
 
 fn decode_secret_record(row: SecretRecordRow) -> Result<SecretRecord, SecretInterfaceError> {
     let secret_id = fixed_id::<SECRET_ID_BYTES>(row.0, "secret_id must be exactly 16 bytes")?;
-    validate_text(&row.1, MAX_CLASSIFICATION_BYTES, "classification is invalid")?;
+    validate_text(
+        &row.1,
+        MAX_CLASSIFICATION_BYTES,
+        "classification is invalid",
+    )?;
     validate_text(&row.2, MAX_PRINCIPAL_BYTES, "owner principal is invalid")?;
     let current_version = positive_u64(row.3, "current secret version must be positive")?;
     validate_text(&row.4, MAX_STATUS_BYTES, "secret status is invalid")?;
@@ -565,7 +569,9 @@ mod tests {
 
         assert!(matches!(
             SecretCatalog::open(&authority),
-            Err(SecretInterfaceError::Storage(StorageError::IntegrityCheckFailed(_)))
+            Err(SecretInterfaceError::Storage(
+                StorageError::IntegrityCheckFailed(_)
+            ))
         ));
         fs::remove_dir_all(runtime.root).unwrap();
     }
