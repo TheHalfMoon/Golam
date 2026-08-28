@@ -3,7 +3,7 @@
 **Status**: IMPLEMENTATION_ACTIVE — PHASE_F_COMPLETE — PHASE_G_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current task**: `T003-060`
+**Current task**: `T003-061`
 
 ## Authority
 
@@ -138,15 +138,31 @@ Required boundaries:
 - revocation must immediately block broker/fallback use without deleting prior encrypted versions or weakening audit integrity;
 - no failure mode may acknowledge success while leaving old secret authority usable as current.
 
-Phase F is closed at the task-qualified head above. Phase G is active at T003-060.
+Phase F is closed at the task-qualified head above. Phase G is active at T003-061.
 
 ### Remaining Phase F ordering
 
 T003-053 -> T003-054 -> T003-055 -> T003-056 -> T003-057.
 
+## Phase G — Egress permits
+
+`ACTIVE`
+
+### T003-060 — COMPLETE
+
+Qualified at exact implementation head `50941a6d68a7920aca3666eb786f05d8b2c145b2` by CI #502 / run `33196075286`, SUCCESS on Windows/macOS/Ubuntu.
+
+Evidence: `implementation/strict-local-hard-guard-qualification.md`.
+
+The qualified regression proves strict-local external egress denies before downstream policy/permit evaluation, produces no grant, and records no policy evidence because the downstream permit-like policy is never invoked.
+
+### T003-061 — ACTIVE
+
+Implement non-strict `EgressPermit` scope plus protected issuance, revocation, and bounded use accounting while preserving T003-060 hard-guard dominance.
+
 ## Later phases
 
-- Phase G: T003-060..T003-064, strict-local hard denial remains dominant.
+- Remaining Phase G: T003-061..T003-064, strict-local hard denial remains dominant.
 - Phase H: T003-070..T003-076, with descendant-capturing no-egress predecessor before network-capable native managed children.
 - Phase I: T003-080..T003-084.
 - Phase J: T003-090..T003-098, including fresh exact-head multi-platform CI, convergence, authorized Qodo review, merge, and post-merge canonical-main evidence.
@@ -191,7 +207,10 @@ T003_056_CI_RUN=33169107060
 T003_057=PASS
 T003_057_QUALIFIED_HEAD=3621b502854fd46d7b45b28f7e8d0ca071b08b68
 T003_057_CI_RUN=33195054055
-NEXT_TASK=T003-060
+T003_060=PASS
+T003_060_QUALIFIED_HEAD=50941a6d68a7920aca3666eb786f05d8b2c145b2
+T003_060_CI_RUN=33196075286
+NEXT_TASK=T003-061
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO
