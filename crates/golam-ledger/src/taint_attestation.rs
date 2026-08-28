@@ -303,7 +303,10 @@ fn prepare(
         return Err(TaintAttestationError::TooManySourceArtifacts);
     }
     source_artifact_ids.sort_unstable();
-    if source_artifact_ids.windows(2).any(|pair| pair[0] == pair[1]) {
+    if source_artifact_ids
+        .windows(2)
+        .any(|pair| pair[0] == pair[1])
+    {
         return Err(TaintAttestationError::DuplicateSourceArtifact);
     }
     if source_artifact_ids.contains(&result_artifact_id) {
@@ -450,7 +453,11 @@ impl TaintAttestationStore {
                     &prepared.requested_by_principal,
                     prepared.source_taint_digest,
                 )?;
-                (approval_id, Some(authority.principal.clone()), Some(approval_id))
+                (
+                    approval_id,
+                    Some(authority.principal.clone()),
+                    Some(approval_id),
+                )
             }
             MechanismAuthority::DeterministicVerifier(rule_id) => {
                 let expected_binding = prepared
@@ -1027,10 +1034,8 @@ mod tests {
     #[test]
     fn human_downgrade_creates_new_attestation_and_consumes_exact_approval() {
         let (runtime, authority) = authority();
-        let source_labels = TaintSet::from_labels([
-            TaintLabel::WebUntrusted,
-            TaintLabel::ModelGenerated,
-        ]);
+        let source_labels =
+            TaintSet::from_labels([TaintLabel::WebUntrusted, TaintLabel::ModelGenerated]);
         let result_labels = TaintSet::from_labels([TaintLabel::ModelGenerated]);
         let prepared = prepare_human_downgrade(
             [[1; 32]],
@@ -1087,10 +1092,8 @@ mod tests {
             TaintSet::from_labels([TaintLabel::WebUntrusted]),
         );
 
-        let source_labels = TaintSet::from_labels([
-            TaintLabel::WebUntrusted,
-            TaintLabel::ModelGenerated,
-        ]);
+        let source_labels =
+            TaintSet::from_labels([TaintLabel::WebUntrusted, TaintLabel::ModelGenerated]);
         let prepared = prepare_deterministic_verifier_downgrade(
             [[10; 32]],
             source_labels,
@@ -1159,11 +1162,7 @@ mod tests {
         assert!(matches!(
             TaintAttestationStore::open(&authority)
                 .unwrap()
-                .attest_deterministic_verifier(
-                    overreach,
-                    overreach_decision,
-                    overreach_effect,
-                ),
+                .attest_deterministic_verifier(overreach, overreach_decision, overreach_effect,),
             Err(TaintAttestationError::VerifierRuleDoesNotAuthorizeDowngrade)
         ));
         AuthorityStore::open(authority.authority_db_path()).unwrap();
