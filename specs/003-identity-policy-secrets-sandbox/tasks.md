@@ -62,8 +62,8 @@ Legend:
 - [x] **T003-052** Implement secret create/version/rotate/revoke protected transitions with atomic security evidence. Exact-head qualification: CI #434 (`33163396509`) SUCCESS at `b70689c1e4836f1540541f45d66cdd5a3f514dec` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-mutation-qualification.md`.
 - [x] **T003-053** Implement `BrokerSecretUse` authorization around handle, purpose, destination/process, lease/policy/approval and locality state. Exact-head qualification: CI #448 (`33165034463`) SUCCESS at `6f24182e1d810bc4fe6e437117149c4479241034` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-broker-qualification.md`.
 - [x] **T003-054** Implement bounded unbrokerable fallback: no argv, cleared environment, exact injection scope, no ambient child inheritance, minimized lifetime and redaction. Exact-head qualification: CI #464 (`33166659638`) SUCCESS at `f2cef061f4a6847a2eedf7b867b8b94e4ccadd8f` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-fallback-qualification.md`.
-- [ ] **T003-055** ACTIVE — Implement an explicit user-designated secret-entry boundary that treats the entire submitted value as secret independent of format detection; before any model-visible canonical append persist only an opaque handle, tombstone/redaction marker and non-secret metadata. Keep recognized-format detection only as defense in depth for ordinary free text.
-- [ ] **T003-056** Add canary tests covering both recognized and deliberately unknown-format deterministic values through the explicit secret-entry path, proving no plaintext in durable vault bytes, event/audit/log/error/prompt paths or unauthorized subprocess output; separately test free-text detectors as defense in depth.
+- [x] **T003-055** Implement an explicit user-designated secret-entry boundary that treats the entire submitted value as secret independent of format detection; before any model-visible canonical append persist only an opaque handle, tombstone/redaction marker and non-secret metadata. Keep recognized-format detection only as defense in depth for ordinary free text. Exact-head qualification: CI #473 (`33167705734`) SUCCESS at `b434da7c675fecf41d3f3aed2104559f959e8310` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-entry-qualification.md`.
+- [ ] **T003-056** ACTIVE — Add canary tests covering both recognized and deliberately unknown-format deterministic values through the explicit secret-entry path, proving no plaintext in durable vault bytes, event/audit/log/error/prompt paths or unauthorized subprocess output; separately test free-text detectors as defense in depth.
 - [ ] **T003-057** Add crash/disk-full/rotation/revocation tests and prove no acknowledged half-transition exposes stale secret authority.
 
 ## Phase G — Egress permits
@@ -167,12 +167,15 @@ T003_053_CI_RUN=33165034463
 T003_054=PASS
 T003_054_QUALIFIED_HEAD=f2cef061f4a6847a2eedf7b867b8b94e4ccadd8f
 T003_054_CI_RUN=33166659638
-T003_055=ACTIVE
+T003_055=PASS
+T003_055_QUALIFIED_HEAD=b434da7c675fecf41d3f3aed2104559f959e8310
+T003_055_CI_RUN=33167705734
+T003_056=ACTIVE
 CEDAR_POLICY_ADMITTED_EXACT=4.12.0
 SECRET_CRYPTO_AND_OS_KEY_PROTECTORS_QUALIFIED=YES
 WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED
 Golam-Research=REFERENCE_ONLY
 DONOR_CODE_ADMITTED=NO
 REAL_SECRETS_USED=NO
-NEXT_TASK=T003-055
+NEXT_TASK=T003-056
 ```
