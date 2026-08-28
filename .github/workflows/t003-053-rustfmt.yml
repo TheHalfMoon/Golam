@@ -1,0 +1,31 @@
+name: t003-053-rustfmt
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/t003-053-rustfmt.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'impl/003-identity-policy-secrets-sandbox'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/003-identity-policy-secrets-sandbox
+          fetch-depth: 0
+      - name: Apply pinned rustfmt to T003-053
+        shell: bash
+        run: |
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt
+          cargo +1.98.0 fmt --all
+          git rm .github/workflows/t003-053-rustfmt.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/golam-ledger/src/secret_broker.rs
+          git commit -m 'style: apply rustfmt to secret broker'
+          git push origin HEAD:impl/003-identity-policy-secrets-sandbox
