@@ -62,29 +62,33 @@ Completed:
 
 - T003-040 qualified at `cb69d638107ca4fe0118c9a61f143ac3ba65a2d3` with CI #359 / run `33150969442` SUCCESS on Windows/macOS/Ubuntu. Evidence: `implementation/taint-baseline-qualification.md`.
 - T003-041 qualified at `76e1addf35c92a22d2c5826ca429278cacd598b3` with CI #366 / run `33151556481` SUCCESS on Windows/macOS/Ubuntu. Evidence: `implementation/taint-propagation-qualification.md`.
+- T003-042 qualified at `67f74c9b9b75e43b9fa00069050c97c041567184` with CI #373 / run `33152187952` SUCCESS on Windows/macOS/Ubuntu. Evidence: `implementation/verifier-registry-qualification.md`.
 
-T003-041 established monotonic `TaintSet::union`, a provenance carrier that does not alter the wrapped value's identity, derived-artifact propagation tests, and typed authority-context provenance tests. There is still no downgrade/removal API. Normal policy-path consumption remains later integration work rather than widening T003-041.
+T003-041 established monotonic `TaintSet::union`, a provenance carrier that does not alter the wrapped value's identity, derived-artifact propagation tests, and typed authority-context provenance tests. There is still no downgrade/removal API.
 
-Next canonical task: **T003-042** — implement the protected verifier/sanitizer registry; tainted sources cannot register their own downgrade rule.
+T003-042 established a protected verifier/sanitizer registry over the existing `verifier_rules` schema. Registration is bounded/canonical, rejects untrusted/generated/secret-derived registration provenance before mutation, and requires exact current authorization, exact at-most-once elevated effect, exact ONCE approval with registration taint digest, atomic approval consumption, and fresh `authority-security-v2` coverage. The registry stores authority; it does not itself perform a downgrade.
 
-T003-042 bounded design constraints:
+Next canonical task: **T003-043** — implement human/deterministic-verifier downgrade attestations as new evidence rather than in-place source mutation.
 
-- reuse the already-created `verifier_rules` protected schema; no new migration unless a proven invariant requires one;
-- registry mutation must be typed protected work, not generic SQL/filesystem/tool access;
-- exact current authorization + exact effect/approval evidence must bind registration where required by the protected-resource mutation contract;
-- the registration source must be trusted: untrusted/model/channel/MCP/plugin/secret-derived provenance cannot register a rule that could later downgrade provenance;
-- allowed downgrade labels and authoritative source binding are canonical/bounded data;
-- registration commits the protected row and fresh `authority-security` evidence atomically;
-- this task registers/reads rules only; it does not yet create downgrade attestations or mutate artifact labels;
-- T003-043 remains the owner of actual human/deterministic-verifier downgrade attestations.
+T003-043 bounded design constraints:
+
+- reuse the already-created protected `taint_attestations` schema unless a proven invariant requires a migration;
+- a downgrade must create a new attestation/derived-artifact evidence record; source provenance is immutable;
+- human downgrade and deterministic-verifier downgrade are distinct mechanisms;
+- deterministic-verifier downgrade must reference an active registered rule whose allowed downgrade set covers the requested label removal;
+- the verifier/rule evidence must be independent of the tainted source and cannot be supplied as self-authenticating model/channel/MCP/plugin content;
+- human downgrade must be exact protected authority work under current authorization and approval scope; a free-form content assertion is not approval;
+- `SECRET_DERIVED` is not cleared by the normal human/deterministic-verifier path; its separately authorized deterministic secret-elimination path remains T003-045;
+- result labels are a separately evidenced set and source labels/rows remain unchanged;
+- the attestation row and fresh `authority-security` evidence commit atomically;
+- this task does not yet implement the canonical long-term-memory sink (T003-044) or secret-elimination sanitizer execution (T003-045).
 
 Remaining Phase E order:
 
-1. T003-042 protected verifier/sanitizer registry;
-2. T003-043 downgrade attestations as new evidence;
-3. T003-044 `SECRET_DERIVED` long-term-memory admission denial boundary;
-4. T003-045 deterministic secret-elimination sanitizer evidence;
-5. T003-046 multi-hop/self-clear/unregistered-verifier/SECRET_DERIVED adversarial qualification.
+1. T003-043 downgrade attestations as new evidence;
+2. T003-044 `SECRET_DERIVED` long-term-memory admission denial boundary;
+3. T003-045 deterministic secret-elimination sanitizer evidence;
+4. T003-046 multi-hop/self-clear/unregistered-verifier/SECRET_DERIVED adversarial qualification.
 
 Do not begin Phase F until the Phase E predecessor tasks required by `tasks.md` are complete and qualified.
 
@@ -141,7 +145,10 @@ T003_040_CI_RUN=33150969442
 T003_041=PASS
 T003_041_QUALIFIED_HEAD=76e1addf35c92a22d2c5826ca429278cacd598b3
 T003_041_CI_RUN=33151556481
-NEXT_TASK=T003-042
+T003_042=PASS
+T003_042_QUALIFIED_HEAD=67f74c9b9b75e43b9fa00069050c97c041567184
+T003_042_CI_RUN=33152187952
+NEXT_TASK=T003-043
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO
 PR_READY=NO
