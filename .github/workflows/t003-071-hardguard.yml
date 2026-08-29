@@ -110,10 +110,11 @@ jobs:
           )
           ensure_replace(
               plan,
-              '        let mut connection = Connection::open(authority.authority_db_path()).unwrap();',
-              '        let store = AuthorityStore::open(authority.authority_db_path()).unwrap();\n        drop(store);\n        let mut connection = Connection::open(authority.authority_db_path()).unwrap();',
+              '    fn install_base_authority(authority: &AuthorityLayout) {\n        let mut connection = Connection::open(authority.authority_db_path()).unwrap();',
+              '    fn install_base_authority(authority: &AuthorityLayout) {\n        let store = AuthorityStore::open(authority.authority_db_path()).unwrap();\n        drop(store);\n        let mut connection = Connection::open(authority.authority_db_path()).unwrap();',
               'test authority initialization',
           )
+
           text = plan.read_text()
           text = text.replace(
               'let mut compiler = SandboxPlanCompiler::open(&authority).unwrap();',
@@ -122,9 +123,10 @@ jobs:
           text = text.replace('            strict_local: false,\n', '')
           old = '''        let mut compiler = SandboxPlanCompiler::open(&authority, SandboxLocality::NonStrict).unwrap();\n\n        assert!(matches!(\n            compiler.compile(request(DECISION_ID)),\n            Err(SandboxPlanError::EgressPermitRequired)\n        ));\n        let mut strict = request(DECISION_ID);\n        strict.egress_permit_id = Some(PERMIT_ID);\n        strict.strict_local = true;\n        assert!(matches!(\n            compiler.compile(strict),\n            Err(SandboxPlanError::StrictLocalExternalEgressDenied)\n        ));\n        let mut permitted = request(DECISION_ID);'''
           new = '''        let mut compiler = SandboxPlanCompiler::open(&authority, SandboxLocality::NonStrict).unwrap();\n\n        assert!(matches!(\n            compiler.compile(request(DECISION_ID)),\n            Err(SandboxPlanError::EgressPermitRequired)\n        ));\n        let mut strict_compiler =\n            SandboxPlanCompiler::open(&authority, SandboxLocality::StrictLocal).unwrap();\n        let mut strict = request(DECISION_ID);\n        strict.egress_permit_id = Some(PERMIT_ID);\n        assert!(matches!(\n            strict_compiler.compile(strict),\n            Err(SandboxPlanError::StrictLocalExternalEgressDenied)\n        ));\n        drop(strict_compiler);\n        let mut permitted = request(DECISION_ID);'''
-          if old not in text:
-              raise SystemExit('strict-local regression block did not match')
-          text = text.replace(old, new, 1)
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif new not in text:
+              raise SystemExit('strict-local regression block did not match either form')
           plan.write_text(text)
       - name: Focused hardened T003-071 qualification
         run: |
