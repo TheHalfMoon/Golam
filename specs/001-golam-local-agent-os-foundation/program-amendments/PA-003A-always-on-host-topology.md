@@ -87,6 +87,11 @@ Security-relevant authority identity is the tuple **`(authority_domain_id, autho
 
 A fresh recovery domain identity MUST be generated through an implementation-qualified collision-resistant mechanism such as OS cryptographic randomness and MUST NOT be caller-selected, copied from the stale backup as current identity, or reused from a prior authority domain. This requirement is semantic; PA-003A does not admit any new runtime dependency.
 
+A fresh identifier is not sufficient authentication. Every current authority domain MUST also be cryptographically bound to an implementation-qualified **authority-domain authentication root** (for example, a host/domain signing or authenticated-transport credential whose private material is protected by the qualified platform boundary). Lost-host recovery MUST generate fresh private authentication/root material that is unavailable to the unreachable old host and is not restored from the stale backup as current authority. The current `authority_domain_id`, generation, and public credential/key identifier MUST be bound together in protected state and in the authentication evidence used by paired devices/nodes. Merely presenting a fresh random domain label while authenticating with an old backup-carried private key MUST NOT establish current authority.
+
+`FRESH_DOMAIN_ID != FRESH_AUTHENTICATION_ROOT`
+`STALE_BACKUP_KEY != CURRENT_AUTHORITY_CREDENTIAL`
+
 Backups/standby copies are not active authority.
 
 `BACKUP_STATE != ACTIVE_AUTHORITY`
@@ -108,10 +113,10 @@ A future migration protocol MUST cover:
 - approval/lease expiry or re-mint rules;
 - secret re-sealing/re-brokering;
 - device/channel rebinding generation changes where required;
-- **authority-domain identity rotation plus pairing-domain/generation rotation at cutover** so credentials and signed objects cannot remain valid merely because protected bytes were copied to a new Authority Host;
-- **invalidation of every pre-cutover mobile approval response and queued signed request intent whose domain/generation binding names the old Authority Host**, followed by fresh authorization or re-signing only after the new host relationship is current;
+- **authority-domain identity rotation plus fresh authority-domain authentication-root/key rotation and pairing-domain/generation rotation at cutover** so credentials and signed objects cannot remain valid merely because protected bytes were copied to a new Authority Host;
+- **invalidation of every pre-cutover mobile approval response and queued signed request intent whose domain/generation/authentication-root binding names the old Authority Host**, followed by fresh authorization or re-signing only after the new host relationship is current;
 - old-host revocation/fencing before the new host accepts protected mutations when the old host is reachable;
-- monotonic audit evidence binding the old domain/generation, migration operation, new domain/generation and cutover point;
+- monotonic audit evidence binding the old domain/generation/authentication-root identity, migration operation, new domain/generation/authentication-root identity and cutover point;
 - rollback before cutover where safe;
 - explicit lost-host recovery when the old host is unavailable.
 
@@ -119,24 +124,26 @@ A future migration protocol MUST cover:
 
 When the old Authority Host is reachable, it MUST durably enter a fenced/decommissioned state for the old domain/generation before the new host accepts protected mutations under the replacement domain/generation. The old host cannot later resume the prior authority identity through ordinary restart/reconnect.
 
-A planned migration MAY transfer enough verified predecessor state to establish the replacement domain deterministically as part of the protected migration transaction, but the replacement domain identity still MUST be distinct from the old domain and bound into all post-cutover authority-bearing objects.
+A planned migration MAY transfer enough verified predecessor state to establish the replacement domain deterministically as part of the protected migration transaction, but the replacement domain identity still MUST be distinct from the old domain and bound into all post-cutover authority-bearing objects. The target host MUST establish fresh current authority-domain authentication private material (or an equivalently strong protected key-rotation result) before accepting post-cutover protected requests; copying the old host's private authority credential to the target as the current credential is not a valid migration cutover.
 
 ### Lost-host recovery
 
-When the old host cannot be contacted, Golam cannot truthfully claim to have changed unreachable bytes on that machine or know that a reachable backup contains the last generation ever used there. Recovery therefore establishes a **fresh collision-resistant authority domain identity** and logically fences the complete old domain across every re-established trusted relationship rather than pretending physical remote revocation occurred.
+When the old host cannot be contacted, Golam cannot truthfully claim to have changed unreachable bytes on that machine or know that a reachable backup contains the last generation ever used there. Recovery therefore establishes a **fresh collision-resistant authority domain identity and fresh cryptographic authority-domain authentication root** and logically fences the complete old domain across every re-established trusted relationship rather than pretending physical remote revocation occurred.
 
 The recovery protocol MUST ensure:
 
-- the new Authority Host starts protected mutations only under a newly generated authority-domain identity and its current generation;
+- the new Authority Host starts protected mutations only under a newly generated authority-domain identity, its current generation, and freshly generated authority-domain authentication private material unavailable to the old host;
 - the new domain identity is not computed only by incrementing a generation/counter read from a stale backup;
-- re-enrolled/reconnected devices and Execution Nodes pin the complete fresh domain/generation tuple and reject protected requests, approvals, leases, queued intents, nonces, or control envelopes from stale domains or generations;
-- cached or backup-carried authority-bearing objects retain their original domain/generation binding and cannot be relabeled into the new domain by restoration code;
+- old/stale authority-host private signing/authentication keys restored from backup are never promoted as the current domain credential; they may be retained only where strictly necessary for bounded historical verification/recovery and MUST NOT authenticate current protected traffic;
+- re-enrolled/reconnected devices and Execution Nodes pin the complete fresh domain/generation plus current authority authentication public-key/key-id binding and reject protected requests, approvals, leases, queued intents, nonces, or control envelopes from stale domains, generations, or authority credentials;
+- knowledge of the fresh `authority_domain_id` or generation alone is insufficient to authenticate the new Authority Host; a returning old host that still controls prior private credentials cannot impersonate the recovered domain merely by relabeling requests with the fresh identifier;
+- cached or backup-carried authority-bearing objects retain their original domain/generation/authentication-root binding and cannot be relabeled into the new domain by restoration code;
 - secrets/approvals/leases that cannot be proven safely transferable are re-sealed/re-minted/re-authorized rather than inherited by byte-copy alone;
 - an old host that later returns is treated as **stale/recovered-old-host**, not as an equal active peer;
-- a returning old host may enter bounded recovery/export/reconciliation tooling but MUST NOT resume protected mutations or rejoin the active domain until an explicit protected reprovisioning process enrolls it into the current domain/generation;
+- a returning old host may enter bounded recovery/export/reconciliation tooling but MUST NOT resume protected mutations or rejoin the active domain until an explicit protected reprovisioning process enrolls it into the current domain/generation under the current authentication root;
 - protected mutations made by a stale old host after the recovery cutover are divergent non-canonical evidence and MUST NOT auto-merge into current authority/effect/audit state;
 - any user-data artifacts recovered from the old host enter explicit provenance/conflict handling rather than silently rewriting current canonical state;
-- the migration/recovery record distinguishes physical old-host decommissioning from logical stale-domain fencing and records the predecessor backup identity/hash plus newly generated domain identity without pretending the backup proves unreachable-host recency.
+- the migration/recovery record distinguishes physical old-host decommissioning from logical stale-domain fencing and records the predecessor backup identity/hash, predecessor authority credential identity, newly generated domain identity, and newly generated authority credential identity without pretending the backup proves unreachable-host recency.
 
 #### Effect and scheduler uncertainty across a stale-backup gap
 
@@ -150,13 +157,13 @@ Lost-host recovery MUST record the exact restored backup/canonical cut point (fo
 - Consequence-bearing scheduled work whose trigger window falls inside the unobserved lost-host gap MUST NOT be automatically “caught up” or replayed. It is treated as outcome-unknown until reconciled or deliberately rescheduled under current authority.
 - At-most-once/irreversible operations MUST NOT be blind-retried across the recovery gap. Existing provider idempotency/reconciliation identities are reused where they are known and still valid; absence of such identity does not authorize guessing.
 - Recovered canonical state MUST preserve an explicit uncertainty boundary so later Trust Receipts, Task satisfaction, learning, and memory do not describe post-backup real-world outcomes as known facts without evidence.
-- Recovery-domain rotation, effect reconciliation, and user-visible recovery decisions are separately attributable. Creating a new domain MUST NOT reset Effect Gate history or erase UNKNOWN outcomes.
+- Recovery-domain rotation, authentication-root rotation, effect reconciliation, and user-visible recovery decisions are separately attributable. Creating a new domain or key MUST NOT reset Effect Gate history or erase UNKNOWN outcomes.
 
 `LOST_HOST_RECOVERY != EFFECT_OUTCOME_RESET`
 `ABSENT_FROM_STALE_BACKUP != NOT_EXECUTED`
 `MISSED_SCHEDULE_WINDOW != SAFE_REPLAY`
 
-A migration or recovery MUST NOT create a canonical window where both old and new domains/generations are accepted as current authority. Host migration continuity applies to user-visible Task/session state, not to automatic portability of stale authority material.
+A migration or recovery MUST NOT create a canonical window where both old and new domains/generations/authentication roots are accepted as current authority. Host migration continuity applies to user-visible Task/session state, not to automatic portability of stale authority material.
 
 `OLD_HOST_RETURNS != AUTHORITY_RESTORED`
 `USER_VISIBLE_CONTINUITY != AUTHORITY_OBJECT_CONTINUITY`
@@ -238,9 +245,9 @@ The always-on Authority Host solves availability, not authentication:
 
 - possession of WhatsApp/Telegram/WeChat account access cannot enroll a native device;
 - phone pairing remains cryptographic and protected;
-- mobile approval and queued-intent signatures remain bound to the exact current Authority Host/pairing domain identity and generation defined by the PA-001 contract;
+- mobile approval and queued-intent signatures remain bound to the exact current Authority Host/pairing domain identity and generation defined by the PA-001 contract and, once PA-003A topology is implemented, to the current authority-domain authentication credential/key identity as part of the protected current-domain binding;
 - Authority Host migration/recovery invalidates pre-cutover signed mobile authority/request objects rather than treating user-visible continuity as authority continuity;
-- a returning stale old host/domain cannot authenticate as current authority merely because a device remembers it;
+- a returning stale old host/domain cannot authenticate as current authority merely because a device remembers it or because it retains an old private authority credential;
 - channel messages remain channel-tainted;
 - high-risk approval still steps up to an authenticated trusted surface;
 - push remains a wake/sync convenience rather than canonical order or authority.
@@ -278,7 +285,7 @@ These are setup projections; the underlying security contracts remain identical.
 
 ### Spec 007
 
-Define native host/node pairing, device topology, reconnect, node availability, protected host migration prerequisites, collision-resistant authority-domain identity and generation rotation, stale mobile approval/queued-intent invalidation, stale-backup-safe lost-host recovery fencing, returning-old-host disposition, and phone continuity semantics.
+Define native host/node pairing, device topology, reconnect, node availability, protected host migration prerequisites, collision-resistant authority-domain identity and generation rotation, fresh authority-domain authentication-root/key rotation and pinning, stale mobile approval/queued-intent invalidation, stale-backup-safe lost-host recovery fencing, returning-old-host disposition, and phone continuity semantics.
 
 ### Spec 008
 
@@ -298,8 +305,11 @@ Test:
 - lost old host followed by new-domain recovery;
 - recovery from a deliberately stale backup whose stored generation collides with or predates a generation used by the lost host;
 - proof that lost-host recovery does not derive authority identity solely as `backup_generation + 1`;
+- proof that lost-host recovery generates a fresh authority-domain authentication private credential/root rather than promoting backup-carried old private authority keys;
+- a returning old host retaining the prior authority private key attempting to impersonate the new domain after learning the fresh domain ID, and proof that paired devices/nodes reject it;
+- paired-device/node pinning of the fresh domain/generation plus current authority authentication public-key/key-id binding;
 - old host returning after recovery and being denied current-authority status;
-- stale-domain/generation device/node/control replay;
+- stale-domain/generation/authentication-root device/node/control replay;
 - no automatic merge of post-cutover protected mutations from a stale old host;
 - an irreversible/at-most-once external effect executed by the old host after the restored backup cut point and proof that recovery does not blindly re-dispatch it;
 - scheduled consequential work whose trigger window lies inside the lost-host/backup gap and proof that recovery marks it unknown/reconciliation-required instead of automatic catch-up;
@@ -331,6 +341,8 @@ BACKUP_STATE != ACTIVE_AUTHORITY
 STALE_AUTHORITY_EPOCH != ACTIVE_AUTHORITY
 STALE_BACKUP_COUNTER != RECOVERY_DOMAIN_IDENTITY
 BACKUP_GENERATION_PLUS_ONE != LOST_HOST_FENCING
+FRESH_DOMAIN_ID != FRESH_AUTHENTICATION_ROOT
+STALE_BACKUP_KEY != CURRENT_AUTHORITY_CREDENTIAL
 LOST_HOST_RECOVERY != EFFECT_OUTCOME_RESET
 ABSENT_FROM_STALE_BACKUP != NOT_EXECUTED
 MISSED_SCHEDULE_WINDOW != SAFE_REPLAY
