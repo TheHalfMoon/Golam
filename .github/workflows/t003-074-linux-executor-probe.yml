@@ -20,6 +20,33 @@ jobs:
           sudo apt-get install -y --no-install-recommends bubblewrap
           bwrap --version
           /usr/bin/setpriv --version
+      - name: Build fixed x86_64 seccomp network-deny filter
+        shell: python
+        run: |
+          import struct
+          from pathlib import Path
+
+          BPF_LD_W_ABS = 0x20
+          BPF_JMP_JEQ_K = 0x15
+          BPF_RET_K = 0x06
+          AUDIT_ARCH_X86_64 = 0xC000003E
+          SECCOMP_RET_KILL_PROCESS = 0x80000000
+          SECCOMP_RET_ERRNO_EPERM = 0x00050001
+          SECCOMP_RET_ALLOW = 0x7FFF0000
+          blocked = [41, 42, 43, 49, 50, 53, 288]
+          insns = [
+              (BPF_LD_W_ABS, 0, 0, 4),
+              (BPF_JMP_JEQ_K, 1, 0, AUDIT_ARCH_X86_64),
+              (BPF_RET_K, 0, 0, SECCOMP_RET_KILL_PROCESS),
+              (BPF_LD_W_ABS, 0, 0, 0),
+          ]
+          for syscall in blocked:
+              insns.append((BPF_JMP_JEQ_K, 0, 1, syscall))
+              insns.append((BPF_RET_K, 0, 0, SECCOMP_RET_ERRNO_EPERM))
+          insns.append((BPF_RET_K, 0, 0, SECCOMP_RET_ALLOW))
+          data = b''.join(struct.pack('<HBBI', *insn) for insn in insns)
+          Path('/tmp/golam-network-deny.bpf').write_bytes(data)
+          print(f'SECCOMP_FILTER_INSTRUCTIONS={len(insns)}')
       - name: Prove bounded Linux primitive
         shell: bash
         run: |
@@ -27,9 +54,10 @@ jobs:
           forbidden="$RUNNER_TEMP/golam-t003-074-forbidden"
           printf 'host-only\n' > "$forbidden"
           export GOLAM_AMBIENT_SECRET='must-not-cross-boundary'
+          exec 3</tmp/golam-network-deny.bpf
           bwrap \
             --unshare-all \
-            --cap-add CAP_NET_ADMIN \
+            --share-net \
             --die-with-parent \
             --new-session \
             --clearenv \
@@ -40,6 +68,7 @@ jobs:
             --proc /proc \
             --dev /dev \
             --tmpfs /tmp \
+            --seccomp 3 \
             --chdir /tmp \
             /usr/bin/setpriv \
               --bounding-set=-all \
@@ -57,16 +86,25 @@ jobs:
                   exit 31
                 fi
                 /bin/bash -c "exit 0"
-                if /usr/bin/timeout 2 /bin/bash -c "exec 3<>/dev/tcp/1.1.1.1/53" 2>/dev/null; then
+                if /usr/bin/timeout 2 /bin/bash -c "exec 4<>/dev/tcp/1.1.1.1/53" 2>/dev/null; then
                   echo "external network unexpectedly succeeded" >&2
                   exit 32
                 fi
+                python3 - <<"PY"
+import socket
+try:
+    socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+except PermissionError:
+    pass
+else:
+    raise SystemExit("socket syscall unexpectedly succeeded")
+PY
               ' golam-probe "$forbidden"
           echo 'BWRAP_EXECUTOR_PROBE=PASS'
           echo 'ENVIRONMENT_CLEARED=YES'
           echo 'FORBIDDEN_HOST_FS_VISIBLE=NO'
           echo 'READONLY_ROOT_WRITE_BLOCKED=YES'
-          echo 'NETWORK_EGRESS_BLOCKED=YES'
+          echo 'NETWORK_SOCKET_SYSCALL_DENIED=YES'
           echo 'PAYLOAD_CAPABILITIES_DROPPED=YES'
           echo 'MANAGED_DESCENDANT_EXECUTED=YES'
       - name: Record bounded executor research
@@ -81,35 +119,37 @@ jobs:
               '',
               '## Disposition',
               '',
-              'Ubuntu-hosted qualification proved a bounded Bubblewrap-based primitive suitable only for the minimum native untrusted-process test executor required by T003-074.',
+              'Ubuntu-hosted qualification proved a bounded Bubblewrap plus seccomp primitive suitable only for the minimum native untrusted-process test executor required by T003-074.',
               '',
-              'This record does not admit Bubblewrap as a universal product sandbox and does not claim macOS/Windows parity. The production executor remains fail-closed unless an exact platform capability is explicitly qualified.',
+              'Bubblewrap network namespaces are not usable on the hosted runner (`RTM_NEWADDR: Operation not permitted`), so the qualified primitive deliberately shares the host network namespace while applying a fixed x86_64 seccomp filter that returns EPERM for socket/connect/listen/bind/accept/socketpair syscalls before the payload executes.',
+              '',
+              'This record does not admit Bubblewrap as a universal product sandbox and does not claim macOS/Windows parity. Production capability resolution remains fail-closed unless an exact platform executor is explicitly qualified.',
               '',
               '## Qualified primitive properties',
               '',
               '- Ubuntu package `bubblewrap` was installed from the runner package repository and its version was printed in the run log.',
               '- `--clearenv` removed the injected ambient canary environment variable.',
-              '- Bubblewrap constructed an empty mount namespace populated only by explicit read-only runtime roots plus sandbox-local `/proc`, `/dev`, and `/tmp`.',
+              '- Bubblewrap constructed an isolated mount/PID/session boundary populated only by explicit read-only runtime roots plus sandbox-local `/proc`, `/dev`, and `/tmp`.',
               '- A host-only forbidden file outside the mounted roots was not visible.',
               '- A write attempt beneath a read-only runtime root failed.',
-              '- The separate network namespace denied the external IPv4 connection probe.',
-              '- Bubblewrap retained only CAP_NET_ADMIN while configuring loopback; payload execution then used `setpriv` to drop the capability bounding, inheritable, and ambient sets and enabled `no_new_privs`.',
+              '- The fixed seccomp filter denied AF_INET socket creation with EPERM while the host network namespace remained shared.',
+              '- Payload execution used `setpriv` to drop the capability bounding, inheritable, and ambient sets and enabled `no_new_privs`.',
               '- A descendant process executed inside the sandbox PID namespace and Bubblewrap retained parent-death/process-tree cleanup semantics.',
               '',
               '## Boundaries',
               '',
-              '- This is Linux-only research for the T003-074 test executor.',
+              '- This is Linux x86_64-only research for the T003-074 test executor.',
               '- No arbitrary requester command, argument vector, host path, environment name, device, IPC endpoint, or inherited handle is accepted by the probe.',
-              '- macOS and Windows remain unsupported for this concrete executor until separately qualified; T003-073 fail-closed behavior remains binding.',
-              '- No network-capable Golam-managed native child was launched; the probe child ran with external networking removed by a separate network namespace.',
+              '- macOS, Windows, non-x86_64 Linux, and any profile requiring external networking remain unsupported by this concrete executor.',
+              '- No network-capable Golam-managed native child was launched; the child was network-incapable by seccomp before payload execution.',
               '',
               '```text',
               'T003_074_LINUX_PRIMITIVE_RESEARCH=PASS',
-              'EXECUTOR_PRIMITIVE=BUBBLEWRAP_BOUNDED_TEST_ONLY',
+              'EXECUTOR_PRIMITIVE=BUBBLEWRAP_SECCOMP_BOUNDED_TEST_ONLY',
               'ENVIRONMENT_CLEARED=YES',
               'FORBIDDEN_HOST_FS_VISIBLE=NO',
               'READONLY_ROOT_WRITE_BLOCKED=YES',
-              'NETWORK_EGRESS_BLOCKED=YES',
+              'NETWORK_SOCKET_SYSCALL_DENIED=YES',
               'PAYLOAD_CAPABILITIES_DROPPED=YES',
               'MANAGED_DESCENDANT_EXECUTED=YES',
               'MACOS_EXECUTOR_SUPPORTED=NO',
