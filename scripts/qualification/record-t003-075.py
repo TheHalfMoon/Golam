@@ -7,11 +7,18 @@ root = Path("specs/003-identity-policy-secrets-sandbox")
 
 tasks = root / "tasks.md"
 text = tasks.read_text()
-old = "- [ ] **T003-075** If Wasmtime is later admitted by reopened T003-005, implement the bounded WASM/WASI profile through the qualified executor; otherwise keep it deferred with explicit evidence."
-new = f"- [x] **T003-075** If Wasmtime is later admitted by reopened T003-005, implement the bounded WASM/WASI profile through the qualified executor; otherwise keep it deferred with explicit evidence. Deferred/not-admitted qualification: CI #597 (`{RUN}`) SUCCESS at `{HEAD}`, tree `{TREE}`, on Windows/macOS/Ubuntu. `WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED`; no runtime authority or dependency surface changed. Evidence: `implementation/t003-075-wasm-profile-disposition.md`."
-if text.count(old) != 1:
-    raise SystemExit(f"T003-075 task anchor count {text.count(old)}")
-text = text.replace(old, new, 1)
+lines = text.splitlines()
+indexes = [i for i, line in enumerate(lines) if line.startswith("- [ ] **T003-075** ")]
+if len(indexes) != 1:
+    raise SystemExit(f"T003-075 task line count {len(indexes)}")
+i = indexes[0]
+lines[i] = (
+    f"- [x] **T003-075** If Wasmtime is later admitted by reopened T003-005, implement bounded WASM/WASI profile via the qualified executor; otherwise keep it deferred with explicit evidence. "
+    f"Deferred/not-admitted qualification: CI #597 (`{RUN}`) SUCCESS at `{HEAD}`, tree `{TREE}`, on Windows/macOS/Ubuntu. "
+    "`WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED`; no runtime authority or dependency surface changed. "
+    "Evidence: `implementation/t003-075-wasm-profile-disposition.md`."
+)
+text = "\n".join(lines) + ("\n" if text.endswith("\n") else "")
 if text.count("NEXT_TASK=T003-075") != 1:
     raise SystemExit(f"tasks NEXT_TASK count {text.count('NEXT_TASK=T003-075')}")
 text = text.replace(
@@ -43,10 +50,9 @@ Add consolidated adversarial sandbox coverage for escape/inheritance, forbidden 
 if text.count(old_section) != 1:
     raise SystemExit(f"T003-075 plan section count {text.count(old_section)}")
 text = text.replace(old_section, new_section, 1)
-if text.count("Remaining Phase H: T003-075..T003-076.") == 1:
-    text = text.replace("Remaining Phase H: T003-075..T003-076.", "Remaining Phase H: T003-076.", 1)
-elif text.count("Remaining Phase H: T003-076.") != 1:
+if text.count("Remaining Phase H: T003-075..T003-076.") != 1:
     raise SystemExit("remaining Phase H anchor missing")
+text = text.replace("Remaining Phase H: T003-075..T003-076.", "Remaining Phase H: T003-076.", 1)
 if text.count("NEXT_TASK=T003-075") != 1:
     raise SystemExit(f"plan NEXT_TASK count {text.count('NEXT_TASK=T003-075')}")
 text = text.replace(
