@@ -19,6 +19,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends bubblewrap
           bwrap --version
+          /usr/bin/setpriv --version
       - name: Prove bounded Linux primitive
         shell: bash
         run: |
@@ -28,37 +29,44 @@ jobs:
           export GOLAM_AMBIENT_SECRET='must-not-cross-boundary'
           bwrap \
             --unshare-all \
-            --unshare-net \
             --die-with-parent \
             --new-session \
             --clearenv \
-            --cap-drop ALL \
             --ro-bind /usr /usr \
             --ro-bind /bin /bin \
             --ro-bind-try /lib /lib \
             --ro-bind-try /lib64 /lib64 \
+            --proc /proc \
+            --dev /dev \
             --tmpfs /tmp \
             --chdir /tmp \
-            /bin/bash -ceu '
-              test -z "${GOLAM_AMBIENT_SECRET+x}"
-              test ! -e "$1"
-              printf allowed > /tmp/allowed
-              test "$(cat /tmp/allowed)" = allowed
-              if printf forbidden > /usr/golam-forbidden 2>/dev/null; then
-                echo "read-only root write unexpectedly succeeded" >&2
-                exit 31
-              fi
-              /bin/bash -c "exit 0"
-              if /usr/bin/timeout 2 /bin/bash -c "exec 3<>/dev/tcp/1.1.1.1/53" 2>/dev/null; then
-                echo "external network unexpectedly succeeded" >&2
-                exit 32
-              fi
-            ' golam-probe "$forbidden"
+            /usr/bin/setpriv \
+              --bounding-set=-all \
+              --inh-caps=-all \
+              --ambient-caps=-all \
+              --no-new-privs \
+              /bin/bash -ceu '
+                test -z "${GOLAM_AMBIENT_SECRET+x}"
+                test ! -e "$1"
+                test "$(id -u)" -ne 0 || test -z "$(/usr/bin/setpriv --dump | sed -n "s/^Bounding set: //p" | tr -d " ")"
+                printf allowed > /tmp/allowed
+                test "$(cat /tmp/allowed)" = allowed
+                if printf forbidden > /usr/golam-forbidden 2>/dev/null; then
+                  echo "read-only root write unexpectedly succeeded" >&2
+                  exit 31
+                fi
+                /bin/bash -c "exit 0"
+                if /usr/bin/timeout 2 /bin/bash -c "exec 3<>/dev/tcp/1.1.1.1/53" 2>/dev/null; then
+                  echo "external network unexpectedly succeeded" >&2
+                  exit 32
+                fi
+              ' golam-probe "$forbidden"
           echo 'BWRAP_EXECUTOR_PROBE=PASS'
           echo 'ENVIRONMENT_CLEARED=YES'
           echo 'FORBIDDEN_HOST_FS_VISIBLE=NO'
           echo 'READONLY_ROOT_WRITE_BLOCKED=YES'
           echo 'NETWORK_EGRESS_BLOCKED=YES'
+          echo 'PAYLOAD_CAPABILITIES_DROPPED=YES'
           echo 'MANAGED_DESCENDANT_EXECUTED=YES'
       - name: Record bounded executor research
         shell: python
@@ -80,12 +88,12 @@ jobs:
               '',
               '- Ubuntu package `bubblewrap` was installed from the runner package repository and its version was printed in the run log.',
               '- `--clearenv` removed the injected ambient canary environment variable.',
-              '- Bubblewrap constructed an empty mount namespace populated only by explicit read-only runtime roots plus a sandbox-local `/tmp`.',
+              '- Bubblewrap constructed an empty mount namespace populated only by explicit read-only runtime roots plus sandbox-local `/proc`, `/dev`, and `/tmp`.',
               '- A host-only forbidden file outside the mounted roots was not visible.',
               '- A write attempt beneath a read-only runtime root failed.',
-              '- A new network namespace denied the external IPv4 connection probe.',
+              '- The separate network namespace denied the external IPv4 connection probe.',
+              '- Payload execution used `setpriv` to drop the capability bounding, inheritable, and ambient sets and enabled `no_new_privs` after Bubblewrap completed namespace setup.',
               '- A descendant process executed inside the sandbox PID namespace and Bubblewrap retained parent-death/process-tree cleanup semantics.',
-              '- Capabilities were dropped and a new session was created.',
               '',
               '## Boundaries',
               '',
@@ -101,6 +109,7 @@ jobs:
               'FORBIDDEN_HOST_FS_VISIBLE=NO',
               'READONLY_ROOT_WRITE_BLOCKED=YES',
               'NETWORK_EGRESS_BLOCKED=YES',
+              'PAYLOAD_CAPABILITIES_DROPPED=YES',
               'MANAGED_DESCENDANT_EXECUTED=YES',
               'MACOS_EXECUTOR_SUPPORTED=NO',
               'WINDOWS_EXECUTOR_SUPPORTED=NO',
