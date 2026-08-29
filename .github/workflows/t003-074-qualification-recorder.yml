@@ -15,128 +15,16 @@ jobs:
           ref: impl/003-identity-policy-secrets-sandbox
           fetch-depth: 0
       - name: Record exact T003-074 qualification
-        shell: python
-        run: |
-          from pathlib import Path
-
-          qualified_head = '0d28681c971b3ae1f08504c7eb2448789ac8ed6e'
-          qualified_tree = '32379e52964faca7db84b8354947be825ba2ef64'
-          ci_run = '33247996101'
-          focused_run = '33247892761'
-
-          evidence = Path('specs/003-identity-policy-secrets-sandbox/implementation/sandbox-native-executor-qualification.md')
-          if evidence.exists():
-              raise SystemExit('T003-074 final evidence already exists')
-          evidence.write_text(f'''# T003-074 Minimum Native Sandbox Executor Qualification
-
-**Status**: PASS  
-**Qualified implementation head**: `{qualified_head}`  
-**Qualified tree**: `{qualified_tree}`  
-**Official qualification**: CI #592 / run `{ci_run}` — SUCCESS on Windows, macOS, and Ubuntu.  
-**Focused native-executor qualification**: run `{focused_run}` — SUCCESS.
-
-## Qualified boundary
-
-T003-074 reuses the descendant-aware strict-local managed-process-tree observer already qualified by T003-064 and establishes only the minimum native untrusted-process test profile/executor required by the frozen contract.
-
-The Rust qualification profile is test-only. It is intersected through the T003-072 enforcement descriptor, requires strict-local `DenyAll` networking, clears the environment, exposes only explicit filesystem/device rights, allows only managed descendants, and carries the exact platform requirement `platform:linux-x86_64-bwrap-seccomp-test-v1`.
-
-The production T003-073 capability baseline remains `native:unqualified` with zero containment controls. The test profile therefore cannot become a production launch authority and continues to fail closed through normal production capability resolution.
-
-## Linux x86_64 executor evidence
-
-The durable qualification script `scripts/qualification/t003-074-native-executor.sh` proves the bounded OS boundary used by the test profile:
-
-- trusted qualification setup creates mount, PID, IPC, UTS, session and parent-death boundaries;
-- payload execution is reduced to uid/gid 65534;
-- capability inheritable, permitted, effective, bounding and ambient sets are all empty;
-- `no_new_privs` is set before untrusted payload execution;
-- ambient environment is cleared;
-- host paths outside explicit runtime mounts are not visible;
-- runtime roots are read-only and sandbox-local `/tmp` is the only qualified writable root;
-- `/dev/null` is the only explicitly exposed device;
-- a fixed x86_64 seccomp filter denies socket/connect/listen/bind/accept/socketpair syscalls before payload execution;
-- a managed descendant executes under the same no-network/no-ambient-environment boundary.
-
-The GitHub-hosted Ubuntu runner does not support the attempted unprivileged user/network namespace paths. User-namespace and network-namespace isolation are therefore explicitly not claimed. The host network namespace is shared only inside this test harness while seccomp removes socket capability before payload execution.
-
-## Honesty boundaries
-
-- Bubblewrap and sudo are qualification-harness dependencies only; they are not admitted as Golam product runtime dependencies.
-- macOS, Windows, non-x86_64 Linux, external-network profiles, arbitrary requester executable paths and universal native isolation remain unsupported by this concrete executor.
-- No network-capable Golam-managed native child was launched.
-- No platform containment claim transfers from this bounded test harness to the production `native:unqualified` baseline.
-- `WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED` remains unchanged.
-
-```text
-T003_074=PASS
-T003_074_QUALIFIED_HEAD={qualified_head}
-T003_074_QUALIFIED_TREE={qualified_tree}
-T003_074_CI_RUN={ci_run}
-T003_074_FOCUSED_RUN={focused_run}
-MANAGED_PROCESS_TREE_OBSERVER=QUALIFIED
-PRODUCTION_NATIVE_EXECUTOR_ADMITTED=NO
-USER_NAMESPACE_ISOLATION_CLAIMED=NO
-NETWORK_NAMESPACE_ISOLATION_CLAIMED=NO
-UNIVERSAL_NATIVE_SANDBOX_CLAIMED=NO
-NETWORK_CAPABLE_MANAGED_CHILD_LAUNCHED=NO
-NEXT_TASK=T003-075
-```
-''')
-
-          tasks = Path('specs/003-identity-policy-secrets-sandbox/tasks.md')
-          text = tasks.read_text()
-          old = '- [ ] **T003-074** Before launching any native Golam-managed child process with network capability, upgrade the external strict-local observer from daemon-PID-only inspection to complete managed-process-tree observation or an equivalent descendant-capturing sinkholed boundary; then implement the minimum native untrusted-process test executor/profile required to prove the contract without claiming unsupported universal isolation.'
-          new = f'- [x] **T003-074** Before launching any native Golam-managed child process with network capability, upgrade the external strict-local observer from daemon-PID-only inspection to complete managed-process-tree observation or an equivalent descendant-capturing sinkholed boundary; then implement the minimum native untrusted-process test executor/profile required to prove the contract without claiming unsupported universal isolation. Exact-head qualification: CI #592 (`{ci_run}`) SUCCESS at `{qualified_head}`, tree `{qualified_tree}`, on Windows/macOS/Ubuntu; focused native-executor run `{focused_run}` SUCCESS. Evidence: `implementation/sandbox-native-executor-qualification.md`.'
-          if text.count(old) != 1:
-              raise SystemExit(f'T003-074 task anchor count {text.count(old)}')
-          text = text.replace(old, new, 1)
-          if text.count('NEXT_TASK=T003-074') != 1:
-              raise SystemExit(f'NEXT_TASK T003-074 count {text.count("NEXT_TASK=T003-074")}')
-          text = text.replace('NEXT_TASK=T003-074', f'T003_074=PASS\nT003_074_QUALIFIED_HEAD={qualified_head}\nT003_074_QUALIFIED_TREE={qualified_tree}\nT003_074_CI_RUN={ci_run}\nT003_074_FOCUSED_RUN={focused_run}\nNEXT_TASK=T003-075', 1)
-          tasks.write_text(text)
-
-          plan = Path('specs/003-identity-policy-secrets-sandbox/implementation/current-execution-plan.md')
-          text = plan.read_text()
-          old_section = '''### T003-074 — ACTIVE
-
-Reuse the already-qualified descendant-aware strict-local observer, then implement the minimum native untrusted-process test executor/profile necessary to prove the contract without claiming unsupported universal isolation. Any network-capable managed child remains forbidden until complete managed-process-tree external observation is active.'''
-          new_section = f'''### T003-074 — COMPLETE
-
-Qualified at exact implementation head `{qualified_head}`, tree `{qualified_tree}`, by CI #592 / run `{ci_run}`, SUCCESS on Windows/macOS/Ubuntu. Focused native-executor qualification run `{focused_run}` also completed SUCCESS.
-
-Evidence: `implementation/sandbox-native-executor-qualification.md`.
-
-The qualified boundary reuses the T003-064 descendant-aware observer and proves a Linux x86_64 test-only native executor/profile using explicit mount/PID/IPC/UTS/session controls, cleared environment, unprivileged payload identity, empty capability sets, `no_new_privs`, bounded device/filesystem exposure and pre-payload seccomp network denial. Production remains `native:unqualified`; user/network namespace isolation, macOS/Windows parity, external-network profiles and universal native isolation are not claimed. No network-capable managed child was launched.
-
-### T003-075 — ACTIVE
-
-Re-read the canonical T003-005 Wasmtime disposition. Because Wasmtime remains `NOT_ADMITTED_NOT_NEEDED` and no bounded Phase H requirement has reopened dependency qualification, complete T003-075 as explicit deferred/not-admitted evidence without adding Wasmtime.'''
-          if text.count(old_section) != 1:
-              raise SystemExit(f'T003-074 plan section count {text.count(old_section)}')
-          text = text.replace(old_section, new_section, 1)
-          text = text.replace('Remaining Phase H: T003-074..T003-076.', 'Remaining Phase H: T003-075..T003-076.', 1)
-          if text.count('NEXT_TASK=T003-074') != 1:
-              raise SystemExit(f'plan NEXT_TASK T003-074 count {text.count("NEXT_TASK=T003-074")}')
-          text = text.replace('NEXT_TASK=T003-074', f'T003_074=PASS\nT003_074_QUALIFIED_HEAD={qualified_head}\nT003_074_QUALIFIED_TREE={qualified_tree}\nT003_074_CI_RUN={ci_run}\nT003_074_FOCUSED_RUN={focused_run}\nNEXT_TASK=T003-075', 1)
-          plan.write_text(text)
-
-          candidate = Path('specs/003-identity-policy-secrets-sandbox/implementation/t003-074-qualification-candidate.md')
-          ctext = candidate.read_text()
-          ctext = ctext.replace('**Status**: QUALIFICATION_CANDIDATE — NOT YET PASS', '**Status**: SUPERSEDED BY QUALIFIED EVIDENCE')
-          ctext = ctext.replace('Official Windows/macOS/Ubuntu repository CI on this candidate is still required before `T003_074=PASS` may be recorded.', 'Official Windows/macOS/Ubuntu CI #592 completed SUCCESS. Canonical task evidence is now `implementation/sandbox-native-executor-qualification.md`.')
-          candidate.write_text(ctext)
-      - name: Validate recorder mutation
-        run: |
-          grep -q 'T003_074=PASS' specs/003-identity-policy-secrets-sandbox/tasks.md
-          grep -q 'NEXT_TASK=T003-075' specs/003-identity-policy-secrets-sandbox/tasks.md
-          grep -q '### T003-075 — ACTIVE' specs/003-identity-policy-secrets-sandbox/implementation/current-execution-plan.md
-          test -f specs/003-identity-policy-secrets-sandbox/implementation/sandbox-native-executor-qualification.md
-      - name: Commit repository evidence
+        run: python3 scripts/qualification/record-t003-074.py
+      - name: Commit repository evidence and self-delete
         run: |
           git rm .github/workflows/t003-074-qualification-recorder.yml
+          git rm scripts/qualification/record-t003-074.py
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add specs/003-identity-policy-secrets-sandbox/tasks.md specs/003-identity-policy-secrets-sandbox/implementation/current-execution-plan.md specs/003-identity-policy-secrets-sandbox/implementation/t003-074-qualification-candidate.md specs/003-identity-policy-secrets-sandbox/implementation/sandbox-native-executor-qualification.md
+          git add specs/003-identity-policy-secrets-sandbox/tasks.md
+          git add specs/003-identity-policy-secrets-sandbox/implementation/current-execution-plan.md
+          git add specs/003-identity-policy-secrets-sandbox/implementation/t003-074-qualification-candidate.md
+          git add specs/003-identity-policy-secrets-sandbox/implementation/sandbox-native-executor-qualification.md
           git commit -m 'docs: record T003-074 native executor qualification'
           git push origin HEAD:impl/003-identity-policy-secrets-sandbox
