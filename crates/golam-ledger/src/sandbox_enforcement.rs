@@ -131,9 +131,7 @@ impl fmt::Display for SandboxEnforcementError {
             Self::SpawnWidening => {
                 f.write_str("sandbox enforcement request widens process spawning authority")
             }
-            Self::InvalidResourceLimit => {
-                f.write_str("sandbox enforcement resource limit is zero")
-            }
+            Self::InvalidResourceLimit => f.write_str("sandbox enforcement resource limit is zero"),
             Self::UndeclaredDevice => {
                 f.write_str("sandbox enforcement request widens device authority")
             }
@@ -265,7 +263,9 @@ fn validate_network(
 ) -> Result<(), SandboxEnforcementError> {
     let allowed = match requested {
         SandboxNetworkRequest::None => true,
-        SandboxNetworkRequest::LoopbackOnly => plan.network_rule == SandboxNetworkRule::LoopbackOnly,
+        SandboxNetworkRequest::LoopbackOnly => {
+            plan.network_rule == SandboxNetworkRule::LoopbackOnly
+        }
         SandboxNetworkRequest::PermitBoundExternal => {
             plan.network_rule == SandboxNetworkRule::PermitRequired
                 && plan.locality == SandboxLocality::NonStrict
@@ -287,10 +287,19 @@ fn validate_spawn(
         (allowed, requested),
         (SandboxSpawnRule::Deny, SandboxSpawnRule::Deny)
             | (SandboxSpawnRule::DirectChildOnly, SandboxSpawnRule::Deny)
-            | (SandboxSpawnRule::DirectChildOnly, SandboxSpawnRule::DirectChildOnly)
+            | (
+                SandboxSpawnRule::DirectChildOnly,
+                SandboxSpawnRule::DirectChildOnly
+            )
             | (SandboxSpawnRule::ManagedDescendants, SandboxSpawnRule::Deny)
-            | (SandboxSpawnRule::ManagedDescendants, SandboxSpawnRule::DirectChildOnly)
-            | (SandboxSpawnRule::ManagedDescendants, SandboxSpawnRule::ManagedDescendants)
+            | (
+                SandboxSpawnRule::ManagedDescendants,
+                SandboxSpawnRule::DirectChildOnly
+            )
+            | (
+                SandboxSpawnRule::ManagedDescendants,
+                SandboxSpawnRule::ManagedDescendants
+            )
     );
     if allowed {
         Ok(())
@@ -454,7 +463,8 @@ mod tests {
     fn descriptor_is_deterministic_for_equivalent_requested_sets() {
         let first = resolve_sandbox_enforcement(&plan(), allowed_request()).unwrap();
         let mut alternate = allowed_request();
-        alternate.filesystem_read_roots = &["/workspace/input", "/workspace/shared", "/workspace/input"];
+        alternate.filesystem_read_roots =
+            &["/workspace/input", "/workspace/shared", "/workspace/input"];
         let second = resolve_sandbox_enforcement(&plan(), alternate).unwrap();
         assert_eq!(first, second);
     }
@@ -544,7 +554,8 @@ mod tests {
 
     #[test]
     fn deny_all_request_has_no_ambient_rights() {
-        let descriptor = resolve_sandbox_enforcement(&plan(), SandboxRequestedRights::deny_all()).unwrap();
+        let descriptor =
+            resolve_sandbox_enforcement(&plan(), SandboxRequestedRights::deny_all()).unwrap();
         assert!(descriptor.filesystem_read_roots.is_empty());
         assert!(descriptor.filesystem_write_roots.is_empty());
         assert!(descriptor.environment_names.is_empty());

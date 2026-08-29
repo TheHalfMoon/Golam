@@ -35,6 +35,7 @@ pub mod policy;
 pub mod protocol_audit;
 pub mod recovery;
 pub mod run_preauthorization;
+pub mod sandbox_enforcement;
 pub mod sandbox_plan;
 pub mod sandbox_profile;
 #[allow(dead_code)]
