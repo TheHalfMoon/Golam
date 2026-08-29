@@ -1,6 +1,6 @@
 # Contract: Phone, Mobile, Voice, and Messaging-Channel Access
 
-**Authority note**: This contract is an additive Spec 001 program contract introduced by `program-amendments/PA-001-phone-channel-access.md`. It defines future requirements; it does not authorize implementation inside the active Spec 003 scope.
+**Authority note**: This contract is an additive Spec 001 program contract introduced by `program-amendments/PA-001-phone-channel-access.md`. It defines future requirements; it does not authorize implementation inside the active Spec 003 scope. Where a non-normative logical data-model sketch in PA-001 omits a field required by this contract, this contract governs and the owning future spec MUST carry the complete contract field set forward.
 
 ## 1. One Golam, multiple surfaces
 
@@ -19,8 +19,9 @@ A native iOS/Android Golam client is an authenticated GolamConnect `Device`, not
 
 ## 3. Native mobile approval object
 
-A mobile approval MUST be cryptographically bound to the exact pending operation. At minimum the signed response binds:
+A mobile approval MUST be cryptographically bound to the exact pending operation and to the exact Golam authority domain that issued it. At minimum the signed response binds:
 
+- authority-host identity / pairing-domain identity and current pairing generation;
 - `approval_id`;
 - `effect_id` and canonical effect digest;
 - allowed action/resource scope and quantitative bounds;
@@ -32,7 +33,9 @@ A mobile approval MUST be cryptographically bound to the exact pending operation
 - decision;
 - user-presence/step-up evidence when required by policy.
 
-Host-side authorization is re-evaluated at execution. A valid mobile signature does not override monotonic safety denial, strict-local denial, revoked/expired state, stale generation or changed effect parameters.
+Approval signatures MUST be domain-separated so that a response created for one Golam Authority Host, pairing relationship, or authority generation is invalid on another host/domain even if the same physical phone is paired to both. Host-side authorization is re-evaluated at execution. A valid mobile signature does not override monotonic safety denial, strict-local denial, revoked/expired state, stale generation or changed effect parameters.
+
+Any PA-001 `MobileApprovalResponse` logical sketch is non-exhaustive: the owning Spec 007 data model MUST include every binding above rather than treating the sketch as permission to omit host/domain identity, `effect_id`, risk, expiry/freshness, or replay state.
 
 ## 4. Messaging channels are untrusted transports
 
@@ -40,7 +43,9 @@ Telegram, WhatsApp, WeChat/WeCom, Slack, Discord, Matrix and later adapters are 
 
 - Inbound content remains channel-tainted even from a bound owner account.
 - A channel account maps to a Golam principal only via explicit local binding using provider-stable identifiers.
-- Usernames, display names, aliases, phonebook labels, avatars and similar human-readable identity are never authority keys.
+- Provider-stable identifiers are binding identity keys only. They are never authority by themselves; authority, if any, derives from the explicit current Golam binding plus current policy/capability state.
+- Any PA-001 wording that describes a provider-stable identifier as an “authority key” MUST be interpreted as “binding identity key” under this contract and MUST NOT be implemented as transport-derived authority.
+- Usernames, display names, aliases, phonebook labels, avatars and similar human-readable identity are never binding or authority keys.
 - Group/unbound participants hold zero machine authority by default.
 - Cross-channel identity equivalence is never inferred.
 - Binding creation, privilege change, unbinding and revocation are protected audited effects.
@@ -160,7 +165,17 @@ Received executable content, archives, macros, scripts or documents MUST NOT aut
 
 ## 14. Offline/delayed input
 
-A mobile client may queue a signed **request intent**, not an authorized effect, while the host is offline. The intent carries target, creation time, TTL, device/binding generation and requested operation. When the host reconnects it performs fresh authentication, policy, approval and state checks.
+A mobile client may queue a signed **request intent**, not an authorized effect, while the host is offline. The signed canonical intent MUST carry at least:
+
+- `intent_id` and dedupe/idempotency identity;
+- target authority-host / pairing-domain identity;
+- device identity and current pairing/binding generation;
+- creation time and TTL/expiry;
+- canonical requested-operation digest and bounded request metadata;
+- nonce/replay state;
+- signature over the complete domain-separated canonical intent.
+
+Repeated delivery of the same signed intent MUST deduplicate rather than create duplicate canonical work. A request signed for one authority host/domain MUST NOT be accepted by another. When the host reconnects it performs fresh authentication, policy, approval and state checks; the signature proves only the queued request origin/integrity and never proves current authorization.
 
 Channel-provider queueing/delivery delay follows the same principle. Delayed content never revives an expired approval or stale lease.
 
@@ -196,6 +211,7 @@ The owning specs MUST cover at minimum:
 
 - lost/stolen/revoked phone;
 - mobile replay/stale generation;
+- cross-host/cross-pairing approval and queued-intent replay;
 - malicious mobile renderer;
 - forged/duplicate/reordered push;
 - lock-screen leakage;
