@@ -14,6 +14,13 @@ before that feature's product code is authorized.
 
 No later feature may infer authority from this program task graph alone.
 
+**Additive program amendments**:
+
+- `PA-001-phone-channel-access.md` expands future Spec 007 to first-class native mobile, voice and governed channel access.
+- `PA-002-memory-retrieval-learning-evals.md` strengthens future Specs 004/005/008/009/010 for governed memory candidates, multi-route context/retrieval, learning proposals, bounded autonomous experiments, provider conformance and trajectory-level evaluation.
+
+Neither amendment changes the currently authorized bounded implementation scope by itself.
+
 ---
 
 ## Phase 0 — Close and preserve Spec 001
@@ -63,31 +70,37 @@ No later feature may infer authority from this program task graph alone.
 - [ ] **T036** Define/qualify sandbox profiles for MCP/skill/native helpers; Wasmtime only when justified.
 - [ ] **T037** Complete prompt-injection/taint, secret isolation, policy self-modification and no-egress adversarial gates before close.
 
+**PA-002 boundary**: no memory/retrieval framework, vector database, learning loop, worker graph or evaluation platform introduced by PA-002 is part of Spec 003. Existing kernel/taint/approval/effect/egress semantics remain prerequisites those later systems must consume.
+
 ---
 
 ## Phase 3 — Spec 004: Harness & Local Intelligence
 
-- [ ] **T040** Create bounded Spec 004 after 003 closes.
-- [ ] **T041** Define model-independent harness/session-visible-history/tool/cancellation/retry/compaction contracts, explicitly comparing authorized Golam-Research, grok-build, Goose, DeepSeek Harness and other qualified sources rather than re-inventing known mechanisms.
+- [ ] **T040** Create bounded Spec 004 after 003 closes. Read PA-002 and `contracts/behavior-evaluation-contract.md` before freezing harness semantics.
+- [ ] **T041** Define model-independent harness/session-visible-history/tool/cancellation/retry/compaction contracts, explicitly comparing authorized Golam-Research, grok-build, Goose and exact PA-002 DeepSeek Harness/LangGraph evidence. Make `Turn`, `Step`, `RequestSeries`, `InboxItem`, `Interrupt` and `Continuation` explicit while preserving `MODEL_VISIBLE => LOGGED` from canonical events.
 - [ ] **T042** Qualify exact `mistral.rs` version/API/hardware/network behavior as primary local backend candidate.
 - [ ] **T043** Qualify `llama.cpp` sidecar compatibility path and keep unsafe C FFI outside `golamd`.
-- [ ] **T044** Implement expanded ExecutionProfile and HardwareProfile calibration/routing without hidden locality downgrade.
-- [ ] **T045** Benchmark model vs harness separately: TTFT/TPS/load/warm residency/cache/tool-call validity/repair/task success/resource use.
+- [ ] **T044** Implement expanded ExecutionProfile and HardwareProfile calibration/routing without hidden locality downgrade. Runtime profiles may replace model/tool/context providers but MUST NOT replace privileged kernel authority services.
+- [ ] **T045** Build shared conformance suites for model/harness/provider seams and benchmark model vs harness separately: TTFT/TPS/load/warm residency/cache/tool-call validity/repair/task success/resource use. Provider support claims require exact conformance evidence rather than interface compilation alone.
+
+**Spec 004 exit additions from PA-002**: prove interrupt/resume without history loss, request-series/cache envelope correctness, cancellation behavior, provider capability truth, and inability of a runtime profile/plugin/adapter to mount or replace a protected authority service.
 
 ---
 
 ## Phase 4 — Spec 005: Local Tools, Context & Memory
 
-- [ ] **T050** Create bounded Spec 005 after 004 closes.
-- [ ] **T051** Mine and qualify Golam-Research's host/tool/MCP/plugin/local-execution behavior plus other authorized donors before defining Golam tool contracts; reuse/port only bounded qualified mechanisms that preserve Rust/local-first/security rules.
-- [ ] **T052** Implement governed filesystem/shell/process/git/browser tool surfaces through kernel capability/effect gates.
-- [ ] **T053** Implement context L0 (files/ripgrep/git) and justified L1 structural evidence (Tree-sitter/LSP); L2 graph/dataflow remains optional by measured need.
-- [ ] **T054** Implement Markdown canonical vault + SQLite operational state and the full governed memory operation contract.
-- [ ] **T055** Implement single Golam memory writer plus reconciliation of user hand-edited Markdown.
-- [ ] **T056** Implement promotion/conflict/supersession/FORGET/REDACT and full derived-index rebuild tests.
-- [ ] **T057** Implement Agent Skills-compatible instructions and governed lifecycle; executable scripts wait for qualified sandbox support.
-- [ ] **T058** Implement MCP/ACP as untrusted interoperability boundaries; MCP processes are sandboxed and tainted.
-- [ ] **T059** Run memory-poisoning, stale-memory, injection and strict-local regression gates.
+- [ ] **T050** Create bounded Spec 005 after 004 closes. Read PA-002 architecture, source research and `contracts/memory-retrieval-learning-contract.md` before requirements freeze.
+- [ ] **T051** Re-pin and qualify Golam-Research plus PA-002 Mem0, Qdrant, LlamaIndex, LangChain, Firecrawl, Hermes and Braintrust context-route evidence at then-current exact source states. Reuse/port only bounded qualified mechanisms preserving Rust/local-first/security rules; no framework/cloud dependency is admitted by the program plan alone.
+- [ ] **T052** Implement governed filesystem/shell/process/git/browser tool surfaces through kernel capability/effect gates. Web evidence remains tainted, attributable and egress-governed; Firecrawl-class hosted access is optional, explicit and never a strict-local fallback.
+- [ ] **T053** Implement the Context Compiler as measured route selection over direct files/ripgrep/git, SQLite/structured query, FTS/BM25, justified L1 Tree-sitter/LSP, and optional dense/sparse/hybrid/entity routes. Preserve per-evidence source/hash/time/authority/permission/taint/score metadata; L2 graph/dataflow remains optional by measured need.
+- [ ] **T054** Implement Markdown canonical vault + SQLite operational state plus explicit working/run/episodic/semantic/procedural/project/user/worker scopes. Add local SQLite FTS5 or equivalent session-search baseline before making semantic/vector retrieval mandatory.
+- [ ] **T055** Implement `MemoryCandidate` extraction separate from promotion, ADD-first observation evidence, temporal metadata/entity links, single governed canonical memory writer and reconciliation of user hand-edited Markdown. Agent-generated assertions cannot self-promote.
+- [ ] **T056** Implement approval/authoritative-verification promotion plus conflict/supersession/CONTRADICT/MERGE/EXPIRE/FORGET/REDACT. Derived lexical/vector/entity indexes MUST be deletable/rebuildable without canonical knowledge loss and a corrupt index cannot fabricate authority or canonical refs.
+- [ ] **T057** Benchmark retrieval providers before admission: SQLite lexical/structured baseline versus any simple local vector baseline and Qdrant Edge exact candidate where still relevant. If Qdrant is admitted it remains a derived index; remote Qdrant is never required for strict-local core. Implement Agent Skills-compatible instructions and governed skill lifecycle on the same provenance/capability principles.
+- [ ] **T058** Implement MCP/ACP and optional LangChain/LlamaIndex/Firecrawl-class compatibility adapters as untrusted interoperability boundaries. Add `LearningProposal` generation for memory/skill/behavior/routing/profile candidates, but canonical adoption remains governed and background learning cannot silently write memory or mutate installed skills.
+- [ ] **T059** Run `ContextRouteBench` plus memory quality/security gates: compare filesystem/lexical/structured/vector/hybrid routes under equal model/budget conditions; run admissible LoCoMo/LongMemEval/BEAM subsets or full suites plus Golam-specific stale-live-state, contradiction, scope isolation, secret-derived rejection, prompt-injection, user-edit reconciliation, crash/promotion and index-corruption/rebuild tests. Report success with tokens and latency, not accuracy alone.
+
+**Spec 005 exit additions from PA-002**: prove `MemoryCandidate != Durable Truth`, `RetrievalIndex != Canonical Memory`, live state outranks stale memory, web/provider evidence cannot grant authority, and useful local search remains available without remote embeddings/services.
 
 ---
 
@@ -123,33 +136,35 @@ No later feature may infer authority from this program task graph alone.
 
 ---
 
-## Phase 7 — Spec 008: Workers & Automations
+## Phase 7 — Spec 008: Workers, Durable Graphs, Learning & Automations
 
-- [ ] **T080** Define typed worker lifecycle, spawn/join/cancel/crash-adopt, narrow lease inheritance and workspace/worktree isolation after comparing qualified worker/subagent implementations from authorized sources.
+- [ ] **T080** Define typed worker lifecycle, spawn/join/cancel/crash-adopt, narrow lease inheritance and workspace/worktree isolation after comparing qualified worker/subagent implementations from authorized sources. Re-pin PA-002 LangGraph/DeepSeek Harness/Hermes/autoresearch evidence before freezing worker orchestration.
 - [ ] **T081** Implement durable scheduler/triggers using canonical event/effect semantics; prove restart does not double-fire effects. Phone/channel inputs may become typed triggers only through explicit policy-bound rules defined by Spec 007; receiving a message is not blanket automation authority.
-- [ ] **T082** Implement bounded parallelism and parent/child goal/causality tracking. Worker notifications to mobile/channels remain ordinary auditable outbound effects.
-- [ ] **T083** Keep groups/collaboration and teach-by-demonstration late in the spec; single-worker reliability is the entry gate.
+- [ ] **T082** Implement bounded parallelism and parent/child goal/causality tracking plus an event-sourced `WorkerGraph` with deterministic/model/tool/worker/wait/interrupt/join/verification nodes. Bind `WORKFLOW_CHECKPOINT != EXTERNAL_EFFECT_COMMIT`: graph replay cannot blind-retry protected external effects and resume revalidates current authority/live state.
+- [ ] **T083** After single-worker reliability is proven, add groups/collaboration/teach-by-demonstration and bounded `LearningReview`/versioned skill-improvement proposals. Add an autoresearch-inspired `ExperimentProgram` only for declared non-authority mutable scopes with immutable evaluators, fixed budgets, sandbox/worktree, keep/discard evidence, guardrails and separate adoption. Ordinary experiments cannot autonomously adopt privileged-kernel/authority changes.
+
+**Spec 008 exit additions from PA-002**: crash/restart preserves graph causality without duplicate effects; interrupts resume safely; learning remains proposals until governed adoption; skill patches cannot self-expand capabilities; experiment candidates cannot rewrite evaluators/guardrails or escape declared resource bounds.
 
 ---
 
 ## Phase 8 — Spec 009: Grok Public Feature Parity
 
 - [ ] **T090** Refresh public Grok Bot capability evidence AND mine the pinned Golam-Research/Grok Bot 0.18 implementation evidence at exact source state. Keep source-derived implementation evidence distinct from public behavior evidence and from any later Grok releases.
-- [ ] **T091** Close independently implementable MUST-MATCH domains: persistent agents/computer/workspace, apps/browser/files/shell, long-running/background work, memory, approvals, local computer control, native mobile continuity, channels/connectors/MCP, routines/schedules, multimodal input, deep research/artifacts and built-in Documents/Presentations/Spreadsheets/PDFs/Skill Creator equivalents.
-- [ ] **T092** Use authorized source code/behavior where technically justified but preserve Golam's Rust/local-first/security architecture rather than mechanically cloning Electron/cloud assumptions.
-- [ ] **T093** Require scenario evidence before `VERIFIED_EQUIVALENT` or `VERIFIED_SUPERSET` states.
+- [ ] **T091** Close independently implementable MUST-MATCH domains: persistent agents/computer/workspace, apps/browser/files/shell, long-running/background work, governed cross-session memory/search, proactive learning/skill improvement, approvals, local computer control, native mobile continuity, channels/connectors/MCP, routines/schedules, multimodal input, deep research/evidence-rich artifacts and built-in Documents/Presentations/Spreadsheets/PDFs/Skill Creator equivalents.
+- [ ] **T092** Use authorized source code/behavior where technically justified but preserve Golam's Rust/local-first/security architecture rather than mechanically cloning Electron/cloud/framework assumptions. Prefer `VERIFIED_SUPERSET` where Golam's user-owned memory, authority-aware retrieval, learning governance and local/offline behavior are stronger.
+- [ ] **T093** Require atomic scenario evidence before `VERIFIED_EQUIVALENT` or `VERIFIED_SUPERSET` states. A parity scenario that succeeds by violating Golam authority/privacy/durability invariants is a failure, not parity.
 
 ---
 
 ## Phase 9 — Spec 010: GolamBench & Release Qualification
 
-- [ ] **T100** Aggregate all incremental gates into a reproducible GolamBench release suite.
-- [ ] **T101** Qualify long-horizon goal retention/premature termination/model-switch/compaction behavior.
-- [ ] **T102** Qualify crash/recovery/idempotency/fork/checkpoint/disk failure.
-- [ ] **T103** Qualify prompt injection/taint/memory poisoning/secret isolation/policy self-escalation/local IPC/channel impersonation.
-- [ ] **T104** Qualify computer control, native Golam Mobile, push privacy, voice approval isolation and GolamConnect across the exact claimed platform/device matrix.
-- [ ] **T105** Prove strict-local no-egress from outside the Golam process boundary, including no third-party channel or APNs/FCM traffic when strict-local is active.
-- [ ] **T106** Produce exact-head evidence/receipts for every release/parity/security claim.
+- [ ] **T100** Aggregate all incremental gates into a reproducible local-first GolamBench release suite. Add typed EvalDataset/EvalCase/ReferenceEvidence/Scorer/BehaviorSpec/TrajectoryTrace/ExperimentRun records and optional compatibility with open `BEHAVIOR.md`; no hosted eval/telemetry service is mandatory.
+- [ ] **T101** Qualify long-horizon goal retention/premature termination/model-switch/compaction behavior with trajectory-level behaviors: evidence gathering, live-state reread, verification discipline, interruption, recovery, abstention and no fabricated PASS/completion claims. Outcome success alone is insufficient.
+- [ ] **T102** Qualify crash/recovery/idempotency/fork/checkpoint/disk failure across session ledger and WorkerGraph. Explicitly prove graph/checkpoint replay never substitutes for effect reconciliation or duplicates AT_MOST_ONCE/IRREVERSIBLE effects.
+- [ ] **T103** Qualify prompt injection/taint/memory poisoning/secret isolation/policy self-escalation/local IPC/channel impersonation plus PA-002 memory/index/eval threats: false memory promotion, stale-live conflicts, cross-scope leakage, corrupt derived indexes, judge/evaluator injection and skill/experiment self-expansion.
+- [ ] **T104** Qualify computer control, native Golam Mobile, push privacy, voice approval isolation and GolamConnect across the exact claimed platform/device matrix. Include user interruption/takeover as trajectory behaviors, not only final-state tests.
+- [ ] **T105** Prove strict-local no-egress from outside the Golam process boundary, including no third-party channel/APNs/FCM traffic and no hidden Mem0/Firecrawl/Braintrust/LangSmith/vector/eval provider calls when strict-local is active. Run ContextRouteBench and admissible memory benchmarks under equal budget/model constraints, reporting tokens/latency/resources with quality.
+- [ ] **T106** Produce exact-head evidence/receipts for every release/parity/security/performance claim. Deterministic/execution-grounded scorers take precedence where possible; every LLM judge result records exact judge/provider/prompt-rubric/version/cost/variance provenance and cannot alone close a security gate.
 
 ---
 
@@ -165,4 +180,4 @@ No later feature may infer authority from this program task graph alone.
 
 ## Next safe action
 
-Follow exact live repository truth and the currently active bounded Spec Kit feature. PA-001 does not authorize leapfrogging the current implementation sequence; phone/mobile/channel product work starts only when the future Spec 007 package is legitimately opened and completes its planning gates.
+Follow exact live repository truth and the currently active bounded Spec Kit feature. PA-001 and PA-002 are future-program planning amendments only: neither authorizes leapfrogging the current implementation sequence. Phone/channel work begins only when Spec 007 is legitimately opened; PA-002 memory/retrieval/harness/worker/eval work begins only inside its owning Specs 004/005/008/010 after their prerequisites and planning gates close.
