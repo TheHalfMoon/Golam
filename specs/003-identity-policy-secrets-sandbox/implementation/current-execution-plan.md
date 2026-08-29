@@ -3,7 +3,7 @@
 **Status**: IMPLEMENTATION_ACTIVE — PHASE_F_COMPLETE — PHASE_G_COMPLETE — PHASE_H_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current task**: `T003-074`
+**Current task**: `T003-075`
 
 ## Authority
 
@@ -224,14 +224,22 @@ Evidence: `implementation/sandbox-executor-capability-qualification.md`.
 
 The qualified boundary resolves every rights-derived and exact profile platform requirement against a trusted current-platform capability manifest and fails closed before launch if any required control is unsupported. The production T003-073 baseline advertises zero native containment controls (`native:unqualified`), preventing capability self-assertion and preserving honest fail-closed behavior until T003-074 qualifies concrete native execution. No process is launched and no platform containment is claimed.
 
-### T003-074 — ACTIVE
+### T003-074 — COMPLETE
 
-Reuse the already-qualified descendant-aware strict-local observer, then implement the minimum native untrusted-process test executor/profile necessary to prove the contract without claiming unsupported universal isolation. Any network-capable managed child remains forbidden until complete managed-process-tree external observation is active.
+Qualified at exact implementation head `0d28681c971b3ae1f08504c7eb2448789ac8ed6e`, tree `32379e52964faca7db84b8354947be825ba2ef64`, by CI #592 / run `33247996101`, SUCCESS on Windows/macOS/Ubuntu. Focused native-executor qualification run `33247892761` also completed SUCCESS.
+
+Evidence: `implementation/sandbox-native-executor-qualification.md`.
+
+The qualified boundary reuses the T003-064 descendant-aware observer and proves a Linux x86_64 test-only native executor/profile using explicit mount/PID/IPC/UTS/session controls, cleared environment, unprivileged payload identity, empty capability sets, `no_new_privs`, bounded device/filesystem exposure and pre-payload seccomp network denial. Production remains `native:unqualified`; user/network namespace isolation, macOS/Windows parity, external-network profiles and universal native isolation are not claimed. No network-capable managed child was launched.
+
+### T003-075 — ACTIVE
+
+Re-read the canonical T003-005 Wasmtime disposition. Because Wasmtime remains `NOT_ADMITTED_NOT_NEEDED` and no bounded Phase H requirement has reopened dependency qualification, complete T003-075 as explicit deferred/not-admitted evidence without adding Wasmtime.
 
 ## Later phases
 
 - Phase G: COMPLETE through T003-064; strict-local hard denial and descendant-capturing observation remain dominant predecessors.
-- Remaining Phase H: T003-074..T003-076.
+- Remaining Phase H: T003-075..T003-076.
 - Phase I: T003-080..T003-084.
 - Phase J: T003-090..T003-098, including fresh exact-head multi-platform CI, convergence, authorized Qodo review, merge, and post-merge canonical-main evidence.
 
@@ -305,7 +313,12 @@ T003_073=PASS
 T003_073_QUALIFIED_HEAD=39b5989b18457785f0a02a952c1f6d69bb123e60
 T003_073_QUALIFIED_TREE=7b70ae25afcf6a601b376d76ea5dd99ba9f6cce4
 T003_073_CI_RUN=33246660545
-NEXT_TASK=T003-074
+T003_074=PASS
+T003_074_QUALIFIED_HEAD=0d28681c971b3ae1f08504c7eb2448789ac8ed6e
+T003_074_QUALIFIED_TREE=32379e52964faca7db84b8354947be825ba2ef64
+T003_074_CI_RUN=33247996101
+T003_074_FOCUSED_RUN=33247892761
+NEXT_TASK=T003-075
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO

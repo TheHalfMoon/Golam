@@ -1,6 +1,6 @@
 # T003-074 Qualification Candidate
 
-**Status**: QUALIFICATION_CANDIDATE — NOT YET PASS
+**Status**: SUPERSEDED BY QUALIFIED EVIDENCE
 
 This record freezes the T003-074 implementation candidate for official repository CI after the focused native-executor qualification completed successfully.
 
@@ -22,7 +22,7 @@ This record freezes the T003-074 implementation candidate for official repositor
 
 Focused workflow `t003-074-native-executor-qualification` run `33247892761` completed successfully before this candidate freeze. The workflow self-deleted after writing the clean implementation tree.
 
-Official Windows/macOS/Ubuntu repository CI on this candidate is still required before `T003_074=PASS` may be recorded.
+Official Windows/macOS/Ubuntu CI #592 completed SUCCESS. Canonical task evidence is now `implementation/sandbox-native-executor-qualification.md`.
 
 ```text
 T003_074=NOT_YET_PASS
