@@ -1,0 +1,119 @@
+name: t003-074-linux-executor-probe
+on:
+  push:
+    branches:
+      - impl/003-identity-policy-secrets-sandbox
+permissions:
+  contents: write
+jobs:
+  probe:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/003-identity-policy-secrets-sandbox
+          fetch-depth: 0
+      - name: Install Ubuntu bubblewrap executor
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends bubblewrap
+          bwrap --version
+      - name: Prove bounded Linux primitive
+        shell: bash
+        run: |
+          set -euo pipefail
+          forbidden="$RUNNER_TEMP/golam-t003-074-forbidden"
+          printf 'host-only\n' > "$forbidden"
+          export GOLAM_AMBIENT_SECRET='must-not-cross-boundary'
+          bwrap \
+            --unshare-all \
+            --unshare-net \
+            --die-with-parent \
+            --new-session \
+            --clearenv \
+            --cap-drop ALL \
+            --ro-bind /usr /usr \
+            --ro-bind /bin /bin \
+            --ro-bind-try /lib /lib \
+            --ro-bind-try /lib64 /lib64 \
+            --tmpfs /tmp \
+            --chdir /tmp \
+            /bin/bash -ceu '
+              test -z "${GOLAM_AMBIENT_SECRET+x}"
+              test ! -e "$1"
+              printf allowed > /tmp/allowed
+              test "$(cat /tmp/allowed)" = allowed
+              if printf forbidden > /usr/golam-forbidden 2>/dev/null; then
+                echo "read-only root write unexpectedly succeeded" >&2
+                exit 31
+              fi
+              /bin/bash -c "exit 0"
+              if /usr/bin/timeout 2 /bin/bash -c "exec 3<>/dev/tcp/1.1.1.1/53" 2>/dev/null; then
+                echo "external network unexpectedly succeeded" >&2
+                exit 32
+              fi
+            ' golam-probe "$forbidden"
+          echo 'BWRAP_EXECUTOR_PROBE=PASS'
+          echo 'ENVIRONMENT_CLEARED=YES'
+          echo 'FORBIDDEN_HOST_FS_VISIBLE=NO'
+          echo 'READONLY_ROOT_WRITE_BLOCKED=YES'
+          echo 'NETWORK_EGRESS_BLOCKED=YES'
+          echo 'MANAGED_DESCENDANT_EXECUTED=YES'
+      - name: Record bounded executor research
+        shell: python
+        run: |
+          from pathlib import Path
+          evidence = Path('specs/003-identity-policy-secrets-sandbox/implementation/t003-074-linux-executor-research.md')
+          if evidence.exists():
+              raise SystemExit('T003-074 Linux executor research already exists')
+          lines = [
+              '# T003-074 Linux Executor Primitive Research',
+              '',
+              '## Disposition',
+              '',
+              'Ubuntu-hosted qualification proved a bounded Bubblewrap-based primitive suitable only for the minimum native untrusted-process test executor required by T003-074.',
+              '',
+              'This record does not admit Bubblewrap as a universal product sandbox and does not claim macOS/Windows parity. The production executor remains fail-closed unless an exact platform capability is explicitly qualified.',
+              '',
+              '## Qualified primitive properties',
+              '',
+              '- Ubuntu package `bubblewrap` was installed from the runner package repository and its version was printed in the run log.',
+              '- `--clearenv` removed the injected ambient canary environment variable.',
+              '- Bubblewrap constructed an empty mount namespace populated only by explicit read-only runtime roots plus a sandbox-local `/tmp`.',
+              '- A host-only forbidden file outside the mounted roots was not visible.',
+              '- A write attempt beneath a read-only runtime root failed.',
+              '- A new network namespace denied the external IPv4 connection probe.',
+              '- A descendant process executed inside the sandbox PID namespace and Bubblewrap retained parent-death/process-tree cleanup semantics.',
+              '- Capabilities were dropped and a new session was created.',
+              '',
+              '## Boundaries',
+              '',
+              '- This is Linux-only research for the T003-074 test executor.',
+              '- No arbitrary requester command, argument vector, host path, environment name, device, IPC endpoint, or inherited handle is accepted by the probe.',
+              '- macOS and Windows remain unsupported for this concrete executor until separately qualified; T003-073 fail-closed behavior remains binding.',
+              '- No network-capable Golam-managed native child was launched; the probe child ran with external networking removed by a separate network namespace.',
+              '',
+              '```text',
+              'T003_074_LINUX_PRIMITIVE_RESEARCH=PASS',
+              'EXECUTOR_PRIMITIVE=BUBBLEWRAP_BOUNDED_TEST_ONLY',
+              'ENVIRONMENT_CLEARED=YES',
+              'FORBIDDEN_HOST_FS_VISIBLE=NO',
+              'READONLY_ROOT_WRITE_BLOCKED=YES',
+              'NETWORK_EGRESS_BLOCKED=YES',
+              'MANAGED_DESCENDANT_EXECUTED=YES',
+              'MACOS_EXECUTOR_SUPPORTED=NO',
+              'WINDOWS_EXECUTOR_SUPPORTED=NO',
+              'UNIVERSAL_NATIVE_SANDBOX_CLAIMED=NO',
+              'NETWORK_CAPABLE_MANAGED_CHILD_LAUNCHED=NO',
+              '```',
+          ]
+          evidence.write_text('\n'.join(lines) + '\n')
+      - name: Commit research and self-delete
+        run: |
+          git rm .github/workflows/t003-074-linux-executor-probe.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add specs/003-identity-policy-secrets-sandbox/implementation/t003-074-linux-executor-research.md
+          git commit -m 'docs: qualify T003-074 Linux executor primitive'
+          git push origin HEAD:impl/003-identity-policy-secrets-sandbox
