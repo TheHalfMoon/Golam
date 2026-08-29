@@ -18,12 +18,7 @@ fn minimum_native_test_plan() -> SandboxLaunchPlan {
         profile_id: [0x74; 16],
         profile_version: 1,
         profile_class: SandboxProfileClass::NativeUntrustedSubprocess,
-        filesystem_read_roots: vec![
-            "/bin".into(),
-            "/lib".into(),
-            "/lib64".into(),
-            "/usr".into(),
-        ],
+        filesystem_read_roots: vec!["/bin".into(), "/lib".into(), "/lib64".into(), "/usr".into()],
         filesystem_write_roots: vec!["/tmp".into()],
         network_rule: SandboxNetworkRule::DenyAll,
         environment_allowlist: vec![],
@@ -68,9 +63,8 @@ fn requested_rights<'a>() -> SandboxRequestedRights<'a> {
 
 #[test]
 fn minimum_native_test_profile_is_exactly_bounded_to_the_qualified_harness() {
-    let descriptor =
-        resolve_sandbox_enforcement(&minimum_native_test_plan(), requested_rights())
-            .expect("minimum native qualification descriptor");
+    let descriptor = resolve_sandbox_enforcement(&minimum_native_test_plan(), requested_rights())
+        .expect("minimum native qualification descriptor");
 
     assert!(descriptor.clears_environment());
     assert!(!descriptor.claims_platform_containment());

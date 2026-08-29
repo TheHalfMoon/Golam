@@ -37,6 +37,8 @@ pub mod recovery;
 pub mod run_preauthorization;
 pub mod sandbox_enforcement;
 pub mod sandbox_executor;
+#[cfg(test)]
+mod sandbox_native_qualification;
 pub mod sandbox_plan;
 pub mod sandbox_profile;
 #[allow(dead_code)]
