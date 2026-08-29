@@ -1,0 +1,59 @@
+name: t003-063-record
+on:
+  push:
+    branches:
+      - impl/003-identity-policy-secrets-sandbox
+permissions:
+  contents: write
+jobs:
+  record:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/003-identity-policy-secrets-sandbox
+          fetch-depth: 0
+      - name: Record T003-063 and activate T003-064
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              text = path.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: replacement count {count} for {old!r}')
+              path.write_text(text.replace(old, new, 1))
+
+          tasks = Path('specs/003-identity-policy-secrets-sandbox/tasks.md')
+          replace_once(
+              tasks,
+              '- [ ] **T003-063** Bind relevant taint and secret-handle context into egress authorization/evidence.',
+              '- [x] **T003-063** Bind relevant taint and secret-handle context into egress authorization/evidence. Exact-head qualification: CI #532 (`33234466919`) SUCCESS at `a2486acc1b4dab47207ca9becdad09afe27fefe1` on Windows/macOS/Ubuntu. Evidence: `implementation/egress-context-qualification.md`.',
+          )
+          replace_once(tasks, 'NEXT_TASK=T003-063', 'T003_063=PASS\nT003_063_QUALIFIED_HEAD=a2486acc1b4dab47207ca9becdad09afe27fefe1\nT003_063_CI_RUN=33234466919\nNEXT_TASK=T003-064')
+
+          plan = Path('specs/003-identity-policy-secrets-sandbox/implementation/current-execution-plan.md')
+          replace_once(plan, '**Current task**: `T003-063`', '**Current task**: `T003-064`')
+          replace_once(
+              plan,
+              '### T003-063 — ACTIVE\n\nBind relevant taint and secret-handle context into egress authorization/evidence.',
+              '### T003-063 — COMPLETE\n\nQualified at exact implementation head `a2486acc1b4dab47207ca9becdad09afe27fefe1` by CI #532 / run `33234466919`, SUCCESS on Windows/macOS/Ubuntu.\n\nEvidence: `implementation/egress-context-qualification.md`.\n\nThe qualified effective-use boundary requires exact runtime taint and optional opaque secret-handle context to match the protected permit and binds both into durable authorization-decision context evidence without secret plaintext.\n\n### T003-064 — ACTIVE\n\nUpgrade external strict-local qualification to observe the complete Golam-managed process tree or equivalent descendant-capturing boundary while preserving hard-guard dominance.',
+          )
+          replace_once(plan, 'T003_063=ACTIVE', 'T003_063=PASS\nT003_063_QUALIFIED_HEAD=a2486acc1b4dab47207ca9becdad09afe27fefe1\nT003_063_CI_RUN=33234466919')
+          replace_once(plan, 'NEXT_TASK=T003-063', 'NEXT_TASK=T003-064')
+      - name: Verify record
+        run: |
+          grep -F 'T003_063=PASS' specs/003-identity-policy-secrets-sandbox/tasks.md
+          grep -F 'NEXT_TASK=T003-064' specs/003-identity-policy-secrets-sandbox/tasks.md
+          grep -F '### T003-064 — ACTIVE' specs/003-identity-policy-secrets-sandbox/implementation/current-execution-plan.md
+      - name: Commit record
+        run: |
+          git rm .github/workflows/t003-063-record.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add specs/003-identity-policy-secrets-sandbox/tasks.md
+          git add specs/003-identity-policy-secrets-sandbox/implementation/current-execution-plan.md
+          git commit -m 'docs: record T003-063 qualification'
+          git push origin HEAD:impl/003-identity-policy-secrets-sandbox
