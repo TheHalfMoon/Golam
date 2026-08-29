@@ -16,12 +16,20 @@ An LLM, worker, skill, channel, web page, MCP server or retrieval provider MAY p
 
 Promotion requires the existing memory-governance path:
 
-- explicit human approval; or
-- deterministic verification against an admitted authoritative source/rule where policy allows.
+- explicit human approval attributable to an authenticated principal currently authorized for the target memory scope and promotion operation; or
+- deterministic verification against an admitted, pre-registered authoritative source/rule where policy allows.
 
-The candidate retains provenance, actor/model, taint, scope, temporal metadata, confidence and supporting evidence refs.
+Free-form channel content, a provider-side identity/display claim, model/worker output, retrieved instructions, or a candidate's own assertion MUST NOT satisfy human promotion approval merely because the content says `remember`, `approve`, `yes`, or equivalent. A bound channel MAY transport a promotion request or reference a pending governed approval object only under the channel/identity rules of PA-001; channel transport itself does not become memory-promotion authority.
+
+A candidate, model, worker, skill, channel, retrieval provider or learning process MUST NOT select, register, modify, or reinterpret its own deterministic verifier/source in a way that upgrades its assertion to authoritative verification. Verifier/source admission and any authority-changing registration remain independently governed protected state. Verification evidence MUST identify the exact admitted source/rule/version used.
+
+User-authored edits to user-owned canonical Markdown remain governed by the constitutional user-edit/reconciliation path and are not reclassified as model/candidate self-promotion merely because Golam later observes them.
+
+The candidate retains provenance, actor/model, taint, scope, temporal metadata, confidence and supporting evidence refs. The promotion decision retains its authenticated approver or exact verifier/source evidence so the resulting durable mutation is attributable.
 
 `MEMORY_CANDIDATE != DURABLE_TRUTH`
+`CHANNEL_CONTENT != MEMORY_PROMOTION_APPROVAL`
+`CANDIDATE_SELECTED_VERIFIER != AUTHORITATIVE_VERIFICATION`
 
 ## 3. ADD-first evidence; governed active knowledge
 
@@ -208,9 +216,9 @@ It MUST emit an immutable `LearningProposal` with evidence refs. It MUST NOT sil
 
 ## 16. Memory learning promotion
 
-A learning proposal for memory enters the same `MemoryCandidate` governance path as any other inferred memory.
+A learning proposal for memory enters the same `MemoryCandidate` governance path as any other inferred memory, including the authenticated-approval or admitted-deterministic-verification requirements in Section 2.
 
-Repeated model assertions do not constitute independent verification. Repetition may affect candidate priority, not authority.
+Repeated model assertions do not constitute independent verification. Repetition may affect candidate priority, not authority. A learning process cannot turn its own repeated output, self-selected verifier, channel echo, or model-written approval text into promotion authority.
 
 ## 17. Skill self-improvement
 
@@ -280,6 +288,10 @@ A one-metric gain that violates a guardrail or introduces unjustified complexity
 Owning specs MUST test at least:
 
 - false model-generated memory promotion;
+- free-form channel/model text attempting to satisfy memory-promotion approval;
+- stale/revoked/mismatched authenticated promotion approval;
+- candidate/model/worker self-selection or mutation of an alleged authoritative verifier/source;
+- verifier/source version substitution after evidence capture;
 - stale memory versus live state;
 - contradiction/supersession retrieval;
 - cross-scope user/project/worker leakage;
