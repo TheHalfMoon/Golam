@@ -54,7 +54,7 @@ jobs:
       - name: Commit clean T003-080 implementation candidate
         run: |
           git rm .github/workflows/t003-080-runtime-policy-qualification.yml
-          git rm scripts/qualification/prepare-t003-080.py
+          git rm -f scripts/qualification/prepare-t003-080.py
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add crates/golam-ledger/src/active_policy_integrity.rs
