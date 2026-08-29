@@ -1,9 +1,9 @@
 # Spec 003 — Live Implementation Execution Plan
 
-**Status**: IMPLEMENTATION_ACTIVE — PHASE_F_COMPLETE — PHASE_G_ACTIVE  
+**Status**: IMPLEMENTATION_ACTIVE — PHASE_F_COMPLETE — PHASE_G_COMPLETE — PHASE_H_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current task**: `T003-064`
+**Current task**: `T003-070`
 
 ## Authority
 
@@ -138,7 +138,7 @@ Required boundaries:
 - revocation must immediately block broker/fallback use without deleting prior encrypted versions or weakening audit integrity;
 - no failure mode may acknowledge success while leaving old secret authority usable as current.
 
-Phase F is closed at the task-qualified head above. Phase G is active at T003-064.
+Phase F and Phase G are closed at their task-qualified heads above. Phase H is active at T003-070.
 
 ### Remaining Phase F ordering
 
@@ -146,7 +146,7 @@ T003-053 -> T003-054 -> T003-055 -> T003-056 -> T003-057.
 
 ## Phase G — Egress permits
 
-`ACTIVE`
+`COMPLETE`
 
 ### T003-060 — COMPLETE
 
@@ -180,14 +180,26 @@ Evidence: `implementation/egress-context-qualification.md`.
 
 The qualified effective-use boundary requires exact runtime taint and optional opaque secret-handle context to match the protected permit and binds both into durable authorization-decision context evidence without secret plaintext.
 
-### T003-064 — ACTIVE
+### T003-064 — COMPLETE
 
-Upgrade external strict-local qualification to observe the complete Golam-managed process tree or equivalent descendant-capturing boundary while preserving hard-guard dominance.
+Qualified at exact implementation head `d77cd2b8e78a41153085c279fea698bb794d2d4e` by CI #538 / run `33234807292`, SUCCESS on Windows/macOS/Ubuntu.
+
+Evidence: `implementation/strict-local-process-tree-qualification.md`.
+
+The qualified independent observer computes the transitive managed process-tree closure on Unix and Windows and fails if any observed Golam-owned PID holds an Internet socket. No native managed-child executor is claimed here; T003-074 remains the first task permitted to add one and must reuse this descendant-capturing observer.
+
+## Phase H — Sandbox profiles/admission
+
+`ACTIVE`
+
+### T003-070 — ACTIVE
+
+Implement protected `SandboxProfile` records and deterministic profile validation.
 
 ## Later phases
 
-- Remaining Phase G: T003-064, strict-local hard denial remains dominant.
-- Phase H: T003-070..T003-076, with descendant-capturing no-egress predecessor before network-capable native managed children.
+- Phase G: COMPLETE through T003-064; strict-local hard denial and descendant-capturing observation remain dominant predecessors.
+- Remaining Phase H: T003-070..T003-076.
 - Phase I: T003-080..T003-084.
 - Phase J: T003-090..T003-098, including fresh exact-head multi-platform CI, convergence, authorized Qodo review, merge, and post-merge canonical-main evidence.
 
@@ -203,7 +215,8 @@ PHASE_C_COMPLETE=YES
 PHASE_D_COMPLETE=YES
 PHASE_E_COMPLETE=YES
 PHASE_F_COMPLETE=YES
-PHASE_G_ACTIVE=YES
+PHASE_G_COMPLETE=YES
+PHASE_H_ACTIVE=YES
 T003_046=PASS
 T003_046_QUALIFIED_HEAD=890571fe705f36f42c1c20acff3a8a2c4fa3498e
 T003_046_CI_RUN=33157139728
@@ -243,7 +256,10 @@ T003_062_CI_RUN=33200261387
 T003_063=PASS
 T003_063_QUALIFIED_HEAD=a2486acc1b4dab47207ca9becdad09afe27fefe1
 T003_063_CI_RUN=33234466919
-NEXT_TASK=T003-064
+T003_064=PASS
+T003_064_QUALIFIED_HEAD=d77cd2b8e78a41153085c279fea698bb794d2d4e
+T003_064_CI_RUN=33234807292
+NEXT_TASK=T003-070
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO

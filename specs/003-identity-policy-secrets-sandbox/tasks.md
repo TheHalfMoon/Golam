@@ -1,6 +1,6 @@
 # Tasks — Spec 003 Identity, Policy, Secrets & Sandbox
 
-**Status**: IMPLEMENTATION_ACTIVE — PHASE_B_COMPLETE — PHASE_C_COMPLETE — PHASE_D_COMPLETE — PHASE_E_COMPLETE — PHASE_F_COMPLETE — PHASE_G_ACTIVE  
+**Status**: IMPLEMENTATION_ACTIVE — PHASE_B_COMPLETE — PHASE_C_COMPLETE — PHASE_D_COMPLETE — PHASE_E_COMPLETE — PHASE_F_COMPLETE — PHASE_G_COMPLETE — PHASE_H_ACTIVE  
 **Canonical implementation base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`
 
 Legend:
@@ -72,7 +72,7 @@ Legend:
 - [x] **T003-061** Implement non-strict EgressPermit scope and protected issuance/revocation/use accounting. Exact-head qualification: CI #514 (`33198112325`) SUCCESS at `94d1482f8963ea4d5630a1ba4d2bdaba0e12e7ef` on Windows/macOS/Ubuntu. Evidence: `implementation/egress-permit-qualification.md`.
 - [x] **T003-062** Implement mandatory reauthorization of every effective destination before connect/follow whenever DNS resolution, redirect, rebinding, protocol/port, or private/link-local/loopback target changes; hostname authority never transfers implicitly to a changed effective target. Exact-head qualification: CI #525 (`33200261387`) SUCCESS at `4d730e894ebde948185597f5fe4296a142fd9ac6` on Windows/macOS/Ubuntu. Evidence: `implementation/egress-effective-destination-qualification.md`.
 - [x] **T003-063** Bind relevant taint and secret-handle context into egress authorization/evidence. Exact-head qualification: CI #532 (`33234466919`) SUCCESS at `a2486acc1b4dab47207ca9becdad09afe27fefe1` on Windows/macOS/Ubuntu. Evidence: `implementation/egress-context-qualification.md`.
-- [ ] **T003-064** Add strict-local dominance plus external sinkhole/no-egress qualification covering `golamd` and every Golam-managed descendant, proving permits and child processes cannot bypass the hard guard.
+- [x] **T003-064** Add strict-local dominance plus external sinkhole/no-egress qualification covering `golamd` and every Golam-managed descendant, proving permits and child processes cannot bypass the hard guard. Exact-head qualification: CI #538 (`33234807292`) SUCCESS at `d77cd2b8e78a41153085c279fea698bb794d2d4e` on Windows/macOS/Ubuntu. Evidence: `implementation/strict-local-process-tree-qualification.md`.
 
 ## Phase H — Sandbox profiles/admission
 
@@ -195,5 +195,10 @@ REAL_SECRETS_USED=NO
 T003_063=PASS
 T003_063_QUALIFIED_HEAD=a2486acc1b4dab47207ca9becdad09afe27fefe1
 T003_063_CI_RUN=33234466919
-NEXT_TASK=T003-064
+T003_064=PASS
+T003_064_QUALIFIED_HEAD=d77cd2b8e78a41153085c279fea698bb794d2d4e
+T003_064_CI_RUN=33234807292
+PHASE_G_COMPLETE=YES
+PHASE_H_ACTIVE=YES
+NEXT_TASK=T003-070
 ```
