@@ -99,13 +99,22 @@ The canonical runtime SHALL expose semantic operations equivalent to:
 - TakeOver where computer/input authority exists;
 - Resume.
 
-These commands MUST be attributable to an authenticated principal.
+These commands MUST be attributable to an authenticated principal and checked against the current authority applicable to that control operation.
 
-User steering may narrow goal/scope/authority. Any widening request still passes normal policy/capability/approval rules.
+User steering may narrow goal/scope or request narrower authority. Any widening request still passes normal policy/capability/approval rules.
 
+A Task/Run control record or Task Contract revision MUST NOT directly mint, rewrite, revoke, or narrow protected authority objects merely because the requested direction is safer. If steering requires a capability lease to be narrowed/revoked, an approval/preauthorization to be invalidated, an egress permit to be reduced, or another protected authority object to change, that change proceeds through the owning typed protected mutation path with durable attribution/evidence. Planner/executor behavior may immediately respect the narrower Task scope while protected authority state converges, but stale broader authority MUST NOT be silently reused contrary to the current Task constraints.
+
+`TASK_CONTROL != AUTHORITY_MUTATION`
 `USER_STEERING_CAN_NARROW_BUT_NOT_SILENTLY_WIDEN_AUTHORITY`
 
-Resume MUST re-read current protected state, relevant live environment state, stale references, expiries, approvals, and UNKNOWN external effects before continuing.
+Pause/Stop/Cancel MUST prevent new dispatch that is no longer authorized by the resulting Run/Task state. They MUST NOT fabricate cancellation of an external or irreversible effect that has already been dispatched or may have taken effect. Such work remains subject to handler-specific cancellation evidence, observation and normal Effect Gate reconciliation; if outcome is uncertain, the Run enters `UNKNOWN_EFFECT_BLOCKED` or an equivalent state rather than reporting successful cancellation.
+
+`STOP_REQUESTED != EXTERNAL_EFFECT_CANCELLED`
+
+TakeOver transfers only the explicitly governed interactive/input-control lease or equivalent bounded control needed for the takeover. It MUST NOT silently grant general Task, filesystem, secret, network, or effect authority.
+
+Resume MUST re-read current protected state, relevant live environment state, stale references, expiries, approvals, and UNKNOWN external effects before continuing. A paused/stopped Task Contract or cached pre-pause capability view is not authority to resume protected work.
 
 ## 7. Progressive autonomy projection
 
@@ -195,4 +204,4 @@ Imports from external agents MUST remain quarantined/provenanced until governed 
 
 After Spec 005, CLI/TUI MUST be able to demonstrate the complete Golden Loop without Desktop, Mobile, broad channels, or worker swarms being required.
 
-The owning product gate must prove representative repository, research/evidence, filesystem/document, cross-session memory, interrupt/recovery, and strict-local tasks with exact evidence.
+The owning product gate must prove representative repository, research/evidence, filesystem/document, cross-session memory, interrupt/recovery, and strict-local tasks with exact evidence. It MUST also include control-path cases proving that steering cannot mutate protected authority by TaskContract side effect, stop/cancel cannot falsely claim an already-dispatched external effect was cancelled, UNKNOWN outcomes block honest completion, takeover remains bounded to its control lease, and resume revalidates current authority rather than reusing stale pre-pause state.
