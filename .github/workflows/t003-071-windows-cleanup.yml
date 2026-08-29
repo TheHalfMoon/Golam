@@ -1,0 +1,43 @@
+name: t003-071-windows-cleanup
+on:
+  push:
+    branches:
+      - impl/003-identity-policy-secrets-sandbox
+permissions:
+  contents: write
+jobs:
+  qualify:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/003-identity-policy-secrets-sandbox
+          fetch-depth: 0
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
+      - name: Fix Windows-safe SQLite cleanup
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('crates/golam-ledger/src/sandbox_plan.rs')
+          text = path.read_text()
+          old = '''        assert_eq!(uses, 0);\n        fs::remove_dir_all(runtime.root).unwrap();\n    }\n\n    #[test]\n    fn deny_all_profile_rejects_ambient_egress_binding()'''
+          new = '''        assert_eq!(uses, 0);\n        drop(connection);\n        fs::remove_dir_all(runtime.root).unwrap();\n    }\n\n    #[test]\n    fn deny_all_profile_rejects_ambient_egress_binding()'''
+          if text.count(old) != 1:
+              raise SystemExit(f'cleanup anchor count {text.count(old)}')
+          path.write_text(text.replace(old, new, 1))
+      - name: Focused Windows qualification
+        run: |
+          cargo +1.98.0 fmt --all -- --check
+          cargo +1.98.0 test -p golam-ledger sandbox_plan::tests::egress_authority_is_exact_intersection_and_is_not_consumed_by_compilation -- --nocapture
+          cargo +1.98.0 clippy -p golam-ledger --all-targets -- -D warnings
+      - name: Commit clean T003-071 Windows repair
+        shell: bash
+        run: |
+          git rm .github/workflows/t003-071-windows-cleanup.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/golam-ledger/src/sandbox_plan.rs
+          git commit -m 'test: close sandbox plan fixture before cleanup'
+          git push origin HEAD:impl/003-identity-policy-secrets-sandbox
