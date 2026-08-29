@@ -3,7 +3,7 @@
 **Status**: IMPLEMENTATION_ACTIVE — PHASE_F_COMPLETE — PHASE_G_COMPLETE — PHASE_H_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current task**: `T003-075`
+**Current task**: `T003-076`
 
 ## Authority
 
@@ -232,14 +232,22 @@ Evidence: `implementation/sandbox-native-executor-qualification.md`.
 
 The qualified boundary reuses the T003-064 descendant-aware observer and proves a Linux x86_64 test-only native executor/profile using explicit mount/PID/IPC/UTS/session controls, cleared environment, unprivileged payload identity, empty capability sets, `no_new_privs`, bounded device/filesystem exposure and pre-payload seccomp network denial. Production remains `native:unqualified`; user/network namespace isolation, macOS/Windows parity, external-network profiles and universal native isolation are not claimed. No network-capable managed child was launched.
 
-### T003-075 — ACTIVE
+### T003-075 — COMPLETE
 
-Re-read the canonical T003-005 Wasmtime disposition. Because Wasmtime remains `NOT_ADMITTED_NOT_NEEDED` and no bounded Phase H requirement has reopened dependency qualification, complete T003-075 as explicit deferred/not-admitted evidence without adding Wasmtime.
+Qualified at exact human-authored implementation head `6d3bf98c51ba2c44d187ff07d24bd804a3026bdd`, tree `ae2463fa36240fc801accdfeb5b39adf7fccde10`, by CI #597 / run `33249678974`, SUCCESS on Windows/macOS/Ubuntu.
+
+Evidence: `implementation/t003-075-wasm-profile-disposition.md`.
+
+T003-005 was not reopened. `WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED` remains authoritative; no Wasmtime/WASI executor, runtime/JIT/hostcall surface or dependency was admitted, and runtime authority did not change.
+
+### T003-076 — ACTIVE
+
+Add consolidated adversarial sandbox coverage for escape/inheritance, forbidden filesystem/network/device/IPC/handle/spawn rights, bounded resources and unsupported-platform denial. Reuse the T003-074 bounded Linux x86_64 test harness without widening it into a product executor or claiming unsupported platform parity.
 
 ## Later phases
 
 - Phase G: COMPLETE through T003-064; strict-local hard denial and descendant-capturing observation remain dominant predecessors.
-- Remaining Phase H: T003-075..T003-076.
+- Remaining Phase H: T003-076.
 - Phase I: T003-080..T003-084.
 - Phase J: T003-090..T003-098, including fresh exact-head multi-platform CI, convergence, authorized Qodo review, merge, and post-merge canonical-main evidence.
 
@@ -318,7 +326,11 @@ T003_074_QUALIFIED_HEAD=0d28681c971b3ae1f08504c7eb2448789ac8ed6e
 T003_074_QUALIFIED_TREE=32379e52964faca7db84b8354947be825ba2ef64
 T003_074_CI_RUN=33247996101
 T003_074_FOCUSED_RUN=33247892761
-NEXT_TASK=T003-075
+T003_075=PASS
+T003_075_QUALIFIED_HEAD=6d3bf98c51ba2c44d187ff07d24bd804a3026bdd
+T003_075_QUALIFIED_TREE=ae2463fa36240fc801accdfeb5b39adf7fccde10
+T003_075_CI_RUN=33249678974
+NEXT_TASK=T003-076
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO

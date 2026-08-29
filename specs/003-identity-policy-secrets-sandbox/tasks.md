@@ -81,7 +81,7 @@ Legend:
 - [x] **T003-072** Enforce cleared environment and explicit FS/network/spawn/resource/device/IPC/handle inheritance rules. Exact-head qualification: CI #565 (`33237725527`) SUCCESS at `241f36a6fbbaad93d46aed1970353a9270b05431`, tree `37d65e8dc72f0c9ed4935ac997d2de06e653b101`, on Windows/macOS/Ubuntu. Evidence: `implementation/sandbox-enforcement-qualification.md`.
 - [x] **T003-073** Implement platform-executor capability checks and fail closed when a required containment control is unsupported. Exact-head qualification: CI #574 (`33246660545`) SUCCESS at `39b5989b18457785f0a02a952c1f6d69bb123e60`, tree `7b70ae25afcf6a601b376d76ea5dd99ba9f6cce4`, on Windows/macOS/Ubuntu. Evidence: `implementation/sandbox-executor-capability-qualification.md`.
 - [x] **T003-074** Before launching any native Golam-managed child process with network capability, upgrade the external strict-local observer from daemon-PID-only inspection to complete managed-process-tree observation or an equivalent descendant-capturing sinkholed boundary; then implement the minimum native untrusted-process test executor/profile required to prove the contract without claiming unsupported universal isolation. Exact-head qualification: CI #592 (`33247996101`) SUCCESS at `0d28681c971b3ae1f08504c7eb2448789ac8ed6e`, tree `32379e52964faca7db84b8354947be825ba2ef64`, on Windows/macOS/Ubuntu; focused native-executor run `33247892761` SUCCESS. Evidence: `implementation/sandbox-native-executor-qualification.md`.
-- [ ] **T003-075** If Wasmtime is later admitted by reopened T003-005, implement bounded WASM/WASI profile via the qualified executor; otherwise keep it deferred with explicit evidence.
+- [x] **T003-075** If Wasmtime is later admitted by reopened T003-005, implement bounded WASM/WASI profile via the qualified executor; otherwise keep it deferred with explicit evidence. Deferred/not-admitted qualification: CI #597 (`33249678974`) SUCCESS at `6d3bf98c51ba2c44d187ff07d24bd804a3026bdd`, tree `ae2463fa36240fc801accdfeb5b39adf7fccde10`, on Windows/macOS/Ubuntu. `WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED`; no runtime authority or dependency surface changed. Evidence: `implementation/t003-075-wasm-profile-disposition.md`.
 - [ ] **T003-076** Add escape/inheritance/forbidden-FS/network/spawn/resource/unsupported-platform tests.
 
 ## Phase I — Kernel/CLI integration and adversarial qualification
@@ -218,5 +218,9 @@ T003_074_QUALIFIED_HEAD=0d28681c971b3ae1f08504c7eb2448789ac8ed6e
 T003_074_QUALIFIED_TREE=32379e52964faca7db84b8354947be825ba2ef64
 T003_074_CI_RUN=33247996101
 T003_074_FOCUSED_RUN=33247892761
-NEXT_TASK=T003-075
+T003_075=PASS
+T003_075_QUALIFIED_HEAD=6d3bf98c51ba2c44d187ff07d24bd804a3026bdd
+T003_075_QUALIFIED_TREE=ae2463fa36240fc801accdfeb5b39adf7fccde10
+T003_075_CI_RUN=33249678974
+NEXT_TASK=T003-076
 ```
