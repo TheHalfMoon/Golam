@@ -750,7 +750,7 @@ fn consume_once_approval(
         .map_err(|error| SandboxProfileError::AuthoritySecurity(error.to_string()))
 }
 
-fn load_profile(
+pub(crate) fn load_profile(
     connection: &Connection,
     profile_id: [u8; 16],
     version: u64,

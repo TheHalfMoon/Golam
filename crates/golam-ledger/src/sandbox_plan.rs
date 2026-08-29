@@ -16,6 +16,21 @@ use crate::storage::{AuthorityStore, StorageError};
 
 pub const SANDBOX_LAUNCH_ACTION: &str = "sandbox.launch";
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SandboxLocality {
+    StrictLocal,
+    NonStrict,
+}
+
+impl SandboxLocality {
+    const fn code(self) -> u8 {
+        match self {
+            Self::StrictLocal => 1,
+            Self::NonStrict => 2,
+        }
+    }
+}
+
 const PLAN_DOMAIN: &[u8] = b"golam:sandbox-launch-plan:v1";
 const MAX_PRINCIPAL_BYTES: usize = 512;
 
@@ -28,7 +43,6 @@ pub struct SandboxPlanRequest<'a> {
     pub lease_id: [u8; 16],
     pub egress_permit_id: Option<[u8; 16]>,
     pub observed_at: &'a str,
-    pub strict_local: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -69,7 +83,7 @@ pub struct SandboxLaunchPlan {
     pub policy_bundle_id: [u8; 16],
     pub policy_bundle_hash: [u8; 32],
     pub egress: Option<SandboxEgressBinding>,
-    pub strict_local: bool,
+    pub locality: SandboxLocality,
     pub observed_at: String,
     pub plan_hash: [u8; 32],
 }
@@ -112,7 +126,9 @@ impl fmt::Display for SandboxPlanError {
             Self::Profile(error) => write!(f, "sandbox plan profile error: {error}"),
             Self::InvalidPrincipal => f.write_str("sandbox plan principal/process is invalid"),
             Self::InvalidTime => f.write_str("sandbox plan observed_at is invalid"),
-            Self::MissingDecision => f.write_str("sandbox launch authorization decision is missing"),
+            Self::MissingDecision => {
+                f.write_str("sandbox launch authorization decision is missing")
+            }
             Self::DecisionMismatch => {
                 f.write_str("sandbox launch authorization decision is mismatched")
             }
@@ -124,7 +140,9 @@ impl fmt::Display for SandboxPlanError {
             Self::ActivePolicyInvalid => {
                 f.write_str("sandbox launch active policy bundle is not validated")
             }
-            Self::LeaseAuthority(error) => write!(f, "sandbox launch lease authority denied: {error}"),
+            Self::LeaseAuthority(error) => {
+                write!(f, "sandbox launch lease authority denied: {error}")
+            }
             Self::StrictLocalExternalEgressDenied => {
                 f.write_str("strict-local mode forbids an external-egress sandbox plan")
             }
@@ -134,7 +152,9 @@ impl fmt::Display for SandboxPlanError {
             Self::EgressPermitForbidden => {
                 f.write_str("sandbox profile does not permit an external egress binding")
             }
-            Self::EgressPermitInvalid => f.write_str("sandbox egress permit is invalid or mismatched"),
+            Self::EgressPermitInvalid => {
+                f.write_str("sandbox egress permit is invalid or mismatched")
+            }
             Self::EgressPermitExpired => f.write_str("sandbox egress permit is expired"),
             Self::EgressPermitExhausted => f.write_str("sandbox egress permit is exhausted"),
         }
@@ -172,17 +192,25 @@ impl From<golam_core::CoreError> for SandboxPlanError {
 
 pub struct SandboxPlanCompiler {
     connection: Connection,
+    locality: SandboxLocality,
 }
 
 impl SandboxPlanCompiler {
-    pub fn open(layout: &AuthorityLayout) -> Result<Self, SandboxPlanError> {
+    /// The trusted kernel boundary selects locality; plan requesters cannot downgrade it.
+    pub fn open(
+        layout: &AuthorityLayout,
+        locality: SandboxLocality,
+    ) -> Result<Self, SandboxPlanError> {
         let store = AuthorityStore::open(layout.authority_db_path())?;
         drop(store);
         let connection = Connection::open(layout.authority_db_path())?;
         connection.execute_batch(
             "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA busy_timeout = 5000;",
         )?;
-        Ok(Self { connection })
+        Ok(Self {
+            connection,
+            locality,
+        })
     }
 
     pub fn compile(
@@ -236,9 +264,15 @@ impl SandboxPlanCompiler {
             authority.lease_generation,
             request.egress_permit_id,
             request.observed_at,
-            request.strict_local,
+            self.locality,
         )?;
-        let plan_hash = plan_hash(&profile, &request, &authority, egress.as_ref())?;
+        let plan_hash = plan_hash(
+            &profile,
+            &request,
+            &authority,
+            self.locality,
+            egress.as_ref(),
+        )?;
 
         Ok(SandboxLaunchPlan {
             profile_id: profile.profile_id,
@@ -264,7 +298,7 @@ impl SandboxPlanCompiler {
             policy_bundle_id: authority.policy_bundle_id,
             policy_bundle_hash: authority.policy_bundle_hash,
             egress,
-            strict_local: request.strict_local,
+            locality: self.locality,
             observed_at: request.observed_at.to_owned(),
             plan_hash,
         })
@@ -397,9 +431,11 @@ fn compile_egress_binding(
     lease_generation: u64,
     permit_id: Option<[u8; 16]>,
     observed_at: &str,
-    strict_local: bool,
+    locality: SandboxLocality,
 ) -> Result<Option<SandboxEgressBinding>, SandboxPlanError> {
-    if strict_local && profile.network_rule == SandboxNetworkRule::PermitRequired {
+    if locality == SandboxLocality::StrictLocal
+        && profile.network_rule == SandboxNetworkRule::PermitRequired
+    {
         return Err(SandboxPlanError::StrictLocalExternalEgressDenied);
     }
     match profile.network_rule {
@@ -465,6 +501,7 @@ fn plan_hash(
     profile: &SandboxProfileRecord,
     request: &SandboxPlanRequest<'_>,
     authority: &LaunchAuthority,
+    locality: SandboxLocality,
     egress: Option<&SandboxEgressBinding>,
 ) -> Result<[u8; 32], SandboxPlanError> {
     let mut encoder = CanonicalEncoder::new();
@@ -491,7 +528,7 @@ fn plan_hash(
     encoder.push_u64(authority.lease_generation);
     encoder.push_bytes(&authority.policy_bundle_id)?;
     encoder.push_bytes(&authority.policy_bundle_hash)?;
-    encoder.push_u8(u8::from(request.strict_local));
+    encoder.push_u8(locality.code());
     encoder.push_bytes(request.observed_at.as_bytes())?;
     match egress {
         Some(binding) => {
@@ -515,9 +552,7 @@ fn encode_strings(
     encoder: &mut CanonicalEncoder,
     values: &[String],
 ) -> Result<(), SandboxPlanError> {
-    encoder.push_u64(
-        u64::try_from(values.len()).map_err(|_| SandboxPlanError::DecisionMismatch)?,
-    );
+    encoder.push_u64(u64::try_from(values.len()).map_err(|_| SandboxPlanError::DecisionMismatch)?);
     for value in values {
         encoder.push_bytes(value.as_bytes())?;
     }
@@ -646,8 +681,8 @@ mod tests {
     use super::*;
     use crate::authority_security_write::{
         append_active_policy_snapshot, append_authorization_decision_v2_snapshot,
-        append_capability_lease_snapshot, append_egress_permit_snapshot, append_policy_bundle_snapshot,
-        append_sandbox_profile_snapshot,
+        append_capability_lease_snapshot, append_egress_permit_snapshot,
+        append_policy_bundle_snapshot, append_sandbox_profile_snapshot,
     };
     use crate::security_audit::{AuthorizationAuditInput, append_authorization_decision};
     use golam_core::paths::RuntimeLayout;
@@ -673,10 +708,9 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let runtime = RuntimeLayout::initialize(std::env::temp_dir().join(format!(
-            "golam-sandbox-plan-{}-{t}-{n}",
-            std::process::id()
-        )))
+        let runtime = RuntimeLayout::initialize(
+            std::env::temp_dir().join(format!("golam-sandbox-plan-{}-{t}-{n}", std::process::id())),
+        )
         .unwrap();
         let authority = AuthorityLayout::initialize(&runtime).unwrap();
         (runtime, authority)
@@ -684,12 +718,16 @@ mod tests {
 
     fn encoded_empty_list() -> Vec<u8> {
         let mut encoder = CanonicalEncoder::new();
-        encoder.push_bytes(b"golam:sandbox-profile-list:v1").unwrap();
+        encoder
+            .push_bytes(b"golam:sandbox-profile-list:v1")
+            .unwrap();
         encoder.push_u64(0);
         encoder.finish()
     }
 
     fn install_base_authority(authority: &AuthorityLayout) {
+        let store = AuthorityStore::open(authority.authority_db_path()).unwrap();
+        drop(store);
         let mut connection = Connection::open(authority.authority_db_path()).unwrap();
         let transaction = connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -819,8 +857,15 @@ mod tests {
             .execute(
                 "INSERT INTO egress_permits \
                  (permit_id, principal_or_process, action, purpose, destination_scope, protocol_port_scope, taint_digest, secret_handle_id, parent_lease_id, issued_at, expires_at, usage_limit, status, uses_consumed) \
-                 VALUES (?1, ?2, 'network.egress.connect', 'sandbox-fixture', 'https://example.invalid', 'https:443', ?3, NULL, ?4, '2026-08-29T00:00:00Z', '2026-08-30T00:00:00Z', 3, 'active', 0)",
-                params![&PERMIT_ID[..], PRINCIPAL, &[71_u8; 32][..], &LEASE_ID[..]],
+                 VALUES (?1, ?2, 'network.egress.connect', 'sandbox-fixture', ?3, ?4, ?5, NULL, ?6, '2026-08-29T00:00:00Z', '2026-08-30T00:00:00Z', 3, 'active', 0)",
+                params![
+                    &PERMIT_ID[..],
+                    PRINCIPAL,
+                    &b"https://example.invalid"[..],
+                    &b"https:443"[..],
+                    &[71_u8; 32][..],
+                    &LEASE_ID[..]
+                ],
             )
             .unwrap();
         append_egress_permit_snapshot(&transaction, &PERMIT_ID).unwrap();
@@ -837,7 +882,6 @@ mod tests {
             lease_id: LEASE_ID,
             egress_permit_id: None,
             observed_at: OBSERVED_AT,
-            strict_local: false,
         }
     }
 
@@ -845,7 +889,8 @@ mod tests {
     fn compile_is_deterministic_and_binds_current_profile_lease_and_policy() {
         let (runtime, authority) = authority();
         install_base_authority(&authority);
-        let mut compiler = SandboxPlanCompiler::open(&authority).unwrap();
+        let mut compiler =
+            SandboxPlanCompiler::open(&authority, SandboxLocality::NonStrict).unwrap();
         let first = compiler.compile(request(DECISION_ID)).unwrap();
         let second = compiler.compile(request(DECISION_ID)).unwrap();
         assert_eq!(first, second);
@@ -864,7 +909,8 @@ mod tests {
         let (runtime, authority) = authority();
         install_base_authority(&authority);
         install_launch_decision(&authority, [52; 16]);
-        let mut compiler = SandboxPlanCompiler::open(&authority).unwrap();
+        let mut compiler =
+            SandboxPlanCompiler::open(&authority, SandboxLocality::NonStrict).unwrap();
         assert!(matches!(
             compiler.compile(request(DECISION_ID)),
             Err(SandboxPlanError::DecisionStale)
@@ -885,24 +931,30 @@ mod tests {
         install_base_authority(&authority);
         set_profile_network_rule(&authority, "permit_required");
         install_egress_permit(&authority);
-        let mut compiler = SandboxPlanCompiler::open(&authority).unwrap();
+        let mut compiler =
+            SandboxPlanCompiler::open(&authority, SandboxLocality::NonStrict).unwrap();
 
         assert!(matches!(
             compiler.compile(request(DECISION_ID)),
             Err(SandboxPlanError::EgressPermitRequired)
         ));
+        let mut strict_compiler =
+            SandboxPlanCompiler::open(&authority, SandboxLocality::StrictLocal).unwrap();
         let mut strict = request(DECISION_ID);
         strict.egress_permit_id = Some(PERMIT_ID);
-        strict.strict_local = true;
         assert!(matches!(
-            compiler.compile(strict),
+            strict_compiler.compile(strict),
             Err(SandboxPlanError::StrictLocalExternalEgressDenied)
         ));
+        drop(strict_compiler);
         let mut permitted = request(DECISION_ID);
         permitted.egress_permit_id = Some(PERMIT_ID);
         let plan = compiler.compile(permitted).unwrap();
         assert_eq!(plan.egress.as_ref().unwrap().permit_id, PERMIT_ID);
-        assert_eq!(plan.egress.as_ref().unwrap().destination_scope, "https://example.invalid");
+        assert_eq!(
+            plan.egress.as_ref().unwrap().destination_scope,
+            "https://example.invalid"
+        );
         drop(compiler);
 
         let connection = Connection::open(authority.authority_db_path()).unwrap();
@@ -922,7 +974,8 @@ mod tests {
         let (runtime, authority) = authority();
         install_base_authority(&authority);
         install_egress_permit(&authority);
-        let mut compiler = SandboxPlanCompiler::open(&authority).unwrap();
+        let mut compiler =
+            SandboxPlanCompiler::open(&authority, SandboxLocality::NonStrict).unwrap();
         let mut supplied = request(DECISION_ID);
         supplied.egress_permit_id = Some(PERMIT_ID);
         assert!(matches!(
