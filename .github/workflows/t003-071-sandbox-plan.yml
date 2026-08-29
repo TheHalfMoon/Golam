@@ -1,0 +1,70 @@
+name: t003-071-sandbox-plan
+on:
+  push:
+    branches:
+      - impl/003-identity-policy-secrets-sandbox
+permissions:
+  contents: write
+jobs:
+  qualify:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/003-identity-policy-secrets-sandbox
+          fetch-depth: 0
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
+      - name: Wire bounded sandbox plan compiler
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path, old, new, label):
+              text = path.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: replacement count {count} for {old!r}')
+              path.write_text(text.replace(old, new, 1))
+
+          lib = Path('crates/golam-ledger/src/lib.rs')
+          replace_once(
+              lib,
+              'pub mod sandbox_profile;\n',
+              'pub mod sandbox_plan;\npub mod sandbox_profile;\n',
+              'sandbox plan module export',
+          )
+
+          profile = Path('crates/golam-ledger/src/sandbox_profile.rs')
+          replace_once(
+              profile,
+              'fn load_profile(\n    connection: &Connection,',
+              'pub(crate) fn load_profile(\n    connection: &Connection,',
+              'transactional profile reader visibility',
+          )
+
+          plan = Path('crates/golam-ledger/src/sandbox_plan.rs')
+          replace_once(
+              plan,
+              '    fn install_base_authority(authority: &AuthorityLayout) {\n        let mut connection = Connection::open(authority.authority_db_path()).unwrap();',
+              '    fn install_base_authority(authority: &AuthorityLayout) {\n        let store = AuthorityStore::open(authority.authority_db_path()).unwrap();\n        drop(store);\n        let mut connection = Connection::open(authority.authority_db_path()).unwrap();',
+              'test authority initialization',
+          )
+      - name: Focused T003-071 qualification
+        run: |
+          cargo +1.98.0 fmt --all
+          cargo +1.98.0 test -p golam-ledger sandbox_plan::tests:: -- --nocapture
+          cargo +1.98.0 test -p golam-ledger sandbox_profile::tests:: -- --nocapture
+          cargo +1.98.0 test -p golam-ledger egress_effective_use::tests:: -- --nocapture
+          cargo +1.98.0 clippy -p golam-ledger --all-targets -- -D warnings
+      - name: Commit clean T003-071 implementation
+        run: |
+          git rm .github/workflows/t003-071-sandbox-plan.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/golam-ledger/src/lib.rs
+          git add crates/golam-ledger/src/sandbox_profile.rs
+          git add crates/golam-ledger/src/sandbox_plan.rs
+          git commit -m 'feat: compile bounded sandbox launch plans'
+          git push origin HEAD:impl/003-identity-policy-secrets-sandbox
