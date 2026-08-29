@@ -966,6 +966,7 @@ mod tests {
             )
             .unwrap();
         assert_eq!(uses, 0);
+        drop(connection);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 
