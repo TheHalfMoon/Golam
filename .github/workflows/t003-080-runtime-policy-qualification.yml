@@ -32,6 +32,16 @@ jobs:
           p.write_text(text.replace(old, new, 1))
           PY
           python3 scripts/qualification/prepare-t003-080.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('crates/golam-ledger/src/active_policy_integrity.rs')
+          text = p.read_text()
+          old = "fn decode_canonical_bundle<'a>(\n    bytes: &'a [u8],\n    expected_schema_version: u64,\n) -> Result<(&'a str, &'a str), ActivePolicyIntegrityError> {"
+          new = "fn decode_canonical_bundle(\n    bytes: &[u8],\n    expected_schema_version: u64,\n) -> Result<(&str, &str), ActivePolicyIntegrityError> {"
+          if old not in text:
+              raise SystemExit('T003-080 lifetime repair source missing')
+          p.write_text(text.replace(old, new, 1))
+          PY
       - name: Format
         run: cargo +1.98.0 fmt --all
       - name: Run focused T003-080 qualification
