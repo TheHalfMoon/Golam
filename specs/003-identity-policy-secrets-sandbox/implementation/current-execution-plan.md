@@ -1,9 +1,9 @@
 # Spec 003 — Live Implementation Execution Plan
 
-**Status**: IMPLEMENTATION_ACTIVE — PHASE_F_COMPLETE — PHASE_G_COMPLETE — PHASE_H_ACTIVE  
+**Status**: IMPLEMENTATION_ACTIVE — PHASE_H_COMPLETE — PHASE_I_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current task**: `T003-080`
+**Current task**: `T003-081`
 
 ## Authority
 
@@ -138,7 +138,7 @@ Required boundaries:
 - revocation must immediately block broker/fallback use without deleting prior encrypted versions or weakening audit integrity;
 - no failure mode may acknowledge success while leaving old secret authority usable as current.
 
-Phase F and Phase G are closed at their task-qualified heads above. Phase H is active at T003-073.
+Phases F, G, and H are closed at their task-qualified heads below. Phase I is active at T003-081.
 
 ### Remaining Phase F ordering
 
@@ -190,7 +190,7 @@ The qualified independent observer computes the transitive managed process-tree 
 
 ## Phase H — Sandbox profiles/admission
 
-`ACTIVE`
+`COMPLETE`
 
 ### T003-070 — COMPLETE
 
