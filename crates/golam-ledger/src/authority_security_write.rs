@@ -27,7 +27,6 @@ enum ProtectedMutationKind {
     SecretVersion,
     SecretUseRecord,
     EgressPermit,
-    #[cfg(test)]
     SandboxProfile,
     #[cfg(test)]
     SandboxAdmission,
@@ -50,7 +49,6 @@ impl ProtectedMutationKind {
             Self::SecretVersion => "secret_version",
             Self::SecretUseRecord => "secret_use_record",
             Self::EgressPermit => "egress_permit",
-            #[cfg(test)]
             Self::SandboxProfile => "sandbox_profile",
             #[cfg(test)]
             Self::SandboxAdmission => "sandbox_admission",
@@ -297,7 +295,6 @@ pub(crate) fn append_egress_permit_snapshot(
     append_snapshot(transaction, ProtectedMutationKind::EgressPermit, 1, &values)
 }
 
-#[cfg(test)]
 pub(crate) fn append_sandbox_profile_snapshot(
     transaction: &Transaction<'_>,
     profile_id: &[u8],

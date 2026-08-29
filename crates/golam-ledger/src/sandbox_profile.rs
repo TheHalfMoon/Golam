@@ -16,8 +16,7 @@ pub const SANDBOX_PROFILE_REGISTER_ACTION: &str = "sandbox.profile.register";
 pub const SANDBOX_PROFILE_MUTATION_RISK_CLASS: &str = "sandbox_profile_mutation";
 
 const PROFILE_INTENT_DOMAIN: &[u8] = b"golam:sandbox-profile-register-intent:v1";
-const APPROVAL_CONSUMPTION_DOMAIN: &[u8] =
-    b"golam:sandbox-profile-approval-consumption:v1";
+const APPROVAL_CONSUMPTION_DOMAIN: &[u8] = b"golam:sandbox-profile-approval-consumption:v1";
 const LIST_DOMAIN: &[u8] = b"golam:sandbox-profile-list:v1";
 const MAX_PRINCIPAL_BYTES: usize = 512;
 const MAX_ROOT_BYTES: usize = 2_048;
@@ -358,8 +357,7 @@ pub fn prepare_sandbox_profile(
     }
     validate_principal(registered_by_principal)?;
 
-    let filesystem_read_roots =
-        canonicalize_list(definition.filesystem_read_roots, validate_root)?;
+    let filesystem_read_roots = canonicalize_list(definition.filesystem_read_roots, validate_root)?;
     let filesystem_write_roots =
         canonicalize_list(definition.filesystem_write_roots, validate_root)?;
     let environment_allowlist =
@@ -572,9 +570,7 @@ struct AuthorityEvidence {
     global_seq: u64,
 }
 
-fn verify_transaction_integrity(
-    transaction: &Transaction<'_>,
-) -> Result<(), SandboxProfileError> {
+fn verify_transaction_integrity(transaction: &Transaction<'_>) -> Result<(), SandboxProfileError> {
     crate::integrity::verify(transaction)
         .map_err(|error| SandboxProfileError::Integrity(error.to_string()))?;
     crate::authority_security_v2::verify(transaction)
@@ -790,10 +786,12 @@ fn load_profile(
 
     let class = SandboxProfileClass::from_str(&row.0)
         .ok_or(SandboxProfileError::InvalidStoredRecord("invalid class"))?;
-    let network_rule = SandboxNetworkRule::from_str(&row.3)
-        .ok_or(SandboxProfileError::InvalidStoredRecord("invalid network rule"))?;
-    let spawn_rule = SandboxSpawnRule::from_str(&row.5)
-        .ok_or(SandboxProfileError::InvalidStoredRecord("invalid spawn rule"))?;
+    let network_rule = SandboxNetworkRule::from_str(&row.3).ok_or(
+        SandboxProfileError::InvalidStoredRecord("invalid network rule"),
+    )?;
+    let spawn_rule = SandboxSpawnRule::from_str(&row.5).ok_or(
+        SandboxProfileError::InvalidStoredRecord("invalid spawn rule"),
+    )?;
     if row.14 != "active" {
         return Err(SandboxProfileError::InvalidStoredRecord(
             "unsupported profile status",
@@ -851,9 +849,8 @@ fn canonicalize_list(
 fn encode_list(values: &[String]) -> Result<Vec<u8>, SandboxProfileError> {
     let mut encoder = CanonicalEncoder::new();
     encoder.push_bytes(LIST_DOMAIN)?;
-    encoder.push_u64(
-        u64::try_from(values.len()).map_err(|_| SandboxProfileError::IntegerOverflow)?,
-    );
+    encoder
+        .push_u64(u64::try_from(values.len()).map_err(|_| SandboxProfileError::IntegerOverflow)?);
     for value in values {
         encoder.push_bytes(value.as_bytes())?;
     }
@@ -903,10 +900,7 @@ fn decode_list(
     Ok(values)
 }
 
-fn take_bytes<'a>(
-    bytes: &'a [u8],
-    offset: &mut usize,
-) -> Result<&'a [u8], SandboxProfileError> {
+fn take_bytes<'a>(bytes: &'a [u8], offset: &mut usize) -> Result<&'a [u8], SandboxProfileError> {
     let end = offset
         .checked_add(4)
         .ok_or(SandboxProfileError::InvalidStoredRecord("length overflow"))?;
@@ -953,17 +947,16 @@ fn validate_root(value: &str) -> Result<(), SandboxProfileError> {
         || value.chars().any(char::is_control)
         || value.contains('\\')
         || value.contains("//")
-        || value.split('/').any(|segment| segment == "." || segment == "..")
+        || value
+            .split('/')
+            .any(|segment| segment == "." || segment == "..")
     {
         return Err(SandboxProfileError::InvalidRoot);
     }
     let unix_absolute = value.starts_with('/');
     let windows_absolute = {
         let bytes = value.as_bytes();
-        bytes.len() >= 3
-            && bytes[0].is_ascii_alphabetic()
-            && bytes[1] == b':'
-            && bytes[2] == b'/'
+        bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'/'
     };
     if !unix_absolute && !windows_absolute {
         return Err(SandboxProfileError::InvalidRoot);
@@ -1379,9 +1372,12 @@ mod tests {
             "test_wrong_sandbox_profile_authority",
         );
         assert!(matches!(
-            SandboxProfileStore::open(&authority)
-                .unwrap()
-                .register(prepared, wrong_decision, approval_id, effect_id),
+            SandboxProfileStore::open(&authority).unwrap().register(
+                prepared,
+                wrong_decision,
+                approval_id,
+                effect_id
+            ),
             Err(SandboxProfileError::AuthorityDecisionMismatch)
         ));
         fs::remove_dir_all(runtime.root).unwrap();
@@ -1412,9 +1408,12 @@ mod tests {
             "test_duplicate_sandbox_profile_authority",
         );
         assert!(matches!(
-            SandboxProfileStore::open(&authority)
-                .unwrap()
-                .register(prepared, decision, approval_id, effect_id),
+            SandboxProfileStore::open(&authority).unwrap().register(
+                prepared,
+                decision,
+                approval_id,
+                effect_id
+            ),
             Err(SandboxProfileError::DuplicateProfileVersion)
         ));
 
