@@ -76,7 +76,7 @@ Legend:
 
 ## Phase H — Sandbox profiles/admission
 
-- [ ] **T003-070** Implement protected SandboxProfile records and deterministic profile validation.
+- [x] **T003-070** Implement protected SandboxProfile records and deterministic profile validation. Exact-head qualification: CI #545 (`33235986709`) SUCCESS at `9704318742c7622cb5304fa24f22b1c5bb35e22e` on Windows/macOS/Ubuntu. Evidence: `implementation/sandbox-profile-qualification.md`.
 - [ ] **T003-071** Compile profiles to bounded launch/admission plans intersected with active lease/policy/egress authority.
 - [ ] **T003-072** Enforce cleared environment and explicit FS/network/spawn/resource/device/IPC/handle inheritance rules.
 - [ ] **T003-073** Implement platform-executor capability checks and fail closed when a required containment control is unsupported.
@@ -200,5 +200,8 @@ T003_064_QUALIFIED_HEAD=d77cd2b8e78a41153085c279fea698bb794d2d4e
 T003_064_CI_RUN=33234807292
 PHASE_G_COMPLETE=YES
 PHASE_H_ACTIVE=YES
-NEXT_TASK=T003-070
+T003_070=PASS
+T003_070_QUALIFIED_HEAD=9704318742c7622cb5304fa24f22b1c5bb35e22e
+T003_070_CI_RUN=33235986709
+NEXT_TASK=T003-071
 ```

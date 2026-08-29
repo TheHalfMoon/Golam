@@ -3,7 +3,7 @@
 **Status**: IMPLEMENTATION_ACTIVE — PHASE_F_COMPLETE — PHASE_G_COMPLETE — PHASE_H_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current task**: `T003-070`
+**Current task**: `T003-071`
 
 ## Authority
 
@@ -192,9 +192,17 @@ The qualified independent observer computes the transitive managed process-tree 
 
 `ACTIVE`
 
-### T003-070 — ACTIVE
+### T003-070 — COMPLETE
 
-Implement protected `SandboxProfile` records and deterministic profile validation.
+Qualified at exact implementation head `9704318742c7622cb5304fa24f22b1c5bb35e22e` by CI #545 / run `33235986709`, SUCCESS on Windows/macOS/Ubuntu.
+
+Evidence: `implementation/sandbox-profile-qualification.md`.
+
+The qualified boundary establishes deterministic bounded SandboxProfile validation and protected immutable profile-version registration under exact current decision/effect/ONCE-approval authority with atomic authority-security evidence. No admission plan or executor is claimed.
+
+### T003-071 — ACTIVE
+
+Compile protected profiles to bounded launch/admission plans intersected with active lease, policy, and optional egress authority without launching a process.
 
 ## Later phases
 
@@ -259,7 +267,10 @@ T003_063_CI_RUN=33234466919
 T003_064=PASS
 T003_064_QUALIFIED_HEAD=d77cd2b8e78a41153085c279fea698bb794d2d4e
 T003_064_CI_RUN=33234807292
-NEXT_TASK=T003-070
+T003_070=PASS
+T003_070_QUALIFIED_HEAD=9704318742c7622cb5304fa24f22b1c5bb35e22e
+T003_070_CI_RUN=33235986709
+NEXT_TASK=T003-071
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO
