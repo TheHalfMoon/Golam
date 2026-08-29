@@ -143,9 +143,14 @@ The exact mechanism is implementation-time qualified; no vendor-hosted service i
 
 - recovery authority is scoped only to the protected recovery ceremony and MUST NOT become general effect, secret, policy, channel, or computer-control authority;
 - the recovery credential/device/quorum state is itself protected, versioned, revocable, and auditable;
+- current recovery-authority membership/revocation/freshness MUST NOT be inferred solely from the stale backup being recovered. Any device/credential/quorum component used to authorize recovery must provide independently protected evidence sufficient for the chosen design to establish that it is still a current recovery authority at the recovery act;
+- a recovery-capable device or credential that appears valid only because the restored backup predates its later revocation/rotation is not current recovery authority. If current revocation/membership state cannot be proven under the qualified recovery design, recovery fails closed;
 - stale/revoked recovery credentials or devices fail closed;
 - free-form Telegram/WhatsApp/WeChat/Slack/Discord/Matrix content, voice, email-like channel text, model output, or possession of a provider account MUST NOT satisfy the recovery authorization;
 - if no valid recovery authority remains, Golam fails closed to bounded forensic/export/recovery tooling and MUST NOT create a new current protected authority domain merely to preserve availability.
+
+`STALE_BACKUP_RECOVERY_ROSTER != CURRENT_RECOVERY_AUTHORITY`
+`UNKNOWN_RECOVERY_REVOCATION_STATE != VALID_RECOVERY_PROOF`
 
 #### Recovery transcript and anti-fork binding
 
@@ -157,10 +162,11 @@ A recovery authorization MUST authorize one exact recovery transcript, not a gen
 - the proposed current authority authentication public key/key ID;
 - target-host identity/attestation evidence where the selected design uses it;
 - recovery mechanism/version and recovery-authority credential/device/quorum identifiers;
+- independently established recovery-authority membership/revocation generation or witness-state digest/freshness evidence required by the selected design;
 - a fresh recovery challenge/nonce and bounded validity/freshness;
 - the recovery policy/owner scope being exercised.
 
-The recovery authority signs/approves that complete transcript. A captured approval for one transcript MUST NOT authorize a different domain ID, authority public key, target host, backup cut, or recovery challenge.
+The recovery authority signs/approves that complete transcript. A captured approval for one transcript MUST NOT authorize a different domain ID, authority public key, target host, backup cut, recovery-authority generation/witness state, or recovery challenge.
 
 If the chosen recovery scheme claims one-time or monotonic recovery semantics, the state that prevents second use MUST not exist only inside the stale backup being recovered. It MUST be enforced by at least one independently protected recovery-authority component/witness, or by an equivalent mechanism whose security argument survives cloned stale backups. A copyable stateless bearer value that can authorize arbitrarily many target transcripts is insufficient by itself to prove exclusive current authority.
 
@@ -357,7 +363,7 @@ These are setup projections; the underlying security contracts remain identical.
 
 ### Spec 007
 
-Define native host/node pairing, device topology, reconnect, node availability, protected host migration prerequisites, collision-resistant authority-domain identity and generation rotation, fresh authority-domain authentication-root/key rotation and pinning, independent owner-controlled lost-host recovery authorization, target-bound anti-fork recovery transcripts/lineage, stale mobile approval/queued-intent invalidation, stale-backup-safe lost-host recovery fencing, external-provider credential exposure/rotation disposition, returning-old-host disposition, and phone continuity semantics.
+Define native host/node pairing, device topology, reconnect, node availability, protected host migration prerequisites, collision-resistant authority-domain identity and generation rotation, fresh authority-domain authentication-root/key rotation and pinning, independent owner-controlled lost-host recovery authorization with anti-rollback recovery-authority freshness, target-bound anti-fork recovery transcripts/lineage, stale mobile approval/queued-intent invalidation, stale-backup-safe lost-host recovery fencing, external-provider credential exposure/rotation disposition, returning-old-host disposition, and phone continuity semantics.
 
 ### Spec 008
 
@@ -376,9 +382,11 @@ Test:
 - planned host migration/fencing where implemented;
 - lost old host followed by new-domain recovery;
 - stolen/copied backup plus backup decryption capability but no independent recovery authority, and proof that no new current authority domain can be created;
+- a backup cut that predates revocation/rotation of a recovery-capable device/credential, and proof that stale backup membership cannot resurrect that recovery authority;
+- unknown/unverifiable current recovery-authority revocation state failing closed rather than trusting the stale backup roster;
 - channel/model/provider-account text attempting to authorize lost-host recovery and proof that it is rejected;
 - stale/revoked recovery credential/device rejection;
-- a captured recovery approval replayed with a different target authority public key, target host, fresh domain ID, or backup cut and proof that the transcript mismatch rejects it;
+- a captured recovery approval replayed with a different target authority public key, target host, fresh domain ID, backup cut, or recovery-authority witness generation and proof that the transcript mismatch rejects it;
 - cloned stale backups receiving the same captured target-bound recovery transcript and proof that a second host lacking the authorized fresh private authority key cannot become current authority;
 - two distinct recovery transcripts from the same predecessor state being detected/surfaced as competing recovery lineages rather than silently merged or both accepted by the same trusted device/node;
 - no-valid-recovery-authority case failing closed to bounded forensic/export tooling rather than silently minting a replacement authority;
@@ -428,6 +436,8 @@ STALE_BACKUP_KEY != CURRENT_AUTHORITY_CREDENTIAL
 BACKUP_POSSESSION != RECOVERY_AUTHORITY
 CHANNEL_CONTENT != LOST_HOST_RECOVERY_APPROVAL
 RECOVERY_AUTHORITY != GENERAL_EFFECT_AUTHORITY
+STALE_BACKUP_RECOVERY_ROSTER != CURRENT_RECOVERY_AUTHORITY
+UNKNOWN_RECOVERY_REVOCATION_STATE != VALID_RECOVERY_PROOF
 RECOVERY_PROOF != GENERIC_BACKUP_RECOVERY_PERMISSION
 RECOVERY_TRANSCRIPT_A != RECOVERY_TRANSCRIPT_B
 CLONED_BACKUP != PERMISSION_FOR_PARALLEL_CURRENT_DOMAINS
