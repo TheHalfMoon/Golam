@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod admin_qualification;
 mod authorization;
 mod capability_lease;
 mod client_auth;
@@ -21,6 +22,11 @@ use golam_core::ClientId;
 use golam_core::authority::{AuthorityLayout, AuthorityPathError};
 use golam_core::paths::RuntimeLayout;
 
+pub use admin_qualification::{
+    AUTHORITY_EXPLAIN_ACTION, AUTHORITY_QUALIFY_ACTION, AdminQualificationKind,
+    AdminQualificationReceipt, AdminSurfaceError, AuthorizationDecisionExplanation,
+    POLICY_VALIDATE_ACTION, PolicyQualificationReceipt,
+};
 pub use authorization::{
     AuthorizationContext, AuthorizationDecision, AuthorizationError, AuthorizationOutcome,
     AuthorizationPolicy, AuthorizationRequest, BootstrapPolicy, DecisionId, DenyByDefault,

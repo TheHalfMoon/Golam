@@ -595,6 +595,9 @@ fn owner_action_allowed(action: &str) -> bool {
             | "effect.simulate"
             | "effect.reconcile"
             | "recovery.status.read"
+            | "policy.validate"
+            | "authority.qualify"
+            | "authority.explain"
     )
 }
 
@@ -612,6 +615,9 @@ fn client_action_allowed(action: &str) -> bool {
             | "effect.simulate"
             | "effect.reconcile"
             | "recovery.status.read"
+            | "policy.validate"
+            | "authority.qualify"
+            | "authority.explain"
     )
 }
 

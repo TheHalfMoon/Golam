@@ -15,6 +15,9 @@ use golam_ledger::active_policy_integrity::{
 use golam_ledger::approval_binding::APPROVAL_ISSUE_ACTION;
 use golam_ledger::policy::{POLICY_ACTIVATE_ACTION, POLICY_STAGE_ACTION};
 
+use crate::admin_qualification::{
+    AUTHORITY_EXPLAIN_ACTION, AUTHORITY_QUALIFY_ACTION, POLICY_VALIDATE_ACTION,
+};
 use crate::policy_candidate::validate_policy_candidate;
 use crate::{AuthorizationPolicy, AuthorizationRequest, PolicyDecision, PrincipalKind};
 
@@ -46,16 +49,25 @@ impl AuthorizationPolicy for RuntimeAuthorityPolicy {
 }
 
 fn bootstrap_administration(request: &AuthorizationRequest<'_>) -> PolicyDecision {
-    let local_owner = request.principal.kind == PrincipalKind::LocalOwner
-        && request.context.scope.starts_with("local");
-    let administrative_action = matches!(
+    let local_scope = request.context.scope.starts_with("local");
+    let read_only_admin_action = matches!(
+        request.action,
+        POLICY_VALIDATE_ACTION | AUTHORITY_QUALIFY_ACTION | AUTHORITY_EXPLAIN_ACTION
+    );
+    let owner_admin_action = matches!(
         request.action,
         POLICY_STAGE_ACTION
             | POLICY_ACTIVATE_ACTION
             | APPROVAL_ISSUE_ACTION
+            | POLICY_VALIDATE_ACTION
+            | AUTHORITY_QUALIFY_ACTION
+            | AUTHORITY_EXPLAIN_ACTION
             | "recovery.status.read"
     );
-    if local_owner && administrative_action {
+    let allowed = local_scope
+        && ((request.principal.kind == PrincipalKind::LocalOwner && owner_admin_action)
+            || (request.principal.kind == PrincipalKind::EnrolledClient && read_only_admin_action));
+    if allowed {
         PolicyDecision::allow("bootstrap_admin_explicit_allow")
     } else {
         PolicyDecision::deny("bootstrap_admin_no_matching_allow")
@@ -281,6 +293,15 @@ permit(
         assert_eq!(
             bootstrap_administration(&client).decision,
             AuthorizationDecision::Deny
+        );
+        let client_qualification = AuthorizationRequest {
+            action: AUTHORITY_QUALIFY_ACTION,
+            resource: "authority-qualification:lease",
+            ..client
+        };
+        assert_eq!(
+            bootstrap_administration(&client_qualification).decision,
+            AuthorizationDecision::Allow
         );
     }
 

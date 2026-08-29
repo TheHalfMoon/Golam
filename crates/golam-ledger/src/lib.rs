@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod active_policy_integrity;
+pub mod admin_qualification;
 pub mod approval_binding;
 pub mod approval_consumption;
 pub mod approval_revocation;
