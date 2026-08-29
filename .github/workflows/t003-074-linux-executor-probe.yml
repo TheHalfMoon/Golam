@@ -54,6 +54,7 @@ jobs:
           exec 3</tmp/golam-network-deny.bpf
           exec bwrap \
             --unshare-all \
+            --share-user \
             --share-net \
             --die-with-parent \
             --new-session \
@@ -119,16 +120,16 @@ jobs:
               '',
               'Ubuntu-hosted qualification proved a privileged setup / unprivileged payload Bubblewrap plus seccomp primitive suitable only for the minimum native untrusted-process test executor required by T003-074.',
               '',
-              'Unprivileged Bubblewrap namespace setup is not supported by the GitHub-hosted runner (`RTM_NEWADDR: Operation not permitted` and `setting up uid map: Permission denied`). The qualified test primitive therefore uses the runner trust boundary only to create namespaces and install the seccomp filter, then executes the payload as uid/gid 65534 with an empty capability set and `no_new_privs`.',
+              'Unprivileged Bubblewrap namespace setup is not supported by the GitHub-hosted runner (`RTM_NEWADDR: Operation not permitted` and `setting up uid map: Permission denied`). The qualified test primitive therefore uses the runner trust boundary for namespace/mount/seccomp setup while deliberately sharing the host user namespace so the payload can be reduced to uid/gid 65534 with empty capability sets and `no_new_privs`.',
               '',
-              'The network namespace is deliberately shared because hosted-runner network-namespace setup is unavailable; a fixed x86_64 seccomp filter returns EPERM for socket/connect/listen/bind/accept/socketpair syscalls before payload execution.',
+              'The network namespace is also deliberately shared because hosted-runner network-namespace setup is unavailable; a fixed x86_64 seccomp filter returns EPERM for socket/connect/listen/bind/accept/socketpair syscalls before payload execution.',
               '',
-              'This record does not admit Bubblewrap or sudo as a product sandbox dependency, does not claim macOS/Windows parity, and does not alter the production `native:unqualified` capability baseline.',
+              'This record does not admit Bubblewrap or sudo as a product sandbox dependency, does not claim user-namespace isolation, does not claim macOS/Windows parity, and does not alter the production `native:unqualified` capability baseline.',
               '',
               '## Qualified primitive properties',
               '',
               '- Bubblewrap and setpriv versions are captured in the run log.',
-              '- Namespace/mount/seccomp setup occurs in the trusted qualification launcher.',
+              '- Mount/PID/session/seccomp setup occurs in the trusted qualification launcher.',
               '- The child payload runs as uid/gid 65534 with cleared environment, empty capability sets, and `no_new_privs`.',
               '- A host-only forbidden file outside explicit read-only runtime mounts is not visible.',
               '- Socket creation is denied before payload use despite sharing the host network namespace.',
@@ -137,6 +138,7 @@ jobs:
               '## Boundaries',
               '',
               '- Linux x86_64 qualification only; this is not a product executor admission.',
+              '- User namespace isolation is not claimed.',
               '- macOS, Windows, non-x86_64 Linux, external-network profiles, arbitrary requester executable paths, and universal native isolation remain unsupported.',
               '- No network-capable Golam-managed native child was launched.',
               '',
@@ -145,6 +147,7 @@ jobs:
               'EXECUTOR_PRIMITIVE=PRIVILEGED_SETUP_BWRAP_SECCOMP_TEST_ONLY',
               'QUALIFICATION_LAUNCHER_PRIVILEGED=YES',
               'PAYLOAD_UID_GID_UNPRIVILEGED=YES',
+              'USER_NAMESPACE_ISOLATION_CLAIMED=NO',
               'ENVIRONMENT_CLEARED=YES',
               'FORBIDDEN_HOST_FS_VISIBLE=NO',
               'NETWORK_SOCKET_SYSCALL_DENIED=YES',
