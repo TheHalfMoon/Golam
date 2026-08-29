@@ -14,6 +14,8 @@ An amendment is **planning authority for future owning specs only** unless it ex
 
 PA-002A does **not** authorize changing the active Spec 003 task order or adding OpenSandbox/OpenClaw dependencies. It only requires the owning spec to re-pin and consider the new sandbox/secret-broker evidence before final provider architecture is frozen where still legitimately possible.
 
+PA-003/PA-003A/PA-003B do not alter active Spec 003 implementation scope. Their product/topology/verification sequencing begins to bind future Specs 004+ and adds a Core Alpha gate only after Spec 005 closes.
+
 ### Before Spec 004 — Harness & Local Intelligence
 
 1. canonical Spec 001 foundation and contracts;
@@ -21,7 +23,14 @@ PA-002A does **not** authorize changing the active Spec 003 task order or adding
 3. `PA-002-memory-retrieval-learning-evals.md`;
 4. `PA-002-source-foundry-research.md`;
 5. `PA-002A-openclaw-opensandbox-source-foundry.md` for provider/runtime boundary evidence;
-6. `../contracts/behavior-evaluation-contract.md`.
+6. `PA-003-product-spine-golden-loop.md`;
+7. `PA-003B-task-lifecycle-verification.md`;
+8. `PA-003-task-delta.md`;
+9. `../contracts/task-run-trust-contract.md`;
+10. `../contracts/task-verification-contract.md`;
+11. `../contracts/behavior-evaluation-contract.md`.
+
+Spec 004 must preserve the PA-003 distinction `TASK != SESSION != RUN != WORKER`, expose runtime-level pause/stop/steer/inspect/resume semantics, and freeze PA-003B Task lifecycle/criterion verification semantics sufficient for the later Core Alpha gate.
 
 ### Before Spec 005 — Local Tools, Context & Memory
 
@@ -30,8 +39,27 @@ PA-002A does **not** authorize changing the active Spec 003 task order or adding
 3. `PA-002-memory-retrieval-learning-evals.md`;
 4. `PA-002-source-foundry-research.md`;
 5. `PA-002A-openclaw-opensandbox-source-foundry.md`;
-6. `../contracts/memory-retrieval-learning-contract.md`;
-7. `../contracts/behavior-evaluation-contract.md`.
+6. `PA-003-product-spine-golden-loop.md`;
+7. `PA-003B-task-lifecycle-verification.md`;
+8. `PA-003-task-delta.md`;
+9. `../contracts/task-run-trust-contract.md`;
+10. `../contracts/task-verification-contract.md`;
+11. `../contracts/memory-retrieval-learning-contract.md`;
+12. `../contracts/behavior-evaluation-contract.md`.
+
+Spec 005 owns the PA-003 **Golam Core Alpha** product gate: useful CLI/TUI Golden Loop, criterion-level verification truth, Trust Receipt projection, UserModel baseline, portability/import staging, recovery/steering, and strict-local end-to-end proof before Desktop becomes the next product blocker.
+
+### Before Spec 006 — Desktop & Computer Control
+
+1. canonical Spec 001 foundation and closed predecessors;
+2. `PA-003-product-spine-golden-loop.md`;
+3. `PA-003B-task-lifecycle-verification.md`;
+4. `PA-003-task-delta.md`;
+5. `../contracts/task-run-trust-contract.md`;
+6. `../contracts/task-verification-contract.md`;
+7. PA-002/PA-002A where Desktop surfaces memory, providers, sandbox/tool evidence, or security posture.
+
+Desktop must remain a client/projection of the same durable Task/Run/Trust/verification semantics rather than creating a separate desktop-only agent state.
 
 ### Before Spec 007 — Phone, GolamConnect & Channel Access
 
@@ -39,9 +67,17 @@ PA-002A does **not** authorize changing the active Spec 003 task order or adding
 2. canonical closed predecessors;
 3. `PA-001-phone-channel-access.md`;
 4. `PA-001-provider-research.md`;
-5. `../contracts/phone-channel-access-contract.md`;
-6. `PA-002A-openclaw-opensandbox-source-foundry.md` for OpenClaw Gateway/node/channel evidence;
-7. PA-002 Hermes/channel-related evidence only where the owning Spec 007 research requalifies it.
+5. `PA-003-product-spine-golden-loop.md`;
+6. `PA-003A-always-on-host-topology.md`;
+7. `PA-003B-task-lifecycle-verification.md`;
+8. `PA-003-task-delta.md`;
+9. `../contracts/task-run-trust-contract.md`;
+10. `../contracts/task-verification-contract.md`;
+11. `../contracts/phone-channel-access-contract.md`;
+12. `PA-002A-openclaw-opensandbox-source-foundry.md` for OpenClaw Gateway/node/channel evidence;
+13. PA-002 Hermes/channel-related evidence only where the owning Spec 007 research requalifies it.
+
+Native Mobile/channels project the same durable task identity and current verification truth; channel/device identity never becomes task or authority identity. PA-003A additionally requires an optional user-owned Authority Host / Execution Node topology so phone continuity and schedules do not require a sleeping work laptop or vendor cloud. Where host migration/lost-host recovery is implemented, Spec 007 must carry the PA-003A independent recovery-authority freshness, target-bound anti-fork recovery lineage, fresh authority-domain authentication-root, stale-backup fencing, external-credential exposure quarantine, and UNKNOWN-effect/scheduler-gap semantics into its bounded task/verification plan through `PA-003-task-delta.md`.
 
 ### Before Spec 008 — Workers, Durable Graphs, Learning & Automations
 
@@ -50,17 +86,25 @@ PA-002A does **not** authorize changing the active Spec 003 task order or adding
 3. `PA-002-memory-retrieval-learning-evals.md`;
 4. `PA-002-source-foundry-research.md`;
 5. `PA-002A-openclaw-opensandbox-source-foundry.md`;
-6. `../contracts/memory-retrieval-learning-contract.md`;
-7. `../contracts/behavior-evaluation-contract.md`;
-8. PA-001 when workers interact with phone/channel triggers or delivery.
+6. `PA-003-product-spine-golden-loop.md`;
+7. `PA-003A-always-on-host-topology.md`;
+8. `PA-003B-task-lifecycle-verification.md`;
+9. `PA-003-task-delta.md`;
+10. `../contracts/task-run-trust-contract.md`;
+11. `../contracts/task-verification-contract.md`;
+12. `../contracts/memory-retrieval-learning-contract.md`;
+13. `../contracts/behavior-evaluation-contract.md`;
+14. PA-001 when workers interact with phone/channel triggers or delivery.
+
+Spec 008 must distinguish initiative authority from attention authority before proactive workers/routines are considered product-complete; worker placement on a remote/node/sandbox must never transfer kernel authority; worker completion must map to parent Task criteria without directly satisfying the parent Task; and Authority Host scheduler recovery must preserve lost-host UNKNOWN-effect/missed-window semantics rather than silently catching up consequential work.
 
 ### Before Spec 009 — Grok Public Feature Parity
 
-Read PA-001, PA-002, and PA-002A because they materially strengthen phone continuity, governed cross-session memory, proactive learning, durable workers, sandboxed execution, multi-channel/companion-device UX, deep research/evidence and parity-superset requirements.
+Read PA-001, PA-002, PA-002A, PA-003, PA-003A, PA-003B, PA-003 task delta, and the task/run/trust + task-verification contracts because they materially strengthen phone continuity, governed cross-session memory, proactive learning, durable workers, sandboxed execution, user-owned always-on topology, multi-channel/companion-device UX, Trust Receipts, criterion-level verification, locality controls, in-flight user control, deep research/evidence and parity-superset requirements.
 
 ### Before Spec 010 — GolamBench & Release Qualification
 
-Read all amendments and additive contracts because release qualification must cover phone/channel security plus PA-002 trajectory behavior, memory/retrieval, learning/experiment evidence, and PA-002A sandbox-provider/credential-broker/snapshot-resume qualification.
+Read all amendments and additive contracts because release qualification must cover phone/channel security; PA-002 trajectory behavior, memory/retrieval, learning/experiment evidence; PA-002A sandbox-provider/credential-broker/snapshot-resume qualification; PA-003 Golden Loop, hybrid-interface/process verification, false-success, steering/recovery, Trust Receipt, capability-truth and staged product-release claims; PA-003A Authority Host/node offline/migration/recovery authority, anti-fork lineage, stale-backup fencing, external-credential exposure and effect/scheduler uncertainty claims where implemented; and PA-003B Task-vs-Run terminal truth, criterion verification/freshness/invalidation, CLOSED_UNVERIFIED semantics and receipt-to-canonical-evidence consistency.
 
 ## Amendment register
 
@@ -69,12 +113,23 @@ Read all amendments and additive contracts because release qualification must co
 | `PA-001-phone-channel-access.md` | proposed in its planning PR until merged | native iOS/Android Golam Mobile, voice, push, official messaging channels, future Spec 007 | does not authorize current Spec 003 implementation; channels do not become authority |
 | `PA-002-memory-retrieval-learning-evals.md` | proposed in its stacked planning PR until merged | memory candidates, retrieval/context, harness seams, worker graphs, learning, autonomous experiments, trajectory evaluation, future Specs 004/005/008/009/010 | does not admit listed donors/dependencies; does not authorize current Spec 003 implementation; does not make plugins/frameworks authority |
 | `PA-002A-openclaw-opensandbox-source-foundry.md` | proposed in the same stacked planning PR until merged | OpenClaw product/memory/channel/security evidence; OpenSandbox sandbox protocol/runtime/egress/credential-broker evidence for future Specs 003/005/007/008/009/010 | does not admit either dependency; does not make sandbox/provider state authority; does not change active Spec 003 task order |
+| `PA-003-product-spine-golden-loop.md` | proposed in a stacked planning PR until merged | durable Task/Run product spine, Task Contract, Golden Loop, Trust Receipts, progressive autonomy UX, in-flight control, Initiative/Attention semantics, UserModel, portability, capability truth, Core Alpha and staged release ladder | does not weaken kernel authority; does not reorder active Spec 003; does not make UI/autonomy settings authority; does not require deferred breadth before Core Alpha |
+| `PA-003A-always-on-host-topology.md` | proposed with PA-003 until merged | optional user-owned Authority Host, paired Execution Nodes, offline-node/wait semantics, protected host migration, independent lost-host recovery authority and anti-fork lineage, fresh authority-domain authentication roots, stale-backup fencing, external-credential/effect uncertainty, data/secret placement, always-on phone/routine continuity without vendor-cloud trust root | does not authorize multi-master authority, automatic cloud failover, CRDT protected-state sync, trust stale backup/recovery state as current, or copy all node data/secrets to the host |
+| `PA-003B-task-lifecycle-verification.md` | proposed with PA-003 until merged | Task lifecycle distinct from Run lifecycle, versioned Task Contract, criterion-level Verification Plan/state, stale-proof invalidation, verified satisfaction vs explicit CLOSED_UNVERIFIED, receipt verification binding | does not create authority, require cloud/LLM judges, alter active Spec 003, or treat user acceptance without proof as verified success |
+
+`PA-003-task-delta.md` is the execution-oriented companion to PA-003/PA-003A/PA-003B. `../contracts/task-run-trust-contract.md` and `../contracts/task-verification-contract.md` are the normative task/run/control/receipt/verification contracts. None changes current implementation authority by itself.
 
 ## Source Foundry rule
 
 Amendment research may upgrade a source from `UNVERIFIED_REFERENCE` to an exact `VERIFIED_SNAPSHOT` or `PARTIALLY_VERIFIED` planning state. It still cannot mark code `ADMITTED`.
 
 Every owning implementation spec must re-pin the exact source state it proposes to use and close permission/license/dependency/security/platform/benchmark/conformance gates before copying, porting, vendoring or adding a dependency.
+
+## Product sequencing rule
+
+After PA-003, product usefulness is an explicit gate rather than an implied by-product of architecture completion.
+
+Specs MUST preserve future extensibility, but no deferred subsystem may become a blocker for the **Golam Core Alpha** checkpoint after Spec 005 unless the owning spec records measured evidence that the subsystem is required for the Golden Loop scenarios.
 
 ## Conflict rule
 

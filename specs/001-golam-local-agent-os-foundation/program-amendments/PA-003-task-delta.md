@@ -1,0 +1,126 @@
+# PA-003 Task Delta — Product Spine and Core Alpha
+
+**Status**: PROPOSED_FOR_REVIEW  
+**Parent amendment**: `PA-003-product-spine-golden-loop.md`  
+**Companion closure**: `PA-003B-task-lifecycle-verification.md` + `../contracts/task-verification-contract.md` close the Task-vs-Run lifecycle and criterion-verification gaps found during the PA-003 consistency review.  
+**Purpose**: make the PA-003 execution implications explicit without rewriting or renumbering the frozen historical Spec 001 task graph in place.
+
+These are **additional future owning-spec requirements**, not authorization to execute them now.
+
+---
+
+## Spec 004 additions — Runtime/product spine
+
+Before Spec 004 closes, its bounded Spec Kit package MUST include tasks that prove:
+
+- **PA003-004-A — Durable Task identity**: define `Task`, `Session`, `Run`, `Worker`, `TaskContract`, and Goal Ledger relationships with persistence/restart tests.
+- **PA003-004-B — In-flight control**: implement/verify Pause, Stop, Steer, AddConstraint, Inspect, and Resume semantics at the canonical harness/runtime layer. Desktop/mobile-native UI is not required yet.
+- **PA003-004-C — Capability truth**: publish machine-readable model/harness/provider capability descriptors and conformance evidence; unsupported features fail honestly.
+- **PA003-004-D — Locality projection**: expose strict-local/local-preferred/cloud-allowed style user posture without hidden provider fallback.
+- **PA003-004-E — Run failure taxonomy**: preserve blocked-policy, blocked-environment, verification failure, unknown-effect, budget exhaustion, interruption, and crash/recovery distinctions.
+- **PA003-004-F — Task lifecycle + Verification Plan**: implement durable Task states distinct from Run states, version Task Contract changes, and maintain criterion-level verification plans/states. A failed Run cannot silently fail the Task; a successful Run cannot silently satisfy the Task; steering/material state changes invalidate stale verification.
+
+**Spec 004 product-spine exit gate**: a Task survives model switch and process restart; a user can inspect and steer a running task; resume revalidates live/protected state; provider claims are conformance-backed; and Task satisfaction is impossible while a current required criterion remains unverified/stale/failed/blocked/unverifiable.
+
+---
+
+## Spec 005 additions — Golam Core Alpha
+
+Before Spec 005 closes, its bounded Spec Kit package MUST include tasks that prove:
+
+- **PA003-005-A — Trust Receipt**: project task/run result evidence, changed artifacts, external effects, egress destinations/classes, provider/tool use, approvals, unknowns, and learning candidates from canonical records.
+- **PA003-005-B — UserModel baseline**: separate compact governed stable user preferences from general memory; retain provenance/supersession; no silent sensitive profiling.
+- **PA003-005-C — Migration staging**: safely detect/import supported portable Markdown memory from selected external assistants into quarantined provenance-preserving staging; no credentials, protected authority, or silent auto-promotion.
+- **PA003-005-D — Export/portability**: export user-owned Markdown and stable machine-readable task/evidence/receipt records where the owning spec freezes a format.
+- **PA003-005-E — CLI/TUI Golden Loop UX**: expose current task/goal, evidence, running state, pause/stop/steer/inspect/resume, approvals, unresolved blockers, criterion verification state, and final Trust Receipt without requiring Desktop.
+- **PA003-005-F — Core Alpha repository scenario**: inspect/edit/verify a real local repository through governed tools and report exact evidence.
+- **PA003-005-G — Core Alpha research scenario**: combine permitted local/web evidence with provenance/taint and produce an attributable result/artifact.
+- **PA003-005-H — Core Alpha filesystem/document scenario**: transform local artifacts without destructive source mutation unless authorized; produce exact receipt.
+- **PA003-005-I — Core Alpha cross-session memory scenario**: approved memory persists through restart/new session and loses to fresher authoritative live state when conflicting.
+- **PA003-005-J — Core Alpha interrupt/recovery scenario**: pause/steer/stop/resume/restart a non-trivial task without losing goal/evidence or duplicating protected effects.
+- **PA003-005-K — Core Alpha strict-local scenario**: useful end-to-end task with externally observed zero unauthorized external egress and no hidden remote model/vector/eval/telemetry fallback.
+- **PA003-005-L — Core Alpha report**: report baseline task quality, false-success/verification failure, time to first useful action, interruption/recovery, approval repetition, tokens/resources, egress, unresolved outcomes and memory correctness without inventing target thresholds before measurement.
+- **PA003-005-M — Task/Run continuity scenario**: prove one Run can fail and a later Run continue the same Task; prove a Run can finish its bounded work while the Task remains unsatisfied because a required criterion is not verified; prove user acceptance of incomplete verification is `CLOSED_UNVERIFIED`/equivalent rather than verified satisfaction.
+- **PA003-005-N — Verification invalidation and receipt scenario**: prove Task Contract/steering or material source-state change invalidates stale criterion proof, an independent deterministic verifier catches an action-path false success, and the Trust Receipt criterion summary matches canonical evidence/verification state.
+
+**Mandatory product checkpoint**: Spec 006 MUST NOT become the next release blocker until the owning program review records whether **Golam Core Alpha** passed or failed on the exact Spec 005 close head.
+
+A failed Core Alpha gate does not authorize skipping required architecture/security work; it requires fixing the Golden Loop before expanding product breadth unless the founder explicitly accepts a documented exception.
+
+---
+
+## Spec 006 additions — Desktop projection
+
+- **PA003-006-A**: Desktop projects the same Task/Run/Goal/Trust state; it does not maintain a separate agent truth.
+- **PA003-006-B**: expose Inspect/Pause/Steer/Stop/TakeOver/Resume in the desktop experience.
+- **PA003-006-C**: Trust Center baseline shows devices, active leases/approvals, egress/provider posture, sandbox posture, memory/learning changes, scheduled work and recent Trust Receipts without exposing secret plaintext.
+- **PA003-006-D**: Desktop shows Task state separately from current Run state and exposes current completion-criterion verification without presenting `CLOSED_UNVERIFIED`, stale evidence, or worker completion as verified Task success.
+
+---
+
+## Spec 007 additions — Everywhere continuity and Authority Host recovery
+
+- **PA003-007-A — Durable surface continuity**: Native Mobile continues an existing Task/Run rather than cloning a conversation-only state.
+- **PA003-007-B — Channel-to-Task boundary**: channel messages can navigate/create/steer tasks only through stable binding and normal authority rules; channel identity never equals Task identity.
+- **PA003-007-C — Surface receipt truth**: mobile/channel receipt views preserve what changed/data-egress/approval/unknown state appropriate to the surface.
+- **PA003-007-D — Fresh reconnect projection**: device/surface reconnect projects current Task and verification truth from the Authority Host; cached/stale mobile/channel state cannot upgrade a criterion to VERIFIED or a Task to SATISFIED.
+- **PA003-007-E — Authority Host topology identity**: implement the optional Authority Host / Execution Node topology with exactly one active protected authority by default; bind current authority to collision-resistant `authority_domain_id`, generation, fresh authority authentication-root/key identity, and device/node pinning. Capability advertisement, worker placement, backups, and standby copies cannot become authority.
+- **PA003-007-F — Planned migration**: implement a protected migration transaction that verifies predecessor state, reconciles UNKNOWN effects, rotates authority-domain/authentication and pairing bindings, invalidates stale mobile approval/queued-intent objects, establishes fresh target-host credentials, fences the reachable old host before new protected mutation, and never treats copied authority bytes as sufficient cutover.
+- **PA003-007-G — Lost-host recovery authority and anti-fork**: define the independent owner-controlled recovery authority mechanism; prove stale backup possession/old keys/channel text cannot authorize recovery; prove recovery-authority membership/revocation freshness independent from the stale backup; bind recovery to one exact backup-cut/target-domain/target-key/target-host/challenge transcript; prevent captured-proof retargeting and silent parallel current domains from cloned backups; detect conflicting recovery lineages and fail closed rather than auto-merge.
+- **PA003-007-H — Lost-host external-state quarantine**: preserve effect/scheduler uncertainty across the unobserved backup gap, prohibit blind replay/catch-up of consequential work, classify credentials potentially usable by the lost host as exposure-unknown until provider-side rotation/revocation/reissue or equivalent evidence, and preserve unresolved exposure/UNKNOWN state into Task verification and Trust Receipts without plaintext.
+- **PA003-007-I — Recovery failure and reprovisioning UX**: if no valid recovery authority or required current recovery-membership evidence remains, expose bounded forensic/export/recovery tooling rather than silently minting replacement authority; returning old hosts and stale devices/nodes require explicit current-domain reprovisioning and cannot resume protected authority by ordinary reconnect.
+
+**Spec 007 topology/recovery exit gate**: where Authority Host recovery is implemented, a stolen/cloned stale backup, stale old-host key, revoked recovery device, captured recovery proof, channel/model input, or restored external credential cannot create or impersonate current authority; exact recovery lineage, unresolved effect state, credential-exposure posture, and device/node trust are inspectable and fail closed on ambiguity.
+
+---
+
+## Spec 008 additions — Proactivity without interruption abuse
+
+- **PA003-008-A — InitiativePolicy**: define when Golam may discover/propose/start bounded proactive work.
+- **PA003-008-B — AttentionBudget**: define notify/quiet/batch/dedupe/urgency/surface-routing controls independently from effect authority.
+- **PA003-008-C — Proactive receipt**: unattended work produces the same causal/effect/evidence/receipt trail as attended work.
+- **PA003-008-D — User feedback**: mute/defer/reduce-priority/never-notify-for-class feedback changes future attention behavior without silently altering unrelated capability authority.
+- **PA003-008-E — Worker criterion mapping**: every worker/subgoal completion maps explicitly to parent Task criteria/evidence where relevant; worker success cannot directly mark the parent Task SATISFIED.
+- **PA003-008-F — Lost-host scheduler recovery**: when persistent scheduling runs on an Authority Host, restart/lost-host recovery preserves the PA-003A stale-backup uncertainty boundary. Consequence-bearing missed windows are not automatically caught up, unknown prior dispatch is not inferred absent, and at-most-once/irreversible work is not blind-retried across the recovery gap.
+
+---
+
+## Spec 009 additions — Superset posture
+
+- **PA003-009-A**: public parity scenarios explicitly score Golam Trust Receipts, locality, in-flight control, governed memory and recovery as candidate `VERIFIED_SUPERSET` dimensions where supported by evidence.
+- **PA003-009-B**: no parity claim may be closed by bypassing Golam security/durability/product-spine invariants.
+- **PA003-009-C**: parity/superset claims distinguish a successful execution attempt from verified Task satisfaction and preserve any incomplete/stale criterion state.
+
+---
+
+## Spec 010 additions — Golden Loop release qualification
+
+- **PA003-010-A**: evaluate process and outcome separately for long-horizon tasks.
+- **PA003-010-B**: measure false-success rate and fabricated verification/shortcut behavior.
+- **PA003-010-C**: add representative hybrid CLI + GUI/browser/computer tasks once Spec 006 capabilities exist.
+- **PA003-010-D**: score controllable agent failures separately from external/environment blockers.
+- **PA003-010-E**: test user steering/takeover/recovery in trajectory, not only terminal artifact state.
+- **PA003-010-F**: verify Trust Receipt completeness against canonical event/effect/evidence state.
+- **PA003-010-G**: verify capability truth matrices against real claimed provider/platform behavior.
+- **PA003-010-H**: produce exact-head product ladder evidence for Core Alpha, Desktop, Everywhere, Persistent Team, Parity/Superset and release qualification claims.
+- **PA003-010-I**: verify Task terminal state independently from individual Run terminal states, including failed-Run/new-Run continuation and operationally successful Runs that leave required criteria unresolved.
+- **PA003-010-J**: verify criterion-state freshness/invalidation and recompute Trust Receipt verification summaries from canonical evidence; no stale or unverified criterion may be reported as verified success.
+- **PA003-010-K — Authority Host recovery adversarial suite**: where PA-003A topology is implemented, qualify planned migration, stale-backup lost-host recovery, independent recovery-authority freshness, target-bound anti-fork recovery transcripts, returning-old-host denial, device/node recovery-lineage pinning, external-credential exposure quarantine, UNKNOWN-effect/scheduler-gap handling, and receipt/verification propagation. Include cloned-backup competing-recovery, revoked-recovery-device-after-backup, captured-proof retargeting, stale old-host private-key impersonation, provider-token-still-valid-after-domain-rotation, blind-retry prevention, and no-valid-recovery-authority fail-closed cases.
+
+---
+
+## Explicit non-blockers for Core Alpha
+
+Unless the owning Spec Kit package demonstrates measured necessity, Core Alpha does not wait for:
+
+- native Desktop;
+- iOS/Android;
+- WhatsApp/WeChat/Telegram/Slack/Discord/Matrix breadth;
+- multi-agent groups/swarms;
+- custom relay infrastructure;
+- mandatory Qdrant/graph database;
+- hosted observability/evaluation;
+- A2A federation;
+- image/video generation;
+- marketplace/discovery ecosystem;
+- generalized autonomous self-modification.
