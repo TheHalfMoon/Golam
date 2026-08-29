@@ -117,6 +117,7 @@ A future migration protocol MUST cover:
 - **invalidation of every pre-cutover mobile approval response and queued signed request intent whose domain/generation/authentication-root binding names the old Authority Host**, followed by fresh authorization or re-signing only after the new host relationship is current;
 - old-host revocation/fencing before the new host accepts protected mutations when the old host is reachable;
 - monotonic audit evidence binding the old domain/generation/authentication-root identity, migration operation, new domain/generation/authentication-root identity and cutover point;
+- an explicit high-assurance lost-host recovery authorization ceremony whose authority is independent from restored backup contents and stale old-host credentials;
 - rollback before cutover where safe;
 - explicit lost-host recovery when the old host is unavailable.
 
@@ -126,12 +127,37 @@ When the old Authority Host is reachable, it MUST durably enter a fenced/decommi
 
 A planned migration MAY transfer enough verified predecessor state to establish the replacement domain deterministically as part of the protected migration transaction, but the replacement domain identity still MUST be distinct from the old domain and bound into all post-cutover authority-bearing objects. The target host MUST establish fresh current authority-domain authentication private material (or an equivalently strong protected key-rotation result) before accepting post-cutover protected requests; copying the old host's private authority credential to the target as the current credential is not a valid migration cutover.
 
+### Lost-host recovery authorization
+
+Possession of a backup is evidence of stored state, not proof of current owner authority. Lost-host recovery MUST NOT be authorized solely by possession of backup bytes, a backup decryption key, an old host disk/image, an old authority private key, knowledge of a domain identifier, access to a messaging account, or model/channel text claiming that recovery is approved.
+
+Before a new Authority Host creates current protected authority, the owning Spec 007 design MUST require an explicit high-assurance owner-controlled recovery authorization path that is independent from the stale backup and unavailable to an attacker who merely stole or copied that backup. Qualified designs MAY use one or more mechanisms such as:
+
+- a pre-established offline recovery credential/key stored separately from the Authority Host and backup;
+- explicit user-presence approval from a currently trusted recovery-capable paired device whose recovery authority was provisioned before host loss;
+- a policy-defined quorum of independently protected recovery credentials/devices;
+- another separately reviewed local/user-controlled mechanism with equivalent replay resistance and compromise separation.
+
+The exact mechanism is implementation-time qualified; no vendor-hosted service is mandatory. Whatever mechanism is selected:
+
+- recovery authority is scoped only to the protected recovery ceremony and MUST NOT become general effect, secret, policy, channel, or computer-control authority;
+- the recovery credential/device/quorum state is itself protected, versioned, revocable, and auditable;
+- stale/revoked recovery credentials or devices fail closed;
+- one-time/replay-sensitive recovery material is durably consumed/rotated so the same proof cannot silently recreate another competing current domain;
+- free-form Telegram/WhatsApp/WeChat/Slack/Discord/Matrix content, voice, email-like channel text, model output, or possession of a provider account MUST NOT satisfy the recovery authorization;
+- if no valid recovery authority remains, Golam fails closed to bounded forensic/export/recovery tooling and MUST NOT create a new current protected authority domain merely to preserve availability.
+
+`BACKUP_POSSESSION != RECOVERY_AUTHORITY`
+`CHANNEL_CONTENT != LOST_HOST_RECOVERY_APPROVAL`
+`RECOVERY_AUTHORITY != GENERAL_EFFECT_AUTHORITY`
+
 ### Lost-host recovery
 
-When the old host cannot be contacted, Golam cannot truthfully claim to have changed unreachable bytes on that machine or know that a reachable backup contains the last generation ever used there. Recovery therefore establishes a **fresh collision-resistant authority domain identity and fresh cryptographic authority-domain authentication root** and logically fences the complete old domain across every re-established trusted relationship rather than pretending physical remote revocation occurred.
+When the old host cannot be contacted, Golam cannot truthfully claim to have changed unreachable bytes on that machine or know that a reachable backup contains the last generation ever used there. After successful recovery authorization, recovery therefore establishes a **fresh collision-resistant authority domain identity and fresh cryptographic authority-domain authentication root** and logically fences the complete old domain across every re-established trusted relationship rather than pretending physical remote revocation occurred.
 
 The recovery protocol MUST ensure:
 
+- no protected current-domain creation begins until the independent recovery-authorization gate above succeeds and is durably attributed;
 - the new Authority Host starts protected mutations only under a newly generated authority-domain identity, its current generation, and freshly generated authority-domain authentication private material unavailable to the old host;
 - the new domain identity is not computed only by incrementing a generation/counter read from a stale backup;
 - old/stale authority-host private signing/authentication keys restored from backup are never promoted as the current domain credential; they may be retained only where strictly necessary for bounded historical verification/recovery and MUST NOT authenticate current protected traffic;
@@ -143,7 +169,7 @@ The recovery protocol MUST ensure:
 - a returning old host may enter bounded recovery/export/reconciliation tooling but MUST NOT resume protected mutations or rejoin the active domain until an explicit protected reprovisioning process enrolls it into the current domain/generation under the current authentication root;
 - protected mutations made by a stale old host after the recovery cutover are divergent non-canonical evidence and MUST NOT auto-merge into current authority/effect/audit state;
 - any user-data artifacts recovered from the old host enter explicit provenance/conflict handling rather than silently rewriting current canonical state;
-- the migration/recovery record distinguishes physical old-host decommissioning from logical stale-domain fencing and records the predecessor backup identity/hash, predecessor authority credential identity, newly generated domain identity, and newly generated authority credential identity without pretending the backup proves unreachable-host recency.
+- the migration/recovery record distinguishes physical old-host decommissioning from logical stale-domain fencing and records the predecessor backup identity/hash, predecessor authority credential identity, recovery-authorization evidence identity, newly generated domain identity, and newly generated authority credential identity without pretending the backup proves unreachable-host recency.
 
 #### Effect and scheduler uncertainty across a stale-backup gap
 
@@ -248,6 +274,7 @@ The always-on Authority Host solves availability, not authentication:
 - mobile approval and queued-intent signatures remain bound to the exact current Authority Host/pairing domain identity and generation defined by the PA-001 contract and, once PA-003A topology is implemented, to the current authority-domain authentication credential/key identity as part of the protected current-domain binding;
 - Authority Host migration/recovery invalidates pre-cutover signed mobile authority/request objects rather than treating user-visible continuity as authority continuity;
 - a returning stale old host/domain cannot authenticate as current authority merely because a device remembers it or because it retains an old private authority credential;
+- messaging/channel content cannot authorize lost-host recovery merely because the provider account is bound to the owner;
 - channel messages remain channel-tainted;
 - high-risk approval still steps up to an authenticated trusted surface;
 - push remains a wake/sync convenience rather than canonical order or authority.
@@ -285,7 +312,7 @@ These are setup projections; the underlying security contracts remain identical.
 
 ### Spec 007
 
-Define native host/node pairing, device topology, reconnect, node availability, protected host migration prerequisites, collision-resistant authority-domain identity and generation rotation, fresh authority-domain authentication-root/key rotation and pinning, stale mobile approval/queued-intent invalidation, stale-backup-safe lost-host recovery fencing, returning-old-host disposition, and phone continuity semantics.
+Define native host/node pairing, device topology, reconnect, node availability, protected host migration prerequisites, collision-resistant authority-domain identity and generation rotation, fresh authority-domain authentication-root/key rotation and pinning, independent owner-controlled lost-host recovery authorization, stale mobile approval/queued-intent invalidation, stale-backup-safe lost-host recovery fencing, returning-old-host disposition, and phone continuity semantics.
 
 ### Spec 008
 
@@ -303,6 +330,10 @@ Test:
 - worker placement changes;
 - planned host migration/fencing where implemented;
 - lost old host followed by new-domain recovery;
+- stolen/copied backup plus backup decryption capability but no independent recovery authority, and proof that no new current authority domain can be created;
+- channel/model/provider-account text attempting to authorize lost-host recovery and proof that it is rejected;
+- stale/revoked recovery credential/device rejection and replay/second-use rejection for one-time recovery evidence;
+- no-valid-recovery-authority case failing closed to bounded forensic/export tooling rather than silently minting a replacement authority;
 - recovery from a deliberately stale backup whose stored generation collides with or predates a generation used by the lost host;
 - proof that lost-host recovery does not derive authority identity solely as `backup_generation + 1`;
 - proof that lost-host recovery generates a fresh authority-domain authentication private credential/root rather than promoting backup-carried old private authority keys;
@@ -343,6 +374,9 @@ STALE_BACKUP_COUNTER != RECOVERY_DOMAIN_IDENTITY
 BACKUP_GENERATION_PLUS_ONE != LOST_HOST_FENCING
 FRESH_DOMAIN_ID != FRESH_AUTHENTICATION_ROOT
 STALE_BACKUP_KEY != CURRENT_AUTHORITY_CREDENTIAL
+BACKUP_POSSESSION != RECOVERY_AUTHORITY
+CHANNEL_CONTENT != LOST_HOST_RECOVERY_APPROVAL
+RECOVERY_AUTHORITY != GENERAL_EFFECT_AUTHORITY
 LOST_HOST_RECOVERY != EFFECT_OUTCOME_RESET
 ABSENT_FROM_STALE_BACKUP != NOT_EXECUTED
 MISSED_SCHEDULE_WINDOW != SAFE_REPLAY
