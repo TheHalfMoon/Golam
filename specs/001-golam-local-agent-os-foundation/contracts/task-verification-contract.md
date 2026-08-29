@@ -129,9 +129,14 @@ Potential invalidators include:
 - external provider state change;
 - application/device state change;
 - relevant policy/lease/approval generation change;
+- Authority Host recovery-domain, authority-authentication-root, or device/node trust-generation change;
+- provider/external credential exposure, revocation, rotation, reissue, or exclusivity status changing after host/device loss or recovery;
 - user steering that changes expected results.
 
+A criterion that relies on an external account, provider credential, or exclusive control of a provider identity MUST NOT remain VERIFIED merely because an earlier action succeeded before the credential became `EXPOSURE_UNKNOWN`/equivalent. If the current criterion depends on provider state or credential exclusivity, unresolved lost-host credential exposure makes the prior evidence stale/blocked until the owning verification strategy obtains sufficient current evidence.
+
 `STALE_VERIFICATION != CURRENT_PROOF`
+`CREDENTIAL_EXPOSURE_CHANGE != PRESERVED_VERIFICATION`
 
 A stale criterion cannot support Task satisfaction until reverified.
 
@@ -157,7 +162,7 @@ A Run may:
 - be cancelled while the Task remains open/suspended;
 - produce evidence that a later Run reuses or invalidates.
 
-Starting another Run MUST preserve Task identity, current Task Contract version, verification state, blockers, unknown effects, and prior Run history.
+Starting another Run MUST preserve Task identity, current Task Contract version, verification state, blockers, unknown effects, unresolved credential-exposure/provider-reconciliation blockers where applicable, and prior Run history.
 
 ## 12. Worker-to-Task mapping
 
@@ -177,11 +182,14 @@ A terminal or meaningful-stop Trust Receipt MUST include:
 - criterion-level verification summary;
 - verified/unverified/stale/blocked distinctions;
 - evidence refs supporting verified claims;
-- unresolved UNKNOWN effects where applicable.
+- unresolved UNKNOWN effects where applicable;
+- unresolved lost-host/device credential exposure or provider-side revocation/rotation/reconciliation blockers when they affect the Task's external-state claims or ability to continue safely, without secret plaintext.
 
 Where canonical audit/evidence chains expose stable positions/digests, the receipt SHOULD include references sufficient to validate its evidence basis without falsely claiming a cryptographic signature that was not produced.
 
-A receipt MUST NOT word CLOSED_UNVERIFIED as verified success.
+A receipt MUST NOT word CLOSED_UNVERIFIED as verified success. It also MUST NOT present provider/account control as verified-exclusive when current canonical recovery state marks a relevant credential `EXPOSURE_UNKNOWN`/equivalent.
+
+`TRUST_RECEIPT_DOES_NOT_CLEAR_CREDENTIAL_EXPOSURE`
 
 ## 14. Recovery
 
@@ -195,9 +203,12 @@ Restart/recovery MUST preserve:
 - known stale evidence;
 - blockers;
 - UNKNOWN external effects;
+- unresolved credential-exposure/provider-reconciliation state that can affect Task truth or safe continuation;
 - prior Run history.
 
-Recovery may re-run verification safely, but cannot erase prior failure/staleness evidence.
+Recovery may re-run verification safely, but cannot erase prior failure/staleness evidence. Authority-domain or host recovery MUST NOT silently clear credential-exposure uncertainty merely because the replacement host has a fresh domain/key or restored SecretHandle.
+
+`RECOVERY_DOES_NOT_ERASE_CREDENTIAL_EXPOSURE`
 
 ## 15. Core Alpha and release qualification
 
@@ -214,4 +225,4 @@ Core Alpha MUST prove at least:
 9. Trust Receipt criterion summary matching canonical evidence;
 10. restart persistence of Task and Verification Plan state.
 
-Spec 010 SHALL re-test the same invariants against exact release heads and measure false-success/stale-verification behavior.
+Spec 010 SHALL re-test the same invariants against exact release heads and measure false-success/stale-verification behavior. Where Authority Host/device recovery and external credentials are implemented, Spec 010 MUST additionally prove that unresolved credential exposure invalidates dependent verification, survives restart/recovery, appears in the Trust Receipt without plaintext, and cannot be cleared by domain rotation, restored secret metadata, model claims, or worker self-report.
