@@ -138,6 +138,24 @@ The recovery protocol MUST ensure:
 - any user-data artifacts recovered from the old host enter explicit provenance/conflict handling rather than silently rewriting current canonical state;
 - the migration/recovery record distinguishes physical old-host decommissioning from logical stale-domain fencing and records the predecessor backup identity/hash plus newly generated domain identity without pretending the backup proves unreachable-host recency.
 
+#### Effect and scheduler uncertainty across a stale-backup gap
+
+A fresh authority domain fences stale authority; it does **not** prove that external effects after the backup horizon did not occur.
+
+Lost-host recovery MUST record the exact restored backup/canonical cut point (for example, the last authenticated global/effect/audit position available in that backup) and conservatively handle work whose real-world outcome may have changed after that point.
+
+- Any protected external effect that was in-flight/UNKNOWN at the restored cut point remains UNKNOWN until the normal Effect Gate reconciler obtains sufficient current evidence.
+- Any Task/Run/effect whose continuation could duplicate a consequence that the lost host may have dispatched after the restored cut point MUST enter an explicit recovery-blocked/UNKNOWN state until provider/environment reconciliation or a separate attributable user decision makes a safe continuation possible.
+- The new host MUST NOT infer `NOT_EXECUTED` merely because an effect transition, receipt, scheduler record, or task event is absent from a stale backup.
+- Consequence-bearing scheduled work whose trigger window falls inside the unobserved lost-host gap MUST NOT be automatically “caught up” or replayed. It is treated as outcome-unknown until reconciled or deliberately rescheduled under current authority.
+- At-most-once/irreversible operations MUST NOT be blind-retried across the recovery gap. Existing provider idempotency/reconciliation identities are reused where they are known and still valid; absence of such identity does not authorize guessing.
+- Recovered canonical state MUST preserve an explicit uncertainty boundary so later Trust Receipts, Task satisfaction, learning, and memory do not describe post-backup real-world outcomes as known facts without evidence.
+- Recovery-domain rotation, effect reconciliation, and user-visible recovery decisions are separately attributable. Creating a new domain MUST NOT reset Effect Gate history or erase UNKNOWN outcomes.
+
+`LOST_HOST_RECOVERY != EFFECT_OUTCOME_RESET`
+`ABSENT_FROM_STALE_BACKUP != NOT_EXECUTED`
+`MISSED_SCHEDULE_WINDOW != SAFE_REPLAY`
+
 A migration or recovery MUST NOT create a canonical window where both old and new domains/generations are accepted as current authority. Host migration continuity applies to user-visible Task/session state, not to automatic portability of stale authority material.
 
 `OLD_HOST_RETURNS != AUTHORITY_RESTORED`
@@ -264,7 +282,7 @@ Define native host/node pairing, device topology, reconnect, node availability, 
 
 ### Spec 008
 
-Use the topology for scheduler/worker placement and WAITING_NODE recovery. Proactive work must respect data/secret/node placement and attention policy.
+Use the topology for scheduler/worker placement and WAITING_NODE recovery. Proactive work must respect data/secret/node placement and attention policy. Scheduler recovery across a lost-host gap MUST preserve the effect/outcome uncertainty rules above rather than automatically replaying missed consequential work.
 
 ### Spec 010
 
@@ -283,6 +301,9 @@ Test:
 - old host returning after recovery and being denied current-authority status;
 - stale-domain/generation device/node/control replay;
 - no automatic merge of post-cutover protected mutations from a stale old host;
+- an irreversible/at-most-once external effect executed by the old host after the restored backup cut point and proof that recovery does not blindly re-dispatch it;
+- scheduled consequential work whose trigger window lies inside the lost-host/backup gap and proof that recovery marks it unknown/reconciliation-required instead of automatic catch-up;
+- absence of a post-backup effect record being rejected as proof that the effect never happened;
 - cross-host replay of pre-cutover mobile approvals, queued intents, leases and nonces;
 - secret placement and re-brokering;
 - phone continuity while a work node is offline;
@@ -310,6 +331,9 @@ BACKUP_STATE != ACTIVE_AUTHORITY
 STALE_AUTHORITY_EPOCH != ACTIVE_AUTHORITY
 STALE_BACKUP_COUNTER != RECOVERY_DOMAIN_IDENTITY
 BACKUP_GENERATION_PLUS_ONE != LOST_HOST_FENCING
+LOST_HOST_RECOVERY != EFFECT_OUTCOME_RESET
+ABSENT_FROM_STALE_BACKUP != NOT_EXECUTED
+MISSED_SCHEDULE_WINDOW != SAFE_REPLAY
 OFFLINE_NODE != PERMISSION_TO_FALLBACK
 WORKER_PLACEMENT != AUTHORITY_TRANSFER
 NODE_CAPABILITY_ADVERTISEMENT != CAPABILITY_LEASE
