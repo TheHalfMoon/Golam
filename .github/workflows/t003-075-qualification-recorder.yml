@@ -1,0 +1,28 @@
+name: t003-075-qualification-recorder
+on:
+  push:
+    branches:
+      - impl/003-identity-policy-secrets-sandbox
+permissions:
+  contents: write
+jobs:
+  record:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/003-identity-policy-secrets-sandbox
+          fetch-depth: 0
+      - name: Record exact T003-075 qualification
+        run: python3 scripts/qualification/record-t003-075.py
+      - name: Commit repository evidence and self-delete
+        run: |
+          git rm .github/workflows/t003-075-qualification-recorder.yml
+          git rm scripts/qualification/record-t003-075.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add specs/003-identity-policy-secrets-sandbox/tasks.md
+          git add specs/003-identity-policy-secrets-sandbox/implementation/current-execution-plan.md
+          git commit -m 'docs: record T003-075 Wasmtime disposition qualification'
+          git push origin HEAD:impl/003-identity-policy-secrets-sandbox
