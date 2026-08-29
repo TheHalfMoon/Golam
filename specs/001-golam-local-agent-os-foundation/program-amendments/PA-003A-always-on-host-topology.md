@@ -77,14 +77,23 @@ Golam v1 MUST avoid implicit multi-master protected-state authority.
 
 For one Golam domain, exactly one Authority Host is active for protected mutations unless a later separately reviewed design proves a safe replicated authority protocol.
 
-The active Authority Host is bound to a monotonically changing **authority epoch/domain generation**. Cross-host protected requests, paired-device authority state, execution-node authority envelopes, approvals/queued signed intents, and migration evidence MUST identify the current epoch wherever that identity is security-relevant. An older epoch cannot become current merely because an old host comes back online.
+Security-relevant authority identity is the tuple **`(authority_domain_id, authority_generation)`**, not a generation counter by itself.
+
+- `authority_domain_id` is a collision-resistant protected domain identity. Planned migration or lost-host recovery MUST rotate it whenever the prior Authority Host/domain can no longer be proven exclusively current.
+- `authority_generation` is monotonically increasing only within the currently established domain identity and may be used for ordinary revocation/rekey/rebinding generations inside that domain.
+- Cross-host protected requests, paired-device authority state, execution-node authority envelopes, approvals/queued signed intents, and migration/recovery evidence MUST bind the complete current domain/generation tuple wherever that identity is security-relevant.
+- An older domain or generation cannot become current merely because an old host comes back online.
+- A stale backup's stored generation MUST NOT be treated as proof of the maximum generation ever used by an unreachable host. Lost-host recovery therefore MUST NOT derive current authority identity solely as `stored_generation + 1`.
+
+A fresh recovery domain identity MUST be generated through an implementation-qualified collision-resistant mechanism such as OS cryptographic randomness and MUST NOT be caller-selected, copied from the stale backup as current identity, or reused from a prior authority domain. This requirement is semantic; PA-003A does not admit any new runtime dependency.
 
 Backups/standby copies are not active authority.
 
 `BACKUP_STATE != ACTIVE_AUTHORITY`
 `STALE_AUTHORITY_EPOCH != ACTIVE_AUTHORITY`
+`STALE_BACKUP_COUNTER != RECOVERY_DOMAIN_IDENTITY`
 
-This avoids split-brain approvals, leases, effects, scheduler decisions, and audit ordering.
+This avoids split-brain approvals, leases, effects, scheduler decisions, and audit ordering even when the newest reachable backup predates authority activity on a lost host.
 
 ## 4. Host migration and lost-host recovery
 
@@ -99,36 +108,41 @@ A future migration protocol MUST cover:
 - approval/lease expiry or re-mint rules;
 - secret re-sealing/re-brokering;
 - device/channel rebinding generation changes where required;
-- **authority-domain / pairing-domain generation rotation at cutover** so credentials and signed objects cannot remain valid merely because protected bytes were copied to a new Authority Host;
+- **authority-domain identity rotation plus pairing-domain/generation rotation at cutover** so credentials and signed objects cannot remain valid merely because protected bytes were copied to a new Authority Host;
 - **invalidation of every pre-cutover mobile approval response and queued signed request intent whose domain/generation binding names the old Authority Host**, followed by fresh authorization or re-signing only after the new host relationship is current;
 - old-host revocation/fencing before the new host accepts protected mutations when the old host is reachable;
-- monotonic audit evidence binding the old domain/epoch, migration operation, new domain/epoch/generation and cutover point;
+- monotonic audit evidence binding the old domain/generation, migration operation, new domain/generation and cutover point;
 - rollback before cutover where safe;
 - explicit lost-host recovery when the old host is unavailable.
 
 ### Planned migration
 
-When the old Authority Host is reachable, it MUST durably enter a fenced/decommissioned state for the old epoch before the new host accepts protected mutations under the new epoch. The old host cannot later resume the old epoch through ordinary restart/reconnect.
+When the old Authority Host is reachable, it MUST durably enter a fenced/decommissioned state for the old domain/generation before the new host accepts protected mutations under the replacement domain/generation. The old host cannot later resume the prior authority identity through ordinary restart/reconnect.
+
+A planned migration MAY transfer enough verified predecessor state to establish the replacement domain deterministically as part of the protected migration transaction, but the replacement domain identity still MUST be distinct from the old domain and bound into all post-cutover authority-bearing objects.
 
 ### Lost-host recovery
 
-When the old host cannot be contacted, Golam cannot truthfully claim to have changed unreachable bytes on that machine. Recovery therefore establishes a **fresh authority epoch** and logically fences the old epoch across every re-established trusted relationship rather than pretending physical remote revocation occurred.
+When the old host cannot be contacted, Golam cannot truthfully claim to have changed unreachable bytes on that machine or know that a reachable backup contains the last generation ever used there. Recovery therefore establishes a **fresh collision-resistant authority domain identity** and logically fences the complete old domain across every re-established trusted relationship rather than pretending physical remote revocation occurred.
 
 The recovery protocol MUST ensure:
 
-- the new Authority Host starts protected mutations only under the fresh epoch;
-- re-enrolled/reconnected devices and Execution Nodes pin the fresh epoch and reject protected requests, approvals, leases, queued intents, nonces, or control envelopes from stale epochs;
+- the new Authority Host starts protected mutations only under a newly generated authority-domain identity and its current generation;
+- the new domain identity is not computed only by incrementing a generation/counter read from a stale backup;
+- re-enrolled/reconnected devices and Execution Nodes pin the complete fresh domain/generation tuple and reject protected requests, approvals, leases, queued intents, nonces, or control envelopes from stale domains or generations;
+- cached or backup-carried authority-bearing objects retain their original domain/generation binding and cannot be relabeled into the new domain by restoration code;
 - secrets/approvals/leases that cannot be proven safely transferable are re-sealed/re-minted/re-authorized rather than inherited by byte-copy alone;
 - an old host that later returns is treated as **stale/recovered-old-host**, not as an equal active peer;
-- a returning old host may enter bounded recovery/export/reconciliation tooling but MUST NOT resume protected mutations or rejoin the active domain until an explicit protected reprovisioning process enrolls it into the current epoch;
+- a returning old host may enter bounded recovery/export/reconciliation tooling but MUST NOT resume protected mutations or rejoin the active domain until an explicit protected reprovisioning process enrolls it into the current domain/generation;
 - protected mutations made by a stale old host after the recovery cutover are divergent non-canonical evidence and MUST NOT auto-merge into current authority/effect/audit state;
 - any user-data artifacts recovered from the old host enter explicit provenance/conflict handling rather than silently rewriting current canonical state;
-- the migration/recovery record distinguishes physical old-host decommissioning from logical stale-epoch fencing.
+- the migration/recovery record distinguishes physical old-host decommissioning from logical stale-domain fencing and records the predecessor backup identity/hash plus newly generated domain identity without pretending the backup proves unreachable-host recency.
 
-A migration or recovery MUST NOT create a canonical window where both old and new epochs are accepted as current authority. Host migration continuity applies to user-visible Task/session state, not to automatic portability of stale authority material.
+A migration or recovery MUST NOT create a canonical window where both old and new domains/generations are accepted as current authority. Host migration continuity applies to user-visible Task/session state, not to automatic portability of stale authority material.
 
 `OLD_HOST_RETURNS != AUTHORITY_RESTORED`
 `USER_VISIBLE_CONTINUITY != AUTHORITY_OBJECT_CONTINUITY`
+`BACKUP_GENERATION_PLUS_ONE != LOST_HOST_FENCING`
 
 No vendor service may silently become authority during migration or recovery.
 
@@ -206,9 +220,9 @@ The always-on Authority Host solves availability, not authentication:
 
 - possession of WhatsApp/Telegram/WeChat account access cannot enroll a native device;
 - phone pairing remains cryptographic and protected;
-- mobile approval and queued-intent signatures remain bound to the exact current Authority Host/pairing domain and generation defined by the PA-001 contract;
+- mobile approval and queued-intent signatures remain bound to the exact current Authority Host/pairing domain identity and generation defined by the PA-001 contract;
 - Authority Host migration/recovery invalidates pre-cutover signed mobile authority/request objects rather than treating user-visible continuity as authority continuity;
-- a returning stale old host/epoch cannot authenticate as current authority merely because a device remembers it;
+- a returning stale old host/domain cannot authenticate as current authority merely because a device remembers it;
 - channel messages remain channel-tainted;
 - high-risk approval still steps up to an authenticated trusted surface;
 - push remains a wake/sync convenience rather than canonical order or authority.
@@ -246,7 +260,7 @@ These are setup projections; the underlying security contracts remain identical.
 
 ### Spec 007
 
-Define native host/node pairing, device topology, reconnect, node availability, protected host migration prerequisites, authority-domain/epoch and pairing-generation rotation, stale mobile approval/queued-intent invalidation, lost-host recovery fencing, returning-old-host disposition, and phone continuity semantics.
+Define native host/node pairing, device topology, reconnect, node availability, protected host migration prerequisites, collision-resistant authority-domain identity and generation rotation, stale mobile approval/queued-intent invalidation, stale-backup-safe lost-host recovery fencing, returning-old-host disposition, and phone continuity semantics.
 
 ### Spec 008
 
@@ -263,9 +277,11 @@ Test:
 - stale capability advertisement;
 - worker placement changes;
 - planned host migration/fencing where implemented;
-- lost old host followed by new-epoch recovery;
+- lost old host followed by new-domain recovery;
+- recovery from a deliberately stale backup whose stored generation collides with or predates a generation used by the lost host;
+- proof that lost-host recovery does not derive authority identity solely as `backup_generation + 1`;
 - old host returning after recovery and being denied current-authority status;
-- stale-epoch device/node/control replay;
+- stale-domain/generation device/node/control replay;
 - no automatic merge of post-cutover protected mutations from a stale old host;
 - cross-host replay of pre-cutover mobile approvals, queued intents, leases and nonces;
 - secret placement and re-brokering;
@@ -292,6 +308,8 @@ ALWAYS_ON != CLOUD_REQUIRED
 EXECUTION_NODE != AUTHORITY_HOST
 BACKUP_STATE != ACTIVE_AUTHORITY
 STALE_AUTHORITY_EPOCH != ACTIVE_AUTHORITY
+STALE_BACKUP_COUNTER != RECOVERY_DOMAIN_IDENTITY
+BACKUP_GENERATION_PLUS_ONE != LOST_HOST_FENCING
 OFFLINE_NODE != PERMISSION_TO_FALLBACK
 WORKER_PLACEMENT != AUTHORITY_TRANSFER
 NODE_CAPABILITY_ADVERTISEMENT != CAPABILITY_LEASE
