@@ -5,7 +5,7 @@ use std::fmt;
 use std::path::Path;
 use std::str;
 
-use rusqlite::{Connection, OpenFlags, OptionalExtension, params};
+use rusqlite::{Connection, OpenFlags, OptionalExtension, TransactionBehavior, params};
 
 use crate::policy::PolicyBundleId;
 use crate::storage::{AuthorityStore, StorageError};
@@ -29,6 +29,19 @@ pub struct VerifiedActivePolicy {
 pub enum ActivePolicyIntegrityState {
     Bootstrap,
     Active(VerifiedActivePolicy),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VerifiedActivePolicyBundle {
+    pub policy: VerifiedActivePolicy,
+    pub policy_source: String,
+    pub schema_source: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ActivePolicyLoadState {
+    Bootstrap,
+    Active(VerifiedActivePolicyBundle),
 }
 
 #[derive(Debug)]
@@ -115,6 +128,40 @@ impl From<StorageError> for ActivePolicyIntegrityError {
 impl From<rusqlite::Error> for ActivePolicyIntegrityError {
     fn from(value: rusqlite::Error) -> Self {
         Self::Sqlite(value)
+    }
+}
+
+pub fn load_path(
+    path: impl AsRef<Path>,
+) -> Result<ActivePolicyLoadState, ActivePolicyIntegrityError> {
+    let path = path.as_ref();
+    let store = AuthorityStore::open(path)?;
+    drop(store);
+    let mut connection = Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )?;
+    connection.execute_batch(
+        "PRAGMA foreign_keys = ON; PRAGMA query_only = ON; PRAGMA busy_timeout = 5000;",
+    )?;
+    let transaction = connection.transaction_with_behavior(TransactionBehavior::Deferred)?;
+    let state = verify_connection(&transaction)?;
+    match state {
+        ActivePolicyIntegrityState::Bootstrap => Ok(ActivePolicyLoadState::Bootstrap),
+        ActivePolicyIntegrityState::Active(policy) => {
+            let canonical_policy_bytes = transaction.query_row(
+                "SELECT canonical_policy_bytes FROM policy_bundles WHERE policy_bundle_id = ?1",
+                params![&policy.policy_bundle_id.0[..]],
+                |row| row.get::<_, Vec<u8>>(0),
+            )?;
+            let (policy_source, schema_source) =
+                decode_canonical_bundle(&canonical_policy_bytes, policy.schema_version)?;
+            Ok(ActivePolicyLoadState::Active(VerifiedActivePolicyBundle {
+                policy,
+                policy_source: policy_source.to_owned(),
+                schema_source: schema_source.to_owned(),
+            }))
+        }
     }
 }
 
@@ -253,6 +300,13 @@ fn verify_canonical_bundle(
     bytes: &[u8],
     expected_schema_version: u64,
 ) -> Result<(), ActivePolicyIntegrityError> {
+    decode_canonical_bundle(bytes, expected_schema_version).map(|_| ())
+}
+
+fn decode_canonical_bundle(
+    bytes: &[u8],
+    expected_schema_version: u64,
+) -> Result<(&str, &str), ActivePolicyIntegrityError> {
     let mut offset = 0_usize;
     let domain = take_len_prefixed(bytes, &mut offset)?;
     if domain != POLICY_BUNDLE_DOMAIN {
@@ -263,17 +317,21 @@ fn verify_canonical_bundle(
         return Err(ActivePolicyIntegrityError::InvalidSchemaVersion);
     }
     let policy = take_len_prefixed(bytes, &mut offset)?;
-    if policy.len() > MAX_POLICY_SOURCE_BYTES || str::from_utf8(policy).is_err() {
+    if policy.len() > MAX_POLICY_SOURCE_BYTES {
         return Err(ActivePolicyIntegrityError::InvalidCanonicalBundle);
     }
+    let policy =
+        str::from_utf8(policy).map_err(|_| ActivePolicyIntegrityError::InvalidCanonicalBundle)?;
     let schema = take_len_prefixed(bytes, &mut offset)?;
-    if schema.len() > MAX_SCHEMA_SOURCE_BYTES || str::from_utf8(schema).is_err() {
+    if schema.len() > MAX_SCHEMA_SOURCE_BYTES {
         return Err(ActivePolicyIntegrityError::InvalidCanonicalBundle);
     }
+    let schema =
+        str::from_utf8(schema).map_err(|_| ActivePolicyIntegrityError::InvalidCanonicalBundle)?;
     if offset != bytes.len() {
         return Err(ActivePolicyIntegrityError::InvalidCanonicalBundle);
     }
-    Ok(())
+    Ok((policy, schema))
 }
 
 fn take_len_prefixed<'a>(
@@ -429,6 +487,20 @@ mod tests {
             verify_path(authority.authority_db_path()).unwrap(),
             ActivePolicyIntegrityState::Bootstrap
         );
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn material_loader_returns_exact_sources_from_one_verified_snapshot() {
+        let (runtime, authority) = authority();
+        let expected = seed_valid_active(&authority);
+        let loaded = load_path(authority.authority_db_path()).unwrap();
+        let ActivePolicyLoadState::Active(bundle) = loaded else {
+            panic!("active bundle must load");
+        };
+        assert_eq!(bundle.policy, expected);
+        assert_eq!(bundle.policy_source, POLICY);
+        assert_eq!(bundle.schema_source, SCHEMA);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 

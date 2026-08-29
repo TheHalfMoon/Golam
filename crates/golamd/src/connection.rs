@@ -18,7 +18,8 @@ use golam_ipc::request::{
 use golam_ipc::wire::{WireError, read_frame, write_frame};
 use golam_ipc::{FrameHeader, FrameKind};
 use golam_kernel::{
-    BootstrapPolicy, ClientEnrollmentError, ClientKind, KernelApi, KernelError, Principal,
+    AuthorizationPolicy, BootstrapPolicy, ClientEnrollmentError, ClientKind, KernelApi,
+    KernelError, Principal,
 };
 use golamd::CommandRouter;
 
@@ -113,10 +114,10 @@ impl From<RequestProtocolError> for ConnectionError {
     }
 }
 
-pub fn serve_connection<S: Read + Write, A: BootstrapApprover>(
+pub fn serve_connection<S: Read + Write, A: BootstrapApprover, P: AuthorizationPolicy>(
     stream: &mut S,
     runtime: &RuntimeLayout,
-    router: &mut CommandRouter<BootstrapPolicy>,
+    router: &mut CommandRouter<P>,
     material: ConnectionMaterial,
     approver: &mut A,
 ) -> Result<(), ConnectionError> {

@@ -471,6 +471,9 @@ impl<P: AuthorizationPolicy> AuthorizationEngine<P> {
         let canonical_policy_input = normalized.policy_input_bytes()?;
         let hard_guard = evaluate_hard_guards(request);
         let policy_decision = match hard_guard {
+            HardGuardOutcome::Pass if request.principal.kind == PrincipalKind::Unauthenticated => {
+                PolicyDecision::deny("unauthenticated_principal_denied")
+            }
             HardGuardOutcome::Pass => self
                 .policy
                 .authorize_normalized(request, &canonical_policy_input),
@@ -660,6 +663,31 @@ mod tests {
             resource,
             context: AuthorizationContext::local(scope),
         }
+    }
+
+    #[test]
+    fn unauthenticated_principal_is_denied_before_a_permissive_policy() {
+        struct PermitAll;
+        impl AuthorizationPolicy for PermitAll {
+            fn authorize(&self, _request: &AuthorizationRequest<'_>) -> PolicyDecision {
+                PolicyDecision::allow("should_not_run_for_unauthenticated")
+            }
+        }
+
+        let (runtime, authority) = authority();
+        let mut engine = AuthorizationEngine::open(&authority, PermitAll).unwrap();
+        let request = AuthorizationRequest {
+            principal: Principal::unauthenticated("anonymous"),
+            action: "session.read",
+            resource: "session:1",
+            context: AuthorizationContext::local("local-ipc"),
+        };
+        let (outcome, grant) = engine.authorize(&request).unwrap();
+        assert_eq!(outcome.decision, AuthorizationDecision::Deny);
+        assert_eq!(outcome.reason_code, "unauthenticated_principal_denied");
+        assert!(grant.is_none());
+        drop(engine);
+        fs::remove_dir_all(runtime.root).unwrap();
     }
 
     #[test]

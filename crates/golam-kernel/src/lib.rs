@@ -9,6 +9,7 @@ mod operations;
 pub mod policy_candidate;
 pub mod policy_lifecycle;
 mod resource;
+mod runtime_policy;
 mod startup;
 mod synthetic_effect;
 
@@ -50,6 +51,7 @@ pub use operations::{
     KernelOperationError,
 };
 pub use resource::{ProtectedResourceError, UnprivilegedPath};
+pub use runtime_policy::RuntimeAuthorityPolicy;
 pub use startup::{KernelStartup, KernelStartupError, start_kernel};
 pub use synthetic_effect::{
     CompleteSyntheticEffect, PrepareSyntheticEffect, ResolveSyntheticReconciliation,

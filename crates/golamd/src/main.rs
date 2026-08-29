@@ -18,7 +18,7 @@ use golam_core::runtime_home::default_runtime_root;
 use golam_core::{ClientId, ResourceLimits};
 use golam_ipc::client_handshake::{random_connection_id, random_server_epoch, random_server_nonce};
 use golam_ipc::lifecycle::ClientKeyId;
-use golam_kernel::{BootstrapPolicy, KernelStartup, start_kernel};
+use golam_kernel::{KernelStartup, RuntimeAuthorityPolicy, start_kernel};
 use golamd::CommandRouter;
 
 const CONNECTION_DEADLINE: Duration = Duration::from_secs(30);
@@ -95,7 +95,7 @@ fn run() -> Result<(), Box<dyn Error>> {
     }
 
     let runtime = RuntimeLayout::initialize(default_runtime_root()?)?;
-    let startup = start_kernel(&runtime, BootstrapPolicy::default())?;
+    let startup = start_kernel(&runtime, RuntimeAuthorityPolicy::for_runtime(&runtime)?)?;
     let kernel = match startup {
         KernelStartup::Serving { kernel, report } => {
             eprintln!(
@@ -134,7 +134,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 #[cfg(unix)]
 fn serve_local_loop(
     runtime: &RuntimeLayout,
-    router: &mut CommandRouter<BootstrapPolicy>,
+    router: &mut CommandRouter<RuntimeAuthorityPolicy>,
     approval: &mut ForegroundApproval,
     limits: ResourceLimits,
     server_epoch: u64,
@@ -157,7 +157,7 @@ fn serve_local_loop(
 #[cfg(windows)]
 fn serve_local_loop(
     runtime: &RuntimeLayout,
-    router: &mut CommandRouter<BootstrapPolicy>,
+    router: &mut CommandRouter<RuntimeAuthorityPolicy>,
     approval: &mut ForegroundApproval,
     limits: ResourceLimits,
     server_epoch: u64,
@@ -180,7 +180,7 @@ fn serve_local_loop(
 #[cfg(not(any(unix, windows)))]
 fn serve_local_loop(
     _runtime: &RuntimeLayout,
-    _router: &mut CommandRouter<BootstrapPolicy>,
+    _router: &mut CommandRouter<RuntimeAuthorityPolicy>,
     _approval: &mut ForegroundApproval,
     _limits: ResourceLimits,
     _server_epoch: u64,
