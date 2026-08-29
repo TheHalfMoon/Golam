@@ -3,7 +3,7 @@
 **Status**: IMPLEMENTATION_ACTIVE — PHASE_F_COMPLETE — PHASE_G_COMPLETE — PHASE_H_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current task**: `T003-076`
+**Current task**: `T003-080`
 
 ## Authority
 
@@ -240,15 +240,23 @@ Evidence: `implementation/t003-075-wasm-profile-disposition.md`.
 
 T003-005 was not reopened. `WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED` remains authoritative; no Wasmtime/WASI executor, runtime/JIT/hostcall surface or dependency was admitted, and runtime authority did not change.
 
-### T003-076 — ACTIVE
+### T003-076 — COMPLETE
 
-Add consolidated adversarial sandbox coverage for escape/inheritance, forbidden filesystem/network/device/IPC/handle/spawn rights, bounded resources and unsupported-platform denial. Reuse the T003-074 bounded Linux x86_64 test harness without widening it into a product executor or claiming unsupported platform parity.
+Qualified at exact human-authored implementation head `758476315cebf48c31a8c43f84b5d9859f8e3342`, tree `57d4930af50f8d6c259f87332884de4f641a8261`, by CI #606 / run `33250188127`, SUCCESS on Windows/macOS/Ubuntu. Focused adversarial run `33250097386` also completed SUCCESS.
+
+Evidence: `implementation/t003-076-qualification-candidate.md`.
+
+The task repaired a material deny-all capability gap: empty filesystem/device/IPC/inherited-handle allowlists now still require explicit executor enforcement controls. Adversarial coverage also proves forbidden rights widening, strict-local network dominance, spawn denial, independent resource-control support, unsupported-platform fail-closed behavior, and preservation of the bounded T003-074 OS containment harness. Production remains `native:unqualified`; no universal native containment claim was added.
+
+### T003-080 — ACTIVE
+
+Replace `BootstrapPolicy` in the normal authority-serving path with Cedar-backed active-policy evaluation while preserving the stable `Authorize(principal, action, resource, context)` contract and keeping initial/recovery bootstrap administration narrowly bounded to the local owner. Runtime evaluator errors, malformed stored bundle/source/context and missing active policy must fail closed for ordinary product effects.
 
 ## Later phases
 
 - Phase G: COMPLETE through T003-064; strict-local hard denial and descendant-capturing observation remain dominant predecessors.
-- Remaining Phase H: T003-076.
-- Phase I: T003-080..T003-084.
+- Phase H: COMPLETE through T003-076.
+- Phase I: ACTIVE at T003-080; remaining T003-080..T003-084.
 - Phase J: T003-090..T003-098, including fresh exact-head multi-platform CI, convergence, authorized Qodo review, merge, and post-merge canonical-main evidence.
 
 ## Current invariant set
@@ -264,7 +272,8 @@ PHASE_D_COMPLETE=YES
 PHASE_E_COMPLETE=YES
 PHASE_F_COMPLETE=YES
 PHASE_G_COMPLETE=YES
-PHASE_H_ACTIVE=YES
+PHASE_H_COMPLETE=YES
+PHASE_I_ACTIVE=YES
 T003_046=PASS
 T003_046_QUALIFIED_HEAD=890571fe705f36f42c1c20acff3a8a2c4fa3498e
 T003_046_CI_RUN=33157139728
@@ -330,7 +339,12 @@ T003_075=PASS
 T003_075_QUALIFIED_HEAD=6d3bf98c51ba2c44d187ff07d24bd804a3026bdd
 T003_075_QUALIFIED_TREE=ae2463fa36240fc801accdfeb5b39adf7fccde10
 T003_075_CI_RUN=33249678974
-NEXT_TASK=T003-076
+T003_076=PASS
+T003_076_QUALIFIED_HEAD=758476315cebf48c31a8c43f84b5d9859f8e3342
+T003_076_QUALIFIED_TREE=57d4930af50f8d6c259f87332884de4f641a8261
+T003_076_CI_RUN=33250188127
+T003_076_FOCUSED_RUN=33250097386
+NEXT_TASK=T003-080
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO

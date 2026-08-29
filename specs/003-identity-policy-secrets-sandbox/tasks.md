@@ -82,7 +82,7 @@ Legend:
 - [x] **T003-073** Implement platform-executor capability checks and fail closed when a required containment control is unsupported. Exact-head qualification: CI #574 (`33246660545`) SUCCESS at `39b5989b18457785f0a02a952c1f6d69bb123e60`, tree `7b70ae25afcf6a601b376d76ea5dd99ba9f6cce4`, on Windows/macOS/Ubuntu. Evidence: `implementation/sandbox-executor-capability-qualification.md`.
 - [x] **T003-074** Before launching any native Golam-managed child process with network capability, upgrade the external strict-local observer from daemon-PID-only inspection to complete managed-process-tree observation or an equivalent descendant-capturing sinkholed boundary; then implement the minimum native untrusted-process test executor/profile required to prove the contract without claiming unsupported universal isolation. Exact-head qualification: CI #592 (`33247996101`) SUCCESS at `0d28681c971b3ae1f08504c7eb2448789ac8ed6e`, tree `32379e52964faca7db84b8354947be825ba2ef64`, on Windows/macOS/Ubuntu; focused native-executor run `33247892761` SUCCESS. Evidence: `implementation/sandbox-native-executor-qualification.md`.
 - [x] **T003-075** If Wasmtime is later admitted by reopened T003-005, implement bounded WASM/WASI profile via the qualified executor; otherwise keep it deferred with explicit evidence. Deferred/not-admitted qualification: CI #597 (`33249678974`) SUCCESS at `6d3bf98c51ba2c44d187ff07d24bd804a3026bdd`, tree `ae2463fa36240fc801accdfeb5b39adf7fccde10`, on Windows/macOS/Ubuntu. `WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED`; no runtime authority or dependency surface changed. Evidence: `implementation/t003-075-wasm-profile-disposition.md`.
-- [ ] **T003-076** Add escape/inheritance/forbidden-FS/network/spawn/resource/unsupported-platform tests.
+- [x] **T003-076** Add escape/inheritance/forbidden-FS/network/spawn/resource/unsupported-platform tests. Exact-head qualification: CI #606 (`33250188127`) SUCCESS at `758476315cebf48c31a8c43f84b5d9859f8e3342`, tree `57d4930af50f8d6c259f87332884de4f641a8261`, on Windows/macOS/Ubuntu; focused adversarial run `33250097386` SUCCESS. Empty allowlists now require explicit executor enforcement and resource controls fail closed. Evidence: `implementation/t003-076-qualification-candidate.md`.
 
 ## Phase I — Kernel/CLI integration and adversarial qualification
 
@@ -198,7 +198,8 @@ T003_064=PASS
 T003_064_QUALIFIED_HEAD=d77cd2b8e78a41153085c279fea698bb794d2d4e
 T003_064_CI_RUN=33234807292
 PHASE_G_COMPLETE=YES
-PHASE_H_ACTIVE=YES
+PHASE_H_COMPLETE=YES
+PHASE_I_ACTIVE=YES
 T003_070=PASS
 T003_070_QUALIFIED_HEAD=9704318742c7622cb5304fa24f22b1c5bb35e22e
 T003_070_CI_RUN=33235986709
@@ -222,5 +223,10 @@ T003_075=PASS
 T003_075_QUALIFIED_HEAD=6d3bf98c51ba2c44d187ff07d24bd804a3026bdd
 T003_075_QUALIFIED_TREE=ae2463fa36240fc801accdfeb5b39adf7fccde10
 T003_075_CI_RUN=33249678974
-NEXT_TASK=T003-076
+T003_076=PASS
+T003_076_QUALIFIED_HEAD=758476315cebf48c31a8c43f84b5d9859f8e3342
+T003_076_QUALIFIED_TREE=57d4930af50f8d6c259f87332884de4f641a8261
+T003_076_CI_RUN=33250188127
+T003_076_FOCUSED_RUN=33250097386
+NEXT_TASK=T003-080
 ```
