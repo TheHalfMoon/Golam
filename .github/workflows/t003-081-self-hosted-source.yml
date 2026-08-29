@@ -1,0 +1,56 @@
+name: T003-081 self-hosted source qualification
+
+on:
+  push:
+    branches: ["qualify/t003-081-self-hosted-source"]
+
+permissions:
+  contents: read
+
+jobs:
+  source-qualification:
+    name: t003-081-source-macos
+    runs-on: self-hosted
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify candidate source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "a6420da22d97f3ca68177f4ea9fe8c1f9b9023eb"
+          changed="$(git diff --name-only HEAD^ HEAD)"
+          test "$changed" = ".github/workflows/t003-081-self-hosted-source.yml"
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+      - name: Format
+        run: cargo +1.98.0 fmt --all -- --check
+      - name: Clippy
+        run: cargo +1.98.0 clippy --locked --workspace --all-targets -- -D warnings
+      - name: Test workspace
+        run: cargo +1.98.0 test --locked --workspace --all-targets
+      - name: T003-081 focused ledger and kernel tests
+        run: |
+          cargo +1.98.0 test --locked -p golam-ledger authorization::tests::
+          cargo +1.98.0 test --locked -p golam-kernel admin_qualification::tests::
+      - name: Authenticated daemon IPC qualification
+        run: cargo +1.98.0 test --locked -p golamd --bin golamd connection::tests::
+      - name: Adversarial authority qualification
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc --test adversarial
+          cargo +1.98.0 test --locked -p golam-kernel --test hostile_adapter
+          cargo +1.98.0 test --locked -p golam-kernel client_auth::tests::
+      - name: Property qualification
+        run: |
+          cargo +1.98.0 test --locked -p golam-effects --test qualification_properties
+          cargo +1.98.0 test --locked -p golam-ledger --test qualification_properties
+      - name: Bounded fuzz smoke
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc --test fuzz_smoke
+          cargo +1.98.0 test --locked -p golam-ledger --test fuzz_smoke
+      - name: IPC transport qualification
+        run: cargo +1.98.0 test --locked -p golam-ipc unix_transport::
+      - name: Build daemon for external locality observation
+        run: cargo +1.98.0 build --locked -p golamd --bin golamd
+      - name: Strict-local external network observation
+        run: bash scripts/qualification/strict-local-no-network.sh target/debug/golamd
