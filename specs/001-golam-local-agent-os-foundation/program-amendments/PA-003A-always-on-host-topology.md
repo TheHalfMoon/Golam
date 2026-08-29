@@ -112,6 +112,7 @@ A future migration protocol MUST cover:
 - current effect/UNKNOWN outcome reconciliation;
 - approval/lease expiry or re-mint rules;
 - secret re-sealing/re-brokering;
+- external-provider credential exposure/revocation/rotation disposition for any credential the old host may still be able to use;
 - device/channel rebinding generation changes where required;
 - **authority-domain identity rotation plus fresh authority-domain authentication-root/key rotation and pairing-domain/generation rotation at cutover** so credentials and signed objects cannot remain valid merely because protected bytes were copied to a new Authority Host;
 - **invalidation of every pre-cutover mobile approval response and queued signed request intent whose domain/generation/authentication-root binding names the old Authority Host**, followed by fresh authorization or re-signing only after the new host relationship is current;
@@ -171,6 +172,24 @@ The recovery protocol MUST ensure:
 - any user-data artifacts recovered from the old host enter explicit provenance/conflict handling rather than silently rewriting current canonical state;
 - the migration/recovery record distinguishes physical old-host decommissioning from logical stale-domain fencing and records the predecessor backup identity/hash, predecessor authority credential identity, recovery-authorization evidence identity, newly generated domain identity, and newly generated authority credential identity without pretending the backup proves unreachable-host recency.
 
+#### External credential exposure after host loss
+
+Rotating Golam authority fences Golam authority; it does **not** revoke a provider/API/account credential that an unreachable old host may still possess or be able to use directly against an external service.
+
+During lost-host recovery, every secret/provider credential relevant to future external effects MUST receive an exposure disposition based on its actual placement and the old host's possible access:
+
+- if plaintext, decryptable vault material, a broker credential, refresh token, provider API key, signing key, session credential, or equivalent external-use capability may have been available to the lost host, its recovery state is `EXPOSURE_UNKNOWN`/equivalent until independently remediated;
+- a recovered ciphertext/SecretHandle/version from the stale backup MUST NOT by itself make that credential safe-current in the new domain;
+- `EXPOSURE_UNKNOWN` credentials MUST NOT authorize new external effects from the recovered domain until the owning provider/account credential is revoked/rotated/reissued and the fresh replacement is entered/brokered under current authority, or until independently verifiable evidence proves the old host never possessed usable credential material for that credential class;
+- credentials intentionally node-local on another still-trusted node, or non-exportable hardware-bound credentials for which the lost Authority Host never had usable secret material, MAY receive a narrower disposition only when the owning spec defines evidence sufficient to prove that boundary;
+- provider-side revocation/rotation status, credential identifiers/versions, and reconciliation evidence are recorded without secret plaintext;
+- if provider-side revocation/rotation cannot be confirmed, Golam MUST surface the residual compromise/unknown risk and block consequential work that depends on treating that credential as exclusively current;
+- an old host's potential direct provider activity after Golam recovery is outside the new domain's authority but remains relevant external-state uncertainty. Where provider audit/state APIs exist and are authorized, recovery SHOULD reconcile them before claiming account/effect state is known.
+
+`AUTHORITY_DOMAIN_ROTATION != PROVIDER_CREDENTIAL_REVOCATION`
+`RESTORED_SECRET_HANDLE != SAFE_CURRENT_EXTERNAL_CREDENTIAL`
+`LOST_HOST_SECRET_ACCESS_UNKNOWN != CREDENTIAL_EXCLUSIVITY`
+
 #### Effect and scheduler uncertainty across a stale-backup gap
 
 A fresh authority domain fences stale authority; it does **not** prove that external effects after the backup horizon did not occur.
@@ -183,7 +202,7 @@ Lost-host recovery MUST record the exact restored backup/canonical cut point (fo
 - Consequence-bearing scheduled work whose trigger window falls inside the unobserved lost-host gap MUST NOT be automatically “caught up” or replayed. It is treated as outcome-unknown until reconciled or deliberately rescheduled under current authority.
 - At-most-once/irreversible operations MUST NOT be blind-retried across the recovery gap. Existing provider idempotency/reconciliation identities are reused where they are known and still valid; absence of such identity does not authorize guessing.
 - Recovered canonical state MUST preserve an explicit uncertainty boundary so later Trust Receipts, Task satisfaction, learning, and memory do not describe post-backup real-world outcomes as known facts without evidence.
-- Recovery-domain rotation, authentication-root rotation, effect reconciliation, and user-visible recovery decisions are separately attributable. Creating a new domain or key MUST NOT reset Effect Gate history or erase UNKNOWN outcomes.
+- Recovery-domain rotation, authentication-root rotation, external-credential exposure disposition, effect reconciliation, and user-visible recovery decisions are separately attributable. Creating a new domain or key MUST NOT reset Effect Gate history, erase UNKNOWN outcomes, or imply external credentials were revoked.
 
 `LOST_HOST_RECOVERY != EFFECT_OUTCOME_RESET`
 `ABSENT_FROM_STALE_BACKUP != NOT_EXECUTED`
@@ -235,7 +254,7 @@ Some secrets may be Authority-Host-brokered; others may intentionally remain dev
 
 The architecture MUST allow a task to block until the correct secret-owning node is available rather than copying all credentials into a central vault.
 
-Secret movement between hosts/nodes is a protected operation with explicit provenance and policy.
+Secret movement between hosts/nodes is a protected operation with explicit provenance and policy. Lost-host recovery MUST preserve secret placement/exposure truth: a credential that may remain usable by the lost host cannot be relabeled safe-current merely because its encrypted record was restored or re-sealed on the replacement host.
 
 ## 8. Capability and locality truth
 
@@ -312,7 +331,7 @@ These are setup projections; the underlying security contracts remain identical.
 
 ### Spec 007
 
-Define native host/node pairing, device topology, reconnect, node availability, protected host migration prerequisites, collision-resistant authority-domain identity and generation rotation, fresh authority-domain authentication-root/key rotation and pinning, independent owner-controlled lost-host recovery authorization, stale mobile approval/queued-intent invalidation, stale-backup-safe lost-host recovery fencing, returning-old-host disposition, and phone continuity semantics.
+Define native host/node pairing, device topology, reconnect, node availability, protected host migration prerequisites, collision-resistant authority-domain identity and generation rotation, fresh authority-domain authentication-root/key rotation and pinning, independent owner-controlled lost-host recovery authorization, stale mobile approval/queued-intent invalidation, stale-backup-safe lost-host recovery fencing, external-provider credential exposure/rotation disposition, returning-old-host disposition, and phone continuity semantics.
 
 ### Spec 008
 
@@ -342,6 +361,9 @@ Test:
 - old host returning after recovery and being denied current-authority status;
 - stale-domain/generation/authentication-root device/node/control replay;
 - no automatic merge of post-cutover protected mutations from a stale old host;
+- a provider/API credential usable by the lost host remaining valid after Golam domain rotation, and proof that the recovered domain marks it exposure-unknown and cannot use it as safe-current until provider-side rotation/revocation/reissue or equivalent independent evidence closes the exposure;
+- a restored SecretHandle/ciphertext alone being rejected as proof that an external provider credential is exclusively current;
+- an unaffected node-local/non-exportable credential receiving a narrower recovery disposition only from explicit placement/hardware evidence rather than assumption;
 - an irreversible/at-most-once external effect executed by the old host after the restored backup cut point and proof that recovery does not blindly re-dispatch it;
 - scheduled consequential work whose trigger window lies inside the lost-host/backup gap and proof that recovery marks it unknown/reconciliation-required instead of automatic catch-up;
 - absence of a post-backup effect record being rejected as proof that the effect never happened;
@@ -377,6 +399,9 @@ STALE_BACKUP_KEY != CURRENT_AUTHORITY_CREDENTIAL
 BACKUP_POSSESSION != RECOVERY_AUTHORITY
 CHANNEL_CONTENT != LOST_HOST_RECOVERY_APPROVAL
 RECOVERY_AUTHORITY != GENERAL_EFFECT_AUTHORITY
+AUTHORITY_DOMAIN_ROTATION != PROVIDER_CREDENTIAL_REVOCATION
+RESTORED_SECRET_HANDLE != SAFE_CURRENT_EXTERNAL_CREDENTIAL
+LOST_HOST_SECRET_ACCESS_UNKNOWN != CREDENTIAL_EXCLUSIVITY
 LOST_HOST_RECOVERY != EFFECT_OUTCOME_RESET
 ABSENT_FROM_STALE_BACKUP != NOT_EXECUTED
 MISSED_SCHEDULE_WINDOW != SAFE_REPLAY
