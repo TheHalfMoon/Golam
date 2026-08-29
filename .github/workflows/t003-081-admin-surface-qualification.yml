@@ -13,5 +13,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Prove workflow registration
-        run: echo T003-081 workflow registered
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
+      - name: Prepare bounded implementation
+        run: python3 scripts/qualification/prepare-t003-081.py
+      - name: Format
+        run: cargo +1.98.0 fmt --all
+      - name: Verify format
+        run: cargo +1.98.0 fmt --all -- --check
+      - name: Run focused T003-081 qualification
+        run: |
+          cargo +1.98.0 test --locked -p golam-ledger admin_qualification::tests:: -- --nocapture
+          cargo +1.98.0 test --locked -p golam-ipc command::tests:: -- --nocapture
+          cargo +1.98.0 test --locked -p golam-kernel admin_qualification::tests:: -- --nocapture
+          cargo +1.98.0 test --locked -p golam-kernel runtime_policy::tests::bootstrap_is_local_owner_administration_only -- --nocapture
+          cargo +1.98.0 test --locked -p golam --lib -- --nocapture
+          cargo +1.98.0 test --locked -p golamd --lib -- --nocapture
+          cargo +1.98.0 clippy --locked -p golam-ledger -p golam-ipc -p golam-kernel -p golam -p golamd --all-targets -- -D warnings
