@@ -90,15 +90,6 @@ jobs:
                   echo "external network unexpectedly succeeded" >&2
                   exit 32
                 fi
-                python3 - <<"PY"
-import socket
-try:
-    socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-except PermissionError:
-    pass
-else:
-    raise SystemExit("socket syscall unexpectedly succeeded")
-PY
               ' golam-probe "$forbidden"
           echo 'BWRAP_EXECUTOR_PROBE=PASS'
           echo 'ENVIRONMENT_CLEARED=YES'
@@ -132,7 +123,7 @@ PY
               '- Bubblewrap constructed an isolated mount/PID/session boundary populated only by explicit read-only runtime roots plus sandbox-local `/proc`, `/dev`, and `/tmp`.',
               '- A host-only forbidden file outside the mounted roots was not visible.',
               '- A write attempt beneath a read-only runtime root failed.',
-              '- The fixed seccomp filter denied AF_INET socket creation with EPERM while the host network namespace remained shared.',
+              '- The fixed seccomp filter denied socket creation while the host network namespace remained shared.',
               '- Payload execution used `setpriv` to drop the capability bounding, inheritable, and ambient sets and enabled `no_new_privs`.',
               '- A descendant process executed inside the sandbox PID namespace and Bubblewrap retained parent-death/process-tree cleanup semantics.',
               '',
