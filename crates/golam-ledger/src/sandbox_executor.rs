@@ -74,7 +74,7 @@ pub struct PlatformExecutorCapabilities {
 impl PlatformExecutorCapabilities {
     /// Only trusted Golam executor code inside this crate may construct a capability manifest.
     /// Requesters receive the resulting manifest but cannot self-assert platform support.
-    pub(crate) fn from_trusted_manifest(
+    fn from_trusted_manifest(
         executor_id: &str,
         supported_controls: &[&str],
     ) -> Result<Self, SandboxExecutorError> {
@@ -127,6 +127,16 @@ impl PlatformExecutorCapabilities {
     pub const fn manifest_hash(&self) -> [u8; 32] {
         self.manifest_hash
     }
+}
+
+/// Return the only production capability manifest admitted by T003-073.
+///
+/// No native executor containment control is qualified yet, so the trusted baseline
+/// deliberately advertises zero controls. Any profile that requires containment therefore
+/// fails closed until a later ordered task implements and qualifies concrete enforcement.
+pub fn current_platform_executor_capabilities()
+-> Result<PlatformExecutorCapabilities, SandboxExecutorError> {
+    PlatformExecutorCapabilities::from_trusted_manifest("native:unqualified", &[])
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -463,15 +473,17 @@ mod tests {
             &all_controls(),
         )
         .expect("manifest");
-        let resolution =
-            resolve_platform_executor_capabilities(&plan, &descriptor, &capabilities)
-                .expect("resolution");
+        let resolution = resolve_platform_executor_capabilities(&plan, &descriptor, &capabilities)
+            .expect("resolution");
         assert_eq!(resolution.executor_id, "native:test-executor");
         assert_eq!(resolution.platform, SandboxPlatform::current());
         assert!(!resolution.claims_platform_containment());
         assert!(!resolution.launches_process());
         assert_eq!(resolution.source_plan_hash, plan.plan_hash);
-        assert_eq!(resolution.source_descriptor_hash, descriptor.descriptor_hash);
+        assert_eq!(
+            resolution.source_descriptor_hash,
+            descriptor.descriptor_hash
+        );
     }
 
     #[test]
@@ -482,11 +494,9 @@ mod tests {
             .into_iter()
             .filter(|control| *control != CONTROL_ENVIRONMENT_CLEAR)
             .collect();
-        let capabilities = PlatformExecutorCapabilities::from_trusted_manifest(
-            "native:test-executor",
-            &controls,
-        )
-        .expect("manifest");
+        let capabilities =
+            PlatformExecutorCapabilities::from_trusted_manifest("native:test-executor", &controls)
+                .expect("manifest");
         assert!(matches!(
             resolve_platform_executor_capabilities(&plan, &descriptor, &capabilities),
             Err(SandboxExecutorError::UnsupportedRequiredControl(control))
@@ -502,11 +512,9 @@ mod tests {
             .into_iter()
             .filter(|control| *control != "platform:test-control")
             .collect();
-        let capabilities = PlatformExecutorCapabilities::from_trusted_manifest(
-            "native:test-executor",
-            &controls,
-        )
-        .expect("manifest");
+        let capabilities =
+            PlatformExecutorCapabilities::from_trusted_manifest("native:test-executor", &controls)
+                .expect("manifest");
         assert!(matches!(
             resolve_platform_executor_capabilities(&plan, &descriptor, &capabilities),
             Err(SandboxExecutorError::UnsupportedRequiredControl(control))
@@ -569,6 +577,19 @@ mod tests {
     }
 
     #[test]
+    fn production_baseline_advertises_no_unqualified_containment() {
+        let plan = plan();
+        let descriptor = descriptor(&plan);
+        let capabilities = current_platform_executor_capabilities().expect("baseline manifest");
+        assert_eq!(capabilities.executor_id(), "native:unqualified");
+        assert_eq!(capabilities.platform(), SandboxPlatform::current());
+        assert!(matches!(
+            resolve_platform_executor_capabilities(&plan, &descriptor, &capabilities),
+            Err(SandboxExecutorError::UnsupportedRequiredControl(_))
+        ));
+    }
+
+    #[test]
     fn capability_manifest_is_canonical_and_duplicate_free() {
         assert!(matches!(
             PlatformExecutorCapabilities::from_trusted_manifest(
@@ -595,7 +616,11 @@ mod tests {
         let descriptor = resolve_sandbox_enforcement(&plan, SandboxRequestedRights::deny_all())
             .expect("deny-all descriptor");
         let controls = required_controls(&plan, &descriptor);
-        assert!(controls.iter().any(|control| control == CONTROL_NETWORK_DENY));
+        assert!(
+            controls
+                .iter()
+                .any(|control| control == CONTROL_NETWORK_DENY)
+        );
         assert!(controls.iter().any(|control| control == CONTROL_SPAWN_DENY));
         assert!(
             controls
