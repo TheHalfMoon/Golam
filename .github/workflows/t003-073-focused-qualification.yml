@@ -1,0 +1,35 @@
+name: t003-073-focused-qualification
+on:
+  push:
+    branches:
+      - impl/003-identity-policy-secrets-sandbox
+permissions:
+  contents: write
+jobs:
+  qualify:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/003-identity-policy-secrets-sandbox
+          fetch-depth: 0
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
+      - name: Apply pinned formatting
+        run: cargo +1.98.0 fmt --all
+      - name: Focused T003-073 qualification
+        run: |
+          cargo +1.98.0 test -p golam-ledger sandbox_executor::tests:: -- --nocapture
+          cargo +1.98.0 test -p golam-ledger sandbox_enforcement::tests:: -- --nocapture
+          cargo +1.98.0 test -p golam-ledger sandbox_plan::tests:: -- --nocapture
+          cargo +1.98.0 test -p golam-ledger sandbox_profile::tests:: -- --nocapture
+          cargo +1.98.0 clippy -p golam-ledger --all-targets -- -D warnings
+      - name: Commit clean T003-073 candidate
+        run: |
+          git rm .github/workflows/t003-073-focused-qualification.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/golam-ledger/src/sandbox_executor.rs
+          git commit -m 'style: apply Rust 1.98 sandbox executor formatting'
+          git push origin HEAD:impl/003-identity-policy-secrets-sandbox
