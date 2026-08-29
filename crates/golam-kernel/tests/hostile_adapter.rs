@@ -79,6 +79,7 @@ fn hostile_adapter_cannot_cross_kernel_authority_boundary() {
     assert_eq!(egress.decision, AuthorizationDecision::Deny);
 
     drop(kernel);
+    drop(credential_store);
     fs::remove_dir_all(runtime.root).unwrap();
 }
 
@@ -149,6 +150,8 @@ fn hostile_adapter_cannot_self_register_verifier_or_weaken_sandbox_profile() {
     let runtime = runtime();
     let authority = AuthorityLayout::initialize(&runtime).unwrap();
 
+    // Even a fabricated trusted-origin taint assertion cannot substitute for
+    // the exact current decision/effect/ONCE-approval registration evidence.
     let prepared_verifier = prepare_verifier_rule(
         VerifierRuleKind::DeterministicVerifier,
         1,
@@ -208,6 +211,8 @@ fn hostile_adapter_cannot_self_register_verifier_or_weaken_sandbox_profile() {
         Err(SandboxProfileError::ProfileNotFound)
     ));
 
+    drop(profile_store);
+    drop(verifier_store);
     fs::remove_dir_all(runtime.root).unwrap();
 }
 
