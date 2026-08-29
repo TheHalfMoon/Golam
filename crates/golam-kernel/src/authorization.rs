@@ -520,6 +520,13 @@ impl<P: AuthorizationPolicy> AuthorizationEngine<P> {
         Ok((outcome, grant))
     }
 
+    pub(crate) fn record(
+        &self,
+        decision_id: [u8; 16],
+    ) -> Result<Option<StoredAuthorizationDecision>, AuthorizationError> {
+        Ok(self.audit.record(decision_id)?)
+    }
+
     pub(crate) fn records(&self) -> Result<Vec<StoredAuthorizationDecision>, AuthorizationError> {
         Ok(self.audit.records()?)
     }

@@ -227,9 +227,7 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         self.authorize_admin(principal, AUTHORITY_EXPLAIN_ACTION, &resource, scope)?;
         let record = self
             .authorization
-            .records()?
-            .into_iter()
-            .find(|record| record.decision_id == decision_id)
+            .record(decision_id)?
             .ok_or(AdminSurfaceError::DecisionNotFound)?;
         Ok(AuthorizationDecisionExplanation {
             decision_id: record.decision_id,

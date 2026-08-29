@@ -4,7 +4,7 @@ use std::error::Error;
 use std::fmt;
 
 use golam_core::authority::AuthorityLayout;
-use rusqlite::{Connection, Transaction, TransactionBehavior, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
 use crate::active_policy_integrity::{
     ActivePolicyIntegrityError, verify_path as verify_active_policy,
@@ -268,6 +268,92 @@ impl AuthorizationAuditLog {
             global_seq,
             authority_evidence_version: AUTHORITY_EVIDENCE_VERSION,
         })
+    }
+
+    pub fn record(
+        &self,
+        decision_id: [u8; 16],
+    ) -> Result<Option<StoredAuthorizationDecision>, AuthorizationAuditError> {
+        let raw = self
+            .connection
+            .query_row(
+                "SELECT decision_id, principal, action, resource, context_hash, hard_guard_result, lease_id, lease_generation, policy_bundle_id, policy_bundle_hash, matched_rule_ids, approval_id, decision, reason_code, global_seq, authority_evidence_version \
+                 FROM authorization_decisions WHERE decision_id = ?1 LIMIT 1",
+                params![&decision_id[..]],
+                |row| {
+                    Ok((
+                        row.get::<_, Vec<u8>>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, Vec<u8>>(4)?,
+                        row.get::<_, String>(5)?,
+                        row.get::<_, Option<Vec<u8>>>(6)?,
+                        row.get::<_, Option<i64>>(7)?,
+                        row.get::<_, Option<Vec<u8>>>(8)?,
+                        row.get::<_, Option<Vec<u8>>>(9)?,
+                        row.get::<_, Vec<u8>>(10)?,
+                        row.get::<_, Option<Vec<u8>>>(11)?,
+                        row.get::<_, String>(12)?,
+                        row.get::<_, String>(13)?,
+                        row.get::<_, i64>(14)?,
+                        row.get::<_, i64>(15)?,
+                    ))
+                },
+            )
+            .optional()?;
+        let Some((
+            decision_id,
+            principal,
+            action,
+            resource,
+            context_hash,
+            hard_guard_result,
+            lease_id,
+            lease_generation,
+            policy_bundle_id,
+            policy_bundle_hash,
+            matched_rule_ids,
+            approval_id,
+            decision,
+            reason_code,
+            global_seq,
+            authority_evidence_version,
+        )) = raw
+        else {
+            return Ok(None);
+        };
+        let authority_evidence_version = u64::try_from(authority_evidence_version)
+            .map_err(|_| AuthorizationAuditError::InvalidStoredRecord)?;
+        let matched_rule_ids = if authority_evidence_version >= AUTHORITY_EVIDENCE_VERSION {
+            decode_matched_rule_ids(&matched_rule_ids)?
+        } else if matched_rule_ids.is_empty() {
+            Vec::new()
+        } else {
+            return Err(AuthorizationAuditError::InvalidStoredRecord);
+        };
+        let record = StoredAuthorizationDecision {
+            decision_id: id16(decision_id)?,
+            principal,
+            action,
+            resource,
+            context_hash: hash32(context_hash)?,
+            hard_guard_result,
+            lease_id: optional_id16(lease_id)?,
+            lease_generation: optional_positive_u64(lease_generation)?,
+            policy_bundle_id: optional_id16(policy_bundle_id)?,
+            policy_bundle_hash: optional_hash32(policy_bundle_hash)?,
+            matched_rule_ids,
+            approval_id: optional_id16(approval_id)?,
+            decision: AuthorizationDecisionKind::from_str(&decision)
+                .ok_or(AuthorizationAuditError::InvalidStoredRecord)?,
+            reason_code,
+            global_seq: u64::try_from(global_seq)
+                .map_err(|_| AuthorizationAuditError::InvalidStoredRecord)?,
+            authority_evidence_version,
+        };
+        validate_stored_evidence(&record)?;
+        Ok(Some(record))
     }
 
     pub fn records(&self) -> Result<Vec<StoredAuthorizationDecision>, AuthorizationAuditError> {
@@ -671,6 +757,8 @@ mod tests {
             allow.context_hash,
             *blake3::hash(b"authenticated-local").as_bytes()
         );
+        assert_eq!(log.record(allow.decision_id).unwrap(), Some(allow.clone()));
+        assert_eq!(log.record([0xff; 16]).unwrap(), None);
         assert_eq!(log.records().unwrap(), vec![allow, deny]);
         drop(log);
 
