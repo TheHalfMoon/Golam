@@ -534,6 +534,71 @@ mod tests {
     }
 
     #[test]
+    fn adversarial_rights_widening_is_denied_across_authority_axes() {
+        let plan = plan();
+
+        let mut request = allowed_request();
+        request.filesystem_read_roots = &["/host/private"];
+        assert!(matches!(
+            resolve_sandbox_enforcement(&plan, request),
+            Err(SandboxEnforcementError::UndeclaredFilesystemRead)
+        ));
+
+        let mut request = allowed_request();
+        request.filesystem_write_roots = &["/host/private"];
+        assert!(matches!(
+            resolve_sandbox_enforcement(&plan, request),
+            Err(SandboxEnforcementError::UndeclaredFilesystemWrite)
+        ));
+
+        let mut request = allowed_request();
+        request.environment_names = &["GOLAM_AMBIENT_SECRET"];
+        assert!(matches!(
+            resolve_sandbox_enforcement(&plan, request),
+            Err(SandboxEnforcementError::UndeclaredEnvironmentName)
+        ));
+
+        let mut request = allowed_request();
+        request.devices = &["device:disk0"];
+        assert!(matches!(
+            resolve_sandbox_enforcement(&plan, request),
+            Err(SandboxEnforcementError::UndeclaredDevice)
+        ));
+
+        let mut request = allowed_request();
+        request.ipc_endpoints = &["ipc:host-daemon"];
+        assert!(matches!(
+            resolve_sandbox_enforcement(&plan, request),
+            Err(SandboxEnforcementError::UndeclaredIpcEndpoint)
+        ));
+
+        let mut request = allowed_request();
+        request.inherited_handle_rules = &["handle:ambient"];
+        assert!(matches!(
+            resolve_sandbox_enforcement(&plan, request),
+            Err(SandboxEnforcementError::UndeclaredInheritedHandleRule)
+        ));
+
+        let mut strict = plan.clone();
+        strict.locality = SandboxLocality::StrictLocal;
+        let mut request = allowed_request();
+        request.network = SandboxNetworkRequest::PermitBoundExternal;
+        assert!(matches!(
+            resolve_sandbox_enforcement(&strict, request),
+            Err(SandboxEnforcementError::NetworkWidening)
+        ));
+
+        let mut deny_spawn = plan.clone();
+        deny_spawn.spawn_rule = SandboxSpawnRule::Deny;
+        let mut request = allowed_request();
+        request.spawn_rule = SandboxSpawnRule::DirectChildOnly;
+        assert!(matches!(
+            resolve_sandbox_enforcement(&deny_spawn, request),
+            Err(SandboxEnforcementError::SpawnWidening)
+        ));
+    }
+
+    #[test]
     fn resource_requests_can_only_tighten_profile_bounds() {
         let descriptor = resolve_sandbox_enforcement(&plan(), allowed_request()).unwrap();
         assert_eq!(descriptor.cpu_limit, Some(5));
