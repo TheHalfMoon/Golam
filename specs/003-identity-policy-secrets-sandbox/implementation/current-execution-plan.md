@@ -248,15 +248,23 @@ Evidence: `implementation/t003-076-qualification-candidate.md`.
 
 The task repaired a material deny-all capability gap: empty filesystem/device/IPC/inherited-handle allowlists now still require explicit executor enforcement controls. Adversarial coverage also proves forbidden rights widening, strict-local network dominance, spawn denial, independent resource-control support, unsupported-platform fail-closed behavior, and preservation of the bounded T003-074 OS containment harness. Production remains `native:unqualified`; no universal native containment claim was added.
 
-### T003-080 — ACTIVE
+### T003-080 — COMPLETE
 
-Replace `BootstrapPolicy` in the normal authority-serving path with Cedar-backed active-policy evaluation while preserving the stable `Authorize(principal, action, resource, context)` contract and keeping initial/recovery bootstrap administration narrowly bounded to the local owner. Runtime evaluator errors, malformed stored bundle/source/context and missing active policy must fail closed for ordinary product effects.
+Qualified at exact human-authored implementation head `cd721231b498450e984810b4f06c4e14bdc311e1`, tree `4c5ddb92f8764f0107510ba72e6f697a3225bd56`, by CI #616 / run `33252170158`, SUCCESS on Windows/macOS/Ubuntu. Focused runtime-policy run `33252055912` also completed SUCCESS.
+
+Evidence: `implementation/t003-080-runtime-policy-qualification.md`.
+
+The normal `golamd` authority-serving path now uses a Cedar-backed runtime policy loaded from one integrity-verified read-only active-policy snapshot for each authorization decision. Hard guards and unauthenticated-principal denial remain above Cedar; malformed or incompatible policy/schema/context/evaluator state fails closed; bounded bundle/rule evidence is recorded; and pre-activation bootstrap authority is restricted to narrow local-owner administration rather than ordinary product effects.
+
+### T003-081 — ACTIVE
+
+Add the minimum authenticated CLI/admin/test surface required by Spec 003 for policy lifecycle, capability leases, approvals, deterministic canary-secret qualification, authorization-decision explanation and sandbox-profile qualification. Every mutation must route through existing typed protected kernel/ledger authority paths; no shell or raw-SQL authority bypass is permitted.
 
 ## Later phases
 
 - Phase G: COMPLETE through T003-064; strict-local hard denial and descendant-capturing observation remain dominant predecessors.
 - Phase H: COMPLETE through T003-076.
-- Phase I: ACTIVE at T003-080; remaining T003-080..T003-084.
+- Phase I: ACTIVE at T003-081; remaining T003-081..T003-084.
 - Phase J: T003-090..T003-098, including fresh exact-head multi-platform CI, convergence, authorized Qodo review, merge, and post-merge canonical-main evidence.
 
 ## Current invariant set
@@ -344,7 +352,12 @@ T003_076_QUALIFIED_HEAD=758476315cebf48c31a8c43f84b5d9859f8e3342
 T003_076_QUALIFIED_TREE=57d4930af50f8d6c259f87332884de4f641a8261
 T003_076_CI_RUN=33250188127
 T003_076_FOCUSED_RUN=33250097386
-NEXT_TASK=T003-080
+T003_080=PASS
+T003_080_QUALIFIED_HEAD=cd721231b498450e984810b4f06c4e14bdc311e1
+T003_080_QUALIFIED_TREE=4c5ddb92f8764f0107510ba72e6f697a3225bd56
+T003_080_CI_RUN=33252170158
+T003_080_FOCUSED_RUN=33252055912
+NEXT_TASK=T003-081
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO

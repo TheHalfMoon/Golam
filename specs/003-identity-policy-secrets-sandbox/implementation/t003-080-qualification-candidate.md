@@ -1,6 +1,6 @@
 # T003-080 Runtime Policy Qualification Candidate
 
-**Status**: QUALIFICATION_CANDIDATE — NOT YET PASS
+**Status**: SUPERSEDED_BY_EXACT_HEAD_QUALIFICATION
 
 ## Focused qualification
 
@@ -42,7 +42,7 @@ No hard guard was moved below Cedar, no lease/approval constructor was exposed, 
 Official repository CI on this exact human-authored candidate must complete SUCCESS on Windows, macOS and Ubuntu before `T003_080=PASS` may be recorded.
 
 ```text
-T003_080=NOT_YET_PASS
+T003_080=PASS_RECORDED_IN_FINAL_EVIDENCE
 T003_080_FOCUSED_RUN=33252055912
 T003_080_IMPLEMENTATION_HEAD=612d697dfc46b4e4e322d49852963452fb5fcdbc
 T003_080_IMPLEMENTATION_TREE=5178725b9a46bcb4d649a8b2d572898be8e7ed22

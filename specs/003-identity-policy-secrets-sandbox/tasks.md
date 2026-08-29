@@ -86,7 +86,7 @@ Legend:
 
 ## Phase I — Kernel/CLI integration and adversarial qualification
 
-- [ ] **T003-080** Replace bootstrap policy evaluation in normal authority path while preserving the stable `Authorize` call contract and narrow recovery bootstrap path.
+- [x] **T003-080** Replace bootstrap policy evaluation in normal authority path while preserving the stable `Authorize` call contract and narrow recovery bootstrap path. Exact-head qualification: CI #616 (`33252170158`) SUCCESS at `cd721231b498450e984810b4f06c4e14bdc311e1`, tree `4c5ddb92f8764f0107510ba72e6f697a3225bd56`, on Windows/macOS/Ubuntu; focused runtime-policy run `33252055912` SUCCESS. Evidence: `implementation/t003-080-runtime-policy-qualification.md`.
 - [ ] **T003-081** Add minimal authenticated CLI/admin/test surface for policy, lease, approval, canary secret, decision explain and sandbox-profile qualification.
 - [ ] **T003-082** Extend hostile-adapter tests: no capability minting, policy activation, approval forging, vault plaintext read, egress bypass, verifier self-registration or profile weakening.
 - [ ] **T003-083** Preserve Spec 002 effect FSM/reconciliation, IPC, corruption and strict-local gates without regression.
@@ -228,5 +228,10 @@ T003_076_QUALIFIED_HEAD=758476315cebf48c31a8c43f84b5d9859f8e3342
 T003_076_QUALIFIED_TREE=57d4930af50f8d6c259f87332884de4f641a8261
 T003_076_CI_RUN=33250188127
 T003_076_FOCUSED_RUN=33250097386
-NEXT_TASK=T003-080
+T003_080=PASS
+T003_080_QUALIFIED_HEAD=cd721231b498450e984810b4f06c4e14bdc311e1
+T003_080_QUALIFIED_TREE=4c5ddb92f8764f0107510ba72e6f697a3225bd56
+T003_080_CI_RUN=33252170158
+T003_080_FOCUSED_RUN=33252055912
+NEXT_TASK=T003-081
 ```
