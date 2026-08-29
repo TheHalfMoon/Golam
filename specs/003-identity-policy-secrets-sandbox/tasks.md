@@ -71,7 +71,7 @@ Legend:
 - [x] **T003-060** Keep strict-local external egress as an unconditional hard guard before policy/permit evaluation. Exact-head qualification: CI #502 (`33196075286`) SUCCESS at `50941a6d68a7920aca3666eb786f05d8b2c145b2` on Windows/macOS/Ubuntu. Evidence: `implementation/strict-local-hard-guard-qualification.md`.
 - [x] **T003-061** Implement non-strict EgressPermit scope and protected issuance/revocation/use accounting. Exact-head qualification: CI #514 (`33198112325`) SUCCESS at `94d1482f8963ea4d5630a1ba4d2bdaba0e12e7ef` on Windows/macOS/Ubuntu. Evidence: `implementation/egress-permit-qualification.md`.
 - [x] **T003-062** Implement mandatory reauthorization of every effective destination before connect/follow whenever DNS resolution, redirect, rebinding, protocol/port, or private/link-local/loopback target changes; hostname authority never transfers implicitly to a changed effective target. Exact-head qualification: CI #525 (`33200261387`) SUCCESS at `4d730e894ebde948185597f5fe4296a142fd9ac6` on Windows/macOS/Ubuntu. Evidence: `implementation/egress-effective-destination-qualification.md`.
-- [ ] **T003-063** Bind relevant taint and secret-handle context into egress authorization/evidence.
+- [x] **T003-063** Bind relevant taint and secret-handle context into egress authorization/evidence. Exact-head qualification: CI #532 (`33234466919`) SUCCESS at `a2486acc1b4dab47207ca9becdad09afe27fefe1` on Windows/macOS/Ubuntu. Evidence: `implementation/egress-context-qualification.md`.
 - [ ] **T003-064** Add strict-local dominance plus external sinkhole/no-egress qualification covering `golamd` and every Golam-managed descendant, proving permits and child processes cannot bypass the hard guard.
 
 ## Phase H — Sandbox profiles/admission
@@ -192,5 +192,8 @@ WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED
 Golam-Research=REFERENCE_ONLY
 DONOR_CODE_ADMITTED=NO
 REAL_SECRETS_USED=NO
-NEXT_TASK=T003-063
+T003_063=PASS
+T003_063_QUALIFIED_HEAD=a2486acc1b4dab47207ca9becdad09afe27fefe1
+T003_063_CI_RUN=33234466919
+NEXT_TASK=T003-064
 ```

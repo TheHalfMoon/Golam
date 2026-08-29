@@ -3,7 +3,7 @@
 **Status**: IMPLEMENTATION_ACTIVE — PHASE_F_COMPLETE — PHASE_G_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current task**: `T003-063`
+**Current task**: `T003-064`
 
 ## Authority
 
@@ -138,7 +138,7 @@ Required boundaries:
 - revocation must immediately block broker/fallback use without deleting prior encrypted versions or weakening audit integrity;
 - no failure mode may acknowledge success while leaving old secret authority usable as current.
 
-Phase F is closed at the task-qualified head above. Phase G is active at T003-063.
+Phase F is closed at the task-qualified head above. Phase G is active at T003-064.
 
 ### Remaining Phase F ordering
 
@@ -172,13 +172,21 @@ Evidence: `implementation/egress-effective-destination-qualification.md`.
 
 The qualified boundary binds normalized effective authority, resolved IP endpoint, protocol/port, address class, permit identity and original destination-scope digest into fresh authorization evidence before connect/follow. Redirect, rebinding and private-target changes reject reused decisions, while protocol/port widening denies. No DNS or socket operation is added to the trusted authority store.
 
-### T003-063 — ACTIVE
+### T003-063 — COMPLETE
 
-Bind relevant taint and optional secret-handle context into egress authorization and evidence without exposing secret plaintext.
+Qualified at exact implementation head `a2486acc1b4dab47207ca9becdad09afe27fefe1` by CI #532 / run `33234466919`, SUCCESS on Windows/macOS/Ubuntu.
+
+Evidence: `implementation/egress-context-qualification.md`.
+
+The qualified effective-use boundary requires exact runtime taint and optional opaque secret-handle context to match the protected permit and binds both into durable authorization-decision context evidence without secret plaintext.
+
+### T003-064 — ACTIVE
+
+Upgrade external strict-local qualification to observe the complete Golam-managed process tree or equivalent descendant-capturing boundary while preserving hard-guard dominance.
 
 ## Later phases
 
-- Remaining Phase G: T003-063..T003-064, strict-local hard denial remains dominant.
+- Remaining Phase G: T003-064, strict-local hard denial remains dominant.
 - Phase H: T003-070..T003-076, with descendant-capturing no-egress predecessor before network-capable native managed children.
 - Phase I: T003-080..T003-084.
 - Phase J: T003-090..T003-098, including fresh exact-head multi-platform CI, convergence, authorized Qodo review, merge, and post-merge canonical-main evidence.
@@ -232,7 +240,10 @@ T003_061_CI_RUN=33198112325
 T003_062=PASS
 T003_062_QUALIFIED_HEAD=4d730e894ebde948185597f5fe4296a142fd9ac6
 T003_062_CI_RUN=33200261387
-NEXT_TASK=T003-063
+T003_063=PASS
+T003_063_QUALIFIED_HEAD=a2486acc1b4dab47207ca9becdad09afe27fefe1
+T003_063_CI_RUN=33234466919
+NEXT_TASK=T003-064
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO
