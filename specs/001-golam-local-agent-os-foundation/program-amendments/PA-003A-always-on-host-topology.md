@@ -144,9 +144,35 @@ The exact mechanism is implementation-time qualified; no vendor-hosted service i
 - recovery authority is scoped only to the protected recovery ceremony and MUST NOT become general effect, secret, policy, channel, or computer-control authority;
 - the recovery credential/device/quorum state is itself protected, versioned, revocable, and auditable;
 - stale/revoked recovery credentials or devices fail closed;
-- one-time/replay-sensitive recovery material is durably consumed/rotated so the same proof cannot silently recreate another competing current domain;
 - free-form Telegram/WhatsApp/WeChat/Slack/Discord/Matrix content, voice, email-like channel text, model output, or possession of a provider account MUST NOT satisfy the recovery authorization;
 - if no valid recovery authority remains, Golam fails closed to bounded forensic/export/recovery tooling and MUST NOT create a new current protected authority domain merely to preserve availability.
+
+#### Recovery transcript and anti-fork binding
+
+A recovery authorization MUST authorize one exact recovery transcript, not a generic reusable permission to "recover this backup". Before protected current-domain activation, the transcript MUST bind at least:
+
+- the restored backup identity/hash and authenticated canonical cut point;
+- the predecessor authority-domain/authentication-root identity known from that backup;
+- the proposed fresh `authority_domain_id` and initial generation;
+- the proposed current authority authentication public key/key ID;
+- target-host identity/attestation evidence where the selected design uses it;
+- recovery mechanism/version and recovery-authority credential/device/quorum identifiers;
+- a fresh recovery challenge/nonce and bounded validity/freshness;
+- the recovery policy/owner scope being exercised.
+
+The recovery authority signs/approves that complete transcript. A captured approval for one transcript MUST NOT authorize a different domain ID, authority public key, target host, backup cut, or recovery challenge.
+
+If the chosen recovery scheme claims one-time or monotonic recovery semantics, the state that prevents second use MUST not exist only inside the stale backup being recovered. It MUST be enforced by at least one independently protected recovery-authority component/witness, or by an equivalent mechanism whose security argument survives cloned stale backups. A copyable stateless bearer value that can authorize arbitrarily many target transcripts is insufficient by itself to prove exclusive current authority.
+
+Replaying an already issued recovery transcript on another machine cannot create a competing current authority: the transcript is bound to the exact fresh authority public key/target context, while the corresponding fresh private authority material remains protected on the authorized target. A second distinct recovery transcript from the same predecessor state requires a fresh independent recovery-authorization act and MUST be surfaced as a potentially competing recovery, not silently treated as ordinary restart.
+
+When any trusted recovery device/witness sees a conflicting valid recovery transcript for the same predecessor recovery state, or when a joining device/node detects incompatible recovery lineages, Golam MUST fail closed from protected cross-domain mutation and require explicit reconciliation/reprovisioning. Competing protected histories MUST NOT auto-merge.
+
+`RECOVERY_PROOF != GENERIC_BACKUP_RECOVERY_PERMISSION`
+`RECOVERY_TRANSCRIPT_A != RECOVERY_TRANSCRIPT_B`
+`CLONED_BACKUP != PERMISSION_FOR_PARALLEL_CURRENT_DOMAINS`
+
+One-time/replay-sensitive recovery material MUST be durably consumed/rotated at the independently protected recovery-authority boundary when the selected mechanism supports such state, so the same proof cannot silently recreate another competing current domain.
 
 `BACKUP_POSSESSION != RECOVERY_AUTHORITY`
 `CHANNEL_CONTENT != LOST_HOST_RECOVERY_APPROVAL`
@@ -158,11 +184,11 @@ When the old host cannot be contacted, Golam cannot truthfully claim to have cha
 
 The recovery protocol MUST ensure:
 
-- no protected current-domain creation begins until the independent recovery-authorization gate above succeeds and is durably attributed;
-- the new Authority Host starts protected mutations only under a newly generated authority-domain identity, its current generation, and freshly generated authority-domain authentication private material unavailable to the old host;
+- no protected current-domain creation begins until the independent recovery-authorization gate and exact transcript binding above succeed and are durably attributed;
+- the new Authority Host starts protected mutations only under the authorized newly generated authority-domain identity, its current generation, and freshly generated authority-domain authentication private material unavailable to the old host;
 - the new domain identity is not computed only by incrementing a generation/counter read from a stale backup;
 - old/stale authority-host private signing/authentication keys restored from backup are never promoted as the current domain credential; they may be retained only where strictly necessary for bounded historical verification/recovery and MUST NOT authenticate current protected traffic;
-- re-enrolled/reconnected devices and Execution Nodes pin the complete fresh domain/generation plus current authority authentication public-key/key-id binding and reject protected requests, approvals, leases, queued intents, nonces, or control envelopes from stale domains, generations, or authority credentials;
+- re-enrolled/reconnected devices and Execution Nodes pin the complete fresh domain/generation plus current authority authentication public-key/key-id and recovery-lineage binding and reject protected requests, approvals, leases, queued intents, nonces, or control envelopes from stale or conflicting domains, generations, credentials, or recovery lineages;
 - knowledge of the fresh `authority_domain_id` or generation alone is insufficient to authenticate the new Authority Host; a returning old host that still controls prior private credentials cannot impersonate the recovered domain merely by relabeling requests with the fresh identifier;
 - cached or backup-carried authority-bearing objects retain their original domain/generation/authentication-root binding and cannot be relabeled into the new domain by restoration code;
 - secrets/approvals/leases that cannot be proven safely transferable are re-sealed/re-minted/re-authorized rather than inherited by byte-copy alone;
@@ -170,7 +196,7 @@ The recovery protocol MUST ensure:
 - a returning old host may enter bounded recovery/export/reconciliation tooling but MUST NOT resume protected mutations or rejoin the active domain until an explicit protected reprovisioning process enrolls it into the current domain/generation under the current authentication root;
 - protected mutations made by a stale old host after the recovery cutover are divergent non-canonical evidence and MUST NOT auto-merge into current authority/effect/audit state;
 - any user-data artifacts recovered from the old host enter explicit provenance/conflict handling rather than silently rewriting current canonical state;
-- the migration/recovery record distinguishes physical old-host decommissioning from logical stale-domain fencing and records the predecessor backup identity/hash, predecessor authority credential identity, recovery-authorization evidence identity, newly generated domain identity, and newly generated authority credential identity without pretending the backup proves unreachable-host recency.
+- the migration/recovery record distinguishes physical old-host decommissioning from logical stale-domain fencing and records the predecessor backup identity/hash, predecessor authority credential identity, exact recovery-authorization transcript/evidence identity, newly generated domain identity, and newly generated authority credential identity without pretending the backup proves unreachable-host recency.
 
 #### External credential exposure after host loss
 
@@ -331,7 +357,7 @@ These are setup projections; the underlying security contracts remain identical.
 
 ### Spec 007
 
-Define native host/node pairing, device topology, reconnect, node availability, protected host migration prerequisites, collision-resistant authority-domain identity and generation rotation, fresh authority-domain authentication-root/key rotation and pinning, independent owner-controlled lost-host recovery authorization, stale mobile approval/queued-intent invalidation, stale-backup-safe lost-host recovery fencing, external-provider credential exposure/rotation disposition, returning-old-host disposition, and phone continuity semantics.
+Define native host/node pairing, device topology, reconnect, node availability, protected host migration prerequisites, collision-resistant authority-domain identity and generation rotation, fresh authority-domain authentication-root/key rotation and pinning, independent owner-controlled lost-host recovery authorization, target-bound anti-fork recovery transcripts/lineage, stale mobile approval/queued-intent invalidation, stale-backup-safe lost-host recovery fencing, external-provider credential exposure/rotation disposition, returning-old-host disposition, and phone continuity semantics.
 
 ### Spec 008
 
@@ -351,13 +377,16 @@ Test:
 - lost old host followed by new-domain recovery;
 - stolen/copied backup plus backup decryption capability but no independent recovery authority, and proof that no new current authority domain can be created;
 - channel/model/provider-account text attempting to authorize lost-host recovery and proof that it is rejected;
-- stale/revoked recovery credential/device rejection and replay/second-use rejection for one-time recovery evidence;
+- stale/revoked recovery credential/device rejection;
+- a captured recovery approval replayed with a different target authority public key, target host, fresh domain ID, or backup cut and proof that the transcript mismatch rejects it;
+- cloned stale backups receiving the same captured target-bound recovery transcript and proof that a second host lacking the authorized fresh private authority key cannot become current authority;
+- two distinct recovery transcripts from the same predecessor state being detected/surfaced as competing recovery lineages rather than silently merged or both accepted by the same trusted device/node;
 - no-valid-recovery-authority case failing closed to bounded forensic/export tooling rather than silently minting a replacement authority;
 - recovery from a deliberately stale backup whose stored generation collides with or predates a generation used by the lost host;
 - proof that lost-host recovery does not derive authority identity solely as `backup_generation + 1`;
 - proof that lost-host recovery generates a fresh authority-domain authentication private credential/root rather than promoting backup-carried old private authority keys;
 - a returning old host retaining the prior authority private key attempting to impersonate the new domain after learning the fresh domain ID, and proof that paired devices/nodes reject it;
-- paired-device/node pinning of the fresh domain/generation plus current authority authentication public-key/key-id binding;
+- paired-device/node pinning of the fresh domain/generation plus current authority authentication public-key/key-id and recovery-lineage binding;
 - old host returning after recovery and being denied current-authority status;
 - stale-domain/generation/authentication-root device/node/control replay;
 - no automatic merge of post-cutover protected mutations from a stale old host;
@@ -399,6 +428,9 @@ STALE_BACKUP_KEY != CURRENT_AUTHORITY_CREDENTIAL
 BACKUP_POSSESSION != RECOVERY_AUTHORITY
 CHANNEL_CONTENT != LOST_HOST_RECOVERY_APPROVAL
 RECOVERY_AUTHORITY != GENERAL_EFFECT_AUTHORITY
+RECOVERY_PROOF != GENERIC_BACKUP_RECOVERY_PERMISSION
+RECOVERY_TRANSCRIPT_A != RECOVERY_TRANSCRIPT_B
+CLONED_BACKUP != PERMISSION_FOR_PARALLEL_CURRENT_DOMAINS
 AUTHORITY_DOMAIN_ROTATION != PROVIDER_CREDENTIAL_REVOCATION
 RESTORED_SECRET_HANDLE != SAFE_CURRENT_EXTERNAL_CREDENTIAL
 LOST_HOST_SECRET_ACCESS_UNKNOWN != CREDENTIAL_EXCLUSIVITY
