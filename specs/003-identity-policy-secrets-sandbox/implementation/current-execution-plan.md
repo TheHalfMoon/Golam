@@ -3,7 +3,7 @@
 **Status**: IMPLEMENTATION_ACTIVE — PHASE_F_COMPLETE — PHASE_G_COMPLETE — PHASE_H_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current task**: `T003-071`
+**Current task**: `T003-073`
 
 ## Authority
 
@@ -138,7 +138,7 @@ Required boundaries:
 - revocation must immediately block broker/fallback use without deleting prior encrypted versions or weakening audit integrity;
 - no failure mode may acknowledge success while leaving old secret authority usable as current.
 
-Phase F and Phase G are closed at their task-qualified heads above. Phase H is active at T003-070.
+Phase F and Phase G are closed at their task-qualified heads above. Phase H is active at T003-073.
 
 ### Remaining Phase F ordering
 
@@ -208,14 +208,22 @@ Evidence: `implementation/sandbox-plan-qualification.md`.
 
 The qualified read-only compiler binds exact protected profile, latest launch decision, active lease generation, active policy and optional egress permit into a deterministic non-authority-bearing plan. Trusted locality belongs to the compiler boundary; requesters cannot downgrade strict-local mode. Compilation writes no admission, consumes no egress use and launches no process.
 
-### T003-072 — ACTIVE
+### T003-072 — COMPLETE
 
-Enforce cleared environment and explicit FS/network/spawn/resource/device/IPC/handle inheritance rules without claiming platform containment before T003-073/T003-074.
+Qualified at exact implementation head `241f36a6fbbaad93d46aed1970353a9270b05431`, tree `37d65e8dc72f0c9ed4935ac997d2de06e653b101`, by CI #565 / run `33237725527`, SUCCESS on Windows/macOS/Ubuntu.
+
+Evidence: `implementation/sandbox-enforcement-qualification.md`.
+
+The qualified boundary starts from a cleared environment, rejects filesystem/environment/device/IPC/inherited-handle widening, preserves strict-local network dominance, prevents spawn widening, intersects resource limits to the stricter bound, and explicitly does not claim OS/platform containment or launch a process.
+
+### T003-073 — ACTIVE
+
+Resolve every profile and rights-derived containment requirement against a trusted current-platform executor capability manifest and fail closed before launch when any required control is unsupported. No native process launch is authorized by this task.
 
 ## Later phases
 
 - Phase G: COMPLETE through T003-064; strict-local hard denial and descendant-capturing observation remain dominant predecessors.
-- Remaining Phase H: T003-070..T003-076.
+- Remaining Phase H: T003-073..T003-076.
 - Phase I: T003-080..T003-084.
 - Phase J: T003-090..T003-098, including fresh exact-head multi-platform CI, convergence, authorized Qodo review, merge, and post-merge canonical-main evidence.
 
@@ -281,7 +289,11 @@ T003_070_CI_RUN=33235986709
 T003_071=PASS
 T003_071_QUALIFIED_HEAD=5f6ea41fc8372273065376f0a5ab546d18100e43
 T003_071_CI_RUN=33237313243
-NEXT_TASK=T003-072
+T003_072=PASS
+T003_072_QUALIFIED_HEAD=241f36a6fbbaad93d46aed1970353a9270b05431
+T003_072_QUALIFIED_TREE=37d65e8dc72f0c9ed4935ac997d2de06e653b101
+T003_072_CI_RUN=33237725527
+NEXT_TASK=T003-073
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO
