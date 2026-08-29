@@ -20,7 +20,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends bubblewrap
           bwrap --version
           /usr/bin/setpriv --version
-      - name: Build fixed x86_64 seccomp network-deny filter
+      - name: Build fixed x86_64 seccomp network-deny filter and trusted launcher
         shell: python
         run: |
           import struct
@@ -47,16 +47,12 @@ jobs:
           Path('/tmp/golam-network-deny.bpf').write_bytes(
               b''.join(struct.pack('<HBBI', *insn) for insn in insns)
           )
-          print(f'SECCOMP_FILTER_INSTRUCTIONS={len(insns)}')
-      - name: Prove bounded Linux qualification primitive
-        shell: bash
-        run: |
+          launcher = Path('/tmp/golam-t003-074-launcher')
+          launcher.write_text('''#!/usr/bin/env bash
           set -euo pipefail
-          forbidden="$RUNNER_TEMP/golam-t003-074-forbidden"
-          printf 'host-only\n' > "$forbidden"
-          export GOLAM_AMBIENT_SECRET='must-not-cross-boundary'
+          forbidden="$1"
           exec 3</tmp/golam-network-deny.bpf
-          sudo -C 4 --preserve-env=GOLAM_AMBIENT_SECRET bwrap \
+          exec bwrap \
             --unshare-all \
             --share-net \
             --die-with-parent \
@@ -79,7 +75,7 @@ jobs:
               --inh-caps=-all \
               --ambient-caps=-all \
               --no-new-privs \
-              /bin/bash -ceu '
+              /bin/bash -ceu '\''
                 test "$(id -u)" = 65534
                 test "$(id -g)" = 65534
                 test -z "${GOLAM_AMBIENT_SECRET+x}"
@@ -90,7 +86,17 @@ jobs:
                   echo "external network unexpectedly succeeded" >&2
                   exit 32
                 fi
-              ' golam-probe "$forbidden"
+              '\'' golam-probe "$forbidden"
+          ''')
+          launcher.chmod(0o755)
+          print(f'SECCOMP_FILTER_INSTRUCTIONS={len(insns)}')
+      - name: Prove bounded Linux qualification primitive
+        shell: bash
+        run: |
+          set -euo pipefail
+          forbidden="$RUNNER_TEMP/golam-t003-074-forbidden"
+          printf 'host-only\n' > "$forbidden"
+          sudo env GOLAM_AMBIENT_SECRET='must-not-cross-boundary' /tmp/golam-t003-074-launcher "$forbidden"
           echo 'BWRAP_EXECUTOR_PROBE=PASS'
           echo 'QUALIFICATION_LAUNCHER_PRIVILEGED=YES'
           echo 'PAYLOAD_UID_GID_UNPRIVILEGED=YES'
