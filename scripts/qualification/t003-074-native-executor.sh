@@ -69,6 +69,7 @@ exec bwrap \
   --dir /dev \
   --dev-bind /dev/null /dev/null \
   --tmpfs /tmp \
+  --chmod 1777 /tmp \
   --seccomp 3 \
   --chdir /tmp \
   /usr/bin/setpriv \
