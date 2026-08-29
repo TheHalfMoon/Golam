@@ -96,10 +96,14 @@ A future migration protocol MUST cover:
 - approval/lease expiry or re-mint rules;
 - secret re-sealing/re-brokering;
 - device/channel rebinding generation changes where required;
-- old-host revocation/fencing;
-- monotonic audit evidence;
+- **authority-domain / pairing-domain generation rotation at cutover** so credentials and signed objects cannot remain valid merely because protected bytes were copied to a new Authority Host;
+- **invalidation of every pre-cutover mobile approval response and queued signed request intent whose domain/generation binding names the old Authority Host**, followed by fresh authorization or re-signing only after the new host relationship is current;
+- old-host revocation/fencing before the new host accepts protected mutations;
+- monotonic audit evidence binding the old domain, migration operation, new domain/generation and cutover point;
 - rollback before cutover where safe;
 - recovery path when the old host is unavailable.
+
+A migration MUST NOT create a window where both old and new Authority Hosts accept the same approval, lease, queued intent, nonce, or protected mutation. Host migration continuity applies to user-visible Task/session state, not to automatic portability of stale authority material.
 
 No vendor service may silently become authority during migration or recovery.
 
@@ -177,6 +181,8 @@ The always-on Authority Host solves availability, not authentication:
 
 - possession of WhatsApp/Telegram/WeChat account access cannot enroll a native device;
 - phone pairing remains cryptographic and protected;
+- mobile approval and queued-intent signatures remain bound to the exact current Authority Host/pairing domain and generation defined by the PA-001 contract;
+- Authority Host migration invalidates pre-cutover signed mobile authority/request objects rather than treating user-visible continuity as authority continuity;
 - channel messages remain channel-tainted;
 - high-risk approval still steps up to an authenticated trusted surface;
 - push remains a wake/sync convenience rather than canonical order or authority.
@@ -214,7 +220,7 @@ These are setup projections; the underlying security contracts remain identical.
 
 ### Spec 007
 
-Define native host/node pairing, device topology, reconnect, node availability, protected host migration prerequisites, and phone continuity semantics.
+Define native host/node pairing, device topology, reconnect, node availability, protected host migration prerequisites, authority-domain/pairing-generation rotation, stale mobile approval/queued-intent invalidation, and phone continuity semantics.
 
 ### Spec 008
 
@@ -231,6 +237,7 @@ Test:
 - stale capability advertisement;
 - worker placement changes;
 - host migration/fencing where implemented;
+- cross-host replay of pre-cutover mobile approvals, queued intents, leases and nonces;
 - secret placement and re-brokering;
 - phone continuity while a work node is offline;
 - strict-local topology claims from outside the process boundary.
@@ -257,4 +264,5 @@ BACKUP_STATE != ACTIVE_AUTHORITY
 OFFLINE_NODE != PERMISSION_TO_FALLBACK
 WORKER_PLACEMENT != AUTHORITY_TRANSFER
 NODE_CAPABILITY_ADVERTISEMENT != CAPABILITY_LEASE
+USER_VISIBLE_CONTINUITY != AUTHORITY_OBJECT_CONTINUITY
 ```
