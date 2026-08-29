@@ -20,7 +20,18 @@ jobs:
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt --component clippy
       - name: Apply T003-080 runtime policy candidate
-        run: python3 scripts/qualification/prepare-t003-080.py
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/qualification/prepare-t003-080.py')
+          text = p.read_text()
+          old = 'test_anchor = """    #[test]\\n    fn clean_bootstrap_without_prior_activation_is_valid() {\\n"""'
+          new = 'test_anchor = """    #[test]\\n    fn verified_active_policy_survives_restart() {\\n"""'
+          if old not in text:
+              raise SystemExit('T003-080 helper anchor repair source missing')
+          p.write_text(text.replace(old, new, 1))
+          PY
+          python3 scripts/qualification/prepare-t003-080.py
       - name: Format
         run: cargo +1.98.0 fmt --all
       - name: Run focused T003-080 qualification
