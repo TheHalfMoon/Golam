@@ -200,9 +200,17 @@ Evidence: `implementation/sandbox-profile-qualification.md`.
 
 The qualified boundary establishes deterministic bounded SandboxProfile validation and protected immutable profile-version registration under exact current decision/effect/ONCE-approval authority with atomic authority-security evidence. No admission plan or executor is claimed.
 
-### T003-071 — ACTIVE
+### T003-071 — COMPLETE
 
-Compile protected profiles to bounded launch/admission plans intersected with active lease, policy, and optional egress authority without launching a process.
+Qualified at exact implementation head `5f6ea41fc8372273065376f0a5ab546d18100e43`, tree `986ad7b04264339f79ea7399d839bfd4904d5ecb`, by CI #558 / run `33237313243`, SUCCESS on Windows/macOS/Ubuntu.
+
+Evidence: `implementation/sandbox-plan-qualification.md`.
+
+The qualified read-only compiler binds exact protected profile, latest launch decision, active lease generation, active policy and optional egress permit into a deterministic non-authority-bearing plan. Trusted locality belongs to the compiler boundary; requesters cannot downgrade strict-local mode. Compilation writes no admission, consumes no egress use and launches no process.
+
+### T003-072 — ACTIVE
+
+Enforce cleared environment and explicit FS/network/spawn/resource/device/IPC/handle inheritance rules without claiming platform containment before T003-073/T003-074.
 
 ## Later phases
 
@@ -270,7 +278,10 @@ T003_064_CI_RUN=33234807292
 T003_070=PASS
 T003_070_QUALIFIED_HEAD=9704318742c7622cb5304fa24f22b1c5bb35e22e
 T003_070_CI_RUN=33235986709
-NEXT_TASK=T003-071
+T003_071=PASS
+T003_071_QUALIFIED_HEAD=5f6ea41fc8372273065376f0a5ab546d18100e43
+T003_071_CI_RUN=33237313243
+NEXT_TASK=T003-072
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO

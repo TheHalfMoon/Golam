@@ -77,7 +77,7 @@ Legend:
 ## Phase H — Sandbox profiles/admission
 
 - [x] **T003-070** Implement protected SandboxProfile records and deterministic profile validation. Exact-head qualification: CI #545 (`33235986709`) SUCCESS at `9704318742c7622cb5304fa24f22b1c5bb35e22e` on Windows/macOS/Ubuntu. Evidence: `implementation/sandbox-profile-qualification.md`.
-- [ ] **T003-071** Compile profiles to bounded launch/admission plans intersected with active lease/policy/egress authority.
+- [x] **T003-071** Compile profiles to bounded launch/admission plans intersected with active lease/policy/egress authority. Exact-head qualification: CI #558 (`33237313243`) SUCCESS at `5f6ea41fc8372273065376f0a5ab546d18100e43` on Windows/macOS/Ubuntu. Evidence: `implementation/sandbox-plan-qualification.md`.
 - [ ] **T003-072** Enforce cleared environment and explicit FS/network/spawn/resource/device/IPC/handle inheritance rules.
 - [ ] **T003-073** Implement platform-executor capability checks and fail closed when a required containment control is unsupported.
 - [ ] **T003-074** Before launching any native Golam-managed child process with network capability, upgrade the external strict-local observer from daemon-PID-only inspection to complete managed-process-tree observation or an equivalent descendant-capturing sinkholed boundary; then implement the minimum native untrusted-process test executor/profile required to prove the contract without claiming unsupported universal isolation.
@@ -203,5 +203,8 @@ PHASE_H_ACTIVE=YES
 T003_070=PASS
 T003_070_QUALIFIED_HEAD=9704318742c7622cb5304fa24f22b1c5bb35e22e
 T003_070_CI_RUN=33235986709
-NEXT_TASK=T003-071
+T003_071=PASS
+T003_071_QUALIFIED_HEAD=5f6ea41fc8372273065376f0a5ab546d18100e43
+T003_071_CI_RUN=33237313243
+NEXT_TASK=T003-072
 ```
