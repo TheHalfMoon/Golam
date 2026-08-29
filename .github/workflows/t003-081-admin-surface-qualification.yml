@@ -42,3 +42,19 @@ jobs:
           cargo +1.98.0 test --locked -p golam --lib -- --nocapture
           cargo +1.98.0 test --locked -p golamd --lib -- --nocapture
           cargo +1.98.0 clippy --locked -p golam-ledger -p golam-ipc -p golam-kernel -p golam -p golamd --all-targets -- -D warnings
+      - name: Package qualified source
+        uses: actions/upload-artifact@v4
+        with:
+          name: t003-081-qualified-source
+          path: |
+            crates/golam-ledger/src/admin_qualification.rs
+            crates/golam-ledger/src/lib.rs
+            crates/golam-kernel/src/admin_qualification.rs
+            crates/golam-kernel/src/lib.rs
+            crates/golam-kernel/src/authorization.rs
+            crates/golam-kernel/src/runtime_policy.rs
+            crates/golam-ipc/src/command.rs
+            crates/golam/src/lib.rs
+            crates/golamd/src/lib.rs
+            specs/003-identity-policy-secrets-sandbox/quickstart.md
+          if-no-files-found: error
