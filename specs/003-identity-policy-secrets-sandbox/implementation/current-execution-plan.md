@@ -3,7 +3,7 @@
 **Status**: IMPLEMENTATION_ACTIVE — PHASE_F_COMPLETE — PHASE_G_COMPLETE — PHASE_H_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current task**: `T003-073`
+**Current task**: `T003-074`
 
 ## Authority
 
@@ -216,14 +216,22 @@ Evidence: `implementation/sandbox-enforcement-qualification.md`.
 
 The qualified boundary starts from a cleared environment, rejects filesystem/environment/device/IPC/inherited-handle widening, preserves strict-local network dominance, prevents spawn widening, intersects resource limits to the stricter bound, and explicitly does not claim OS/platform containment or launch a process.
 
-### T003-073 — ACTIVE
+### T003-073 — COMPLETE
 
-Resolve every profile and rights-derived containment requirement against a trusted current-platform executor capability manifest and fail closed before launch when any required control is unsupported. No native process launch is authorized by this task.
+Qualified at exact implementation head `39b5989b18457785f0a02a952c1f6d69bb123e60`, tree `7b70ae25afcf6a601b376d76ea5dd99ba9f6cce4`, by CI #574 / run `33246660545`, SUCCESS on Windows/macOS/Ubuntu.
+
+Evidence: `implementation/sandbox-executor-capability-qualification.md`.
+
+The qualified boundary resolves every rights-derived and exact profile platform requirement against a trusted current-platform capability manifest and fails closed before launch if any required control is unsupported. The production T003-073 baseline advertises zero native containment controls (`native:unqualified`), preventing capability self-assertion and preserving honest fail-closed behavior until T003-074 qualifies concrete native execution. No process is launched and no platform containment is claimed.
+
+### T003-074 — ACTIVE
+
+Reuse the already-qualified descendant-aware strict-local observer, then implement the minimum native untrusted-process test executor/profile necessary to prove the contract without claiming unsupported universal isolation. Any network-capable managed child remains forbidden until complete managed-process-tree external observation is active.
 
 ## Later phases
 
 - Phase G: COMPLETE through T003-064; strict-local hard denial and descendant-capturing observation remain dominant predecessors.
-- Remaining Phase H: T003-073..T003-076.
+- Remaining Phase H: T003-074..T003-076.
 - Phase I: T003-080..T003-084.
 - Phase J: T003-090..T003-098, including fresh exact-head multi-platform CI, convergence, authorized Qodo review, merge, and post-merge canonical-main evidence.
 
@@ -293,7 +301,11 @@ T003_072=PASS
 T003_072_QUALIFIED_HEAD=241f36a6fbbaad93d46aed1970353a9270b05431
 T003_072_QUALIFIED_TREE=37d65e8dc72f0c9ed4935ac997d2de06e653b101
 T003_072_CI_RUN=33237725527
-NEXT_TASK=T003-073
+T003_073=PASS
+T003_073_QUALIFIED_HEAD=39b5989b18457785f0a02a952c1f6d69bb123e60
+T003_073_QUALIFIED_TREE=7b70ae25afcf6a601b376d76ea5dd99ba9f6cce4
+T003_073_CI_RUN=33246660545
+NEXT_TASK=T003-074
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO
