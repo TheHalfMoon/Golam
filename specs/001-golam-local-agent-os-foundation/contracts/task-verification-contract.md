@@ -87,13 +87,19 @@ Model prose, workflow completion, action-path success responses, or worker self-
 
 The existing Effect Gate/reconciler semantics remain authoritative for external effects.
 
-## 7. Pre-declared verification when practical
+## 7. Pre-declared verification and verifier-governance integrity
 
 Where completion criteria are known before execution, Golam SHOULD select the verification strategy before consequential actions.
 
-A verifier may be revised when evidence or constraints change, but the revision MUST be attributable and versioned so a weak post-hoc verifier cannot silently replace an earlier stronger requirement.
+A verifier may be revised when evidence or constraints change, but the revision MUST be attributable and versioned. A revision that removes a required check, reduces required evidence strength/freshness/independence, changes a required verifier/source, or makes a required criterion NOT_APPLICABLE is a material verification-requirement change and MUST correspond to a legitimate current Task Contract/criterion revision rather than an execution-path side effect.
+
+The model, worker, action/tool path, or candidate whose result is being verified MAY propose a verifier revision but MUST NOT unilaterally weaken the proof requirement after observing its own result. Verifier implementation/configuration/source identity and material version/hash MUST be bound into the Verification Plan/evidence when they affect the result. Replacing a failing/strong verifier with a weaker or different verifier after the action requires explicit attributable governance and preserves the superseded verifier requirement/history.
+
+A verifier change does not grant the tools/capabilities needed to run it. The normal authority path still governs verification execution.
 
 `POST_HOC_WEAK_VERIFIER != REQUIRED_PROOF`
+`ACTION_PATH != VERIFIER_GOVERNANCE`
+`VERIFIER_REVISION != AUTHORITY`
 
 ## 8. Independent observation
 
@@ -109,6 +115,8 @@ Examples include:
 
 Independent observation does not grant additional authority.
 
+If a criterion declares independent observation required, the same model/worker/tool response that performed the action cannot satisfy that independence requirement merely by reformatting or reasserting its own result. The verification record MUST identify the independent evidence path/provider/tool/source used.
+
 ## 9. Freshness and invalidation
 
 Verification evidence MUST be marked stale or re-evaluated when a material dependency changes.
@@ -116,6 +124,7 @@ Verification evidence MUST be marked stale or re-evaluated when a material depen
 Potential invalidators include:
 
 - Task Contract revision;
+- Verification Plan/verifier version change;
 - content hash or repository/worktree change;
 - external provider state change;
 - application/device state change;
@@ -198,8 +207,11 @@ Core Alpha MUST prove at least:
 2. successful Run that cannot satisfy a Task with an unverified required criterion;
 3. steering that invalidates stale verification;
 4. deterministic verification catching an action-path false success;
-5. explicit CLOSED_UNVERIFIED distinct from SATISFIED;
-6. Trust Receipt criterion summary matching canonical evidence;
-7. restart persistence of Task and Verification Plan state.
+5. action/model/worker attempt to weaken or swap a required verifier after seeing a failing result is rejected or creates an attributable Task/criterion revision without rewriting history;
+6. verifier/source version substitution invalidates prior proof until the required current verification runs;
+7. an independence-required criterion cannot be satisfied by the action path self-report alone;
+8. explicit CLOSED_UNVERIFIED distinct from SATISFIED;
+9. Trust Receipt criterion summary matching canonical evidence;
+10. restart persistence of Task and Verification Plan state.
 
 Spec 010 SHALL re-test the same invariants against exact release heads and measure false-success/stale-verification behavior.
