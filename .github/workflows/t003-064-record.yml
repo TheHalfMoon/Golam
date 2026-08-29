@@ -1,0 +1,69 @@
+name: t003-064-record
+on:
+  push:
+    branches:
+      - impl/003-identity-policy-secrets-sandbox
+permissions:
+  contents: write
+jobs:
+  record:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/003-identity-policy-secrets-sandbox
+          fetch-depth: 0
+      - name: Record T003-064 and activate T003-070
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(path, old, new):
+              text = path.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{path}: replacement count {count} for {old!r}')
+              path.write_text(text.replace(old, new, 1))
+
+          tasks = Path('specs/003-identity-policy-secrets-sandbox/tasks.md')
+          replace_once(
+              tasks,
+              '**Status**: IMPLEMENTATION_ACTIVE — PHASE_B_COMPLETE — PHASE_C_COMPLETE — PHASE_D_COMPLETE — PHASE_E_COMPLETE — PHASE_F_COMPLETE — PHASE_G_ACTIVE  ',
+              '**Status**: IMPLEMENTATION_ACTIVE — PHASE_B_COMPLETE — PHASE_C_COMPLETE — PHASE_D_COMPLETE — PHASE_E_COMPLETE — PHASE_F_COMPLETE — PHASE_G_COMPLETE — PHASE_H_ACTIVE  ',
+          )
+          replace_once(
+              tasks,
+              '- [ ] **T003-064** Add strict-local dominance plus external sinkhole/no-egress qualification covering `golamd` and every Golam-managed descendant, proving permits and child processes cannot bypass the hard guard.',
+              '- [x] **T003-064** Add strict-local dominance plus external sinkhole/no-egress qualification covering `golamd` and every Golam-managed descendant, proving permits and child processes cannot bypass the hard guard. Exact-head qualification: CI #538 (`33234807292`) SUCCESS at `d77cd2b8e78a41153085c279fea698bb794d2d4e` on Windows/macOS/Ubuntu. Evidence: `implementation/strict-local-process-tree-qualification.md`.',
+          )
+          replace_once(tasks, 'NEXT_TASK=T003-064', 'T003_064=PASS\nT003_064_QUALIFIED_HEAD=d77cd2b8e78a41153085c279fea698bb794d2d4e\nT003_064_CI_RUN=33234807292\nPHASE_G_COMPLETE=YES\nPHASE_H_ACTIVE=YES\nNEXT_TASK=T003-070')
+
+          plan = Path('specs/003-identity-policy-secrets-sandbox/implementation/current-execution-plan.md')
+          replace_once(plan, '**Status**: IMPLEMENTATION_ACTIVE — PHASE_F_COMPLETE — PHASE_G_ACTIVE  ', '**Status**: IMPLEMENTATION_ACTIVE — PHASE_F_COMPLETE — PHASE_G_COMPLETE — PHASE_H_ACTIVE  ')
+          replace_once(plan, '**Current task**: `T003-064`', '**Current task**: `T003-070`')
+          replace_once(plan, 'Phase F is closed at the task-qualified head above. Phase G is active at T003-064.', 'Phase F and Phase G are closed at their task-qualified heads above. Phase H is active at T003-070.')
+          replace_once(plan, '## Phase G — Egress permits\n\n`ACTIVE`', '## Phase G — Egress permits\n\n`COMPLETE`')
+          replace_once(
+              plan,
+              '### T003-064 — ACTIVE\n\nUpgrade external strict-local qualification to observe the complete Golam-managed process tree or equivalent descendant-capturing boundary while preserving hard-guard dominance.\n\n## Later phases',
+              '### T003-064 — COMPLETE\n\nQualified at exact implementation head `d77cd2b8e78a41153085c279fea698bb794d2d4e` by CI #538 / run `33234807292`, SUCCESS on Windows/macOS/Ubuntu.\n\nEvidence: `implementation/strict-local-process-tree-qualification.md`.\n\nThe qualified independent observer computes the transitive managed process-tree closure on Unix and Windows and fails if any observed Golam-owned PID holds an Internet socket. No native managed-child executor is claimed here; T003-074 remains the first task permitted to add one and must reuse this descendant-capturing observer.\n\n## Phase H — Sandbox profiles/admission\n\n`ACTIVE`\n\n### T003-070 — ACTIVE\n\nImplement protected `SandboxProfile` records and deterministic profile validation.\n\n## Later phases',
+          )
+          replace_once(plan, '- Remaining Phase G: T003-064, strict-local hard denial remains dominant.\n- Phase H: T003-070..T003-076, with descendant-capturing no-egress predecessor before network-capable native managed children.', '- Phase G: COMPLETE through T003-064; strict-local hard denial and descendant-capturing observation remain dominant predecessors.\n- Remaining Phase H: T003-070..T003-076.')
+          replace_once(plan, 'PHASE_G_ACTIVE=YES', 'PHASE_G_COMPLETE=YES\nPHASE_H_ACTIVE=YES')
+          replace_once(plan, 'NEXT_TASK=T003-064', 'T003_064=PASS\nT003_064_QUALIFIED_HEAD=d77cd2b8e78a41153085c279fea698bb794d2d4e\nT003_064_CI_RUN=33234807292\nNEXT_TASK=T003-070')
+      - name: Verify record
+        run: |
+          grep -F 'T003_064=PASS' specs/003-identity-policy-secrets-sandbox/tasks.md
+          grep -F 'PHASE_G_COMPLETE=YES' specs/003-identity-policy-secrets-sandbox/tasks.md
+          grep -F 'NEXT_TASK=T003-070' specs/003-identity-policy-secrets-sandbox/tasks.md
+          grep -F '### T003-070 — ACTIVE' specs/003-identity-policy-secrets-sandbox/implementation/current-execution-plan.md
+      - name: Commit record
+        run: |
+          git rm .github/workflows/t003-064-record.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add specs/003-identity-policy-secrets-sandbox/tasks.md
+          git add specs/003-identity-policy-secrets-sandbox/implementation/current-execution-plan.md
+          git commit -m 'docs: record T003-064 qualification'
+          git push origin HEAD:impl/003-identity-policy-secrets-sandbox
