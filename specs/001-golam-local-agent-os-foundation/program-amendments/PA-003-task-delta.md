@@ -58,12 +58,19 @@ A failed Core Alpha gate does not authorize skipping required architecture/secur
 
 ---
 
-## Spec 007 additions — Everywhere continuity
+## Spec 007 additions — Everywhere continuity and Authority Host recovery
 
-- **PA003-007-A**: Native Mobile continues an existing Task/Run rather than cloning a conversation-only state.
-- **PA003-007-B**: channel messages can navigate/create/steer tasks only through stable binding and normal authority rules; channel identity never equals Task identity.
-- **PA003-007-C**: mobile/channel receipt views preserve what changed/data-egress/approval/unknown state appropriate to the surface.
-- **PA003-007-D**: device/surface reconnect projects current Task and verification truth from the Authority Host; cached/stale mobile/channel state cannot upgrade a criterion to VERIFIED or a Task to SATISFIED.
+- **PA003-007-A — Durable surface continuity**: Native Mobile continues an existing Task/Run rather than cloning a conversation-only state.
+- **PA003-007-B — Channel-to-Task boundary**: channel messages can navigate/create/steer tasks only through stable binding and normal authority rules; channel identity never equals Task identity.
+- **PA003-007-C — Surface receipt truth**: mobile/channel receipt views preserve what changed/data-egress/approval/unknown state appropriate to the surface.
+- **PA003-007-D — Fresh reconnect projection**: device/surface reconnect projects current Task and verification truth from the Authority Host; cached/stale mobile/channel state cannot upgrade a criterion to VERIFIED or a Task to SATISFIED.
+- **PA003-007-E — Authority Host topology identity**: implement the optional Authority Host / Execution Node topology with exactly one active protected authority by default; bind current authority to collision-resistant `authority_domain_id`, generation, fresh authority authentication-root/key identity, and device/node pinning. Capability advertisement, worker placement, backups, and standby copies cannot become authority.
+- **PA003-007-F — Planned migration**: implement a protected migration transaction that verifies predecessor state, reconciles UNKNOWN effects, rotates authority-domain/authentication and pairing bindings, invalidates stale mobile approval/queued-intent objects, establishes fresh target-host credentials, fences the reachable old host before new protected mutation, and never treats copied authority bytes as sufficient cutover.
+- **PA003-007-G — Lost-host recovery authority and anti-fork**: define the independent owner-controlled recovery authority mechanism; prove stale backup possession/old keys/channel text cannot authorize recovery; prove recovery-authority membership/revocation freshness independent from the stale backup; bind recovery to one exact backup-cut/target-domain/target-key/target-host/challenge transcript; prevent captured-proof retargeting and silent parallel current domains from cloned backups; detect conflicting recovery lineages and fail closed rather than auto-merge.
+- **PA003-007-H — Lost-host external-state quarantine**: preserve effect/scheduler uncertainty across the unobserved backup gap, prohibit blind replay/catch-up of consequential work, classify credentials potentially usable by the lost host as exposure-unknown until provider-side rotation/revocation/reissue or equivalent evidence, and preserve unresolved exposure/UNKNOWN state into Task verification and Trust Receipts without plaintext.
+- **PA003-007-I — Recovery failure and reprovisioning UX**: if no valid recovery authority or required current recovery-membership evidence remains, expose bounded forensic/export/recovery tooling rather than silently minting replacement authority; returning old hosts and stale devices/nodes require explicit current-domain reprovisioning and cannot resume protected authority by ordinary reconnect.
+
+**Spec 007 topology/recovery exit gate**: where Authority Host recovery is implemented, a stolen/cloned stale backup, stale old-host key, revoked recovery device, captured recovery proof, channel/model input, or restored external credential cannot create or impersonate current authority; exact recovery lineage, unresolved effect state, credential-exposure posture, and device/node trust are inspectable and fail closed on ambiguity.
 
 ---
 
@@ -74,6 +81,7 @@ A failed Core Alpha gate does not authorize skipping required architecture/secur
 - **PA003-008-C — Proactive receipt**: unattended work produces the same causal/effect/evidence/receipt trail as attended work.
 - **PA003-008-D — User feedback**: mute/defer/reduce-priority/never-notify-for-class feedback changes future attention behavior without silently altering unrelated capability authority.
 - **PA003-008-E — Worker criterion mapping**: every worker/subgoal completion maps explicitly to parent Task criteria/evidence where relevant; worker success cannot directly mark the parent Task SATISFIED.
+- **PA003-008-F — Lost-host scheduler recovery**: when persistent scheduling runs on an Authority Host, restart/lost-host recovery preserves the PA-003A stale-backup uncertainty boundary. Consequence-bearing missed windows are not automatically caught up, unknown prior dispatch is not inferred absent, and at-most-once/irreversible work is not blind-retried across the recovery gap.
 
 ---
 
@@ -97,6 +105,7 @@ A failed Core Alpha gate does not authorize skipping required architecture/secur
 - **PA003-010-H**: produce exact-head product ladder evidence for Core Alpha, Desktop, Everywhere, Persistent Team, Parity/Superset and release qualification claims.
 - **PA003-010-I**: verify Task terminal state independently from individual Run terminal states, including failed-Run/new-Run continuation and operationally successful Runs that leave required criteria unresolved.
 - **PA003-010-J**: verify criterion-state freshness/invalidation and recompute Trust Receipt verification summaries from canonical evidence; no stale or unverified criterion may be reported as verified success.
+- **PA003-010-K — Authority Host recovery adversarial suite**: where PA-003A topology is implemented, qualify planned migration, stale-backup lost-host recovery, independent recovery-authority freshness, target-bound anti-fork recovery transcripts, returning-old-host denial, device/node recovery-lineage pinning, external-credential exposure quarantine, UNKNOWN-effect/scheduler-gap handling, and receipt/verification propagation. Include cloned-backup competing-recovery, revoked-recovery-device-after-backup, captured-proof retargeting, stale old-host private-key impersonation, provider-token-still-valid-after-domain-rotation, blind-retry prevention, and no-valid-recovery-authority fail-closed cases.
 
 ---
 
