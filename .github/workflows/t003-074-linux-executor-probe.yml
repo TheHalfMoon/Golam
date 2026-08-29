@@ -29,6 +29,7 @@ jobs:
           export GOLAM_AMBIENT_SECRET='must-not-cross-boundary'
           bwrap \
             --unshare-all \
+            --cap-add CAP_NET_ADMIN \
             --die-with-parent \
             --new-session \
             --clearenv \
@@ -48,7 +49,7 @@ jobs:
               /bin/bash -ceu '
                 test -z "${GOLAM_AMBIENT_SECRET+x}"
                 test ! -e "$1"
-                test "$(id -u)" -ne 0 || test -z "$(/usr/bin/setpriv --dump | sed -n "s/^Bounding set: //p" | tr -d " ")"
+                test -z "$(/usr/bin/setpriv --dump | sed -n "s/^Bounding set: //p" | tr -d " ")"
                 printf allowed > /tmp/allowed
                 test "$(cat /tmp/allowed)" = allowed
                 if printf forbidden > /usr/golam-forbidden 2>/dev/null; then
@@ -92,7 +93,7 @@ jobs:
               '- A host-only forbidden file outside the mounted roots was not visible.',
               '- A write attempt beneath a read-only runtime root failed.',
               '- The separate network namespace denied the external IPv4 connection probe.',
-              '- Payload execution used `setpriv` to drop the capability bounding, inheritable, and ambient sets and enabled `no_new_privs` after Bubblewrap completed namespace setup.',
+              '- Bubblewrap retained only CAP_NET_ADMIN while configuring loopback; payload execution then used `setpriv` to drop the capability bounding, inheritable, and ambient sets and enabled `no_new_privs`.',
               '- A descendant process executed inside the sandbox PID namespace and Bubblewrap retained parent-death/process-tree cleanup semantics.',
               '',
               '## Boundaries',
