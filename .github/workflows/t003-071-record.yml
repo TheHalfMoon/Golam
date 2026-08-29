@@ -1,0 +1,59 @@
+name: t003-071-record
+on:
+  push:
+    branches:
+      - impl/003-identity-policy-secrets-sandbox
+permissions:
+  contents: write
+jobs:
+  record:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/003-identity-policy-secrets-sandbox
+          fetch-depth: 0
+      - name: Record T003-071 and activate T003-072
+        shell: python
+        run: |
+          from pathlib import Path
+          tasks = Path('specs/003-identity-policy-secrets-sandbox/tasks.md')
+          text = tasks.read_text()
+          old = '- [ ] **T003-071** Compile profiles to bounded launch/admission plans intersected with active lease/policy/egress authority.'
+          new = '- [x] **T003-071** Compile profiles to bounded launch/admission plans intersected with active lease/policy/egress authority. Exact-head qualification: CI #558 (`33237313243`) SUCCESS at `5f6ea41fc8372273065376f0a5ab546d18100e43` on Windows/macOS/Ubuntu. Evidence: `implementation/sandbox-plan-qualification.md`.'
+          if text.count(old) != 1:
+              raise SystemExit(f'T003-071 task anchor count {text.count(old)}')
+          text = text.replace(old, new, 1)
+          old_gate = 'T003_070_CI_RUN=33235986709\nNEXT_TASK=T003-071'
+          new_gate = 'T003_070_CI_RUN=33235986709\nT003_071=PASS\nT003_071_QUALIFIED_HEAD=5f6ea41fc8372273065376f0a5ab546d18100e43\nT003_071_CI_RUN=33237313243\nNEXT_TASK=T003-072'
+          if text.count(old_gate) != 1:
+              raise SystemExit(f'tasks gate anchor count {text.count(old_gate)}')
+          tasks.write_text(text.replace(old_gate, new_gate, 1))
+
+          plan = Path('specs/003-identity-policy-secrets-sandbox/implementation/current-execution-plan.md')
+          text = plan.read_text()
+          old = '### T003-071 — ACTIVE\n\nCompile protected profiles to bounded launch/admission plans intersected with active lease, policy, and optional egress authority without launching a process.'
+          new = '''### T003-071 — COMPLETE\n\nQualified at exact implementation head `5f6ea41fc8372273065376f0a5ab546d18100e43`, tree `986ad7b04264339f79ea7399d839bfd4904d5ecb`, by CI #558 / run `33237313243`, SUCCESS on Windows/macOS/Ubuntu.\n\nEvidence: `implementation/sandbox-plan-qualification.md`.\n\nThe qualified read-only compiler binds exact protected profile, latest launch decision, active lease generation, active policy and optional egress permit into a deterministic non-authority-bearing plan. Trusted locality belongs to the compiler boundary; requesters cannot downgrade strict-local mode. Compilation writes no admission, consumes no egress use and launches no process.\n\n### T003-072 — ACTIVE\n\nEnforce cleared environment and explicit FS/network/spawn/resource/device/IPC/handle inheritance rules without claiming platform containment before T003-073/T003-074.'''
+          if text.count(old) != 1:
+              raise SystemExit(f'plan T071 anchor count {text.count(old)}')
+          text = text.replace(old, new, 1)
+          old_gate = 'T003_070_CI_RUN=33235986709\nNEXT_TASK=T003-071'
+          new_gate = 'T003_070_CI_RUN=33235986709\nT003_071=PASS\nT003_071_QUALIFIED_HEAD=5f6ea41fc8372273065376f0a5ab546d18100e43\nT003_071_CI_RUN=33237313243\nNEXT_TASK=T003-072'
+          if text.count(old_gate) != 1:
+              raise SystemExit(f'plan gate anchor count {text.count(old_gate)}')
+          plan.write_text(text.replace(old_gate, new_gate, 1))
+      - name: Verify record
+        run: |
+          grep -F 'T003_071=PASS' specs/003-identity-policy-secrets-sandbox/tasks.md
+          grep -F 'NEXT_TASK=T003-072' specs/003-identity-policy-secrets-sandbox/tasks.md
+          grep -F '### T003-072 — ACTIVE' specs/003-identity-policy-secrets-sandbox/implementation/current-execution-plan.md
+      - name: Commit record
+        run: |
+          git rm .github/workflows/t003-071-record.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add specs/003-identity-policy-secrets-sandbox/tasks.md
+          git add specs/003-identity-policy-secrets-sandbox/implementation/current-execution-plan.md
+          git commit -m 'docs: record T003-071 qualification'
+          git push origin HEAD:impl/003-identity-policy-secrets-sandbox
