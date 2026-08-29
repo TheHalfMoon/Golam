@@ -8,6 +8,7 @@ use crate::egress_permit::{
     EgressPermitError, EgressPermitStore, EgressPermitUseReceipt, UseDecisionEvidence,
     latest_global_seq, load_permit, verify_active_policy, verify_lease_chain_for_use,
 };
+use crate::egress_use_context::EgressUseContext;
 
 #[allow(clippy::too_many_arguments)]
 /// Authorize one connect/follow attempt against the exact effective endpoint observed by the caller.
@@ -22,6 +23,7 @@ pub fn authorize_effective_use(
     principal_or_process: &str,
     action: &str,
     purpose: &str,
+    use_context: EgressUseContext,
     effective: &EffectiveDestination,
     observed_at: &str,
 ) -> Result<EgressPermitUseReceipt, EgressPermitError> {
@@ -53,6 +55,9 @@ pub fn authorize_effective_use(
     {
         return Err(EgressPermitError::PermitScopeMismatch);
     }
+    if !use_context.matches_permit(&permit) {
+        return Err(EgressPermitError::PermitScopeMismatch);
+    }
     if permit.protocol_port_scope != effective.protocol_port() {
         return Err(EgressPermitError::PermitScopeMismatch);
     }
@@ -76,6 +81,7 @@ pub fn authorize_effective_use(
         principal_or_process,
         action,
         &permit,
+        use_context,
         effective,
     )?;
     verify_active_policy(&transaction, &decision)?;
@@ -130,6 +136,7 @@ fn load_current_effective_use_decision(
     principal: &str,
     action: &str,
     permit: &crate::egress_permit::EgressPermitRecord,
+    use_context: EgressUseContext,
     effective: &EffectiveDestination,
 ) -> Result<UseDecisionEvidence, EgressPermitError> {
     let row = transaction
@@ -157,7 +164,7 @@ fn load_current_effective_use_decision(
         .ok_or(EgressPermitError::UseDecisionNotFound)?;
 
     let expected_context_hash =
-        effective.decision_context_hash(permit.permit_id, &permit.destination_scope);
+        use_context.decision_context_hash(effective, permit.permit_id, &permit.destination_scope);
     if row.0 != principal
         || row.1 != action
         || row.2 != effective.resource()
@@ -289,8 +296,8 @@ mod tests {
         effective: &EffectiveDestination,
     ) -> [u8; 16] {
         let decision = [discriminator; 16];
-        let context_hash =
-            effective.decision_context_hash(permit.permit_id, &permit.destination_scope);
+        let context_hash = EgressUseContext::new(permit.taint_digest, permit.secret_handle_id)
+            .decision_context_hash(effective, permit.permit_id, &permit.destination_scope);
         let transaction = store
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)
@@ -358,6 +365,34 @@ mod tests {
         )
         .unwrap();
         let first_decision = install_effective_use_decision(&mut store, 3, 101, &permit, &first);
+        assert!(matches!(
+            authorize_effective_use(
+                &mut store,
+                permit.permit_id,
+                first_decision,
+                permit_test::PRINCIPAL,
+                permit_test::ACTION,
+                permit_test::PURPOSE,
+                EgressUseContext::new([99; 32], permit.secret_handle_id),
+                &first,
+                "2026-08-28T01:58:00Z",
+            ),
+            Err(EgressPermitError::PermitScopeMismatch)
+        ));
+        assert!(matches!(
+            authorize_effective_use(
+                &mut store,
+                permit.permit_id,
+                first_decision,
+                permit_test::PRINCIPAL,
+                permit_test::ACTION,
+                permit_test::PURPOSE,
+                EgressUseContext::new(permit.taint_digest, Some([77; 16])),
+                &first,
+                "2026-08-28T01:59:00Z",
+            ),
+            Err(EgressPermitError::PermitScopeMismatch)
+        ));
         let first_receipt = authorize_effective_use(
             &mut store,
             permit.permit_id,
@@ -365,6 +400,7 @@ mod tests {
             permit_test::PRINCIPAL,
             permit_test::ACTION,
             permit_test::PURPOSE,
+            EgressUseContext::new(permit.taint_digest, permit.secret_handle_id),
             &first,
             "2026-08-28T02:00:00Z",
         )
@@ -386,6 +422,7 @@ mod tests {
                 permit_test::PRINCIPAL,
                 permit_test::ACTION,
                 permit_test::PURPOSE,
+                EgressUseContext::new(permit.taint_digest, permit.secret_handle_id),
                 &redirected,
                 "2026-08-28T02:01:00Z",
             ),
@@ -401,6 +438,7 @@ mod tests {
                 permit_test::PRINCIPAL,
                 permit_test::ACTION,
                 permit_test::PURPOSE,
+                EgressUseContext::new(permit.taint_digest, permit.secret_handle_id),
                 &redirected,
                 "2026-08-28T02:02:00Z",
             )
@@ -424,6 +462,7 @@ mod tests {
                 permit_test::PRINCIPAL,
                 permit_test::ACTION,
                 permit_test::PURPOSE,
+                EgressUseContext::new(permit.taint_digest, permit.secret_handle_id),
                 &rebound,
                 "2026-08-28T02:03:00Z",
             ),
@@ -439,6 +478,7 @@ mod tests {
                 permit_test::PRINCIPAL,
                 permit_test::ACTION,
                 permit_test::PURPOSE,
+                EgressUseContext::new(permit.taint_digest, permit.secret_handle_id),
                 &rebound,
                 "2026-08-28T02:04:00Z",
             )
@@ -459,6 +499,7 @@ mod tests {
                 permit_test::PRINCIPAL,
                 permit_test::ACTION,
                 permit_test::PURPOSE,
+                EgressUseContext::new(permit.taint_digest, permit.secret_handle_id),
                 &private,
                 "2026-08-28T02:05:00Z",
             ),
@@ -474,6 +515,7 @@ mod tests {
                 permit_test::PRINCIPAL,
                 permit_test::ACTION,
                 permit_test::PURPOSE,
+                EgressUseContext::new(permit.taint_digest, permit.secret_handle_id),
                 &private,
                 "2026-08-28T02:06:00Z",
             )
@@ -493,6 +535,7 @@ mod tests {
                 permit_test::PRINCIPAL,
                 permit_test::ACTION,
                 permit_test::PURPOSE,
+                EgressUseContext::new(permit.taint_digest, permit.secret_handle_id),
                 &changed_protocol,
                 "2026-08-28T02:07:00Z",
             ),

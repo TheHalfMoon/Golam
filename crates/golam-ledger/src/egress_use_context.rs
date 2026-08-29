@@ -78,20 +78,32 @@ mod tests {
         let endpoint = endpoint();
         let permit_id = [9; 16];
         let destination = "https://example.invalid";
-        let baseline = EgressUseContext::new([1; 32], None)
-            .decision_context_hash(&endpoint, permit_id, destination);
-        let changed_taint = EgressUseContext::new([2; 32], None)
-            .decision_context_hash(&endpoint, permit_id, destination);
-        let changed_handle = EgressUseContext::new([1; 32], Some([3; 16]))
-            .decision_context_hash(&endpoint, permit_id, destination);
+        let baseline = EgressUseContext::new([1; 32], None).decision_context_hash(
+            &endpoint,
+            permit_id,
+            destination,
+        );
+        let changed_taint = EgressUseContext::new([2; 32], None).decision_context_hash(
+            &endpoint,
+            permit_id,
+            destination,
+        );
+        let changed_handle = EgressUseContext::new([1; 32], Some([3; 16])).decision_context_hash(
+            &endpoint,
+            permit_id,
+            destination,
+        );
 
         assert_ne!(baseline, changed_taint);
         assert_ne!(baseline, changed_handle);
         assert_ne!(changed_taint, changed_handle);
         assert_eq!(
             baseline,
-            EgressUseContext::new([1; 32], None)
-                .decision_context_hash(&endpoint, permit_id, destination)
+            EgressUseContext::new([1; 32], None).decision_context_hash(
+                &endpoint,
+                permit_id,
+                destination
+            )
         );
     }
 }
