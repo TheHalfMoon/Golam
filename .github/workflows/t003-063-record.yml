@@ -36,13 +36,14 @@ jobs:
 
           plan = Path('specs/003-identity-policy-secrets-sandbox/implementation/current-execution-plan.md')
           replace_once(plan, '**Current task**: `T003-063`', '**Current task**: `T003-064`')
+          replace_once(plan, 'Phase G is active at T003-063.', 'Phase G is active at T003-064.')
           replace_once(
               plan,
-              '### T003-063 — ACTIVE\n\nBind relevant taint and secret-handle context into egress authorization/evidence.',
+              '### T003-063 — ACTIVE\n\nBind relevant taint and optional secret-handle context into egress authorization and evidence without exposing secret plaintext.',
               '### T003-063 — COMPLETE\n\nQualified at exact implementation head `a2486acc1b4dab47207ca9becdad09afe27fefe1` by CI #532 / run `33234466919`, SUCCESS on Windows/macOS/Ubuntu.\n\nEvidence: `implementation/egress-context-qualification.md`.\n\nThe qualified effective-use boundary requires exact runtime taint and optional opaque secret-handle context to match the protected permit and binds both into durable authorization-decision context evidence without secret plaintext.\n\n### T003-064 — ACTIVE\n\nUpgrade external strict-local qualification to observe the complete Golam-managed process tree or equivalent descendant-capturing boundary while preserving hard-guard dominance.',
           )
-          replace_once(plan, 'T003_063=ACTIVE', 'T003_063=PASS\nT003_063_QUALIFIED_HEAD=a2486acc1b4dab47207ca9becdad09afe27fefe1\nT003_063_CI_RUN=33234466919')
-          replace_once(plan, 'NEXT_TASK=T003-063', 'NEXT_TASK=T003-064')
+          replace_once(plan, '- Remaining Phase G: T003-063..T003-064, strict-local hard denial remains dominant.', '- Remaining Phase G: T003-064, strict-local hard denial remains dominant.')
+          replace_once(plan, 'NEXT_TASK=T003-063', 'T003_063=PASS\nT003_063_QUALIFIED_HEAD=a2486acc1b4dab47207ca9becdad09afe27fefe1\nT003_063_CI_RUN=33234466919\nNEXT_TASK=T003-064')
       - name: Verify record
         run: |
           grep -F 'T003_063=PASS' specs/003-identity-policy-secrets-sandbox/tasks.md
