@@ -19,7 +19,9 @@ golam authority explain <decision-id-hex>
 
 The policy/schema arguments are bounded inline Cedar source strings intended for deterministic admin/test qualification. Shell quoting is required when the source contains spaces or punctuation.
 
-All commands travel over the existing authenticated local IPC path. `policy.validate`, `authority.qualify`, and `authority.explain` are non-mutating. In bootstrap state they are the only new read/qualification actions admitted for an authenticated enrolled local client; policy staging/activation, lease issuance/revocation, approval issuance/revocation, secret mutation, and sandbox-profile registration are **not** granted by this CLI surface.
+All commands travel over the existing authenticated local IPC path. `policy.validate`, `authority.qualify`, and `authority.explain` do not mutate the authority object they inspect or qualify: they do not stage/activate policy, mint/revoke a lease, issue/revoke/consume an approval, commit a secret, register a sandbox profile, or execute an external effect. **They are not storage-side-effect-free**: the authorization decision that permits or denies each request is durably appended to the authorization/security audit evidence before the requested read/qualification work proceeds. This audit mutation is mandatory attribution evidence, not target-authority mutation.
+
+In bootstrap state these are the only new read/qualification actions admitted for an authenticated enrolled local client; policy staging/activation, lease issuance/revocation, approval issuance/revocation, secret mutation, and sandbox-profile registration are **not** granted by this CLI surface.
 
 ## Protected mutation boundary
 
@@ -37,27 +39,27 @@ T003-081 intentionally does not fabricate the decision/approval/effect tuples th
 
 ### Policy
 
-`policy validate` runs the same bounded strict Cedar candidate parser/schema validator used before policy staging. It does not stage or activate the candidate.
+`policy validate` runs the same bounded strict Cedar candidate parser/schema validator used before policy staging. It does not stage or activate the candidate. The request authorization decision is still durably audited.
 
 ### Lease
 
-`authority qualify lease` exercises canonical lease-scope normalization and a strict child narrowing. The returned receipt is evidence only and is not a `CapabilityLease`.
+`authority qualify lease` exercises canonical lease-scope normalization and a strict child narrowing. The returned receipt is evidence only and is not a `CapabilityLease`. The request authorization decision is still durably audited.
 
 ### Approval
 
-`authority qualify approval` constructs and canonically digests a bounded ONCE approval scope. It does not issue an approval.
+`authority qualify approval` constructs and canonically digests a bounded ONCE approval scope. It does not issue an approval. The request authorization decision is still durably audited.
 
 ### Secret canary
 
-`authority qualify secret-canary` sends no caller-supplied secret. A fixed unknown-format deterministic canary exists only inside the ledger qualification module, enters the same explicit designated-secret preparation path, is never committed or returned, and is dropped through the zeroizing protected owner. T003-093 remains the full durable leakage suite.
+`authority qualify secret-canary` sends no caller-supplied secret. A fixed unknown-format deterministic canary exists only inside the ledger qualification module, enters the same explicit designated-secret preparation path, is never committed or returned, and is dropped through the zeroizing protected owner. T003-093 remains the full durable leakage suite. The request authorization decision is still durably audited; canary plaintext is not part of that evidence.
 
 ### Decision explain
 
-`authority explain` returns bounded stored authorization evidence: principal, action, resource, context hash, hard-guard result, lease/policy/approval identifiers, matched policy rule IDs, decision/reason, sequence and evidence version. It does not return secret plaintext or raw authorization context.
+`authority explain` returns bounded stored authorization evidence: principal, action, resource, context hash, hard-guard result, lease/policy/approval identifiers, matched policy rule IDs, decision/reason, sequence and evidence version. It does not return secret plaintext or raw authorization context. Authorizing the explain request creates its own attributable authorization decision; the target decision being explained is not rewritten.
 
 ### Sandbox profile
 
-`authority qualify sandbox-profile` validates and canonicalizes a fixed deny-all, no-spawn, empty-inheritance native profile and returns non-authority intent evidence. It neither registers the profile nor launches a process and is not containment proof.
+`authority qualify sandbox-profile` validates and canonicalizes a fixed deny-all, no-spawn, empty-inheritance native profile and returns non-authority intent evidence. It neither registers the profile nor launches a process and is not containment proof. The request authorization decision is still durably audited.
 
 ## Expected strict-local behavior
 
