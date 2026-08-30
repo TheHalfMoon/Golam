@@ -199,12 +199,7 @@ fn fabricated_verifier_and_weakened_profile_evidence_fail_closed() {
     .unwrap();
     let mut verifiers = VerifierRuleStore::open(&authority).unwrap();
     assert!(matches!(
-        verifiers.register(
-            prepared_verifier,
-            [0x61; 16],
-            [0x62; 16],
-            EffectId(0x63),
-        ),
+        verifiers.register(prepared_verifier, [0x61; 16], [0x62; 16], EffectId(0x63),),
         Err(VerifierRegistryError::MissingAuthorityDecision)
     ));
     drop(verifiers);
@@ -234,12 +229,7 @@ fn fabricated_verifier_and_weakened_profile_evidence_fail_closed() {
     .unwrap();
     let mut profiles = SandboxProfileStore::open(&authority).unwrap();
     assert!(matches!(
-        profiles.register(
-            prepared_profile,
-            [0x72; 16],
-            [0x73; 16],
-            EffectId(0x74),
-        ),
+        profiles.register(prepared_profile, [0x72; 16], [0x73; 16], EffectId(0x74),),
         Err(SandboxProfileError::MissingAuthorityDecision)
     ));
     drop(profiles);
