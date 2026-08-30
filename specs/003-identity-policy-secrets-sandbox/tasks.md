@@ -88,7 +88,7 @@ Legend:
 
 - [x] **T003-080** Replace bootstrap policy evaluation in normal authority path while preserving the stable `Authorize` call contract and narrow recovery bootstrap path. Exact-head qualification: CI #616 (`33252170158`) SUCCESS at `cd721231b498450e984810b4f06c4e14bdc311e1`, tree `4c5ddb92f8764f0107510ba72e6f697a3225bd56`, on Windows/macOS/Ubuntu; focused runtime-policy run `33252055912` SUCCESS. Evidence: `implementation/t003-080-runtime-policy-qualification.md`.
 - [x] **T003-081** Add minimal authenticated CLI/admin/test surface for policy, lease, approval, canary secret, decision explain and sandbox-profile qualification. Exact source-candidate qualification: CI #630 (`33264029849`) SUCCESS at `877f8e45f8f8ba4ba4a98af036d51032b3fba684`, tree `1808de4cce60669d89a5c3a11f2c8f47b6608b2f`, on Windows/macOS/Ubuntu. Evidence: `implementation/t003-081-admin-surface-qualification.md`.
-- [ ] **T003-082** Extend hostile-adapter tests: no capability minting, policy activation, approval forging, vault plaintext read, egress bypass, verifier self-registration or profile weakening.
+- [x] **T003-082** Extend hostile-adapter tests: no capability minting, policy activation, approval forging, vault plaintext read, egress bypass, verifier self-registration or profile weakening. Exact-head qualification: CI #650 (`33307009245`) SUCCESS at `a312ba3d0b40454dd6bddd8eb1887e481ec5b0d3`, tree `e6123476f352d94ea10dfd2da65cb2bf9c22dc63`, on Windows/macOS/Ubuntu. Evidence: `implementation/t003-082-hostile-adapter-qualification.md`.
 - [ ] **T003-083** Preserve Spec 002 effect FSM/reconciliation, IPC, corruption and strict-local gates without regression.
 - [ ] **T003-084** Fault-inject every coupled authority mutation around SQLite transaction/commit/restart boundaries.
 
@@ -237,5 +237,9 @@ T003_081=PASS
 T003_081_QUALIFIED_SOURCE_HEAD=877f8e45f8f8ba4ba4a98af036d51032b3fba684
 T003_081_QUALIFIED_SOURCE_TREE=1808de4cce60669d89a5c3a11f2c8f47b6608b2f
 T003_081_CI_RUN=33264029849
-NEXT_TASK=T003-082
+T003_082=PASS
+T003_082_QUALIFIED_HEAD=a312ba3d0b40454dd6bddd8eb1887e481ec5b0d3
+T003_082_QUALIFIED_TREE=e6123476f352d94ea10dfd2da65cb2bf9c22dc63
+T003_082_CI_RUN=33307009245
+NEXT_TASK=T003-083
 ```
