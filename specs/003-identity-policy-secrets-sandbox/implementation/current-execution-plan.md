@@ -3,7 +3,7 @@
 **Status**: IMPLEMENTATION_ACTIVE — PHASE_H_COMPLETE — PHASE_I_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current task**: `T003-081`
+**Current task**: `T003-082`
 
 ## Authority
 
@@ -138,7 +138,7 @@ Required boundaries:
 - revocation must immediately block broker/fallback use without deleting prior encrypted versions or weakening audit integrity;
 - no failure mode may acknowledge success while leaving old secret authority usable as current.
 
-Phases F, G, and H are closed at their task-qualified heads below. Phase I is active at T003-081.
+Phases F, G, and H are closed at their task-qualified heads below. Phase I is active at T003-082.
 
 ### Remaining Phase F ordering
 
@@ -254,17 +254,25 @@ Qualified at exact human-authored implementation head `cd721231b498450e984810b4f
 
 Evidence: `implementation/t003-080-runtime-policy-qualification.md`.
 
-The normal `golamd` authority-serving path now uses a Cedar-backed runtime policy loaded from one integrity-verified read-only active-policy snapshot for each authorization decision. Hard guards and unauthenticated-principal denial remain above Cedar; malformed or incompatible policy/schema/context/evaluator state fails closed; bounded bundle/rule evidence is recorded; and pre-activation bootstrap authority is restricted to narrow local-owner administration rather than ordinary product effects.
+The normal `golamd` authority-serving path now uses a Cedar-backed runtime policy loaded from one integrity-verified read-only active-policy snapshot for each authorization decision. Hard guards and unauthenticated-principal denial remain above Cedar; malformed or incompatible policy/schema/context/request/evaluator state fails closed; bounded bundle/rule evidence is recorded; and pre-activation bootstrap authority is restricted to narrow local-owner administration rather than ordinary product effects.
 
-### T003-081 — ACTIVE
+### T003-081 — COMPLETE
 
-Add the minimum authenticated CLI/admin/test surface required by Spec 003 for policy lifecycle, capability leases, approvals, deterministic canary-secret qualification, authorization-decision explanation and sandbox-profile qualification. Every mutation must route through existing typed protected kernel/ledger authority paths; no shell or raw-SQL authority bypass is permitted.
+Qualified source candidate `877f8e45f8f8ba4ba4a98af036d51032b3fba684`, tree `1808de4cce60669d89a5c3a11f2c8f47b6608b2f`, by CI #630 / run `33264029849`, SUCCESS on Windows/macOS/Ubuntu.
+
+Evidence: `implementation/t003-081-admin-surface-qualification.md`.
+
+The qualified boundary adds the minimum authenticated local CLI/admin/test qualification surface for policy validation, lease/approval/secret-canary/sandbox-profile invariant qualification, and bounded authorization-decision explanation. Requests remain behind the existing authenticated local IPC lifecycle, protected target mutations remain typed, authorization audit decisions are durably attributed before target read/qualification work, `authority explain` uses exact primary-key lookup while startup integrity verifies all protected authorization-decision snapshots, and no secret plaintext or new authority constructor is exposed.
+
+### T003-082 — ACTIVE
+
+Extend the hostile-adapter qualification so unprivileged/adversarial callers cannot mint capability authority, activate policy, forge approvals, obtain generic vault plaintext, bypass strict-local egress, self-register verifier authority, or weaken sandbox profiles. Tests must exercise the public kernel/adapter boundary or prove that a sensitive mutation surface is intentionally unavailable to unprivileged product crates; direct privileged-ledger linkage is not an acceptable adapter path.
 
 ## Later phases
 
 - Phase G: COMPLETE through T003-064; strict-local hard denial and descendant-capturing observation remain dominant predecessors.
 - Phase H: COMPLETE through T003-076.
-- Phase I: ACTIVE at T003-081; remaining T003-081..T003-084.
+- Phase I: ACTIVE at T003-082; remaining T003-082..T003-084.
 - Phase J: T003-090..T003-098, including fresh exact-head multi-platform CI, convergence, authorized Qodo review, merge, and post-merge canonical-main evidence.
 
 ## Current invariant set
@@ -357,7 +365,11 @@ T003_080_QUALIFIED_HEAD=cd721231b498450e984810b4f06c4e14bdc311e1
 T003_080_QUALIFIED_TREE=4c5ddb92f8764f0107510ba72e6f697a3225bd56
 T003_080_CI_RUN=33252170158
 T003_080_FOCUSED_RUN=33252055912
-NEXT_TASK=T003-081
+T003_081=PASS
+T003_081_QUALIFIED_SOURCE_HEAD=877f8e45f8f8ba4ba4a98af036d51032b3fba684
+T003_081_QUALIFIED_SOURCE_TREE=1808de4cce60669d89a5c3a11f2c8f47b6608b2f
+T003_081_CI_RUN=33264029849
+NEXT_TASK=T003-082
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO
