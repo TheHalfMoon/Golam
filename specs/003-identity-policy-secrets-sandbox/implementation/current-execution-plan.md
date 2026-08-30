@@ -3,7 +3,7 @@
 **Status**: IMPLEMENTATION_ACTIVE — PHASE_H_COMPLETE — PHASE_I_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current task**: `T003-082`
+**Current task**: `T003-083`
 
 ## Authority
 
@@ -130,20 +130,6 @@ Evidence: `implementation/secret-fault-qualification.md`.
 
 The qualified suite uses the real secret mutation transaction path with test-only pre-commit pause injection, OS process termination before rotation/revocation commit, bounded SQLite `SQLITE_FULL` rotation/revocation faults, approval-consumption rollback checks, restart verification, and successful-commit controls. Only fully committed transitions change durable secret authority.
 
-Required boundaries:
-
-- injected pre-commit failures must roll back secret record/version/handle and approval-consumption state atomically;
-- crash/restart evidence must show only fully committed protected transitions survive;
-- rotation must leave exactly one active current version while retired versions remain immutable and stale handles deny;
-- revocation must immediately block broker/fallback use without deleting prior encrypted versions or weakening audit integrity;
-- no failure mode may acknowledge success while leaving old secret authority usable as current.
-
-Phases F, G, and H are closed at their task-qualified heads below. Phase I is active at T003-082.
-
-### Remaining Phase F ordering
-
-T003-053 -> T003-054 -> T003-055 -> T003-056 -> T003-057.
-
 ## Phase G — Egress permits
 
 `COMPLETE`
@@ -162,15 +148,11 @@ Qualified at exact implementation head `94d1482f8963ea4d5630a1ba4d2bdaba0e12e7ef
 
 Evidence: `implementation/egress-permit-qualification.md`.
 
-The qualified boundary implements protected permit issuance/revocation, exact scope and lifetime checks, active-policy and parent-lease validation, atomic bounded use accounting, schema-v4 `uses_consumed`, and `authority-security-v2` snapshots while preserving strict-local dominance.
-
 ### T003-062 — COMPLETE
 
 Qualified at exact implementation head `4d730e894ebde948185597f5fe4296a142fd9ac6` by CI #525 / run `33200261387`, SUCCESS on Windows/macOS/Ubuntu.
 
 Evidence: `implementation/egress-effective-destination-qualification.md`.
-
-The qualified boundary binds normalized effective authority, resolved IP endpoint, protocol/port, address class, permit identity and original destination-scope digest into fresh authorization evidence before connect/follow. Redirect, rebinding and private-target changes reject reused decisions, while protocol/port widening denies. No DNS or socket operation is added to the trusted authority store.
 
 ### T003-063 — COMPLETE
 
@@ -178,15 +160,11 @@ Qualified at exact implementation head `a2486acc1b4dab47207ca9becdad09afe27fefe1
 
 Evidence: `implementation/egress-context-qualification.md`.
 
-The qualified effective-use boundary requires exact runtime taint and optional opaque secret-handle context to match the protected permit and binds both into durable authorization-decision context evidence without secret plaintext.
-
 ### T003-064 — COMPLETE
 
 Qualified at exact implementation head `d77cd2b8e78a41153085c279fea698bb794d2d4e` by CI #538 / run `33234807292`, SUCCESS on Windows/macOS/Ubuntu.
 
 Evidence: `implementation/strict-local-process-tree-qualification.md`.
-
-The qualified independent observer computes the transitive managed process-tree closure on Unix and Windows and fails if any observed Golam-owned PID holds an Internet socket. No native managed-child executor is claimed here; T003-074 remains the first task permitted to add one and must reuse this descendant-capturing observer.
 
 ## Phase H — Sandbox profiles/admission
 
@@ -198,63 +176,47 @@ Qualified at exact implementation head `9704318742c7622cb5304fa24f22b1c5bb35e22e
 
 Evidence: `implementation/sandbox-profile-qualification.md`.
 
-The qualified boundary establishes deterministic bounded SandboxProfile validation and protected immutable profile-version registration under exact current decision/effect/ONCE-approval authority with atomic authority-security evidence. No admission plan or executor is claimed.
-
 ### T003-071 — COMPLETE
 
-Qualified at exact implementation head `5f6ea41fc8372273065376f0a5ab546d18100e43`, tree `986ad7b04264339f79ea7399d839bfd4904d5ecb`, by CI #558 / run `33237313243`, SUCCESS on Windows/macOS/Ubuntu.
+Qualified at exact implementation head `5f6ea41fc8372273065376f0a5ab546d18100e43` by CI #558 / run `33237313243`, SUCCESS on Windows/macOS/Ubuntu.
 
 Evidence: `implementation/sandbox-plan-qualification.md`.
 
-The qualified read-only compiler binds exact protected profile, latest launch decision, active lease generation, active policy and optional egress permit into a deterministic non-authority-bearing plan. Trusted locality belongs to the compiler boundary; requesters cannot downgrade strict-local mode. Compilation writes no admission, consumes no egress use and launches no process.
-
 ### T003-072 — COMPLETE
 
-Qualified at exact implementation head `241f36a6fbbaad93d46aed1970353a9270b05431`, tree `37d65e8dc72f0c9ed4935ac997d2de06e653b101`, by CI #565 / run `33237725527`, SUCCESS on Windows/macOS/Ubuntu.
+Qualified at exact implementation head `241f36a6fbbaad93d46aed1970353a9270b05431` by CI #565 / run `33237725527`, SUCCESS on Windows/macOS/Ubuntu.
 
 Evidence: `implementation/sandbox-enforcement-qualification.md`.
 
-The qualified boundary starts from a cleared environment, rejects filesystem/environment/device/IPC/inherited-handle widening, preserves strict-local network dominance, prevents spawn widening, intersects resource limits to the stricter bound, and explicitly does not claim OS/platform containment or launch a process.
-
 ### T003-073 — COMPLETE
 
-Qualified at exact implementation head `39b5989b18457785f0a02a952c1f6d69bb123e60`, tree `7b70ae25afcf6a601b376d76ea5dd99ba9f6cce4`, by CI #574 / run `33246660545`, SUCCESS on Windows/macOS/Ubuntu.
+Qualified at exact implementation head `39b5989b18457785f0a02a952c1f6d69bb123e60` by CI #574 / run `33246660545`, SUCCESS on Windows/macOS/Ubuntu.
 
 Evidence: `implementation/sandbox-executor-capability-qualification.md`.
 
-The qualified boundary resolves every rights-derived and exact profile platform requirement against a trusted current-platform capability manifest and fails closed before launch if any required control is unsupported. The production T003-073 baseline advertises zero native containment controls (`native:unqualified`), preventing capability self-assertion and preserving honest fail-closed behavior until T003-074 qualifies concrete native execution. No process is launched and no platform containment is claimed.
-
 ### T003-074 — COMPLETE
 
-Qualified at exact implementation head `0d28681c971b3ae1f08504c7eb2448789ac8ed6e`, tree `32379e52964faca7db84b8354947be825ba2ef64`, by CI #592 / run `33247996101`, SUCCESS on Windows/macOS/Ubuntu. Focused native-executor qualification run `33247892761` also completed SUCCESS.
+Qualified at exact implementation head `0d28681c971b3ae1f08504c7eb2448789ac8ed6e` by CI #592 / run `33247996101`, SUCCESS on Windows/macOS/Ubuntu.
 
 Evidence: `implementation/sandbox-native-executor-qualification.md`.
 
-The qualified boundary reuses the T003-064 descendant-aware observer and proves a Linux x86_64 test-only native executor/profile using explicit mount/PID/IPC/UTS/session controls, cleared environment, unprivileged payload identity, empty capability sets, `no_new_privs`, bounded device/filesystem exposure and pre-payload seccomp network denial. Production remains `native:unqualified`; user/network namespace isolation, macOS/Windows parity, external-network profiles and universal native isolation are not claimed. No network-capable managed child was launched.
-
 ### T003-075 — COMPLETE
 
-Qualified at exact human-authored implementation head `6d3bf98c51ba2c44d187ff07d24bd804a3026bdd`, tree `ae2463fa36240fc801accdfeb5b39adf7fccde10`, by CI #597 / run `33249678974`, SUCCESS on Windows/macOS/Ubuntu.
+Qualified at exact implementation head `6d3bf98c51ba2c44d187ff07d24bd804a3026bdd` by CI #597 / run `33249678974`, SUCCESS on Windows/macOS/Ubuntu.
 
 Evidence: `implementation/t003-075-wasm-profile-disposition.md`.
 
-T003-005 was not reopened. `WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED` remains authoritative; no Wasmtime/WASI executor, runtime/JIT/hostcall surface or dependency was admitted, and runtime authority did not change.
-
 ### T003-076 — COMPLETE
 
-Qualified at exact human-authored implementation head `758476315cebf48c31a8c43f84b5d9859f8e3342`, tree `57d4930af50f8d6c259f87332884de4f641a8261`, by CI #606 / run `33250188127`, SUCCESS on Windows/macOS/Ubuntu. Focused adversarial run `33250097386` also completed SUCCESS.
+Qualified at exact implementation head `758476315cebf48c31a8c43f84b5d9859f8e3342` by CI #606 / run `33250188127`, SUCCESS on Windows/macOS/Ubuntu.
 
 Evidence: `implementation/t003-076-qualification-candidate.md`.
 
-The task repaired a material deny-all capability gap: empty filesystem/device/IPC/inherited-handle allowlists now still require explicit executor enforcement controls. Adversarial coverage also proves forbidden rights widening, strict-local network dominance, spawn denial, independent resource-control support, unsupported-platform fail-closed behavior, and preservation of the bounded T003-074 OS containment harness. Production remains `native:unqualified`; no universal native containment claim was added.
-
 ### T003-080 — COMPLETE
 
-Qualified at exact human-authored implementation head `cd721231b498450e984810b4f06c4e14bdc311e1`, tree `4c5ddb92f8764f0107510ba72e6f697a3225bd56`, by CI #616 / run `33252170158`, SUCCESS on Windows/macOS/Ubuntu. Focused runtime-policy run `33252055912` also completed SUCCESS.
+Qualified at exact implementation head `cd721231b498450e984810b4f06c4e14bdc311e1`, tree `4c5ddb92f8764f0107510ba72e6f697a3225bd56`, by CI #616 / run `33252170158`, SUCCESS on Windows/macOS/Ubuntu.
 
 Evidence: `implementation/t003-080-runtime-policy-qualification.md`.
-
-The normal `golamd` authority-serving path now uses a Cedar-backed runtime policy loaded from one integrity-verified read-only active-policy snapshot for each authorization decision. Hard guards and unauthenticated-principal denial remain above Cedar; malformed or incompatible policy/schema/context/request/evaluator state fails closed; bounded bundle/rule evidence is recorded; and pre-activation bootstrap authority is restricted to narrow local-owner administration rather than ordinary product effects.
 
 ### T003-081 — COMPLETE
 
@@ -262,17 +224,21 @@ Qualified source candidate `877f8e45f8f8ba4ba4a98af036d51032b3fba684`, tree `180
 
 Evidence: `implementation/t003-081-admin-surface-qualification.md`.
 
-The qualified boundary adds the minimum authenticated local CLI/admin/test qualification surface for policy validation, lease/approval/secret-canary/sandbox-profile invariant qualification, and bounded authorization-decision explanation. Requests remain behind the existing authenticated local IPC lifecycle, protected target mutations remain typed, authorization audit decisions are durably attributed before target read/qualification work, `authority explain` uses exact primary-key lookup while startup integrity verifies all protected authorization-decision snapshots, and no secret plaintext or new authority constructor is exposed.
+### T003-082 — COMPLETE
 
-### T003-082 — ACTIVE
+Qualified exact implementation head `a312ba3d0b40454dd6bddd8eb1887e481ec5b0d3`, tree `e6123476f352d94ea10dfd2da65cb2bf9c22dc63`, by CI #650 / run `33307009245`, SUCCESS on Windows/macOS/Ubuntu.
 
-Extend the hostile-adapter qualification so unprivileged/adversarial callers cannot mint capability authority, activate policy, forge approvals, obtain generic vault plaintext, bypass strict-local egress, self-register verifier authority, or weaken sandbox profiles. Tests must exercise the public kernel/adapter boundary or prove that a sensitive mutation surface is intentionally unavailable to unprivileged product crates; direct privileged-ledger linkage is not an acceptable adapter path.
+Evidence: `implementation/t003-082-hostile-adapter-qualification.md`.
+
+The qualified hostile-adapter suite proves fabricated authority evidence cannot mint leases, activate policy, forge approvals, self-register verifier authority or register a deliberately weakened sandbox profile; a permissive downstream policy still cannot override strict-local egress; product crates do not link the privileged ledger directly; and plaintext-bearing secret internals remain non-public.
+
+### T003-083 — ACTIVE
+
+Preserve the closed Spec 002 effect FSM/reconciliation, IPC, corruption/integrity, recovery and strict-local gates without regression. This task is regression qualification unless evidence identifies a concrete break: do not introduce parallel authority or effect behavior merely to create new code. Fresh exact-head CI must execute the complete workspace/property/fuzz/IPC/authenticated-daemon/adversarial/strict-local matrix before PASS.
 
 ## Later phases
 
-- Phase G: COMPLETE through T003-064; strict-local hard denial and descendant-capturing observation remain dominant predecessors.
-- Phase H: COMPLETE through T003-076.
-- Phase I: ACTIVE at T003-082; remaining T003-082..T003-084.
+- Phase I: ACTIVE at T003-083; remaining T003-083..T003-084.
 - Phase J: T003-090..T003-098, including fresh exact-head multi-platform CI, convergence, authorized Qodo review, merge, and post-merge canonical-main evidence.
 
 ## Current invariant set
@@ -290,88 +256,21 @@ PHASE_F_COMPLETE=YES
 PHASE_G_COMPLETE=YES
 PHASE_H_COMPLETE=YES
 PHASE_I_ACTIVE=YES
-T003_046=PASS
-T003_046_QUALIFIED_HEAD=890571fe705f36f42c1c20acff3a8a2c4fa3498e
-T003_046_CI_RUN=33157139728
-T003_050=PASS
-T003_050_QUALIFIED_HEAD=9dc77f9ff565f0540b21feb4706e25cc36087be1
-T003_050_CI_RUN=33160722873
-T003_051=PASS
-T003_051_QUALIFIED_HEAD=92acf59670024004e5fca1658021a99e3e7df913
-T003_051_CI_RUN=33161883864
-T003_052=PASS
-T003_052_QUALIFIED_HEAD=b70689c1e4836f1540541f45d66cdd5a3f514dec
-T003_052_CI_RUN=33163396509
-T003_053=PASS
-T003_053_QUALIFIED_HEAD=6f24182e1d810bc4fe6e437117149c4479241034
-T003_053_CI_RUN=33165034463
-T003_054=PASS
-T003_054_QUALIFIED_HEAD=f2cef061f4a6847a2eedf7b867b8b94e4ccadd8f
-T003_054_CI_RUN=33166659638
-T003_055=PASS
-T003_055_QUALIFIED_HEAD=b434da7c675fecf41d3f3aed2104559f959e8310
-T003_055_CI_RUN=33167705734
-T003_056=PASS
-T003_056_QUALIFIED_HEAD=b1a47898515dc06237a0d71cea00e81b19cddd0a
-T003_056_CI_RUN=33169107060
-T003_057=PASS
-T003_057_QUALIFIED_HEAD=3621b502854fd46d7b45b28f7e8d0ca071b08b68
-T003_057_CI_RUN=33195054055
-T003_060=PASS
-T003_060_QUALIFIED_HEAD=50941a6d68a7920aca3666eb786f05d8b2c145b2
-T003_060_CI_RUN=33196075286
-T003_061=PASS
-T003_061_QUALIFIED_HEAD=94d1482f8963ea4d5630a1ba4d2bdaba0e12e7ef
-T003_061_CI_RUN=33198112325
-T003_062=PASS
-T003_062_QUALIFIED_HEAD=4d730e894ebde948185597f5fe4296a142fd9ac6
-T003_062_CI_RUN=33200261387
-T003_063=PASS
-T003_063_QUALIFIED_HEAD=a2486acc1b4dab47207ca9becdad09afe27fefe1
-T003_063_CI_RUN=33234466919
-T003_064=PASS
-T003_064_QUALIFIED_HEAD=d77cd2b8e78a41153085c279fea698bb794d2d4e
-T003_064_CI_RUN=33234807292
-T003_070=PASS
-T003_070_QUALIFIED_HEAD=9704318742c7622cb5304fa24f22b1c5bb35e22e
-T003_070_CI_RUN=33235986709
-T003_071=PASS
-T003_071_QUALIFIED_HEAD=5f6ea41fc8372273065376f0a5ab546d18100e43
-T003_071_CI_RUN=33237313243
-T003_072=PASS
-T003_072_QUALIFIED_HEAD=241f36a6fbbaad93d46aed1970353a9270b05431
-T003_072_QUALIFIED_TREE=37d65e8dc72f0c9ed4935ac997d2de06e653b101
-T003_072_CI_RUN=33237725527
-T003_073=PASS
-T003_073_QUALIFIED_HEAD=39b5989b18457785f0a02a952c1f6d69bb123e60
-T003_073_QUALIFIED_TREE=7b70ae25afcf6a601b376d76ea5dd99ba9f6cce4
-T003_073_CI_RUN=33246660545
-T003_074=PASS
-T003_074_QUALIFIED_HEAD=0d28681c971b3ae1f08504c7eb2448789ac8ed6e
-T003_074_QUALIFIED_TREE=32379e52964faca7db84b8354947be825ba2ef64
-T003_074_CI_RUN=33247996101
-T003_074_FOCUSED_RUN=33247892761
-T003_075=PASS
-T003_075_QUALIFIED_HEAD=6d3bf98c51ba2c44d187ff07d24bd804a3026bdd
-T003_075_QUALIFIED_TREE=ae2463fa36240fc801accdfeb5b39adf7fccde10
-T003_075_CI_RUN=33249678974
-T003_076=PASS
-T003_076_QUALIFIED_HEAD=758476315cebf48c31a8c43f84b5d9859f8e3342
-T003_076_QUALIFIED_TREE=57d4930af50f8d6c259f87332884de4f641a8261
-T003_076_CI_RUN=33250188127
-T003_076_FOCUSED_RUN=33250097386
 T003_080=PASS
 T003_080_QUALIFIED_HEAD=cd721231b498450e984810b4f06c4e14bdc311e1
-T003_080_QUALIFIED_TREE=4c5ddb92f8764f0107510ba72e6f697a3225bd56
 T003_080_CI_RUN=33252170158
-T003_080_FOCUSED_RUN=33252055912
 T003_081=PASS
 T003_081_QUALIFIED_SOURCE_HEAD=877f8e45f8f8ba4ba4a98af036d51032b3fba684
 T003_081_QUALIFIED_SOURCE_TREE=1808de4cce60669d89a5c3a11f2c8f47b6608b2f
 T003_081_CI_RUN=33264029849
-NEXT_TASK=T003-082
+T003_082=PASS
+T003_082_QUALIFIED_HEAD=a312ba3d0b40454dd6bddd8eb1887e481ec5b0d3
+T003_082_QUALIFIED_TREE=e6123476f352d94ea10dfd2da65cb2bf9c22dc63
+T003_082_CI_RUN=33307009245
+NEXT_TASK=T003-083
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO
 PR_READY=NO
+WAIVER_TAKEN=NO
 ```
