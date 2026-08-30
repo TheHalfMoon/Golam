@@ -82,12 +82,12 @@ Legend:
 - [x] **T003-073** Implement platform-executor capability checks and fail closed when a required containment control is unsupported. Exact-head qualification: CI #574 (`33246660545`) SUCCESS at `39b5989b18457785f0a02a952c1f6d69bb123e60`, tree `7b70ae25afcf6a601b376d76ea5dd99ba9f6cce4`, on Windows/macOS/Ubuntu. Evidence: `implementation/sandbox-executor-capability-qualification.md`.
 - [x] **T003-074** Before launching any native Golam-managed child process with network capability, upgrade the external strict-local observer from daemon-PID-only inspection to complete managed-process-tree observation or an equivalent descendant-capturing sinkholed boundary; then implement the minimum native untrusted-process test executor/profile required to prove the contract without claiming unsupported universal isolation. Exact-head qualification: CI #592 (`33247996101`) SUCCESS at `0d28681c971b3ae1f08504c7eb2448789ac8ed6e`, tree `32379e52964faca7db84b8354947be825ba2ef64`, on Windows/macOS/Ubuntu; focused native-executor run `33247892761` SUCCESS. Evidence: `implementation/sandbox-native-executor-qualification.md`.
 - [x] **T003-075** If Wasmtime is later admitted by reopened T003-005, implement bounded WASM/WASI profile via the qualified executor; otherwise keep it deferred with explicit evidence. Deferred/not-admitted qualification: CI #597 (`33249678974`) SUCCESS at `6d3bf98c51ba2c44d187ff07d24bd804a3026bdd`, tree `ae2463fa36240fc801accdfeb5b39adf7fccde10`, on Windows/macOS/Ubuntu. `WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED`; no runtime authority or dependency surface changed. Evidence: `implementation/t003-075-wasm-profile-disposition.md`.
-- [x] **T003-076** Add escape/inheritance/forbidden-FS/network/spawn/resource/unsupported-platform tests. Exact-head qualification: CI #606 (`33250188127`) SUCCESS at `758476315cebf48c31a8c43f84b5d9859f8e3342`, tree `57d4930af50f8d6c259f87332884de4f641a8261`, on Windows/macOS/Ubuntu; focused adversarial run `33250097386` SUCCESS. Empty allowlists now require explicit executor enforcement and resource controls fail closed. Evidence: `implementation/t003-076-qualification-candidate.md`.
+- [x] **T003-076** Add escape/inheritance/forbidden-FS/network/spawn/resource/unsupported-platform tests. Exact-head qualification: CI #606 (`33250188127`) SUCCESS at `758476315cebf48c31a8c43f84b5d9859f8e3342`, tree `57d4930af50f8d6c259f87332884de4f641a8261`, on Windows/macOS/Ubuntu; focused adversarial run `33250097386` also completed SUCCESS. Empty allowlists now require explicit executor enforcement and resource controls fail closed. Evidence: `implementation/t003-076-qualification-candidate.md`.
 
 ## Phase I — Kernel/CLI integration and adversarial qualification
 
 - [x] **T003-080** Replace bootstrap policy evaluation in normal authority path while preserving the stable `Authorize` call contract and narrow recovery bootstrap path. Exact-head qualification: CI #616 (`33252170158`) SUCCESS at `cd721231b498450e984810b4f06c4e14bdc311e1`, tree `4c5ddb92f8764f0107510ba72e6f697a3225bd56`, on Windows/macOS/Ubuntu; focused runtime-policy run `33252055912` SUCCESS. Evidence: `implementation/t003-080-runtime-policy-qualification.md`.
-- [ ] **T003-081** Add minimal authenticated CLI/admin/test surface for policy, lease, approval, canary secret, decision explain and sandbox-profile qualification.
+- [x] **T003-081** Add minimal authenticated CLI/admin/test surface for policy, lease, approval, canary secret, decision explain and sandbox-profile qualification. Exact source-candidate qualification: CI #630 (`33264029849`) SUCCESS at `877f8e45f8f8ba4ba4a98af036d51032b3fba684`, tree `1808de4cce60669d89a5c3a11f2c8f47b6608b2f`, on Windows/macOS/Ubuntu. Evidence: `implementation/t003-081-admin-surface-qualification.md`.
 - [ ] **T003-082** Extend hostile-adapter tests: no capability minting, policy activation, approval forging, vault plaintext read, egress bypass, verifier self-registration or profile weakening.
 - [ ] **T003-083** Preserve Spec 002 effect FSM/reconciliation, IPC, corruption and strict-local gates without regression.
 - [ ] **T003-084** Fault-inject every coupled authority mutation around SQLite transaction/commit/restart boundaries.
@@ -233,5 +233,9 @@ T003_080_QUALIFIED_HEAD=cd721231b498450e984810b4f06c4e14bdc311e1
 T003_080_QUALIFIED_TREE=4c5ddb92f8764f0107510ba72e6f697a3225bd56
 T003_080_CI_RUN=33252170158
 T003_080_FOCUSED_RUN=33252055912
-NEXT_TASK=T003-081
+T003_081=PASS
+T003_081_QUALIFIED_SOURCE_HEAD=877f8e45f8f8ba4ba4a98af036d51032b3fba684
+T003_081_QUALIFIED_SOURCE_TREE=1808de4cce60669d89a5c3a11f2c8f47b6608b2f
+T003_081_CI_RUN=33264029849
+NEXT_TASK=T003-082
 ```
