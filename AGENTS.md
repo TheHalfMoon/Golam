@@ -2,63 +2,70 @@
 
 ## Current phase
 
-Golam is in **Spec 003 implementation: Identity, Policy, Secrets & Sandbox** on branch `impl/003-identity-policy-secrets-sandbox`.
+Golam is in **Spec 004 planning: Harness & Local Intelligence** on branch `spec/004-harness-local-intelligence`.
 
 Spec 002 — Kernel & Durable Session Spine — is `CLOSED_CANONICAL`.
 
-Spec 003 planning is `CLOSED_CANONICAL` at `main@82de7084384009ff3a00522f4e0aef09bf549529`, tree `046966262379ba0e7038e7a1216c6237c2033a94`, after qualified PR #4 merge and post-merge CI #255.
+Spec 003 — Identity, Policy, Secrets & Sandbox — is `CLOSED_CANONICAL` at `main@6719e9997862cbe617b60e33870ef056fa3c0c70` after the exact qualified implementation merge and post-merge CI #666 / run `33410723102` completed successfully on Windows, macOS and Ubuntu.
 
-Product implementation is authorized only to the extent defined by the merged Spec 003 package and its task/dependency ordering.
+Spec 004 planning is authorized by frozen Spec 001 T040–T045 because Spec 003 has closed canonical. This planning branch MUST NOT contain Spec 004 product implementation or production dependency/donor admission.
 
 ## Authority order
 
-1. exact live GitHub truth;
-2. `.specify/memory/constitution.md` (v1.2.0 or later);
-3. frozen Spec 001 program architecture and contracts;
-4. canonical Spec 002 implementation and closeout evidence;
-5. canonical merged Spec 003 artifacts and implementation evidence;
-6. exact admitted dependency/source records.
+1. exact live GitHub/repository truth;
+2. `.specify/memory/constitution.md` v1.2.0 or later;
+3. frozen Spec 001 program architecture, tasks and contracts;
+4. canonical Spec 002 package and closeout evidence;
+5. canonical Spec 003 package, implementation evidence and closeout truth;
+6. the complete active Spec 004 planning package;
+7. exact research/source records and any later admitted Source Foundry records.
 
-## Spec 003 read order
+Open planning proposals that have not merged into canonical `main` are not canonical predecessors merely because they exist or are stacked in GitHub.
+
+## Spec 004 read order
 
 1. `.specify/memory/constitution.md`
 2. `specs/001-golam-local-agent-os-foundation/spec.md`
 3. `specs/001-golam-local-agent-os-foundation/plan.md`
-4. `specs/001-golam-local-agent-os-foundation/source-permission-attestation.md`
-5. canonical Spec 002 package and `implementation/` closeout evidence
-6. `specs/003-identity-policy-secrets-sandbox/spec.md`
-7. `specs/003-identity-policy-secrets-sandbox/clarification-closeout.md`
-8. `specs/003-identity-policy-secrets-sandbox/research.md`
-9. `specs/003-identity-policy-secrets-sandbox/donor-qualification.md`
-10. `specs/003-identity-policy-secrets-sandbox/plan.md`
-11. `specs/003-identity-policy-secrets-sandbox/data-model.md`
-12. all `specs/003-identity-policy-secrets-sandbox/contracts/`
-13. `specs/003-identity-policy-secrets-sandbox/quickstart.md`
-14. `specs/003-identity-policy-secrets-sandbox/checklists/implementation-readiness.md`
-15. `specs/003-identity-policy-secrets-sandbox/tasks.md`
-16. `specs/003-identity-policy-secrets-sandbox/analysis.md`
-17. all `specs/003-identity-policy-secrets-sandbox/implementation/` evidence.
+4. `specs/001-golam-local-agent-os-foundation/tasks.md`
+5. `specs/001-golam-local-agent-os-foundation/contracts/execution-profile-contract.md`
+6. `specs/001-golam-local-agent-os-foundation/source-permission-attestation.md`
+7. canonical Spec 002 closeout package/evidence
+8. canonical Spec 003 package and `implementation/` closeout evidence
+9. `specs/004-harness-local-intelligence/spec.md`
+10. `specs/004-harness-local-intelligence/clarification-closeout.md`
+11. `specs/004-harness-local-intelligence/research.md`
+12. `specs/004-harness-local-intelligence/donor-qualification.md`
+13. `specs/004-harness-local-intelligence/plan.md`
+14. `specs/004-harness-local-intelligence/data-model.md`
+15. all `specs/004-harness-local-intelligence/contracts/`
+16. `specs/004-harness-local-intelligence/quickstart.md`
+17. `specs/004-harness-local-intelligence/checklists/implementation-readiness.md`
+18. `specs/004-harness-local-intelligence/tasks.md`
+19. `specs/004-harness-local-intelligence/analysis.md`
 
-## Spec 003 hard boundaries
+## Spec 004 hard boundaries
 
-- Preserve the existing seven-package Spec 002 spine. Do not create empty domain crates; split only if implementation evidence proves an independent ownership/testing boundary is necessary.
-- Keep `Authorize(principal, action, resource, context)` semantically stable and process-splittable. Spec 003 replaces the normal bootstrap policy evaluator; it does not replace KernelApi.
-- Authorization ordering is hard guards -> authenticated principal -> capability lease -> policy -> required approval -> typed protected mutation/effect. Earlier denial is monotonic.
-- Cedar is an evaluator dependency only. Golam owns authority schemas, normalization, hard denials, capabilities, protected resources, approval semantics and final allow/deny behavior.
-- Cedar evaluation diagnostics/errors are Golam `DENY`, even though Cedar itself uses skip-on-error semantics.
-- Do not enable Cedar experimental/tolerant/WASM/protobuf features without a new qualification record.
-- Capability authority is kernel-minted, principal-bound, non-self-expanding, use-time expiry/revocation checked, and child leases may only narrow.
-- Protected policy/principal/lease/approval/secret/taint-verifier/egress/sandbox/effect/audit state is not generic filesystem state. Protected mutation is typed elevated work under current authority.
-- Real secrets stay out of model context and untrusted execution wherever brokerable. Tests use deterministic canaries only.
-- Vault ciphertext is authenticated encryption; master-key protection uses explicitly selected OS stores and fails closed when unavailable. No plaintext/env/argv fallback.
-- `SECRET_DERIVED` content is not eligible for canonical long-term memory. Model/worker/skill/MCP assertions cannot self-clear taint.
-- Strict-local egress remains a hard deny before Cedar/lease/approval/permit evaluation. No policy or permit can override it.
-- Effective destination changes across DNS resolution, redirect, rebinding, protocol/port, private/link-local/loopback transitions require reauthorization before connect/follow.
-- Before any network-capable Golam-managed native child is launched, external strict-local qualification must observe the complete managed process tree or an equivalent descendant-capturing sinkholed boundary.
-- Authorization and sandboxing are separate. A sandbox profile is not containment proof. Unsupported required controls deny pre-launch.
-- Wasmtime/WASI is currently `NOT_ADMITTED_NOT_NEEDED`; reopen qualification only if T003-075 genuinely requires it. It is never a universal native sandbox.
-- `Golam-Research` remains `REFERENCE_ONLY` for Spec 003 unless a later Source Foundry record admits exact bounded files. No donor code is admitted by Phase A.
-- No model/harness, broad tool suite, Desktop/computer control, GolamConnect, channels, workers, or scheduler implementation in Spec 003.
-- Never claim CI/tests/review PASS without exact-head evidence. Any implementation branch mutation invalidates earlier exact-head closeout evidence.
-- Founder direction dated 2026-08-31 explicitly removes Qodo from the Spec 003 closeout path and keeps Codex excluded. T003-096 requires a fresh substantive independent external semantic review after fresh exact-head CI from an actually available repository-integrated reviewer other than Qodo or Codex. CodeRabbit, Cubic, Greptile, or an equivalent independent reviewer may satisfy the gate only when it produces a substantive result bound to the exact head; status-only, summary-only, billing/rate-limit/unavailable responses and self-review do not count.
-- Do not mark the implementation PR Ready, merge it, claim `SPEC_003_CLOSED_CANONICAL`, or start Spec 004 until the ordered Spec 003 tasks and final exact-head/post-merge gates are genuinely satisfied.
+- Preserve the existing seven-package workspace initially. Do not create empty `golam-harness` or `golam-models` crates. Split only when implementation evidence proves an independent ownership/testing boundary.
+- The model backend is replaceable and unprivileged. It never becomes KernelApi, Effect Gate, policy/lease/approval authority, secret authority, memory truth or Task verification truth.
+- `MODEL_TOOL_CALL != AUTHORITY_OR_EFFECT_COMMIT`. Backend-native tool/agent/MCP/shell/code-execution features are not Golam authority paths.
+- Canonical session/event evidence remains the source of truth. Model-visible history is a projection. `FULL_CANONICAL_HISTORY_SURVIVES_COMPACTION` remains binding.
+- Compaction creates provenance-bound projections/artifacts and never rewrites/deletes canonical history. Goal/non-negotiable constraint evidence remains independently durable.
+- Cancellation and timeout are explicit states. Accepted streamed prefixes remain attributable evidence. Retry creates a new request attempt and never rewrites prior evidence.
+- Harness retry cannot blind-replay protected effects and cannot clear existing `UNKNOWN_OUTCOME` state.
+- Preserve every frozen Spec 001 `ExecutionProfile` field. Material profile changes produce distinct immutable/versioned identity and invalidate stale benchmark binding.
+- Strict-local hard denial remains above routing. Local backend failure never silently selects cloud or enables model download/telemetry/RPC/network behavior.
+- `HardwareProfile` and calibration are bounded execution evidence, not device authority or a telemetry/fingerprinting surface.
+- Ordinary CI must not depend on model downloads, cloud credentials or specialized accelerators. A deterministic scripted backend is the mandatory harness-semantics oracle.
+- `mistral.rs` is only `PRIMARY_CANDIDATE_NOT_YET_ADMITTED` during planning. Before implementation admission, select and qualify the exact minimal crate/feature/transitive/native/network closure. Do not delegate Golam harness/tools/authority to mistral.rs built-in agentic features.
+- `llama.cpp` is only `COMPATIBILITY_CANDIDATE_NOT_YET_ADMITTED` during planning. If later admitted, default to a supervised out-of-process sidecar with local model path, offline policy and authenticated/private local transport. No direct C/C++ FFI inside `golamd` and no generic unauthenticated localhost control surface.
+- Golam-Research, grok-build, Goose and DeepSeek Harness remain `REFERENCE_ONLY` unless an exact bounded Source Foundry record later admits selected code.
+- No product filesystem/shell/git/browser tools, canonical long-term memory product, Desktop/computer control, GolamConnect/channels, workers/scheduler, parity breadth or final release qualification in Spec 004.
+- Never claim CI/tests/review PASS without exact-head evidence. A planning or implementation branch mutation invalidates only CI/review evidence bound to the mutated branch's prior exact head; unchanged canonical predecessor evidence, including `main@6719e9997862cbe617b60e33870ef056fa3c0c70`, remains valid unless that predecessor itself changes or is otherwise superseded by repository truth.
+- Do not mark the planning PR Ready, merge it, start Spec 004 implementation, or admit production dependencies until the complete planning task order and planning closeout gates are genuinely satisfied.
+- After planning merges, implementation MUST start from the exact canonical `main` produced by the planning merge and its successful post-merge CI.
+- Do not start Spec 005 until Spec 004 implementation is genuinely `CLOSED_CANONICAL` after exact-head implementation gates, guarded merge and successful post-merge canonical-main CI.
+
+## Review discipline
+
+Use the exact live repository review policy at the time of each closeout. Codex review remains excluded by founder direction. Do not assume a historical Qodo-only rule applies to Spec 004, and do not treat status-only, billing/rate-limit/unavailable responses, automated summaries or self-review as a substantive independent semantic review. A qualifying review must be bound to the exact head after exact-head CI and must have no unresolved material findings before Ready/merge authorization.
