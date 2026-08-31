@@ -14,17 +14,19 @@ PrepareRequest
   -> optional bounded Retry as a NEW attempt
 ```
 
-Every transition is attributable to `RequestSeriesId` + `RequestAttemptId`.
+Every transition is attributable to `RequestSeriesId` + `RequestAttemptId` and to the canonical initiating principal/turn evidence.
 
 ## Request preparation
 
 A request MUST bind:
-- canonical session/turn source references;
+- canonical initiating principal reference and session/turn source references;
 - exact context projection identity/digest;
 - exact `ExecutionProfileId`;
 - tool-schema digest when schemas are visible;
 - input/output/time budgets;
 - request digest.
+
+The initiating-principal reference is audit/provenance attribution inherited from authenticated canonical state. It is not copied into backend-visible prompt text merely by being present in the request envelope and is not a capability token.
 
 Request construction MUST NOT expose protected secret plaintext or authority-bearing mutation tokens to a backend.
 
@@ -73,6 +75,7 @@ Cancellation never rewrites prior evidence and never implies an external effect 
 Retry MUST:
 - create a new `RequestAttemptId`;
 - reference its parent attempt and reason;
+- preserve/rebind canonical initiating-principal attribution;
 - obey a bounded retry budget;
 - preserve prior failed/cancelled evidence;
 - rebind any changed context/profile identity;
