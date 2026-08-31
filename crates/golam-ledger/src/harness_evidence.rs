@@ -32,7 +32,10 @@ pub const REQUIRED_HARNESS_TABLES: &[&str] = &[
 #[derive(Debug)]
 pub enum HarnessEvidenceError {
     Sqlite(rusqlite::Error),
-    FutureSchema { found: i64, supported: i64 },
+    FutureSchema {
+        found: i64,
+        supported: i64,
+    },
     InvalidRecord(&'static str),
     MissingAttempt(RequestAttemptId),
     ImmutableAttemptMismatch(RequestAttemptId),
@@ -48,12 +51,20 @@ impl fmt::Display for HarnessEvidenceError {
         match self {
             Self::Sqlite(error) => write!(f, "sqlite error: {error}"),
             Self::FutureSchema { found, supported } => {
-                write!(f, "harness schema {found} is newer than supported {supported}")
+                write!(
+                    f,
+                    "harness schema {found} is newer than supported {supported}"
+                )
             }
             Self::InvalidRecord(reason) => write!(f, "invalid harness evidence record: {reason}"),
-            Self::MissingAttempt(attempt_id) => write!(f, "request attempt not found: {attempt_id}"),
+            Self::MissingAttempt(attempt_id) => {
+                write!(f, "request attempt not found: {attempt_id}")
+            }
             Self::ImmutableAttemptMismatch(attempt_id) => {
-                write!(f, "immutable request attempt identity mismatch: {attempt_id}")
+                write!(
+                    f,
+                    "immutable request attempt identity mismatch: {attempt_id}"
+                )
             }
             Self::SequenceConflict {
                 attempt_id,
@@ -313,8 +324,9 @@ impl HarnessEvidenceStore {
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let immutable = read_attempt_identity(&tx, attempt.request_attempt_id)?
-            .ok_or(HarnessEvidenceError::MissingAttempt(attempt.request_attempt_id))?;
+        let immutable = read_attempt_identity(&tx, attempt.request_attempt_id)?.ok_or(
+            HarnessEvidenceError::MissingAttempt(attempt.request_attempt_id),
+        )?;
         if immutable.request_series_id != attempt.request_series_id
             || immutable.session_id != session_id
             || immutable.initiator_principal_ref != attempt.initiator_principal_ref
@@ -1084,7 +1096,9 @@ mod tests {
             .unwrap();
         assert_eq!(identity.state, RequestAttemptState::Prepared);
         assert_eq!(identity.execution_profile_id, attempt.execution_profile_id);
-        let events = reopened.accepted_events(attempt.request_attempt_id).unwrap();
+        let events = reopened
+            .accepted_events(attempt.request_attempt_id)
+            .unwrap();
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].sequence, 0);
         assert_eq!(events[0].payload, b"hel");
