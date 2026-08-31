@@ -31,7 +31,7 @@ use golam_ledger::egress_permit::{
 };
 use golam_ledger::policy::{
     POLICY_ACTIVATE_ACTION, POLICY_MUTATION_RISK_CLASS, POLICY_STAGE_ACTION, PolicyStore,
-    prepare_policy_bundle, policy_bundle_resource,
+    policy_bundle_resource, prepare_policy_bundle,
 };
 use golam_ledger::sandbox_profile::{
     SANDBOX_PROFILE_MUTATION_RISK_CLASS, SANDBOX_PROFILE_REGISTER_ACTION, SandboxNetworkRule,
@@ -169,16 +169,8 @@ fn issue_once_approval(
     taint_digest: [u8; 32],
 ) -> [u8; 16] {
     let scope = ApprovalScope::once(target_effect, target_action, target_resource).unwrap();
-    let prepared = prepare_approval(
-        OWNER,
-        scope,
-        target_risk,
-        taint_digest,
-        TEST_TIME,
-        None,
-        1,
-    )
-    .unwrap();
+    let prepared =
+        prepare_approval(OWNER, scope, target_risk, taint_digest, TEST_TIME, None, 1).unwrap();
     let issue_effect = create_authorized_effect(
         fixture,
         APPROVAL_ISSUE_ACTION,
@@ -267,16 +259,9 @@ fn issue_committed_lease(
 ) -> CapabilityLeaseRecord {
     let actions = vec![action.to_owned()];
     let resources = vec![resource.to_owned()];
-    let prepared = prepare_capability_lease_issue(
-        principal,
-        None,
-        &actions,
-        &resources,
-        &[],
-        None,
-        None,
-    )
-    .unwrap();
+    let prepared =
+        prepare_capability_lease_issue(principal, None, &actions, &resources, &[], None, None)
+            .unwrap();
     let effect = create_authorized_effect(
         fixture,
         CAPABILITY_LEASE_ISSUE_ACTION,
@@ -308,11 +293,8 @@ fn issue_committed_egress_permit(
     fixture: &Fixture,
     lease: &CapabilityLeaseRecord,
 ) -> EgressPermitRecord {
-    let parent = EgressParentLeaseBinding::new(
-        lease.lease_id,
-        lease.generation,
-        lease.authority_digest,
-    );
+    let parent =
+        EgressParentLeaseBinding::new(lease.lease_id, lease.generation, lease.authority_digest);
     let prepared = prepare_egress_permit_issue(
         &lease.principal_id,
         "network.egress",
@@ -342,7 +324,12 @@ fn issue_committed_egress_permit(
         EGRESS_PERMIT_MUTATION_RISK_CLASS,
         [0; 32],
     );
-    let decision = append_allow(fixture, OWNER, EGRESS_PERMIT_ISSUE_ACTION, prepared.resource());
+    let decision = append_allow(
+        fixture,
+        OWNER,
+        EGRESS_PERMIT_ISSUE_ACTION,
+        prepared.resource(),
+    );
     EgressPermitStore::open(&fixture.authority)
         .unwrap()
         .issue(prepared, decision, approval, effect)
@@ -381,15 +368,17 @@ fn authorization_audit_commit_failure_rolls_back_all_coupled_evidence() {
 #[test]
 fn policy_stage_and_activation_commit_failures_roll_back_source_and_approval_state() {
     let fixture = Fixture::new("policy");
-    let prepared = prepare_policy_bundle(1, "permit(principal, action, resource);", "entity User;")
-        .unwrap();
+    let prepared =
+        prepare_policy_bundle(1, "permit(principal, action, resource);", "entity User;").unwrap();
     let bundle_id = prepared.policy_bundle_id();
     let resource = policy_bundle_resource(bundle_id);
     let stage_decision = append_allow(&fixture, OWNER, POLICY_STAGE_ACTION, &resource);
 
     let mut policies = PolicyStore::open(&fixture.authority).unwrap();
     install_commit_fault(&fixture.authority);
-    let error = policies.stage_prepared(prepared, stage_decision).unwrap_err();
+    let error = policies
+        .stage_prepared(prepared, stage_decision)
+        .unwrap_err();
     assert_commit_fault(&error);
     drop(policies);
     remove_commit_fault(&fixture.authority);
@@ -399,8 +388,8 @@ fn policy_stage_and_activation_commit_failures_roll_back_source_and_approval_sta
     );
     assert_restart_integrity(&fixture.authority);
 
-    let prepared = prepare_policy_bundle(1, "permit(principal, action, resource);", "entity User;")
-        .unwrap();
+    let prepared =
+        prepare_policy_bundle(1, "permit(principal, action, resource);", "entity User;").unwrap();
     PolicyStore::open(&fixture.authority)
         .unwrap()
         .stage_prepared(prepared, stage_decision)
@@ -444,16 +433,8 @@ fn approval_issue_and_revocation_commit_failures_preserve_prior_authority() {
     let fixture = Fixture::new("approval");
     let target_effect = EffectId(next_id());
     let scope = ApprovalScope::once(target_effect, "test.effect", "test:resource").unwrap();
-    let prepared = prepare_approval(
-        OWNER,
-        scope,
-        "test_risk",
-        [0; 32],
-        TEST_TIME,
-        None,
-        1,
-    )
-    .unwrap();
+    let prepared =
+        prepare_approval(OWNER, scope, "test_risk", [0; 32], TEST_TIME, None, 1).unwrap();
     let issue_resource = prepared.resource().to_owned();
     let issue_effect = create_authorized_effect(
         &fixture,
@@ -471,26 +452,21 @@ fn approval_issue_and_revocation_commit_failures_preserve_prior_authority() {
     assert_commit_fault(&error);
     drop(approvals);
     remove_commit_fault(&fixture.authority);
-    assert_eq!(row_count(&fixture.authority, "SELECT COUNT(*) FROM approvals"), 0);
+    assert_eq!(
+        row_count(&fixture.authority, "SELECT COUNT(*) FROM approvals"),
+        0
+    );
     assert_restart_integrity(&fixture.authority);
 
     let scope = ApprovalScope::once(target_effect, "test.effect", "test:resource").unwrap();
-    let prepared = prepare_approval(
-        OWNER,
-        scope,
-        "test_risk",
-        [0; 32],
-        TEST_TIME,
-        None,
-        1,
-    )
-    .unwrap();
+    let prepared =
+        prepare_approval(OWNER, scope, "test_risk", [0; 32], TEST_TIME, None, 1).unwrap();
     let approval = ApprovalStore::open(&fixture.authority)
         .unwrap()
         .issue(prepared, issue_decision, issue_effect)
         .unwrap();
-    let revocation = prepare_approval_revocation(approval.approval_id(), OWNER, TEST_TIME_LATER)
-        .unwrap();
+    let revocation =
+        prepare_approval_revocation(approval.approval_id(), OWNER, TEST_TIME_LATER).unwrap();
     let revoke_effect = create_authorized_effect(
         &fixture,
         APPROVAL_REVOKE_ACTION,
@@ -498,7 +474,12 @@ fn approval_issue_and_revocation_commit_failures_preserve_prior_authority() {
         APPROVAL_MUTATION_RISK_CLASS,
         revocation.intent_digest(),
     );
-    let revoke_decision = append_allow(&fixture, OWNER, APPROVAL_REVOKE_ACTION, revocation.resource());
+    let revoke_decision = append_allow(
+        &fixture,
+        OWNER,
+        APPROVAL_REVOKE_ACTION,
+        revocation.resource(),
+    );
     let mut revocations = ApprovalRevocationStore::open(&fixture.authority).unwrap();
     install_commit_fault(&fixture.authority);
     let error = revocations
@@ -558,7 +539,9 @@ fn lease_issue_and_revocation_commit_failures_roll_back_consumption_and_revocati
     );
     let mut leases = CapabilityLeaseStore::open(&fixture.authority).unwrap();
     install_commit_fault(&fixture.authority);
-    let error = leases.issue(prepared, decision, approval, effect).unwrap_err();
+    let error = leases
+        .issue(prepared, decision, approval, effect)
+        .unwrap_err();
     assert_commit_fault(&error);
     drop(leases);
     remove_commit_fault(&fixture.authority);
@@ -575,13 +558,10 @@ fn lease_issue_and_revocation_commit_failures_roll_back_consumption_and_revocati
         "network.egress",
         "https://example.invalid",
     );
-    let binding = CapabilityLeaseBinding::new(
-        lease.lease_id,
-        lease.generation,
-        lease.authority_digest,
-    );
-    let prepared = prepare_capability_lease_revocation(binding, "t003_084", TEST_TIME_LATER)
-        .unwrap();
+    let binding =
+        CapabilityLeaseBinding::new(lease.lease_id, lease.generation, lease.authority_digest);
+    let prepared =
+        prepare_capability_lease_revocation(binding, "t003_084", TEST_TIME_LATER).unwrap();
     let effect = create_authorized_effect(
         &fixture,
         CAPABILITY_LEASE_REVOKE_ACTION,
@@ -665,10 +645,16 @@ fn verifier_taint_and_sandbox_commit_failures_leave_no_half_authority() {
     drop(store);
     remove_commit_fault(&verifier_fixture.authority);
     assert_eq!(
-        row_count(&verifier_fixture.authority, "SELECT COUNT(*) FROM verifier_rules"),
+        row_count(
+            &verifier_fixture.authority,
+            "SELECT COUNT(*) FROM verifier_rules"
+        ),
         0
     );
-    assert_eq!(approval_consumption_count(&verifier_fixture.authority, approval), 0);
+    assert_eq!(
+        approval_consumption_count(&verifier_fixture.authority, approval),
+        0
+    );
     assert_restart_integrity(&verifier_fixture.authority);
     verifier_fixture.cleanup();
 
@@ -699,7 +685,12 @@ fn verifier_taint_and_sandbox_commit_failures_leave_no_half_authority() {
         TAINT_AUTHORITY_MUTATION_RISK_CLASS,
         prepared.source_taint_digest(),
     );
-    let decision = append_allow(&taint_fixture, OWNER, TAINT_DOWNGRADE_ACTION, prepared.resource());
+    let decision = append_allow(
+        &taint_fixture,
+        OWNER,
+        TAINT_DOWNGRADE_ACTION,
+        prepared.resource(),
+    );
     let mut store = TaintAttestationStore::open(&taint_fixture.authority).unwrap();
     install_commit_fault(&taint_fixture.authority);
     let error = store
@@ -709,10 +700,16 @@ fn verifier_taint_and_sandbox_commit_failures_leave_no_half_authority() {
     drop(store);
     remove_commit_fault(&taint_fixture.authority);
     assert_eq!(
-        row_count(&taint_fixture.authority, "SELECT COUNT(*) FROM taint_attestations"),
+        row_count(
+            &taint_fixture.authority,
+            "SELECT COUNT(*) FROM taint_attestations"
+        ),
         0
     );
-    assert_eq!(approval_consumption_count(&taint_fixture.authority, approval), 0);
+    assert_eq!(
+        approval_consumption_count(&taint_fixture.authority, approval),
+        0
+    );
     assert_restart_integrity(&taint_fixture.authority);
     taint_fixture.cleanup();
 
@@ -771,10 +768,16 @@ fn verifier_taint_and_sandbox_commit_failures_leave_no_half_authority() {
     drop(store);
     remove_commit_fault(&sandbox_fixture.authority);
     assert_eq!(
-        row_count(&sandbox_fixture.authority, "SELECT COUNT(*) FROM sandbox_profiles"),
+        row_count(
+            &sandbox_fixture.authority,
+            "SELECT COUNT(*) FROM sandbox_profiles"
+        ),
         0
     );
-    assert_eq!(approval_consumption_count(&sandbox_fixture.authority, approval), 0);
+    assert_eq!(
+        approval_consumption_count(&sandbox_fixture.authority, approval),
+        0
+    );
     assert_restart_integrity(&sandbox_fixture.authority);
     sandbox_fixture.cleanup();
 }
@@ -788,11 +791,8 @@ fn egress_issue_and_revocation_commit_failures_preserve_permit_and_approval_stat
         "network.egress",
         "https://example.invalid",
     );
-    let parent = EgressParentLeaseBinding::new(
-        lease.lease_id,
-        lease.generation,
-        lease.authority_digest,
-    );
+    let parent =
+        EgressParentLeaseBinding::new(lease.lease_id, lease.generation, lease.authority_digest);
     let prepared = prepare_egress_permit_issue(
         &lease.principal_id,
         "network.egress",
@@ -822,10 +822,17 @@ fn egress_issue_and_revocation_commit_failures_preserve_permit_and_approval_stat
         EGRESS_PERMIT_MUTATION_RISK_CLASS,
         [0; 32],
     );
-    let decision = append_allow(&fixture, OWNER, EGRESS_PERMIT_ISSUE_ACTION, prepared.resource());
+    let decision = append_allow(
+        &fixture,
+        OWNER,
+        EGRESS_PERMIT_ISSUE_ACTION,
+        prepared.resource(),
+    );
     let mut store = EgressPermitStore::open(&fixture.authority).unwrap();
     install_commit_fault(&fixture.authority);
-    let error = store.issue(prepared, decision, approval, effect).unwrap_err();
+    let error = store
+        .issue(prepared, decision, approval, effect)
+        .unwrap_err();
     assert_commit_fault(&error);
     drop(store);
     remove_commit_fault(&fixture.authority);
@@ -853,7 +860,12 @@ fn egress_issue_and_revocation_commit_failures_preserve_permit_and_approval_stat
         EGRESS_PERMIT_MUTATION_RISK_CLASS,
         [0; 32],
     );
-    let decision = append_allow(&fixture, OWNER, EGRESS_PERMIT_REVOKE_ACTION, prepared.resource());
+    let decision = append_allow(
+        &fixture,
+        OWNER,
+        EGRESS_PERMIT_REVOKE_ACTION,
+        prepared.resource(),
+    );
     let mut store = EgressPermitStore::open(&fixture.authority).unwrap();
     install_commit_fault(&fixture.authority);
     let error = store
