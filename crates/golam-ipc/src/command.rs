@@ -20,6 +20,9 @@ pub const METHOD_EFFECT_SIMULATE: MethodId = MethodId(108);
 pub const METHOD_EFFECT_RECONCILE: MethodId = MethodId(109);
 pub const METHOD_DOCTOR: MethodId = MethodId(110);
 pub const METHOD_CLIENT_ENROLL: MethodId = MethodId(111);
+pub const METHOD_POLICY_VALIDATE: MethodId = MethodId(112);
+pub const METHOD_AUTHORITY_QUALIFY: MethodId = MethodId(113);
+pub const METHOD_AUTHORITY_EXPLAIN: MethodId = MethodId(114);
 
 pub const MAX_COMMAND_BODY_BYTES: usize = 256 * 1024;
 pub const MAX_TEXT_BYTES: usize = 64 * 1024;
@@ -52,6 +55,35 @@ impl SyntheticSemantics {
             3 => Some(Self::AtMostOnce),
             4 => Some(Self::Compensatable),
             5 => Some(Self::Irreversible),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum AuthorityQualificationKind {
+    Lease,
+    Approval,
+    SecretCanary,
+    SandboxProfile,
+}
+
+impl AuthorityQualificationKind {
+    const fn code(self) -> u8 {
+        match self {
+            Self::Lease => 1,
+            Self::Approval => 2,
+            Self::SecretCanary => 3,
+            Self::SandboxProfile => 4,
+        }
+    }
+
+    const fn from_code(code: u8) -> Option<Self> {
+        match code {
+            1 => Some(Self::Lease),
+            2 => Some(Self::Approval),
+            3 => Some(Self::SecretCanary),
+            4 => Some(Self::SandboxProfile),
             _ => None,
         }
     }
@@ -113,6 +145,16 @@ pub enum Command {
     EffectReconcile {
         effect_id: EffectId,
     },
+    PolicyValidate {
+        policy_source: String,
+        schema_source: String,
+    },
+    AuthorityQualify {
+        kind: AuthorityQualificationKind,
+    },
+    AuthorityExplain {
+        decision_id: [u8; 16],
+    },
     Doctor,
 }
 
@@ -125,6 +167,7 @@ pub enum CommandCodecError {
     TrailingBytes { actual: usize },
     InvalidUtf8,
     InvalidSyntheticSemantics(u8),
+    InvalidAuthorityQualificationKind(u8),
     LengthOverflow,
 }
 
@@ -151,6 +194,9 @@ impl fmt::Display for CommandCodecError {
             Self::InvalidUtf8 => f.write_str("Golam command text is not valid UTF-8"),
             Self::InvalidSyntheticSemantics(code) => {
                 write!(f, "unknown synthetic effect semantics code {code}")
+            }
+            Self::InvalidAuthorityQualificationKind(code) => {
+                write!(f, "unknown authority qualification kind code {code}")
             }
             Self::LengthOverflow => f.write_str("Golam command field length exceeds u32"),
         }
@@ -278,6 +324,27 @@ pub fn encode_command(command: &Command) -> Result<RequestMessage, CommandCodecE
             body.u128(effect_id.0);
             (METHOD_EFFECT_RECONCILE, body.finish())
         }
+        Command::PolicyValidate {
+            policy_source,
+            schema_source,
+        } => {
+            check_field(policy_source.len(), MAX_TEXT_BYTES)?;
+            check_field(schema_source.len(), MAX_TEXT_BYTES)?;
+            let mut body = Writer::new();
+            body.bytes(policy_source.as_bytes())?;
+            body.bytes(schema_source.as_bytes())?;
+            (METHOD_POLICY_VALIDATE, body.finish())
+        }
+        Command::AuthorityQualify { kind } => {
+            let mut body = Writer::new();
+            body.u8(kind.code());
+            (METHOD_AUTHORITY_QUALIFY, body.finish())
+        }
+        Command::AuthorityExplain { decision_id } => {
+            let mut body = Writer::new();
+            body.u128(u128::from_be_bytes(*decision_id));
+            (METHOD_AUTHORITY_EXPLAIN, body.finish())
+        }
         Command::Doctor => (METHOD_DOCTOR, Vec::new()),
     };
     check_body(body.len())?;
@@ -348,6 +415,19 @@ pub fn decode_command(message: &RequestMessage) -> Result<Command, CommandCodecE
         }
         METHOD_EFFECT_RECONCILE => Command::EffectReconcile {
             effect_id: EffectId(reader.u128()?),
+        },
+        METHOD_POLICY_VALIDATE => Command::PolicyValidate {
+            policy_source: reader.text(MAX_TEXT_BYTES)?,
+            schema_source: reader.text(MAX_TEXT_BYTES)?,
+        },
+        METHOD_AUTHORITY_QUALIFY => {
+            let code = reader.u8()?;
+            let kind = AuthorityQualificationKind::from_code(code)
+                .ok_or(CommandCodecError::InvalidAuthorityQualificationKind(code))?;
+            Command::AuthorityQualify { kind }
+        }
+        METHOD_AUTHORITY_EXPLAIN => Command::AuthorityExplain {
+            decision_id: reader.u128()?.to_be_bytes(),
         },
         METHOD_DOCTOR => Command::Doctor,
         other => return Err(CommandCodecError::UnknownMethod(other.0)),
@@ -534,6 +614,16 @@ mod tests {
             Command::EffectReconcile {
                 effect_id: EffectId(11),
             },
+            Command::PolicyValidate {
+                policy_source: "permit(principal, action, resource);".to_owned(),
+                schema_source: "entity User;".to_owned(),
+            },
+            Command::AuthorityQualify {
+                kind: AuthorityQualificationKind::SecretCanary,
+            },
+            Command::AuthorityExplain {
+                decision_id: [7; 16],
+            },
             Command::Doctor,
         ]
     }
@@ -576,6 +666,13 @@ mod tests {
                 body,
             }),
             Err(CommandCodecError::InvalidSyntheticSemantics(255))
+        );
+        assert_eq!(
+            decode_command(&RequestMessage {
+                method: METHOD_AUTHORITY_QUALIFY,
+                body: vec![255],
+            }),
+            Err(CommandCodecError::InvalidAuthorityQualificationKind(255))
         );
     }
 

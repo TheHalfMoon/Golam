@@ -34,6 +34,7 @@ jobs:
         run: |
           cargo +1.98.0 test --locked -p golam-ipc --test fuzz_smoke
           cargo +1.98.0 test --locked -p golam-ledger --test fuzz_smoke
+          cargo +1.98.0 test --locked -p golam-kernel --test spec003_fuzz_smoke
       - name: IPC transport qualification (Unix)
         if: runner.os != 'Windows'
         run: |

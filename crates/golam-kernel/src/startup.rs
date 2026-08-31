@@ -4,9 +4,14 @@ use std::error::Error;
 use std::fmt;
 
 use golam_core::paths::RuntimeLayout;
-use golam_ledger::recovery::{RecoveryError, RecoveryMode, RecoveryReport, RecoveryScanner};
+use golam_ledger::active_policy_integrity::verify_path as verify_active_policy;
+use golam_ledger::recovery::{
+    RecoveryError, RecoveryIssue, RecoveryIssueKind, RecoveryMode, RecoveryReport, RecoveryScanner,
+};
 
 use crate::{AuthorizationPolicy, KernelApi, KernelError};
+
+const MAX_RECOVERY_DETAIL_CHARS: usize = 512;
 
 pub enum KernelStartup<P> {
     Serving {
@@ -67,7 +72,22 @@ pub fn start_kernel<P: AuthorizationPolicy>(
     runtime: &RuntimeLayout,
     policy: P,
 ) -> Result<KernelStartup<P>, KernelStartupError> {
-    let report = RecoveryScanner::scan(runtime)?;
+    let mut report = RecoveryScanner::scan(runtime)?;
+    if report.mode != RecoveryMode::Quarantine
+        && let Err(error) = verify_active_policy(&report.authority_db)
+    {
+        report.mode = RecoveryMode::Quarantine;
+        report.issues.push(RecoveryIssue {
+            kind: RecoveryIssueKind::AuthorityIntegrity,
+            reference: "authority:active-policy".to_owned(),
+            detail: error
+                .to_string()
+                .chars()
+                .take(MAX_RECOVERY_DETAIL_CHARS)
+                .collect(),
+            blocking: true,
+        });
+    }
     match report.mode {
         RecoveryMode::Normal => Ok(KernelStartup::Serving {
             kernel: Box::new(KernelApi::open_after_recovery(runtime, policy)?),

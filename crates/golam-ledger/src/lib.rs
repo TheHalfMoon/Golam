@@ -1,22 +1,70 @@
 #![forbid(unsafe_code)]
 
+pub mod active_policy_integrity;
+pub mod admin_qualification;
+pub mod approval_binding;
+pub mod approval_consumption;
+pub mod approval_revocation;
+pub mod approval_runtime;
+pub mod approvals;
 pub mod artifacts;
+mod authority_security_v2;
+mod authority_security_write;
 pub mod authorization;
+#[cfg(test)]
+mod capability_lease_adversarial;
+pub mod capability_lease_mutation;
+#[path = "capability_leases.rs"]
+pub mod capability_lease_runtime;
+#[path = "capability_leases_facade.rs"]
+pub mod capability_leases;
 pub mod checkpoint;
 pub mod clients;
 pub mod dispatch;
 pub mod effect_completion;
 pub mod effect_read;
 pub mod effects;
+pub mod egress_destination;
+pub mod egress_effective_use;
+pub mod egress_permit;
+pub mod egress_use_context;
 pub mod fork;
 pub mod goal;
 pub mod integrity;
 pub mod manual_review;
+pub mod policy;
 pub mod protocol_audit;
 pub mod recovery;
+pub mod run_preauthorization;
+pub mod sandbox_enforcement;
+pub mod sandbox_executor;
+#[cfg(test)]
+mod sandbox_native_qualification;
+pub mod sandbox_plan;
+pub mod sandbox_profile;
+#[allow(dead_code)]
+pub(crate) mod secret_broker;
+#[cfg(test)]
+mod secret_canary_qualification;
+#[allow(dead_code)]
+pub(crate) mod secret_detection;
+#[allow(dead_code)]
+pub(crate) mod secret_entry;
+#[allow(dead_code)]
+pub(crate) mod secret_fallback;
+#[allow(dead_code)]
+mod secret_vault;
+// T003-052 keeps plaintext-bearing mutation preparation crate-internal; kernel/broker integration is owned by later tasks.
+#[allow(dead_code)]
+pub(crate) mod secret_mutation;
+pub mod secrets;
 mod security_audit;
 pub mod session_read;
 pub mod storage;
+#[cfg(test)]
+mod taint_adversarial;
+pub mod taint_attestation;
+pub mod verifier_registry;
 
 use golam_core::{CanonicalEncoder, CoreError, EventId, SessionId};
 
@@ -31,6 +79,7 @@ pub enum EventKind {
     EffectTransitioned,
     CheckpointCreated,
     SessionForked,
+    SecretEntryRedacted,
 }
 
 impl EventKind {
@@ -42,6 +91,7 @@ impl EventKind {
             Self::EffectTransitioned => 4,
             Self::CheckpointCreated => 5,
             Self::SessionForked => 6,
+            Self::SecretEntryRedacted => 7,
         }
     }
 
@@ -53,6 +103,7 @@ impl EventKind {
             4 => Some(Self::EffectTransitioned),
             5 => Some(Self::CheckpointCreated),
             6 => Some(Self::SessionForked),
+            7 => Some(Self::SecretEntryRedacted),
             _ => None,
         }
     }

@@ -1,119 +1,158 @@
 # Tasks — Spec 003 Identity, Policy, Secrets & Sandbox
 
-**Status**: PLANNED — QODO REPAIR RECONCILED; IMPLEMENTATION BLOCKED UNTIL PLANNING PR MERGES CANONICAL  
-**Planning base**: `main@a04756f242e48faeda802e5b3fd99a0c8d52f53e`
+**Status**: IMPLEMENTATION_ACTIVE — PHASE_I_COMPLETE — PHASE_J_CLOSEOUT_ACTIVE  
+**Canonical implementation base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`
 
 Legend:
-- `[ ]` is future implementation work authorized only after this planning package is reviewed/merged.
-- Planning completion does not mean product implementation exists.
-- No PASS transfers across a branch mutation.
+- `[x]` means the task has repository evidence on the implementation branch or canonical predecessor.
+- `[ ]` is remaining implementation work.
+- No PASS transfers across a branch mutation for final exact-head qualification.
 
 ## Phase A — Exact-main bootstrap and dependency gates
 
-- [ ] **T003-001** Re-read exact canonical `main` after planning merge; create implementation branch from that exact commit.
-- [ ] **T003-002** Re-read constitution, Spec 001 authority contracts, canonical Spec 002 closeout and the merged Spec 003 package before code mutation.
-- [ ] **T003-003** Qualify exact Cedar source/crate/version/features/license/transitives/unsafe/resource behavior before adding it.
-- [ ] **T003-004** Qualify exact cryptographic/vault/key-protection dependencies and Windows/macOS/Linux backing-store boundaries before handling secret values.
-- [ ] **T003-005** Qualify Wasmtime/WASI only if a bounded WASM-profile implementation task actually requires it; otherwise record `NOT_ADMITTED_NOT_NEEDED`.
-- [ ] **T003-006** Record Source Foundry evidence before any donor source reuse; default `Golam-Research=REFERENCE_ONLY`.
+- [x] **T003-001** Re-read exact canonical `main` after planning merge; create implementation branch from that exact commit. Evidence: `implementation/implementation-bootstrap.md`.
+- [x] **T003-002** Re-read constitution, Spec 001 authority contracts, canonical Spec 002 closeout and the merged Spec 003 package before code mutation. Evidence: `implementation/implementation-bootstrap.md`.
+- [x] **T003-003** Qualify exact Cedar source/crate/version/features/license/transitives/unsafe/resource behavior before adding it. Evidence: `implementation/cedar-dependency-qualification.md`.
+- [x] **T003-004** Qualify exact cryptographic/vault/key-protection dependencies and Windows/macOS/Linux backing-store boundaries before handling secret values. Evidence: `implementation/secret-dependency-qualification.md`.
+- [x] **T003-005** Qualify Wasmtime/WASI only if a bounded WASM-profile implementation task actually requires it; otherwise record `NOT_ADMITTED_NOT_NEEDED`. Evidence: `implementation/wasmtime-disposition.md`.
+- [x] **T003-006** Record Source Foundry evidence before any donor source reuse; default `Golam-Research=REFERENCE_ONLY`. Evidence: `implementation/source-foundry-disposition.md`.
 
 ## Phase B — Schema, hard guards and policy lifecycle
 
-- [ ] **T003-010** Extend protected authority schema for policy bundles, active policy, leases/revocations, approvals/consumption, taint attestations/verifier rules, secret records/versions, egress permits and sandbox profiles/admissions.
-- [ ] **T003-011** Extend `authority-security` canonical coverage and startup verification for every new protected source record.
-- [ ] **T003-012** Freeze bounded canonical principal/action/resource/context normalization and policy input test vectors.
-- [ ] **T003-013** Implement hard-kernel-guard stage ahead of policy evaluation, preserving strict-local and other monotonic denials.
-- [ ] **T003-014** Implement candidate policy bundle parse/schema/policy validation with bounded diagnostics and fail-closed behavior.
-- [ ] **T003-015** Implement immutable bundle hashing/versioning/staging and atomic active-policy activation under current authority plus approval.
-- [ ] **T003-016** Implement startup active-policy integrity verification and fail-closed recovery behavior; no permissive bootstrap fallback after normal activation.
-- [ ] **T003-017** Implement stable authorization-decision evidence binding hard guard, lease, policy bundle/rule and approval state without secret plaintext.
+- [x] **T003-010** Extend protected authority schema for policy bundles, active policy, leases/revocations, approvals/consumption, taint attestations/verifier rules, secret records/versions, egress permits and sandbox profiles/admissions.
+- [x] **T003-011** Extend `authority-security` canonical coverage and startup verification for every new protected source record.
+- [x] **T003-012** Freeze bounded canonical principal/action/resource/context normalization and policy input test vectors.
+- [x] **T003-013** Implement hard-kernel-guard stage ahead of policy evaluation, preserving strict-local and other monotonic denials.
+- [x] **T003-014** Implement candidate policy bundle parse/schema/policy validation with bounded diagnostics and fail-closed behavior.
+- [x] **T003-015** Implement immutable bundle hashing/versioning/staging and atomic active-policy activation under current authority plus approval.
+- [x] **T003-016** Implement startup active-policy integrity verification and fail-closed recovery behavior; no permissive bootstrap fallback after normal activation.
+- [x] **T003-017** Implement stable authorization-decision evidence binding hard guard, lease, policy bundle/rule and approval state without secret plaintext. Exact-head regression evidence: CI #281 (`33075420843`) SUCCESS at `d47296e0552d196455f29cbec8da6afd7d639df9` on Windows/macOS/Ubuntu.
 
 ## Phase C — Capability leases
 
-- [ ] **T003-020** Implement sealed kernel-minted capability lease types with no public authority constructor.
-- [ ] **T003-021** Implement action/resource/context scope normalization and subset-only child derivation.
-- [ ] **T003-022** Implement expiry, revocation, generation and principal binding checks at protected action execution.
-- [ ] **T003-023** Implement protected lease issuance/revocation as typed elevated effects with security integrity.
-- [ ] **T003-024** Add property/adversarial tests for widening, self-grant, stale generation, expiry, revocation and replay.
+- [x] **T003-020** Implement sealed kernel-minted capability lease types with no public authority constructor. Exact-head regression evidence: CI #284 (`33076455833`) SUCCESS at `d6e7e8119b0c0f3ee1f53dd0bc70cbbb480a2f75` on Windows/macOS/Ubuntu.
+- [x] **T003-021** Implement action/resource/context scope normalization and subset-only child derivation. Exact-head regression evidence: CI #289 (`33077921766`) SUCCESS at `60930d4531fecb230c14b8f3c76708a8cd15f2b7` on Windows/macOS/Ubuntu.
+- [x] **T003-022** Implement expiry, revocation, generation and principal binding checks at protected action execution. Exact-head regression evidence: CI #292 (`33082378023`) SUCCESS at `b04340e2497f2eabfedc372087a83c57ddb8db2f` on Windows/macOS/Ubuntu.
+- [x] **T003-023** Implement protected lease issuance/revocation as typed elevated effects with security integrity. Exact-head regression evidence: CI #298 (`33088214980`) SUCCESS at `dfdc91887022b0d2c874a218508d06225a9ebe13` on Windows/macOS/Ubuntu.
+- [x] **T003-024** Add property/adversarial tests for widening, self-grant, stale generation, expiry, revocation and replay. Exact-head regression evidence: CI #302 (`33089369171`) SUCCESS at `b94824aeccb789744b1cba7d175026b1771ee75c` on Windows/macOS/Ubuntu.
 
 ## Phase D — Approvals
 
-- [ ] **T003-030** Implement ONCE, SESSION_SCOPED, TIME_BOXED, OPERATION_PATTERN and RUN_PREAUTHORIZATION records/scopes.
-- [ ] **T003-031** Bind approvals to action/resource/effect/pattern, risk, taint/context digest, parent decision, expiry and limits.
-- [ ] **T003-032** Revalidate approval freshness/scope immediately before protected execution.
-- [ ] **T003-033** Implement durable atomic ONCE reservation/consumption with concurrency and crash/retry safety.
-- [ ] **T003-034** Enforce bounded RUN_PREAUTHORIZATION for unattended irreversible effects and deny generic always-allow behavior.
-- [ ] **T003-035** Add approval expiry/revocation/replay/double-use/scope-overreach/taint-mismatch tests.
+- [x] **T003-030** Implement ONCE, SESSION_SCOPED, TIME_BOXED, OPERATION_PATTERN and RUN_PREAUTHORIZATION records/scopes. Exact-head regression evidence: CI #306 (`33090617555`) SUCCESS at `5e2177f5591e7eb3cf7ccf42c24e728f0ed57963` on Windows/macOS/Ubuntu.
+- [x] **T003-031** Bind approvals to action/resource/effect/pattern, risk, taint/context digest, parent decision, expiry and limits. Exact-head regression evidence: CI #318 (`33104078403`) SUCCESS at `a55322e99240ab569b6e8c0d3287f4f7ac3a5a9c` on Windows/macOS/Ubuntu.
+- [x] **T003-032** Revalidate approval freshness/scope immediately before protected execution. Exact-head regression evidence: CI #326 (`33105526713`) SUCCESS at `bc2b0580afc20125331b8c4f75d1ed796b8bff1d` on Windows/macOS/Ubuntu.
+- [x] **T003-033** Implement durable atomic ONCE reservation/consumption with concurrency and crash/retry safety. Exact-head regression evidence: CI #330 (`33106765798`) SUCCESS at `2cd685098e92d34485636d11a1e3b9df59a2205b` on Windows/macOS/Ubuntu.
+- [x] **T003-034** Enforce bounded RUN_PREAUTHORIZATION for unattended irreversible effects and deny generic always-allow behavior. Exact-head qualification: CI #349 (`33149069868`) SUCCESS at `0bcaffb231070082be411e2e37959004ce359ad6` on Windows/macOS/Ubuntu. Evidence: `implementation/run-preauthorization-qualification.md`.
+- [x] **T003-035** Add approval expiry/revocation/replay/double-use/scope-overreach/taint-mismatch tests. Exact-head qualification: CI #354 (`33149715031`) SUCCESS at `ffc8a66c881b1a34dafe32f79beebe03cceba939` on Windows/macOS/Ubuntu. Coverage includes the production typed monotonic approval-revocation mutation plus immediate use-time revocation denial; evidence is recorded in `implementation/current-execution-plan.md` and the exact-head CI run.
 
 ## Phase E — Taint and verifier state
 
-- [ ] **T003-040** Implement baseline taint-label set and deterministic canonical encoding.
-- [ ] **T003-041** Implement monotonic union propagation for derived artifacts/authority context.
-- [ ] **T003-042** Implement protected verifier/sanitizer registry; tainted sources cannot register their own downgrade rule.
-- [ ] **T003-043** Implement human/deterministic-verifier downgrade attestations as new evidence rather than in-place source mutation.
-- [ ] **T003-044** Enforce `SECRET_DERIVED` rejection at long-term-memory admission boundary reserved for later memory integration tests.
-- [ ] **T003-045** Implement deterministic secret-elimination sanitizer evidence path for creating a separately non-secret-derived artifact.
-- [ ] **T003-046** Add multi-hop/self-clear/unregistered-verifier/SECRET_DERIVED property and adversarial tests.
+- [x] **T003-040** Implement baseline taint-label set and deterministic canonical encoding. Exact-head qualification: CI #359 (`33150969442`) SUCCESS at `cb69d638107ca4fe0118c9a61f143ac3ba65a2d3` on Windows/macOS/Ubuntu. Evidence: `implementation/taint-baseline-qualification.md`.
+- [x] **T003-041** Implement monotonic union propagation for derived artifacts/authority context. Exact-head qualification: CI #366 (`33151556481`) SUCCESS at `76e1addf35c92a22d2c5826ca429278cacd598b3` on Windows/macOS/Ubuntu. Evidence: `implementation/taint-propagation-qualification.md`.
+- [x] **T003-042** Implement protected verifier/sanitizer registry; tainted sources cannot register their own downgrade rule. Exact-head qualification: CI #373 (`33152187952`) SUCCESS at `67f74c9b9b75e43b9fa00069050c97c041567184` on Windows/macOS/Ubuntu. Evidence: `implementation/verifier-registry-qualification.md`.
+- [x] **T003-043** Implement human/deterministic-verifier downgrade attestations as new evidence rather than in-place source mutation. Exact-head qualification: CI #388 (`33154505847`) SUCCESS at `2f8655b5bdddd17bb9e6eab7bf00f11a210896cb` on Windows/macOS/Ubuntu. Evidence: `implementation/taint-downgrade-attestation-qualification.md`.
+- [x] **T003-044** Enforce `SECRET_DERIVED` rejection at canonical long-term-memory admission boundary reserved for later memory integration tests. Exact-head qualification: CI #393 (`33155122088`) SUCCESS at `1a9fcddff4c4dd6a6161547cf89a502750f9bc71` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-derived-memory-admission-qualification.md`.
+- [x] **T003-045** Implement deterministic secret-elimination sanitizer evidence path for creating a separately non-secret-derived artifact. Exact-head qualification: CI #398 (`33155929307`) SUCCESS at `e3b91dcecf0048b183c4c333cd9afda43ee25671` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-elimination-sanitizer-qualification.md`.
+- [x] **T003-046** Add multi-hop/self-clear/unregistered-verifier/SECRET_DERIVED property and adversarial tests. Exact-head qualification: CI #405 (`33157139728`) SUCCESS at `890571fe705f36f42c1c20acff3a8a2c4fa3498e` on Windows/macOS/Ubuntu. Evidence: `implementation/taint-adversarial-qualification.md`.
 
 ## Phase F — Secret vault and broker
 
-- [ ] **T003-050** Implement protected opaque SecretHandle/SecretRecord/SecretVersion interfaces without generic plaintext reads.
-- [ ] **T003-051** Implement qualified encrypted-at-rest vault storage and key-protection abstraction with fail-closed corruption/unavailability behavior.
-- [ ] **T003-052** Implement secret create/version/rotate/revoke protected transitions with atomic security evidence.
-- [ ] **T003-053** Implement `BrokerSecretUse` authorization around handle, purpose, destination/process, lease/policy/approval and locality state.
-- [ ] **T003-054** Implement bounded unbrokerable fallback: no argv, cleared environment, exact injection scope, no ambient child inheritance, minimized lifetime and redaction.
-- [ ] **T003-055** Implement an explicit user-designated secret-entry boundary that treats the entire submitted value as secret independent of format detection; before any model-visible canonical append persist only an opaque handle, tombstone/redaction marker and non-secret metadata. Keep recognized-format detection only as defense in depth for ordinary free text.
-- [ ] **T003-056** Add canary tests covering both recognized and deliberately unknown-format deterministic values through the explicit secret-entry path, proving no plaintext in durable vault bytes, event/audit/log/error/prompt paths or unauthorized subprocess output; separately test free-text detectors as defense in depth.
-- [ ] **T003-057** Add crash/disk-full/rotation/revocation tests and prove no acknowledged half-transition exposes stale secret authority.
+- [x] **T003-050** Implement protected opaque SecretHandle/SecretRecord/SecretVersion interfaces without generic plaintext reads. Exact-head qualification: CI #416 (`33160722873`) SUCCESS at `9dc77f9ff565f0540b21feb4706e25cc36087be1` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-interface-qualification.md`.
+- [x] **T003-051** Implement qualified encrypted-at-rest vault storage and key-protection abstraction with fail-closed corruption/unavailability behavior. Exact-head qualification: CI #424 (`33161883864`) SUCCESS at `92acf59670024004e5fca1658021a99e3e7df913` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-vault-storage-qualification.md`.
+- [x] **T003-052** Implement secret create/version/rotate/revoke protected transitions with atomic security evidence. Exact-head qualification: CI #434 (`33163396509`) SUCCESS at `b70689c1e4836f1540541f45d66cdd5a3f514dec` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-mutation-qualification.md`.
+- [x] **T003-053** Implement `BrokerSecretUse` authorization around handle, purpose, destination/process, lease/policy/approval and locality state. Exact-head qualification: CI #448 (`33165034463`) SUCCESS at `6f24182e1d810bc4fe6e437117149c4479241034` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-broker-qualification.md`.
+- [x] **T003-054** Implement bounded unbrokerable fallback: no argv, cleared environment, exact injection scope, no ambient child inheritance, minimized lifetime and redaction. Exact-head qualification: CI #464 (`33166659638`) SUCCESS at `f2cef061f4a6847a2eedf7b867b8b94e4ccadd8f` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-fallback-qualification.md`.
+- [x] **T003-055** Implement an explicit user-designated secret-entry boundary that treats the entire submitted value as secret independent of format detection; before any model-visible canonical append persist only an opaque handle, tombstone/redaction marker and non-secret metadata. Keep recognized-format detection only as defense in depth for ordinary free text. Exact-head qualification: CI #473 (`33167705734`) SUCCESS at `b434da7c675fecf41d3f3aed2104559f959e8310` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-entry-qualification.md`.
+- [x] **T003-056** Add canary tests covering both recognized and deliberately unknown-format deterministic values through the explicit secret-entry path, proving no plaintext in durable vault bytes, event/audit/log/error/prompt paths or unauthorized subprocess output; separately test free-text detectors as defense in depth. Exact-head qualification: CI #484 (`33169107060`) SUCCESS at `b1a47898515dc06237a0d71cea00e81b19cddd0a` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-canary-qualification.md`.
+- [x] **T003-057** Add crash/disk-full/rotation/revocation tests and prove no acknowledged half-transition exposes stale secret authority. Exact-head qualification: CI #495 (`33195054055`) SUCCESS at `3621b502854fd46d7b45b28f7e8d0ca071b08b68` on Windows/macOS/Ubuntu. Evidence: `implementation/secret-fault-qualification.md`.
 
 ## Phase G — Egress permits
 
-- [ ] **T003-060** Keep strict-local external egress as an unconditional hard guard before policy/permit evaluation.
-- [ ] **T003-061** Implement non-strict EgressPermit scope and protected issuance/revocation/use accounting.
-- [ ] **T003-062** Implement mandatory reauthorization of every effective destination before connect/follow whenever DNS resolution, redirect, rebinding, protocol/port, or private/link-local/loopback target changes; hostname authority never transfers implicitly to a changed effective target.
-- [ ] **T003-063** Bind relevant taint and secret-handle context into egress authorization/evidence.
-- [ ] **T003-064** Add strict-local dominance plus external sinkhole/no-egress qualification covering `golamd` and every Golam-managed descendant, proving permits and child processes cannot bypass the hard guard.
+- [x] **T003-060** Keep strict-local external egress as an unconditional hard guard before policy/permit evaluation. Exact-head qualification: CI #502 (`33196075286`) SUCCESS at `50941a6d68a7920aca3666eb786f05d8b2c145b2` on Windows/macOS/Ubuntu. Evidence: `implementation/strict-local-hard-guard-qualification.md`.
+- [x] **T003-061** Implement non-strict EgressPermit scope and protected issuance/revocation/use accounting. Exact-head qualification: CI #514 (`33198112325`) SUCCESS at `94d1482f8963ea4d5630a1ba4d2bdaba0e12e7ef` on Windows/macOS/Ubuntu. Evidence: `implementation/egress-permit-qualification.md`.
+- [x] **T003-062** Implement mandatory reauthorization of every effective destination before connect/follow whenever DNS resolution, redirect, rebinding, protocol/port, or private/link-local/loopback target changes; hostname authority never transfers implicitly to a changed effective target. Exact-head qualification: CI #525 (`33200261387`) SUCCESS at `4d730e894ebde948185597f5fe4296a142fd9ac6` on Windows/macOS/Ubuntu. Evidence: `implementation/egress-effective-destination-qualification.md`.
+- [x] **T003-063** Bind relevant taint and secret-handle context into egress authorization/evidence. Exact-head qualification: CI #532 (`33234466919`) SUCCESS at `a2486acc1b4dab47207ca9becdad09afe27fefe1` on Windows/macOS/Ubuntu. Evidence: `implementation/egress-context-qualification.md`.
+- [x] **T003-064** Add strict-local dominance plus external sinkhole/no-egress qualification covering `golamd` and every Golam-managed descendant, proving permits and child processes cannot bypass the hard guard. Exact-head qualification: CI #538 (`33234807292`) SUCCESS at `d77cd2b8e78a41153085c279fea698bb794d2d4e` on Windows/macOS/Ubuntu. Evidence: `implementation/strict-local-process-tree-qualification.md`.
 
 ## Phase H — Sandbox profiles/admission
 
-- [ ] **T003-070** Implement protected SandboxProfile records and deterministic profile validation.
-- [ ] **T003-071** Compile profiles to bounded launch/admission plans intersected with active lease/policy/egress authority.
-- [ ] **T003-072** Enforce cleared environment and explicit FS/network/spawn/resource/device/IPC/handle inheritance rules.
-- [ ] **T003-073** Implement platform-executor capability checks and fail closed when a required containment control is unsupported.
-- [ ] **T003-074** Before launching any native Golam-managed child process with network capability, upgrade the external strict-local observer from daemon-PID-only inspection to complete managed-process-tree observation or an equivalent descendant-capturing sinkholed boundary; then implement the minimum native untrusted-process test executor/profile required to prove the contract without claiming unsupported universal isolation.
-- [ ] **T003-075** If admitted by T003-005, implement bounded WASM/WASI profile via the qualified executor; otherwise keep it deferred with explicit evidence.
-- [ ] **T003-076** Add escape/inheritance/forbidden-FS/network/spawn/resource/unsupported-platform tests.
+- [x] **T003-070** Implement protected SandboxProfile records and deterministic profile validation. Exact-head qualification: CI #545 (`33235986709`) SUCCESS at `9704318742c7622cb5304fa24f22b1c5bb35e22e` on Windows/macOS/Ubuntu. Evidence: `implementation/sandbox-profile-qualification.md`.
+- [x] **T003-071** Compile profiles to bounded launch/admission plans intersected with active lease/policy/egress authority. Exact-head qualification: CI #558 (`33237313243`) SUCCESS at `5f6ea41fc8372273065376f0a5ab546d18100e43` on Windows/macOS/Ubuntu. Evidence: `implementation/sandbox-plan-qualification.md`.
+- [x] **T003-072** Enforce cleared environment and explicit FS/network/spawn/resource/device/IPC/handle inheritance rules. Exact-head qualification: CI #565 (`33237725527`) SUCCESS at `241f36a6fbbaad93d46aed1970353a9270b05431`, tree `37d65e8dc72f0c9ed4935ac997d2de06e653b101`, on Windows/macOS/Ubuntu. Evidence: `implementation/sandbox-enforcement-qualification.md`.
+- [x] **T003-073** Implement platform-executor capability checks and fail closed when a required containment control is unsupported. Exact-head qualification: CI #574 (`33246660545`) SUCCESS at `39b5989b18457785f0a02a952c1f6d69bb123e60`, tree `7b70ae25afcf6a601b376d76ea5dd99ba9f6cce4`, on Windows/macOS/Ubuntu. Evidence: `implementation/sandbox-executor-capability-qualification.md`.
+- [x] **T003-074** Before launching any native Golam-managed child process with network capability, upgrade the external strict-local observer from daemon-PID-only inspection to complete managed-process-tree observation or an equivalent descendant-capturing sinkholed boundary; then implement the minimum native untrusted-process test executor/profile required to prove the contract without claiming unsupported universal isolation. Exact-head qualification: CI #592 (`33247996101`) SUCCESS at `0d28681c971b3ae1f08504c7eb2448789ac8ed6e`, tree `32379e52964faca7db84b8354947be825ba2ef64`, on Windows/macOS/Ubuntu; focused native-executor run `33247892761` SUCCESS. Evidence: `implementation/sandbox-native-executor-qualification.md`.
+- [x] **T003-075** If Wasmtime is later admitted by reopened T003-005, implement bounded WASM/WASI profile via the qualified executor; otherwise keep it deferred with explicit evidence. Deferred/not-admitted qualification: CI #597 (`33249678974`) SUCCESS at `6d3bf98c51ba2c44d187ff07d24bd804a3026bdd`, tree `ae2463fa36240fc801accdfeb5b39adf7fccde10`, on Windows/macOS/Ubuntu. `WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED`; no runtime authority or dependency surface changed. Evidence: `implementation/t003-075-wasm-profile-disposition.md`.
+- [x] **T003-076** Add escape/inheritance/forbidden-FS/network/spawn/resource/unsupported-platform tests. Exact-head qualification: CI #606 (`33250188127`) SUCCESS at `758476315cebf48c31a8c43f84b5d9859f8e3342`, tree `57d4930af50f8d6c259f87332884de4f641a8261`, on Windows/macOS/Ubuntu; focused adversarial run `33250097386` also completed SUCCESS. Empty allowlists now require explicit executor enforcement and resource controls fail closed. Evidence: `implementation/t003-076-qualification-candidate.md`.
 
 ## Phase I — Kernel/CLI integration and adversarial qualification
 
-- [ ] **T003-080** Replace bootstrap policy evaluation in normal authority path while preserving the stable `Authorize` call contract and narrow recovery bootstrap path.
-- [ ] **T003-081** Add minimal authenticated CLI/admin/test surface for policy, lease, approval, canary secret, decision explain and sandbox-profile qualification.
-- [ ] **T003-082** Extend hostile-adapter tests: no capability minting, policy activation, approval forging, vault plaintext read, egress bypass, verifier self-registration or profile weakening.
-- [ ] **T003-083** Preserve Spec 002 effect FSM/reconciliation, IPC, corruption and strict-local gates without regression.
-- [ ] **T003-084** Fault-inject every coupled authority mutation around SQLite transaction/commit/restart boundaries.
+- [x] **T003-080** Replace bootstrap policy evaluation in normal authority path while preserving the stable `Authorize` call contract and narrow recovery bootstrap path. Exact-head qualification: CI #616 (`33252170158`) SUCCESS at `cd721231b498450e984810b4f06c4e14bdc311e1`, tree `4c5ddb92f8764f0107510ba72e6f697a3225bd56`, on Windows/macOS/Ubuntu; focused runtime-policy run `33252055912` SUCCESS. Evidence: `implementation/t003-080-runtime-policy-qualification.md`.
+- [x] **T003-081** Add minimal authenticated CLI/admin/test surface for policy, lease, approval, canary secret, decision explain and sandbox-profile qualification. Exact source-candidate qualification: CI #630 (`33264029849`) SUCCESS at `877f8e45f8f8ba4ba4a98af036d51032b3fba684`, tree `1808de4cce60669d89a5c3a11f2c8f47b6608b2f`, on Windows/macOS/Ubuntu. Evidence: `implementation/t003-081-admin-surface-qualification.md`.
+- [x] **T003-082** Extend hostile-adapter tests: no capability minting, policy activation, approval forging, vault plaintext read, egress bypass, verifier self-registration or profile weakening. Exact-head qualification: CI #650 (`33307009245`) SUCCESS at `a312ba3d0b40454dd6bddd8eb1887e481ec5b0d3`, tree `e6123476f352d94ea10dfd2da65cb2bf9c22dc63`, on Windows/macOS/Ubuntu. Evidence: `implementation/t003-082-hostile-adapter-qualification.md`.
+- [x] **T003-083** Preserve Spec 002 effect FSM/reconciliation, IPC, corruption and strict-local gates without regression. Exact-head qualification: CI #653 (`33307346352`) SUCCESS at `3c21c0a999b946ceccbf3a9418421c357e0ef350` on Windows/macOS/Ubuntu. Evidence: `implementation/t003-083-spec002-regression-qualification.md`.
+- [x] **T003-084** Fault-inject every coupled authority mutation around SQLite transaction/commit/restart boundaries. Exact-head qualification: CI #656 (`33357216307`) SUCCESS at `a3cf1f19c28aead5b9894b579a3fe8a0b9f2a3f0` on Windows/macOS/Ubuntu; secret-specific crash/disk-full evidence remains T003-057. Evidence: `implementation/t003-084-authority-commit-fault-qualification.md`.
 
 ## Phase J — Exact-head closeout
 
-- [ ] **T003-090** Run pinned fmt/clippy/workspace tests on Windows/macOS/Linux exact head.
-- [ ] **T003-091** Run policy/lease/approval/taint/secret/egress/sandbox property/adversarial qualification.
-- [ ] **T003-092** Run bounded fuzz for newly introduced policy/profile/authority input parsers where applicable.
-- [ ] **T003-093** Run deterministic secret-canary leakage suite, including unknown-format values through the explicit secret-entry boundary.
-- [ ] **T003-094** Run external strict-local no-egress observation across supported CI platforms over the complete Golam-managed process tree, or an equivalent sinkholed/network boundary that independently captures descendant egress.
-- [ ] **T003-095** Re-run Spec Kit convergence and repair material constitution/spec/plan/contracts/tasks divergence.
-- [ ] **T003-096** Obtain fresh authorized Qodo review only after exact-head CI; repair every material finding and repeat qualification after mutation.
-- [ ] **T003-097** Prepare exact-head closeout evidence; no Ready/merge/Spec 004 claim without repository-authorized lifecycle evidence.
-- [ ] **T003-098** After merge, require canonical `main` post-merge CI success before `SPEC_003_CLOSED_CANONICAL=YES` or starting Spec 004.
+- [x] **T003-090** Run pinned fmt/clippy/workspace tests on Windows/macOS/Linux exact head. Pre-convergence exact-head evidence: CI #660 (`33357835321`) SUCCESS at `4430ff95ec81c1f3e0c9683de2043c3b8803fe9e` on Windows/macOS/Ubuntu. Final closeout requires fresh exact-head CI after any branch mutation.
+- [x] **T003-091** Run policy/lease/approval/taint/secret/egress/sandbox property/adversarial qualification. Pre-convergence exact-head evidence: CI #660 (`33357835321`) SUCCESS at `4430ff95ec81c1f3e0c9683de2043c3b8803fe9e`; final closeout requires fresh exact-head CI after any branch mutation.
+- [x] **T003-092** Run bounded fuzz for newly introduced policy/profile/authority input parsers where applicable. CI #660 explicitly ran the existing ledger fuzz smoke and `golam-kernel --test spec003_fuzz_smoke` successfully on all three platforms at `4430ff95ec81c1f3e0c9683de2043c3b8803fe9e`.
+- [x] **T003-093** Run deterministic secret-canary leakage suite, including unknown-format values through the explicit secret-entry boundary. Existing T003-056 canary coverage remained in the full workspace suite and passed on all three platforms in CI #660 at `4430ff95ec81c1f3e0c9683de2043c3b8803fe9e`; final closeout requires fresh exact-head CI after any branch mutation.
+- [x] **T003-094** Run external strict-local no-egress observation across supported CI platforms over the complete Golam-managed process tree, or an equivalent sinkholed/network boundary that independently captures descendant egress. CI #660 completed the platform-applicable external strict-local observer successfully on Windows/macOS/Ubuntu at `4430ff95ec81c1f3e0c9683de2043c3b8803fe9e`.
+- [x] **T003-095** Re-run Spec Kit convergence and repair material constitution/spec/plan/contracts/tasks divergence. Re-read constitution v1.2.0, current `AGENTS.md`, spec, plan, all six Spec 003 contracts, readiness, tasks, implementation evidence and live PR state. No normative constitution/contract repair was required; stale live-state records were reconciled. Evidence: `implementation/t003-095-convergence.md`.
+- [ ] **T003-096** Obtain a fresh substantive independent external semantic review only after fresh exact-head CI from an available repository-integrated reviewer other than Qodo or Codex; repair every material finding and repeat qualification after mutation. Final PASS is recorded in live GitHub PR metadata without mutating the reviewed branch merely to mirror PASS. Review-source rationale: `implementation/t003-096-review-source-amendment.md`; final evidence placement: `implementation/t003-096-live-closeout-evidence-policy.md`.
+- [ ] **T003-097** Prepare exact-head closeout/lifecycle evidence in live GitHub PR metadata; no Ready/merge/Spec 004 claim without repository-authorized lifecycle evidence and unchanged expected head.
+- [ ] **T003-098** After merge, require canonical `main` post-merge CI success on the actual merge commit before `SPEC_003_CLOSED_CANONICAL=YES` or starting Spec 004.
 
-## Planning gate
+## Current gate
+
+The mutable final closeout state is intentionally not embedded in this branch artifact because updating PASS/PENDING after qualification would move the exact head and invalidate that evidence. `implementation/t003-096-live-closeout-evidence-policy.md` defines the non-self-invalidating evidence rule. Exact live GitHub PR metadata is authoritative for current final CI/review/lifecycle state.
 
 ```text
 SPEC_002_CLOSED_CANONICAL=YES
-SPEC_003_TASKS_PLANNED=YES
-QODO_REPAIR_FINDINGS=3_ACCEPTED_AND_RECONCILED
-FINAL_EXACT_HEAD_CI=PENDING_AFTER_REPAIR
-FINAL_POST_CI_QODO=PENDING_AFTER_REPAIR
-PRODUCT_IMPLEMENTATION_IN_PLANNING_PR=NO
+SPEC_003_PLANNING_CLOSED_CANONICAL=YES
+SPEC_003_IMPLEMENTATION_AUTHORIZED=YES
+PHASE_A_COMPLETE=YES
+PHASE_B_COMPLETE=YES
+PHASE_C_COMPLETE=YES
+PHASE_D_COMPLETE=YES
+PHASE_E_COMPLETE=YES
+PHASE_F_COMPLETE=YES
+PHASE_G_COMPLETE=YES
+PHASE_H_COMPLETE=YES
+PHASE_I_COMPLETE=YES
+PHASE_J_CLOSEOUT_ACTIVE=YES
+T003_083=PASS
+T003_083_QUALIFIED_HEAD=3c21c0a999b946ceccbf3a9418421c357e0ef350
+T003_083_CI_RUN=33307346352
+T003_084=PASS
+T003_084_QUALIFIED_HEAD=a3cf1f19c28aead5b9894b579a3fe8a0b9f2a3f0
+T003_084_CI_RUN=33357216307
+T003_090=PASS_PRE_CONVERGENCE
+T003_091=PASS_PRE_CONVERGENCE
+T003_092=PASS_PRE_CONVERGENCE
+T003_093=PASS_PRE_CONVERGENCE
+T003_094=PASS_PRE_CONVERGENCE
+PHASE_J_PRE_CONVERGENCE_HEAD=4430ff95ec81c1f3e0c9683de2043c3b8803fe9e
+PHASE_J_PRE_CONVERGENCE_CI_RUN=33357835321
+T003_095=PASS
+REVIEW_SOURCE_POLICY=INDEPENDENT_EXTERNAL_NON_QODO_NON_CODEX
+CLOSEOUT_EVIDENCE_AUTHORITY=LIVE_GITHUB_PR_METADATA
+EMBED_LATEST_FINAL_CI_STATUS_IN_QUALIFIED_BRANCH=NO
+EMBED_LATEST_FINAL_REVIEW_STATUS_IN_REVIEWED_BRANCH=NO
+T003_096_HISTORY_HEAD_1=5ce152a8a3370b3927eb7b9eeaed838a3e0c7dc6
+T003_096_HISTORY_CI_1=33395230450
+T003_096_HISTORY_HEAD_2=862936b4ea3c62ead65b318ba394b49444722944
+T003_096_HISTORY_CI_2=33405009138
+FINAL_EXACT_HEAD_CI=SEE_LIVE_GITHUB_PR_METADATA
+FINAL_EXTERNAL_REVIEW=SEE_LIVE_GITHUB_PR_METADATA
+NEXT_TASK=SEE_LIVE_GITHUB_PR_METADATA
+CEDAR_POLICY_ADMITTED_EXACT=4.12.0
+SECRET_CRYPTO_AND_OS_KEY_PROTECTORS_QUALIFIED=YES
+WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED
+Golam-Research=REFERENCE_ONLY
 DONOR_CODE_ADMITTED=NO
-DEPENDENCY_ADMISSION_PENDING_IMPLEMENTATION_TASKS=YES
-SPEC_003_IMPLEMENTATION_AUTHORIZED=NO_UNTIL_PLANNING_MERGE
+REAL_SECRETS_USED=NO
+SPEC_003_CLOSED_CANONICAL=NO_UNTIL_POST_MERGE_MAIN_CI
+WAIVER_TAKEN=NO
 ```

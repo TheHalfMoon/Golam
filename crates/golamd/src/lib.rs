@@ -9,13 +9,13 @@ use golam_effects::{
     EffectHandler, EffectSemantics, HandlerAttemptOutcome, HandlerIntent, HandlerOutcome,
     PriorAttempt,
 };
-use golam_ipc::command::{Command, SyntheticSemantics, decode_command};
+use golam_ipc::command::{AuthorityQualificationKind, Command, SyntheticSemantics, decode_command};
 use golam_ipc::request::{ReplyMessage, ReplyStatus, RequestMessage};
 use golam_kernel::{
-    AuthorizationPolicy, ClientEnrollmentError, ClientKind, CompleteSyntheticEffect, KernelApi,
-    KernelError, KernelOperationError, PrepareSyntheticEffect, Principal,
-    ResolveSyntheticReconciliation, SyntheticEffectError, SyntheticExecutionCompletion,
-    SyntheticReconciliationResult,
+    AdminQualificationKind, AdminSurfaceError, AuthorizationPolicy, ClientEnrollmentError,
+    ClientKind, CompleteSyntheticEffect, KernelApi, KernelError, KernelOperationError,
+    PrepareSyntheticEffect, Principal, ResolveSyntheticReconciliation, SyntheticEffectError,
+    SyntheticExecutionCompletion, SyntheticReconciliationResult,
 };
 
 const MAX_REPLY_BODY_BYTES: usize = 256 * 1024;
@@ -312,6 +312,99 @@ impl<P: AuthorizationPolicy> CommandRouter<P> {
             } => self.simulate_effect(principal, effect_id, session_id, semantics, now, scope),
             Command::EffectReconcile { effect_id } => {
                 self.reconcile_effect(principal, effect_id, now, scope)
+            }
+            Command::PolicyValidate {
+                policy_source,
+                schema_source,
+            } => match self.kernel.qualify_policy_candidate(
+                principal,
+                &policy_source,
+                &schema_source,
+                scope,
+            ) {
+                Ok(receipt) => reply(
+                    ReplyStatus::Ok,
+                    format!(
+                        "kind=policy decision_id={} policy_bytes={} schema_bytes={} evidence_digest={}\n",
+                        hex_prefix(&receipt.authorization_decision_id),
+                        receipt.policy_bytes,
+                        receipt.schema_bytes,
+                        hex_prefix(&receipt.evidence_digest),
+                    ),
+                ),
+                Err(error) => admin_error(error),
+            },
+            Command::AuthorityQualify { kind } => {
+                let kind = match kind {
+                    AuthorityQualificationKind::Lease => AdminQualificationKind::Lease,
+                    AuthorityQualificationKind::Approval => AdminQualificationKind::Approval,
+                    AuthorityQualificationKind::SecretCanary => {
+                        AdminQualificationKind::SecretCanary
+                    }
+                    AuthorityQualificationKind::SandboxProfile => {
+                        AdminQualificationKind::SandboxProfile
+                    }
+                };
+                match self.kernel.qualify_admin_surface(principal, kind, scope) {
+                    Ok(receipt) => reply(
+                        ReplyStatus::Ok,
+                        format!(
+                            "kind={} decision_id={} resource={} evidence_digest={}\n",
+                            receipt.kind,
+                            hex_prefix(&receipt.authorization_decision_id),
+                            receipt.resource,
+                            hex_prefix(&receipt.evidence_digest),
+                        ),
+                    ),
+                    Err(error) => admin_error(error),
+                }
+            }
+            Command::AuthorityExplain { decision_id } => {
+                match self
+                    .kernel
+                    .explain_authorization_decision(principal, decision_id, scope)
+                {
+                    Ok(explained) => {
+                        let mut body = format!(
+                            "decision_id={} decision={} principal={} action={} resource={} reason={} hard_guard={} global_seq={} evidence_version={}\ncontext_hash={} lease_id={} lease_generation={} policy_bundle_id={} policy_bundle_hash={} approval_id={}\n",
+                            hex_prefix(&explained.decision_id),
+                            explained.decision,
+                            explained.principal,
+                            explained.action,
+                            explained.resource,
+                            explained.reason_code,
+                            explained.hard_guard_result,
+                            explained.global_seq,
+                            explained.authority_evidence_version,
+                            hex_prefix(&explained.context_hash),
+                            optional_hex(explained.lease_id.as_ref().map(|value| value.as_slice())),
+                            explained
+                                .lease_generation
+                                .map(|value| value.to_string())
+                                .unwrap_or_else(|| "-".to_owned()),
+                            optional_hex(
+                                explained
+                                    .policy_bundle_id
+                                    .as_ref()
+                                    .map(|value| value.as_slice())
+                            ),
+                            optional_hex(
+                                explained
+                                    .policy_bundle_hash
+                                    .as_ref()
+                                    .map(|value| value.as_slice())
+                            ),
+                            optional_hex(
+                                explained.approval_id.as_ref().map(|value| value.as_slice())
+                            ),
+                        );
+                        for rule_id in explained.matched_rule_ids {
+                            body.push_str(&format!("matched_rule_id={rule_id}\n"));
+                        }
+                        reply(ReplyStatus::Ok, body)
+                    }
+                    Err(error) => admin_error(error),
+                }
             }
             Command::Doctor => match self.kernel.read_recovery_status(principal, scope) {
                 Ok(report) => {
@@ -610,6 +703,14 @@ fn synthetic_payload_hash(
     hash
 }
 
+fn admin_error(error: AdminSurfaceError) -> ReplyMessage {
+    let status = match &error {
+        AdminSurfaceError::AuthorizationDenied(_) => ReplyStatus::Denied,
+        _ => ReplyStatus::Failed,
+    };
+    reply(status, format!("error={error}\n"))
+}
+
 fn operation_error(error: KernelOperationError) -> ReplyMessage {
     let status = match &error {
         KernelOperationError::Kernel(KernelError::AuthorizationDenied(_)) => ReplyStatus::Denied,
@@ -646,6 +747,10 @@ fn reply(status: ReplyStatus, body: String) -> ReplyMessage {
             body: body.into_bytes(),
         }
     }
+}
+
+fn optional_hex(value: Option<&[u8]>) -> String {
+    value.map(hex_prefix).unwrap_or_else(|| "-".to_owned())
 }
 
 fn optional_u128(value: Option<u128>) -> String {
@@ -800,6 +905,48 @@ mod tests {
             String::from_utf8(reconciled.body)
                 .unwrap()
                 .contains("state=succeeded")
+        );
+        drop(router);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn authenticated_admin_qualification_routes_through_kernel_api() {
+        let runtime = runtime();
+        let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
+        let mut router = CommandRouter::new(kernel);
+        let principal = Principal::enrolled_client("local-cli", ClientId(9001));
+        let qualified = router.route(
+            principal,
+            &request(Command::AuthorityQualify {
+                kind: golam_ipc::command::AuthorityQualificationKind::Lease,
+            }),
+            "2026-08-29T01:00:00Z",
+            "local-ipc",
+        );
+        assert_eq!(qualified.status, ReplyStatus::Ok);
+        let qualified_text = String::from_utf8(qualified.body).unwrap();
+        let decision_id = qualified_text
+            .split_whitespace()
+            .find_map(|field| field.strip_prefix("decision_id="))
+            .unwrap();
+        let mut parsed = [0_u8; 16];
+        for (index, chunk) in decision_id.as_bytes().as_chunks::<2>().0.iter().enumerate() {
+            parsed[index] = u8::from_str_radix(std::str::from_utf8(chunk).unwrap(), 16).unwrap();
+        }
+        let explained = router.route(
+            principal,
+            &request(Command::AuthorityExplain {
+                decision_id: parsed,
+            }),
+            "2026-08-29T01:00:01Z",
+            "local-ipc",
+        );
+        assert_eq!(explained.status, ReplyStatus::Ok);
+        assert!(
+            String::from_utf8(explained.body)
+                .unwrap()
+                .contains("action=authority.qualify")
         );
         drop(router);
         fs::remove_dir_all(runtime.root).unwrap();

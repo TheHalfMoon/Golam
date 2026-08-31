@@ -4,13 +4,15 @@ use std::error::Error;
 use std::fmt;
 
 use golam_core::{CheckpointId, ClientId, EffectId, EventId, GoalId, GoalVersionId, SessionId};
-use golam_ipc::command::{Command, SyntheticSemantics};
+use golam_ipc::command::{AuthorityQualificationKind, Command, SyntheticSemantics};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum CliError {
     Usage(String),
     InvalidInteger { field: &'static str, value: String },
     InvalidSemantics(String),
+    InvalidHex { field: &'static str, value: String },
+    InvalidQualificationKind(String),
 }
 
 impl fmt::Display for CliError {
@@ -23,6 +25,16 @@ impl fmt::Display for CliError {
             Self::InvalidSemantics(value) => write!(
                 f,
                 "invalid synthetic semantics {value}; expected read-only, idempotent-at-least-once, at-most-once, compensatable, or irreversible"
+            ),
+            Self::InvalidHex { field, value } => {
+                write!(
+                    f,
+                    "invalid {field} hex value: {value}; expected exactly 32 lowercase or uppercase hex digits"
+                )
+            }
+            Self::InvalidQualificationKind(value) => write!(
+                f,
+                "invalid authority qualification kind {value}; expected lease, approval, secret-canary, or sandbox-profile"
             ),
         }
     }
@@ -54,6 +66,9 @@ usage:\n\
   golam replay <session-id> <through-session-seq>\n\
   golam effect simulate <effect-id> <session-id> <semantics>\n\
   golam effect reconcile <effect-id>\n\
+  golam policy validate <policy-source> <schema-source>\n\
+  golam authority qualify <lease|approval|secret-canary|sandbox-profile>\n\
+  golam authority explain <decision-id-hex>\n\
   golam doctor"
 }
 
@@ -153,6 +168,16 @@ fn parse_values(args: &[&str]) -> Result<Command, CliError> {
         ["effect", "reconcile", effect_id] => Ok(Command::EffectReconcile {
             effect_id: EffectId(parse_u128("effect-id", effect_id)?),
         }),
+        ["policy", "validate", policy_source, schema_source] => Ok(Command::PolicyValidate {
+            policy_source: (*policy_source).to_owned(),
+            schema_source: (*schema_source).to_owned(),
+        }),
+        ["authority", "qualify", kind] => Ok(Command::AuthorityQualify {
+            kind: parse_qualification_kind(kind)?,
+        }),
+        ["authority", "explain", decision_id] => Ok(Command::AuthorityExplain {
+            decision_id: parse_hex_16("decision-id", decision_id)?,
+        }),
         ["doctor"] => Ok(Command::Doctor),
         _ => Err(CliError::Usage(usage().to_owned())),
     }
@@ -170,6 +195,31 @@ fn parse_u64(field: &'static str, value: &str) -> Result<u64, CliError> {
         field,
         value: value.to_owned(),
     })
+}
+
+fn parse_hex_16(field: &'static str, value: &str) -> Result<[u8; 16], CliError> {
+    if value.len() != 32 || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(CliError::InvalidHex {
+            field,
+            value: value.to_owned(),
+        });
+    }
+    u128::from_str_radix(value, 16)
+        .map(u128::to_be_bytes)
+        .map_err(|_| CliError::InvalidHex {
+            field,
+            value: value.to_owned(),
+        })
+}
+
+fn parse_qualification_kind(value: &str) -> Result<AuthorityQualificationKind, CliError> {
+    match value {
+        "lease" => Ok(AuthorityQualificationKind::Lease),
+        "approval" => Ok(AuthorityQualificationKind::Approval),
+        "secret-canary" => Ok(AuthorityQualificationKind::SecretCanary),
+        "sandbox-profile" => Ok(AuthorityQualificationKind::SandboxProfile),
+        _ => Err(CliError::InvalidQualificationKind(value.to_owned())),
+    }
 }
 
 fn parse_semantics(value: &str) -> Result<SyntheticSemantics, CliError> {
@@ -250,6 +300,30 @@ mod tests {
                     effect_id: EffectId(6),
                 },
             ),
+            (
+                vec![
+                    "policy",
+                    "validate",
+                    "permit(principal, action, resource);",
+                    "entity User;",
+                ],
+                Command::PolicyValidate {
+                    policy_source: "permit(principal, action, resource);".to_owned(),
+                    schema_source: "entity User;".to_owned(),
+                },
+            ),
+            (
+                vec!["authority", "qualify", "secret-canary"],
+                Command::AuthorityQualify {
+                    kind: AuthorityQualificationKind::SecretCanary,
+                },
+            ),
+            (
+                vec!["authority", "explain", "07070707070707070707070707070707"],
+                Command::AuthorityExplain {
+                    decision_id: [7; 16],
+                },
+            ),
             (vec!["doctor"], Command::Doctor),
         ];
         for (args, expected) in cases {
@@ -323,5 +397,13 @@ mod tests {
             Err(CliError::InvalidSemantics("unsafe".to_owned()))
         );
         assert!(matches!(parse_args(["session"]), Err(CliError::Usage(_))));
+        assert!(matches!(
+            parse_args(["authority", "explain", "xyz"]),
+            Err(CliError::InvalidHex { .. })
+        ));
+        assert_eq!(
+            parse_args(["authority", "qualify", "unknown"]),
+            Err(CliError::InvalidQualificationKind("unknown".to_owned()))
+        );
     }
 }

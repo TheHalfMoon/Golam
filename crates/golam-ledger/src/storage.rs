@@ -9,7 +9,7 @@ use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, 
 
 use crate::{EventKind, EventRecord, audit_integrity_hash, event_integrity_hash, payload_hash};
 
-pub const AUTHORITY_SCHEMA_VERSION: i64 = 1;
+pub const AUTHORITY_SCHEMA_VERSION: i64 = 4;
 const SECURITY_AUDIT_CHAIN: &str = "security";
 
 pub const REQUIRED_TABLES: &[&str] = &[
@@ -25,6 +25,23 @@ pub const REQUIRED_TABLES: &[&str] = &[
     "authorization_decisions",
     "audit_chain_heads",
     "recovery_incidents",
+    "principal_records",
+    "policy_bundles",
+    "active_policy",
+    "capability_leases",
+    "capability_revocations",
+    "approvals",
+    "approval_consumptions",
+    "taint_attestations",
+    "verifier_rules",
+    "secret_records",
+    "secret_versions",
+    "secret_handles",
+    "secret_use_records",
+    "egress_permits",
+    "sandbox_profiles",
+    "sandbox_admissions",
+    "authority_security_audit_v2",
 ];
 
 #[derive(Debug)]
@@ -303,6 +320,8 @@ impl AuthorityStore {
 
 fn verify_canonical_integrity(connection: &Connection) -> Result<(), StorageError> {
     crate::integrity::verify(connection)
+        .map_err(|error| StorageError::IntegrityCheckFailed(error.to_string()))?;
+    crate::authority_security_v2::verify(connection)
         .map_err(|error| StorageError::IntegrityCheckFailed(error.to_string()))
 }
 
@@ -430,17 +449,34 @@ fn configure_connection(connection: &Connection) -> Result<(), StorageError> {
 }
 
 fn migrate(connection: &Connection) -> Result<(), StorageError> {
-    let version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
+    let mut version: i64 = connection.query_row("PRAGMA user_version", [], |row| row.get(0))?;
     if version > AUTHORITY_SCHEMA_VERSION {
         return Err(StorageError::FutureSchema {
             found: version,
             supported: AUTHORITY_SCHEMA_VERSION,
         });
     }
-    if version == AUTHORITY_SCHEMA_VERSION {
-        return Ok(());
+    if version == 0 {
+        migrate_v1(connection)?;
+        version = 1;
     }
+    if version == 1 {
+        migrate_v2(connection)?;
+        version = 2;
+    }
+    if version == 2 {
+        migrate_v3(connection)?;
+        version = 3;
+    }
+    if version == 3 {
+        migrate_v4(connection)?;
+        version = 4;
+    }
+    debug_assert_eq!(version, AUTHORITY_SCHEMA_VERSION);
+    Ok(())
+}
 
+fn migrate_v1(connection: &Connection) -> Result<(), StorageError> {
     connection.execute_batch(
         "BEGIN IMMEDIATE;\n\
          CREATE TABLE clients (\n\
@@ -580,6 +616,239 @@ fn migrate(connection: &Connection) -> Result<(), StorageError> {
     Ok(())
 }
 
+fn migrate_v2(connection: &Connection) -> Result<(), StorageError> {
+    connection.execute_batch(
+        "BEGIN IMMEDIATE;\n\
+         CREATE TABLE principal_records (\n\
+           principal_id TEXT PRIMARY KEY NOT NULL,\n\
+           principal_kind TEXT NOT NULL,\n\
+           owner_principal TEXT,\n\
+           status TEXT NOT NULL,\n\
+           attributes_version INTEGER NOT NULL,\n\
+           created_global_seq INTEGER NOT NULL,\n\
+           revoked_at TEXT\n\
+         );\n\
+         CREATE TABLE policy_bundles (\n\
+           policy_bundle_id BLOB PRIMARY KEY NOT NULL,\n\
+           version INTEGER NOT NULL,\n\
+           schema_version INTEGER NOT NULL,\n\
+           canonical_policy_bytes BLOB NOT NULL,\n\
+           bundle_hash BLOB NOT NULL UNIQUE,\n\
+           created_by TEXT NOT NULL,\n\
+           created_global_seq INTEGER NOT NULL,\n\
+           validation_status TEXT NOT NULL\n\
+         );\n\
+         CREATE TABLE active_policy (\n\
+           singleton_id INTEGER PRIMARY KEY NOT NULL CHECK(singleton_id = 1),\n\
+           policy_bundle_id BLOB NOT NULL,\n\
+           bundle_hash BLOB NOT NULL,\n\
+           activated_by TEXT NOT NULL,\n\
+           activation_effect_id BLOB NOT NULL,\n\
+           activated_global_seq INTEGER NOT NULL\n\
+         );\n\
+         CREATE TABLE capability_leases (\n\
+           lease_id BLOB PRIMARY KEY NOT NULL,\n\
+           principal_id TEXT NOT NULL,\n\
+           parent_lease_id BLOB,\n\
+           actions_scope BLOB NOT NULL,\n\
+           resources_scope BLOB NOT NULL,\n\
+           context_constraints BLOB NOT NULL,\n\
+           issued_by TEXT NOT NULL,\n\
+           issued_global_seq INTEGER NOT NULL,\n\
+           not_before TEXT,\n\
+           expires_at TEXT,\n\
+           generation INTEGER NOT NULL,\n\
+           status TEXT NOT NULL,\n\
+           authority_digest BLOB NOT NULL\n\
+         );\n\
+         CREATE INDEX capability_leases_principal_status_idx ON capability_leases(principal_id, status);\n\
+         CREATE TABLE capability_revocations (\n\
+           revocation_id BLOB PRIMARY KEY NOT NULL,\n\
+           lease_id BLOB NOT NULL,\n\
+           revoked_by TEXT NOT NULL,\n\
+           reason_code TEXT NOT NULL,\n\
+           revoked_global_seq INTEGER NOT NULL,\n\
+           revoked_at TEXT NOT NULL\n\
+         );\n\
+         CREATE INDEX capability_revocations_lease_idx ON capability_revocations(lease_id);\n\
+         CREATE TABLE approvals (\n\
+           approval_id BLOB PRIMARY KEY NOT NULL,\n\
+           class TEXT NOT NULL,\n\
+           approver_principal TEXT NOT NULL,\n\
+           scope_digest BLOB NOT NULL,\n\
+           action_scope BLOB NOT NULL,\n\
+           resource_scope BLOB NOT NULL,\n\
+           effect_id BLOB,\n\
+           session_id BLOB,\n\
+           risk_class TEXT NOT NULL,\n\
+           taint_digest BLOB NOT NULL,\n\
+           parent_decision_id BLOB NOT NULL,\n\
+           issued_at TEXT NOT NULL,\n\
+           expires_at TEXT,\n\
+           max_uses INTEGER,\n\
+           revoked_at TEXT\n\
+         );\n\
+         CREATE TABLE approval_consumptions (\n\
+           consumption_id BLOB PRIMARY KEY NOT NULL,\n\
+           approval_id BLOB NOT NULL,\n\
+           effect_or_operation_id BLOB NOT NULL,\n\
+           reserved_global_seq INTEGER NOT NULL,\n\
+           consumed_global_seq INTEGER,\n\
+           state TEXT NOT NULL\n\
+         );\n\
+         CREATE INDEX approval_consumptions_approval_idx ON approval_consumptions(approval_id);\n\
+         CREATE TABLE taint_attestations (\n\
+           attestation_id BLOB PRIMARY KEY NOT NULL,\n\
+           source_artifact_ids BLOB NOT NULL,\n\
+           source_labels BLOB NOT NULL,\n\
+           result_artifact_id BLOB NOT NULL,\n\
+           result_labels BLOB NOT NULL,\n\
+           mechanism TEXT NOT NULL,\n\
+           rule_id BLOB NOT NULL,\n\
+           principal TEXT,\n\
+           evidence_hash BLOB NOT NULL,\n\
+           created_global_seq INTEGER NOT NULL\n\
+         );\n\
+         CREATE TABLE verifier_rules (\n\
+           rule_id BLOB PRIMARY KEY NOT NULL,\n\
+           kind TEXT NOT NULL,\n\
+           version INTEGER NOT NULL,\n\
+           authority_source_binding BLOB NOT NULL,\n\
+           allowed_downgrades BLOB NOT NULL,\n\
+           registered_by TEXT NOT NULL,\n\
+           status TEXT NOT NULL,\n\
+           created_global_seq INTEGER NOT NULL\n\
+         );\n\
+         CREATE TABLE secret_records (\n\
+           secret_id BLOB PRIMARY KEY NOT NULL,\n\
+           classification TEXT NOT NULL,\n\
+           owner_principal TEXT NOT NULL,\n\
+           current_version INTEGER NOT NULL,\n\
+           status TEXT NOT NULL,\n\
+           created_global_seq INTEGER NOT NULL,\n\
+           revoked_at TEXT\n\
+         );\n\
+         CREATE TABLE secret_versions (\n\
+           secret_id BLOB NOT NULL,\n\
+           version INTEGER NOT NULL,\n\
+           ciphertext BLOB NOT NULL,\n\
+           nonce_or_algorithm_metadata BLOB NOT NULL,\n\
+           associated_data_hash BLOB NOT NULL,\n\
+           created_global_seq INTEGER NOT NULL,\n\
+           rotated_from INTEGER,\n\
+           retired_at TEXT,\n\
+           PRIMARY KEY(secret_id, version)\n\
+         );\n\
+         CREATE TABLE secret_handles (\n\
+           handle_id BLOB PRIMARY KEY NOT NULL,\n\
+           secret_id BLOB NOT NULL,\n\
+           version_constraint INTEGER,\n\
+           purpose_scope BLOB NOT NULL,\n\
+           expires_at TEXT\n\
+         );\n\
+         CREATE TABLE secret_use_records (\n\
+           use_id BLOB PRIMARY KEY NOT NULL,\n\
+           handle_id BLOB NOT NULL,\n\
+           principal TEXT NOT NULL,\n\
+           purpose TEXT NOT NULL,\n\
+           destination_or_process TEXT NOT NULL,\n\
+           mode TEXT NOT NULL,\n\
+           approval_id BLOB,\n\
+           decision_id BLOB NOT NULL,\n\
+           created_global_seq INTEGER NOT NULL\n\
+         );\n\
+         CREATE TABLE egress_permits (\n\
+           permit_id BLOB PRIMARY KEY NOT NULL,\n\
+           principal_or_process TEXT NOT NULL,\n\
+           action TEXT NOT NULL,\n\
+           purpose TEXT NOT NULL,\n\
+           destination_scope BLOB NOT NULL,\n\
+           protocol_port_scope BLOB NOT NULL,\n\
+           taint_digest BLOB NOT NULL,\n\
+           secret_handle_id BLOB,\n\
+           parent_lease_id BLOB NOT NULL,\n\
+           issued_at TEXT NOT NULL,\n\
+           expires_at TEXT,\n\
+           usage_limit INTEGER,\n\
+           status TEXT NOT NULL\n\
+         );\n\
+         CREATE TABLE sandbox_profiles (\n\
+           profile_id BLOB NOT NULL,\n\
+           version INTEGER NOT NULL,\n\
+           class TEXT NOT NULL,\n\
+           filesystem_read_roots BLOB NOT NULL,\n\
+           filesystem_write_roots BLOB NOT NULL,\n\
+           network_rule BLOB NOT NULL,\n\
+           environment_allowlist BLOB NOT NULL,\n\
+           spawn_rule BLOB NOT NULL,\n\
+           cpu_limit INTEGER,\n\
+           memory_limit INTEGER,\n\
+           time_limit INTEGER,\n\
+           output_limit INTEGER,\n\
+           device_allowlist BLOB NOT NULL,\n\
+           ipc_allowlist BLOB NOT NULL,\n\
+           inherited_handle_rules BLOB NOT NULL,\n\
+           platform_requirements BLOB NOT NULL,\n\
+           status TEXT NOT NULL,\n\
+           PRIMARY KEY(profile_id, version)\n\
+         );\n\
+         CREATE TABLE sandbox_admissions (\n\
+           admission_id BLOB PRIMARY KEY NOT NULL,\n\
+           profile_id BLOB NOT NULL,\n\
+           profile_version INTEGER NOT NULL,\n\
+           principal_or_process TEXT NOT NULL,\n\
+           lease_id BLOB NOT NULL,\n\
+           decision_id BLOB NOT NULL,\n\
+           egress_permit_id BLOB,\n\
+           resolved_launch_plan_hash BLOB NOT NULL,\n\
+           platform_executor TEXT NOT NULL,\n\
+           created_global_seq INTEGER NOT NULL\n\
+         );\n\
+         ALTER TABLE authorization_decisions ADD COLUMN hard_guard_result TEXT NOT NULL DEFAULT 'spec002_legacy';\n\
+         ALTER TABLE authorization_decisions ADD COLUMN lease_id BLOB;\n\
+         ALTER TABLE authorization_decisions ADD COLUMN lease_generation INTEGER;\n\
+         ALTER TABLE authorization_decisions ADD COLUMN policy_bundle_id BLOB;\n\
+         ALTER TABLE authorization_decisions ADD COLUMN policy_bundle_hash BLOB;\n\
+         ALTER TABLE authorization_decisions ADD COLUMN matched_rule_ids BLOB NOT NULL DEFAULT X'';\n\
+         ALTER TABLE authorization_decisions ADD COLUMN approval_id BLOB;\n\
+         PRAGMA user_version = 2;\n\
+         COMMIT;",
+    )?;
+    Ok(())
+}
+
+fn migrate_v3(connection: &Connection) -> Result<(), StorageError> {
+    connection.execute_batch(
+        "BEGIN IMMEDIATE;\n\
+         CREATE TABLE authority_security_audit_v2 (\n\
+           audit_seq INTEGER PRIMARY KEY NOT NULL,\n\
+           record_kind TEXT NOT NULL,\n\
+           record_id BLOB NOT NULL,\n\
+           payload_bytes BLOB NOT NULL,\n\
+           payload_hash BLOB NOT NULL,\n\
+           previous_hash BLOB,\n\
+           record_hash BLOB NOT NULL\n\
+         );\n\
+         CREATE INDEX authority_security_audit_v2_record_idx \
+           ON authority_security_audit_v2(record_kind, record_id, audit_seq);\n\
+         ALTER TABLE authorization_decisions \
+           ADD COLUMN authority_evidence_version INTEGER NOT NULL DEFAULT 1;\n\
+         PRAGMA user_version = 3;\n\
+         COMMIT;",
+    )?;
+    Ok(())
+}
+
+fn migrate_v4(connection: &Connection) -> Result<(), StorageError> {
+    connection.execute_batch(
+        "BEGIN IMMEDIATE;\n\
+         ALTER TABLE egress_permits ADD COLUMN uses_consumed INTEGER NOT NULL DEFAULT 0;\n\
+         PRAGMA user_version = 4;\n\
+         COMMIT;",
+    )?;
+    Ok(())
+}
+
 fn verify_quick_check(connection: &Connection) -> Result<(), StorageError> {
     let result: String = connection.query_row("PRAGMA quick_check", [], |row| row.get(0))?;
     if result == "ok" {
@@ -593,6 +862,14 @@ fn verify_quick_check(connection: &Connection) -> Result<(), StorageError> {
 mod tests {
     use super::*;
 
+    fn has_column(connection: &Connection, table: &str, column: &str) -> bool {
+        let query = format!("SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = ?1");
+        let count: i64 = connection
+            .query_row(&query, params![column], |row| row.get(0))
+            .unwrap();
+        count == 1
+    }
+
     #[test]
     fn migration_creates_required_authority_tables() {
         let store = AuthorityStore::open_in_memory().unwrap();
@@ -600,7 +877,91 @@ mod tests {
         for table in REQUIRED_TABLES {
             assert!(store.has_table(table).unwrap(), "missing table {table}");
         }
+        for column in [
+            "hard_guard_result",
+            "lease_id",
+            "lease_generation",
+            "policy_bundle_id",
+            "policy_bundle_hash",
+            "matched_rule_ids",
+            "approval_id",
+            "authority_evidence_version",
+        ] {
+            assert!(
+                has_column(&store.connection, "authorization_decisions", column),
+                "missing authorization v2 column {column}"
+            );
+        }
         store.verify_integrity().unwrap();
+    }
+
+    #[test]
+    fn v1_database_migrates_forward_without_rewriting_existing_rows() {
+        let connection = Connection::open_in_memory().unwrap();
+        configure_connection(&connection).unwrap();
+        migrate_v1(&connection).unwrap();
+        assert_eq!(
+            connection
+                .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+        connection
+            .execute(
+                "INSERT INTO clients \
+                 (client_id, key_id, public_key, kind, owner_principal, enrolled_at, revoked_at, assurance_class) \
+                 VALUES (?1, 'legacy-key', ?2, 'local', 'owner', '2026-08-24T00:00:00Z', NULL, 'owner')",
+                params![vec![7_u8; 16], vec![9_u8; 32]],
+            )
+            .unwrap();
+
+        migrate(&connection).unwrap();
+        assert_eq!(
+            connection
+                .query_row("PRAGMA user_version", [], |row| row.get::<_, i64>(0))
+                .unwrap(),
+            AUTHORITY_SCHEMA_VERSION
+        );
+        let key_id: String = connection
+            .query_row(
+                "SELECT key_id FROM clients WHERE client_id = ?1",
+                params![vec![7_u8; 16]],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(key_id, "legacy-key");
+        let legacy_guard: String = connection
+            .query_row(
+                "SELECT dflt_value FROM pragma_table_info('authorization_decisions') WHERE name = 'hard_guard_result'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(legacy_guard, "'spec002_legacy'");
+        let legacy_evidence_version: String = connection
+            .query_row(
+                "SELECT dflt_value FROM pragma_table_info('authorization_decisions') WHERE name = 'authority_evidence_version'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(legacy_evidence_version, "1");
+    }
+
+    #[test]
+    fn future_authority_schema_still_fails_closed() {
+        let connection = Connection::open_in_memory().unwrap();
+        configure_connection(&connection).unwrap();
+        connection
+            .execute_batch("PRAGMA user_version = 99;")
+            .unwrap();
+        assert!(matches!(
+            migrate(&connection),
+            Err(StorageError::FutureSchema {
+                found: 99,
+                supported: AUTHORITY_SCHEMA_VERSION
+            })
+        ));
     }
 
     #[test]

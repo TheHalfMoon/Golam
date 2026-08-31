@@ -8,7 +8,8 @@ use golam_core::authority::AuthorityLayout;
 use golam_core::paths::RuntimeLayout;
 use golam_core::{ClientId, EffectId, EffectTransitionId, EventId, SessionId};
 use golam_ledger::authorization::{
-    AppendAuthorizationDecision, AuthorizationAuditLog, AuthorizationDecisionKind,
+    AppendAuthorizationDecision, AuthorizationAuditLog, AuthorizationDecisionEvidence,
+    AuthorizationDecisionKind,
 };
 use golam_ledger::clients::{AssuranceClass, ClientKind, ClientRegistry, EnrollClient};
 use golam_ledger::dispatch::encode_effect_dependencies;
@@ -53,6 +54,7 @@ fn authorization_row_tamper_is_detected_on_reopen() {
             action: "session.create",
             resource: "session:new",
             context: "authenticated-local",
+            evidence: AuthorizationDecisionEvidence::hard_guard_only("pass"),
             decision: AuthorizationDecisionKind::Allow,
             reason_code: "bootstrap_owner_session",
         })
@@ -179,6 +181,7 @@ fn missing_authority_security_record_is_detected_on_reopen() {
             action: "session.create",
             resource: "session:new",
             context: "authenticated-local",
+            evidence: AuthorizationDecisionEvidence::hard_guard_only("pass"),
             decision: AuthorizationDecisionKind::Allow,
             reason_code: "bootstrap_owner_session",
         })

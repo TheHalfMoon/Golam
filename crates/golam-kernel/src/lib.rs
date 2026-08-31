@@ -1,11 +1,16 @@
 #![forbid(unsafe_code)]
 
+mod admin_qualification;
 mod authorization;
+mod capability_lease;
 mod client_auth;
 mod client_enrollment;
 mod effect_execution;
 mod operations;
+pub mod policy_candidate;
+pub mod policy_lifecycle;
 mod resource;
+mod runtime_policy;
 mod startup;
 mod synthetic_effect;
 
@@ -17,10 +22,19 @@ use golam_core::ClientId;
 use golam_core::authority::{AuthorityLayout, AuthorityPathError};
 use golam_core::paths::RuntimeLayout;
 
+pub use admin_qualification::{
+    AUTHORITY_EXPLAIN_ACTION, AUTHORITY_QUALIFY_ACTION, AdminQualificationKind,
+    AdminQualificationReceipt, AdminSurfaceError, AuthorizationDecisionExplanation,
+    POLICY_VALIDATE_ACTION, PolicyQualificationReceipt,
+};
 pub use authorization::{
     AuthorizationContext, AuthorizationDecision, AuthorizationError, AuthorizationOutcome,
     AuthorizationPolicy, AuthorizationRequest, BootstrapPolicy, DecisionId, DenyByDefault,
     PolicyDecision, Principal, PrincipalKind,
+};
+pub use capability_lease::{
+    CapabilityLease, CapabilityLeaseId, CapabilityLeaseScope, CapabilityLeaseScopeError,
+    CapabilityLeaseUseError, CapabilityLeaseUseEvidence,
 };
 pub use client_auth::ClientAuthorityError;
 pub use client_enrollment::{ClientEnrollmentError, EnrolledClientCredential};
@@ -43,6 +57,7 @@ pub use operations::{
     KernelOperationError,
 };
 pub use resource::{ProtectedResourceError, UnprivilegedPath};
+pub use runtime_policy::RuntimeAuthorityPolicy;
 pub use startup::{KernelStartup, KernelStartupError, start_kernel};
 pub use synthetic_effect::{
     CompleteSyntheticEffect, PrepareSyntheticEffect, ResolveSyntheticReconciliation,
@@ -185,6 +200,29 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             debug_assert_eq!(grant.decision_id(), outcome.decision_id);
         }
         Ok(outcome)
+    }
+
+    /// Revalidates a sealed capability lease against the current protected
+    /// authority snapshot immediately before a protected action uses it.
+    /// The returned value is evidence only and is not an authority grant.
+    pub fn validate_capability_lease_use(
+        &self,
+        lease: &CapabilityLease,
+        principal_id: &str,
+        action: &str,
+        resource: &str,
+        context_constraints: &[&str],
+        observed_at: &str,
+    ) -> Result<CapabilityLeaseUseEvidence, CapabilityLeaseUseError> {
+        capability_lease::validate_capability_lease_use(
+            &self.authority,
+            lease,
+            principal_id,
+            action,
+            resource,
+            context_constraints,
+            observed_at,
+        )
     }
 
     pub fn enroll_generated_client(
