@@ -4,9 +4,7 @@ use std::collections::HashSet;
 
 use crate::CanonicalEncoder;
 use crate::harness::{RequestAttemptId, ToolCallCandidateId};
-use crate::harness_state::{
-    ToolCallCandidate, ToolCallParseStatus, ToolCallSourceMode,
-};
+use crate::harness_state::{ToolCallCandidate, ToolCallParseStatus, ToolCallSourceMode};
 use crate::taint::{TaintLabel, TaintSet};
 
 const MAX_TOOL_NAME_BYTES: usize = 256;
@@ -93,7 +91,12 @@ pub fn normalize_native_batch(
     calls: Vec<(Vec<String>, StructuredToolCall)>,
     registry: &[ToolDefinition],
 ) -> Result<Vec<NormalizedToolCall>, ToolCallNormalizationError> {
-    normalize_batch(request_attempt_id, calls, registry, ToolCallSourceMode::NativeTools)
+    normalize_batch(
+        request_attempt_id,
+        calls,
+        registry,
+        ToolCallSourceMode::NativeTools,
+    )
 }
 
 fn normalize_batch(
@@ -108,13 +111,8 @@ fn normalize_batch(
     let mut seen = HashSet::new();
     let mut normalized = Vec::with_capacity(calls.len());
     for (source_refs, call) in calls {
-        let candidate = normalize_structured(
-            request_attempt_id,
-            source_refs,
-            source_mode,
-            call,
-            registry,
-        )?;
+        let candidate =
+            normalize_structured(request_attempt_id, source_refs, source_mode, call, registry)?;
         if !seen.insert(candidate.candidate.candidate_digest) {
             return Err(rejected(ToolCallParseStatus::RejectedDuplicate));
         }
@@ -168,11 +166,8 @@ fn normalize_structured(
 
     let arguments_canonical = canonical_arguments(&arguments)?;
     let arguments_digest = sha256(&arguments_canonical);
-    let candidate_digest = semantic_candidate_digest(
-        &definition.name,
-        definition.schema_digest,
-        arguments_digest,
-    );
+    let candidate_digest =
+        semantic_candidate_digest(&definition.name, definition.schema_digest, arguments_digest);
     let candidate_id = candidate_id_from_digest(candidate_digest);
 
     let candidate = ToolCallCandidate {
@@ -354,16 +349,14 @@ const fn rejected(parse_status: ToolCallParseStatus) -> ToolCallNormalizationErr
 }
 
 const SHA256_K: [u32; 64] = [
-    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
-    0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
-    0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
-    0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-    0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
-    0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
-    0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
-    0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
-    0xc67178f2,
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 ];
 
 fn sha256(input: &[u8]) -> [u8; 32] {
@@ -480,15 +473,10 @@ mod tests {
     #[test]
     fn native_grammar_and_text_converge_on_semantic_digest() {
         let attempt = RequestAttemptId::from_u128(9);
-        let native = normalize_native(attempt, vec!["event:1".into()], structured(), &registry())
-            .unwrap();
-        let grammar = normalize_grammar(
-            attempt,
-            vec!["event:2".into()],
-            structured(),
-            &registry(),
-        )
-        .unwrap();
+        let native =
+            normalize_native(attempt, vec!["event:1".into()], structured(), &registry()).unwrap();
+        let grammar =
+            normalize_grammar(attempt, vec!["event:2".into()], structured(), &registry()).unwrap();
         let text = normalize_text(
             attempt,
             vec!["event:3".into()],
@@ -497,8 +485,14 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(native.candidate.candidate_digest, grammar.candidate.candidate_digest);
-        assert_eq!(native.candidate.candidate_digest, text.candidate.candidate_digest);
+        assert_eq!(
+            native.candidate.candidate_digest,
+            grammar.candidate.candidate_digest
+        );
+        assert_eq!(
+            native.candidate.candidate_digest,
+            text.candidate.candidate_digest
+        );
         assert_eq!(native.arguments_canonical, grammar.arguments_canonical);
         assert_eq!(native.arguments_canonical, text.arguments_canonical);
         assert_eq!(
@@ -512,7 +506,10 @@ mod tests {
     fn malformed_oversized_unknown_schema_ambiguous_and_duplicate_reject() {
         let attempt = RequestAttemptId::from_u128(9);
         let malformed = normalize_text(attempt, vec![], "tool=lookup", &registry()).unwrap_err();
-        assert_eq!(malformed.parse_status, ToolCallParseStatus::RejectedAmbiguous);
+        assert_eq!(
+            malformed.parse_status,
+            ToolCallParseStatus::RejectedAmbiguous
+        );
 
         let oversized = normalize_native(
             attempt,
@@ -524,7 +521,10 @@ mod tests {
             &registry(),
         )
         .unwrap_err();
-        assert_eq!(oversized.parse_status, ToolCallParseStatus::RejectedOversized);
+        assert_eq!(
+            oversized.parse_status,
+            ToolCallParseStatus::RejectedOversized
+        );
 
         let unknown = normalize_native(
             attempt,
@@ -536,7 +536,10 @@ mod tests {
             &registry(),
         )
         .unwrap_err();
-        assert_eq!(unknown.parse_status, ToolCallParseStatus::RejectedUnknownTool);
+        assert_eq!(
+            unknown.parse_status,
+            ToolCallParseStatus::RejectedUnknownTool
+        );
 
         let schema = normalize_native(
             attempt,
@@ -557,15 +560,24 @@ mod tests {
             &registry(),
         )
         .unwrap_err();
-        assert_eq!(ambiguous.parse_status, ToolCallParseStatus::RejectedAmbiguous);
+        assert_eq!(
+            ambiguous.parse_status,
+            ToolCallParseStatus::RejectedAmbiguous
+        );
 
         let duplicate = normalize_native_batch(
             attempt,
-            vec![(vec!["event:1".into()], structured()), (vec!["event:2".into()], structured())],
+            vec![
+                (vec!["event:1".into()], structured()),
+                (vec!["event:2".into()], structured()),
+            ],
             &registry(),
         )
         .unwrap_err();
-        assert_eq!(duplicate.parse_status, ToolCallParseStatus::RejectedDuplicate);
+        assert_eq!(
+            duplicate.parse_status,
+            ToolCallParseStatus::RejectedDuplicate
+        );
     }
 
     #[test]
@@ -579,7 +591,10 @@ mod tests {
             "EffectId",
             "EffectAttemptId",
         ] {
-            assert!(!source.contains(forbidden), "forbidden authority symbol: {forbidden}");
+            assert!(
+                !source.contains(forbidden),
+                "forbidden authority symbol: {forbidden}"
+            );
         }
         let candidate = normalize_native(
             RequestAttemptId::from_u128(9),
@@ -600,9 +615,9 @@ mod tests {
         assert_eq!(
             sha256(b"abc"),
             [
-                0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40, 0xde, 0x5d,
-                0xae, 0x22, 0x23, 0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c, 0xb4, 0x10,
-                0xff, 0x61, 0xf2, 0x00, 0x15, 0xad,
+                0xba, 0x78, 0x16, 0xbf, 0x8f, 0x01, 0xcf, 0xea, 0x41, 0x41, 0x40, 0xde, 0x5d, 0xae,
+                0x22, 0x23, 0xb0, 0x03, 0x61, 0xa3, 0x96, 0x17, 0x7a, 0x9c, 0xb4, 0x10, 0xff, 0x61,
+                0xf2, 0x00, 0x15, 0xad,
             ]
         );
     }
