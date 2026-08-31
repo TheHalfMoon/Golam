@@ -1,3 +1,4 @@
+use golam_core::SessionId;
 use golam_core::harness::{
     CompactionId, ExecutionProfileId, HardwareProfileId, RequestAttemptId, RequestSeriesId,
     ToolCallCandidateId,
@@ -9,7 +10,6 @@ use golam_core::harness_state::{
     ModelRequest, RequestAttempt, RequestAttemptState, ToolCallCandidate, ToolCallParseStatus,
     ToolCallSourceMode,
 };
-use golam_core::SessionId;
 
 #[test]
 fn harness_identifiers_round_trip_at_boundary_values() {
@@ -107,10 +107,7 @@ fn validated_tool_candidate_requires_complete_non_authority_payload() {
 
     let mut incomplete = candidate;
     incomplete.schema_digest = None;
-    assert_eq!(
-        incomplete.validate(),
-        Err(HarnessStateError::InvalidBounds)
-    );
+    assert_eq!(incomplete.validate(), Err(HarnessStateError::InvalidBounds));
 }
 
 #[test]
