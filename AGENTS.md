@@ -29,19 +29,20 @@ Open planning proposals that have not merged into canonical `main` are not canon
 3. `specs/001-golam-local-agent-os-foundation/plan.md`
 4. `specs/001-golam-local-agent-os-foundation/tasks.md`
 5. `specs/001-golam-local-agent-os-foundation/contracts/execution-profile-contract.md`
-6. canonical Spec 002 closeout package/evidence
-7. canonical Spec 003 package and `implementation/` closeout evidence
-8. `specs/004-harness-local-intelligence/spec.md`
-9. `specs/004-harness-local-intelligence/clarification-closeout.md`
-10. `specs/004-harness-local-intelligence/research.md`
-11. `specs/004-harness-local-intelligence/donor-qualification.md`
-12. `specs/004-harness-local-intelligence/plan.md`
-13. `specs/004-harness-local-intelligence/data-model.md`
-14. all `specs/004-harness-local-intelligence/contracts/`
-15. `specs/004-harness-local-intelligence/quickstart.md`
-16. `specs/004-harness-local-intelligence/checklists/implementation-readiness.md`
-17. `specs/004-harness-local-intelligence/tasks.md`
-18. `specs/004-harness-local-intelligence/analysis.md`
+6. `specs/001-golam-local-agent-os-foundation/source-permission-attestation.md`
+7. canonical Spec 002 closeout package/evidence
+8. canonical Spec 003 package and `implementation/` closeout evidence
+9. `specs/004-harness-local-intelligence/spec.md`
+10. `specs/004-harness-local-intelligence/clarification-closeout.md`
+11. `specs/004-harness-local-intelligence/research.md`
+12. `specs/004-harness-local-intelligence/donor-qualification.md`
+13. `specs/004-harness-local-intelligence/plan.md`
+14. `specs/004-harness-local-intelligence/data-model.md`
+15. all `specs/004-harness-local-intelligence/contracts/`
+16. `specs/004-harness-local-intelligence/quickstart.md`
+17. `specs/004-harness-local-intelligence/checklists/implementation-readiness.md`
+18. `specs/004-harness-local-intelligence/tasks.md`
+19. `specs/004-harness-local-intelligence/analysis.md`
 
 ## Spec 004 hard boundaries
 
@@ -60,7 +61,7 @@ Open planning proposals that have not merged into canonical `main` are not canon
 - `llama.cpp` is only `COMPATIBILITY_CANDIDATE_NOT_YET_ADMITTED` during planning. If later admitted, default to a supervised out-of-process sidecar with local model path, offline policy and authenticated/private local transport. No direct C/C++ FFI inside `golamd` and no generic unauthenticated localhost control surface.
 - Golam-Research, grok-build, Goose and DeepSeek Harness remain `REFERENCE_ONLY` unless an exact bounded Source Foundry record later admits selected code.
 - No product filesystem/shell/git/browser tools, canonical long-term memory product, Desktop/computer control, GolamConnect/channels, workers/scheduler, parity breadth or final release qualification in Spec 004.
-- Never claim CI/tests/review PASS without exact-head evidence. Any planning or implementation branch mutation invalidates earlier exact-head closeout evidence.
+- Never claim CI/tests/review PASS without exact-head evidence. A planning or implementation branch mutation invalidates only CI/review evidence bound to the mutated branch's prior exact head; unchanged canonical predecessor evidence, including `main@6719e9997862cbe617b60e33870ef056fa3c0c70`, remains valid unless that predecessor itself changes or is otherwise superseded by repository truth.
 - Do not mark the planning PR Ready, merge it, start Spec 004 implementation, or admit production dependencies until the complete planning task order and planning closeout gates are genuinely satisfied.
 - After planning merges, implementation MUST start from the exact canonical `main` produced by the planning merge and its successful post-merge CI.
 - Do not start Spec 005 until Spec 004 implementation is genuinely `CLOSED_CANONICAL` after exact-head implementation gates, guarded merge and successful post-merge canonical-main CI.
