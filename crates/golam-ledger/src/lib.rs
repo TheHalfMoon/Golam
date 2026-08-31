@@ -31,6 +31,7 @@ pub mod egress_use_context;
 pub mod fork;
 pub mod goal;
 pub mod harness_evidence;
+mod harness_sink;
 pub mod integrity;
 pub mod manual_review;
 pub mod policy;
