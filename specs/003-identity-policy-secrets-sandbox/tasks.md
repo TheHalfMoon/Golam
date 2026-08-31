@@ -94,17 +94,19 @@ Legend:
 
 ## Phase J — Exact-head closeout
 
-- [x] **T003-090** Run pinned fmt/clippy/workspace tests on Windows/macOS/Linux exact head. Pre-convergence exact-head evidence: CI #660 (`33357835321`) SUCCESS at `4430ff95ec81c1f3e0c9683de2043c3b8803fe9e` on Windows/macOS/Ubuntu. Final closeout requires fresh exact-head CI after T003-095 mutation.
-- [x] **T003-091** Run policy/lease/approval/taint/secret/egress/sandbox property/adversarial qualification. Pre-convergence exact-head evidence: CI #660 (`33357835321`) SUCCESS at `4430ff95ec81c1f3e0c9683de2043c3b8803fe9e`; final closeout requires fresh exact-head CI after T003-095 mutation.
+- [x] **T003-090** Run pinned fmt/clippy/workspace tests on Windows/macOS/Linux exact head. Pre-convergence exact-head evidence: CI #660 (`33357835321`) SUCCESS at `4430ff95ec81c1f3e0c9683de2043c3b8803fe9e` on Windows/macOS/Ubuntu. Final closeout requires fresh exact-head CI after any branch mutation.
+- [x] **T003-091** Run policy/lease/approval/taint/secret/egress/sandbox property/adversarial qualification. Pre-convergence exact-head evidence: CI #660 (`33357835321`) SUCCESS at `4430ff95ec81c1f3e0c9683de2043c3b8803fe9e`; final closeout requires fresh exact-head CI after any branch mutation.
 - [x] **T003-092** Run bounded fuzz for newly introduced policy/profile/authority input parsers where applicable. CI #660 explicitly ran the existing ledger fuzz smoke and `golam-kernel --test spec003_fuzz_smoke` successfully on all three platforms at `4430ff95ec81c1f3e0c9683de2043c3b8803fe9e`.
-- [x] **T003-093** Run deterministic secret-canary leakage suite, including unknown-format values through the explicit secret-entry boundary. Existing T003-056 canary coverage remained in the full workspace suite and passed on all three platforms in CI #660 at `4430ff95ec81c1f3e0c9683de2043c3b8803fe9e`; final closeout requires fresh exact-head CI after T003-095 mutation.
+- [x] **T003-093** Run deterministic secret-canary leakage suite, including unknown-format values through the explicit secret-entry boundary. Existing T003-056 canary coverage remained in the full workspace suite and passed on all three platforms in CI #660 at `4430ff95ec81c1f3e0c9683de2043c3b8803fe9e`; final closeout requires fresh exact-head CI after any branch mutation.
 - [x] **T003-094** Run external strict-local no-egress observation across supported CI platforms over the complete Golam-managed process tree, or an equivalent sinkholed/network boundary that independently captures descendant egress. CI #660 completed the platform-applicable external strict-local observer successfully on Windows/macOS/Ubuntu at `4430ff95ec81c1f3e0c9683de2043c3b8803fe9e`.
 - [x] **T003-095** Re-run Spec Kit convergence and repair material constitution/spec/plan/contracts/tasks divergence. Re-read constitution v1.2.0, current `AGENTS.md`, spec, plan, all six Spec 003 contracts, readiness, tasks, implementation evidence and live PR state. No normative constitution/contract repair was required; stale live-state records were reconciled. Evidence: `implementation/t003-095-convergence.md`.
-- [ ] **T003-096** Obtain a fresh substantive independent external semantic review only after fresh exact-head CI from an available repository-integrated reviewer other than Qodo or Codex; repair every material finding and repeat qualification after mutation. Status-only, summary-only, billing/rate-limit/unavailable, stale-head and self-review outputs do not satisfy this gate. Review-source rationale: `implementation/t003-096-review-source-amendment.md`.
-- [ ] **T003-097** Prepare exact-head closeout evidence; no Ready/merge/Spec 004 claim without repository-authorized lifecycle evidence.
-- [ ] **T003-098** After merge, require canonical `main` post-merge CI success before `SPEC_003_CLOSED_CANONICAL=YES` or starting Spec 004.
+- [ ] **T003-096** Obtain a fresh substantive independent external semantic review only after fresh exact-head CI from an available repository-integrated reviewer other than Qodo or Codex; repair every material finding and repeat qualification after mutation. Final PASS is recorded in live GitHub PR metadata without mutating the reviewed branch merely to mirror PASS. Review-source rationale: `implementation/t003-096-review-source-amendment.md`; final evidence placement: `implementation/t003-096-live-closeout-evidence-policy.md`.
+- [ ] **T003-097** Prepare exact-head closeout/lifecycle evidence in live GitHub PR metadata; no Ready/merge/Spec 004 claim without repository-authorized lifecycle evidence and unchanged expected head.
+- [ ] **T003-098** After merge, require canonical `main` post-merge CI success on the actual merge commit before `SPEC_003_CLOSED_CANONICAL=YES` or starting Spec 004.
 
 ## Current gate
+
+The mutable final closeout state is intentionally not embedded in this branch artifact because updating PASS/PENDING after qualification would move the exact head and invalidate that evidence. `implementation/t003-096-live-closeout-evidence-policy.md` defines the non-self-invalidating evidence rule. Exact live GitHub PR metadata is authoritative for current final CI/review/lifecycle state.
 
 ```text
 SPEC_002_CLOSED_CANONICAL=YES
@@ -135,22 +137,22 @@ PHASE_J_PRE_CONVERGENCE_HEAD=4430ff95ec81c1f3e0c9683de2043c3b8803fe9e
 PHASE_J_PRE_CONVERGENCE_CI_RUN=33357835321
 T003_095=PASS
 REVIEW_SOURCE_POLICY=INDEPENDENT_EXTERNAL_NON_QODO_NON_CODEX
-T003_096_REVIEWED_HEAD=5ce152a8a3370b3927eb7b9eeaed838a3e0c7dc6
-T003_096_REVIEWED_HEAD_CI_RUN=33395230450
-T003_096_REVIEWED_HEAD_CI=PASS
-T003_096_REVIEW_RESULT=MATERIAL_GOVERNANCE_FINDING_REPAIR_REQUIRED
-T003_096_PRODUCT_SECURITY_FINDINGS=NONE_ADDITIONAL
-T003_096_REPAIR=APPLIED_FORWARD_ONLY
-FINAL_EXACT_HEAD_CI=PENDING_AFTER_T003_096_REPAIR
-NEXT_TASK=FRESH_EXACT_HEAD_CI_THEN_FRESH_EXTERNAL_REVIEW
+CLOSEOUT_EVIDENCE_AUTHORITY=LIVE_GITHUB_PR_METADATA
+EMBED_LATEST_FINAL_CI_STATUS_IN_QUALIFIED_BRANCH=NO
+EMBED_LATEST_FINAL_REVIEW_STATUS_IN_REVIEWED_BRANCH=NO
+T003_096_HISTORY_HEAD_1=5ce152a8a3370b3927eb7b9eeaed838a3e0c7dc6
+T003_096_HISTORY_CI_1=33395230450
+T003_096_HISTORY_HEAD_2=862936b4ea3c62ead65b318ba394b49444722944
+T003_096_HISTORY_CI_2=33405009138
+FINAL_EXACT_HEAD_CI=SEE_LIVE_GITHUB_PR_METADATA
+FINAL_EXTERNAL_REVIEW=SEE_LIVE_GITHUB_PR_METADATA
+NEXT_TASK=SEE_LIVE_GITHUB_PR_METADATA
 CEDAR_POLICY_ADMITTED_EXACT=4.12.0
 SECRET_CRYPTO_AND_OS_KEY_PROTECTORS_QUALIFIED=YES
 WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED
 Golam-Research=REFERENCE_ONLY
 DONOR_CODE_ADMITTED=NO
 REAL_SECRETS_USED=NO
-SPEC_003_IMPLEMENTATION_COMPLETE=NO
-SPEC_003_CLOSED_CANONICAL=NO
-PR_READY=NO
+SPEC_003_CLOSED_CANONICAL=NO_UNTIL_POST_MERGE_MAIN_CI
 WAIVER_TAKEN=NO
 ```

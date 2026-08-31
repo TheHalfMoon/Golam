@@ -74,33 +74,32 @@
 - [x] Sandbox unsupported/enforcement gates defined.
 - [x] Windows/macOS/Linux exact-head CI and post-CI substantive independent external semantic review gates defined.
 
-## Historical Qodo repair reconciliation
+## Historical planning-review reconciliation
 
 - [x] Planning finding 1 accepted: optional destination revalidation was too weak; changed effective destinations require mandatory reauthorization or deny.
 - [x] Planning finding 2 accepted: daemon-PID-only locality observation is insufficient once managed child execution exists; observer upgrade is a predecessor gate to network-capable child launch.
 - [x] Planning finding 3 accepted: recognized-format-only secret ingestion was too weak; explicit user-designated secret entry treats the whole value as secret independent of detection.
-
-## Planning lifecycle — closed canonical
-
 - [x] Exact-head CI succeeded on the repaired final planning candidate.
-- [x] Fresh authorized Qodo review after repaired exact-head CI reported zero unresolved material findings for the historical planning PR #4 sequence.
+- [x] The historical planning review reported zero unresolved material findings.
 - [x] Planning PR #4 was merged to canonical `main`.
 - [x] Exact post-merge `main@82de7084384009ff3a00522f4e0aef09bf549529` was reread and post-merge CI #255 succeeded before implementation branch creation.
 
-## Implementation closeout state
+## Implementation closeout evidence rule
 
-The checklist above remains the planning/readiness record. Implementation-time dependency admission and task qualification are recorded under `implementation/` and `tasks.md`.
+Founder direction dated 2026-08-31 excludes Qodo from the active Spec 003 implementation review path and keeps Codex excluded. T003-096 requires a substantive independent repository-integrated external semantic review on the exact CI-qualified head.
 
-For the implementation closeout, founder direction dated 2026-08-31 excludes Qodo from the active Spec 003 review path and keeps Codex excluded. T003-096 requires a substantive independent repository-integrated external semantic review on the exact CI-qualified head.
+Two replacement-review cycles confirmed the product/security scope while exposing a self-invalidating documentation pattern: branch-owned mutable PASS/PENDING fields become stale when CI/review succeeds, while updating those fields moves the head and invalidates the evidence they attempt to record.
 
-Exact reviewed head `5ce152a8a3370b3927eb7b9eeaed838a3e0c7dc6` passed CI #662 / run `33395230450` on Windows/macOS/Ubuntu. The subsequent substantive CodeRabbit review found one material governance-state inconsistency in this checklist, `tasks.md`, and `implementation/current-execution-plan.md`, and found no additional material product correctness/security defect. This repair reconciles those repository-owned records. Because the repair itself moves the branch, fresh exact-head CI and a fresh substantive external review are required before T003-097.
+Therefore `implementation/t003-096-live-closeout-evidence-policy.md` is authoritative for final evidence placement. This checklist records stable readiness requirements and historical evidence only. The mutable final exact-head CI, final external-review result, Ready/merge state, and post-merge canonical-main CI are authoritative in live GitHub PR metadata and are not mirrored by a branch mutation after qualification.
+
+Historical evidence:
+
+- `5ce152a8a3370b3927eb7b9eeaed838a3e0c7dc6` — CI #662 / run `33395230450` PASS; substantive CodeRabbit review found one stale closeout-governance finding and no additional material product correctness/security defect.
+- `862936b4ea3c62ead65b318ba394b49444722944` — CI #663 / run `33405009138` PASS; substantive CodeRabbit review found the remaining self-invalidating mutable status fields and no additional material product correctness/security defect.
 
 ```text
 SPEC_002_CLOSED_CANONICAL=YES
 SPEC_003_PLANNING_PACKAGE=CLOSED_CANONICAL
-QODO_REPAIR_FINDINGS=3_ACCEPTED_AND_RECONCILED
-PLANNING_EXACT_HEAD_CI=PASS
-PLANNING_POST_CI_QODO=PASS
 PLANNING_PR_4=MERGED
 PLANNING_POST_MERGE_MAIN_CI_255=PASS
 PRODUCT_IMPLEMENTATION_IN_PLANNING_PR=NO
@@ -110,14 +109,14 @@ WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_AUTHORIZED=YES
 IMPLEMENTATION_REVIEW_SOURCE_POLICY=INDEPENDENT_EXTERNAL_NON_QODO_NON_CODEX
-IMPLEMENTATION_T003_096_REVIEWED_HEAD=5ce152a8a3370b3927eb7b9eeaed838a3e0c7dc6
-IMPLEMENTATION_T003_096_REVIEWED_HEAD_CI_RUN=33395230450
-IMPLEMENTATION_T003_096_REVIEWED_HEAD_CI=PASS
-IMPLEMENTATION_T003_096_REVIEW_RESULT=MATERIAL_GOVERNANCE_FINDING_REPAIR_REQUIRED
-IMPLEMENTATION_T003_096_PRODUCT_SECURITY_FINDINGS=NONE_ADDITIONAL
-IMPLEMENTATION_T003_096_REPAIR=APPLIED_FORWARD_ONLY
-IMPLEMENTATION_FINAL_EXACT_HEAD_CI=PENDING_AFTER_T003_096_REPAIR
-IMPLEMENTATION_FINAL_EXTERNAL_REVIEW=PENDING_AFTER_FRESH_EXACT_HEAD_CI
+CLOSEOUT_EVIDENCE_AUTHORITY=LIVE_GITHUB_PR_METADATA
+EMBED_LATEST_FINAL_CI_STATUS_IN_QUALIFIED_BRANCH=NO
+EMBED_LATEST_FINAL_REVIEW_STATUS_IN_REVIEWED_BRANCH=NO
+HISTORICAL_CI_662=PASS
+HISTORICAL_CI_663=PASS
+IMPLEMENTATION_FINAL_EXACT_HEAD_CI=SEE_LIVE_GITHUB_PR_METADATA
+IMPLEMENTATION_FINAL_EXTERNAL_REVIEW=SEE_LIVE_GITHUB_PR_METADATA
 CODEX_REVIEW_GATE=EXCLUDED_BY_FOUNDER_DIRECTION
 QODO_ACTIVE_IMPLEMENTATION_REVIEW_GATE=EXCLUDED_BY_FOUNDER_DIRECTION
+WAIVER_TAKEN=NO
 ```
