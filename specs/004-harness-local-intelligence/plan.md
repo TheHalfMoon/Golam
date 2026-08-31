@@ -76,8 +76,10 @@ Normalize + validate bounded ModelEvents
           |
           v
 Harness terminal transition
-  COMPLETE | CANCELLED | TIMED_OUT | FAILED | RETRY_ELIGIBLE
+  COMPLETED | CANCELLED | TIMED_OUT | FAILED_TRANSIENT | FAILED_DETERMINISTIC | FAILED_CONTEXT_OVERFLOW
 ```
+
+Retry eligibility is separate bounded retry-policy metadata/decision derived from the terminal failure class and retry budget; it is not a terminal state.
 
 A later owning tool layer may submit a validated candidate through normal typed authority/effect gates. Spec 004 fixture tools stop before real product execution.
 
@@ -128,7 +130,7 @@ CompactionAttempt START
 CompactionAttempt END
 ```
 
-Crash/incomplete work remains detectable from durable attempt state. A failed compaction does not pretend history changed. Model-backed compaction uses the same backend contract and cancellation/budget rules; deterministic pruning/projection may be used where sufficient.
+Crash/incomplete work remains detectable from durable attempt state. A failed compaction does not pretend history changed. Model-backed compaction uses the same backend contract and cancellation/budget rules; deterministic pruning/projection may be used where sufficient. Every committed model-backed compaction artifact must uniquely bind the producing `RequestAttemptId`, and its summary/projection reference must resolve to accepted output owned by that same attempt.
 
 Goal/non-negotiable constraints remain separately durable and injected by explicit context policy, not trusted to a summary.
 
@@ -247,6 +249,7 @@ Transient token/KV/backend process state is cache/runtime state and is not canon
 - context-overflow -> compaction -> new attempt;
 - canonical history unchanged by compaction;
 - Goal Ledger injection survives compaction;
+- model-backed compaction uniquely binds the producing `RequestAttemptId` and rejects missing, ambiguous or mismatched accepted-output provenance;
 - tool-call native/grammar/text normalization equivalence;
 - malformed/oversized/unknown candidate denial;
 - strict-local profile routing dominance;
@@ -294,6 +297,7 @@ The planning PR may close only when:
 - cross-artifact analysis has no unresolved material findings;
 - exact-head Windows/macOS/Ubuntu CI succeeds;
 - required independent external semantic review is substantive and clean under the current repository review policy;
+- every material review finding is reconciled without waiver before Ready/merge;
 - planning PR is merged and canonical post-merge CI is green.
 
 Only then may an implementation branch be created from the exact new canonical main.
