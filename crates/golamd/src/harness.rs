@@ -8,8 +8,8 @@ use golam_core::harness_state::{
     RequestAttemptState,
 };
 use golam_core::model_backend::{
-    BackendEmission, HarnessEvidenceSink, HarnessEvidenceSinkError, ModelBackend, ModelBackendError,
-    ModelBackendFailureClass, ModelBackendSession,
+    BackendEmission, HarnessEvidenceSink, HarnessEvidenceSinkError, ModelBackend,
+    ModelBackendError, ModelBackendFailureClass, ModelBackendSession,
 };
 
 const ATTEMPT_RECORD_V1: &[u8] = b"golam-harness-attempt-v1";
@@ -89,7 +89,9 @@ where
         prepared_at_unix_ms: u64,
         control: HarnessRunControl,
     ) -> Result<HarnessAttemptOutcome, HarnessRunError> {
-        request.validate().map_err(|_| HarnessRunError::InvalidRequest)?;
+        request
+            .validate()
+            .map_err(|_| HarnessRunError::InvalidRequest)?;
         if control.poll_duration_ms == 0 || control.max_polls == 0 {
             return Err(HarnessRunError::InvalidRequest);
         }
@@ -119,12 +121,7 @@ where
         };
 
         attempt.backend_instance_ref = Some(session.backend_instance_ref().to_owned());
-        transition_and_persist(
-            sink,
-            request,
-            &mut attempt,
-            RequestAttemptState::Dispatched,
-        )?;
+        transition_and_persist(sink, request, &mut attempt, RequestAttemptState::Dispatched)?;
 
         let mut expected_sequence = 0_u64;
         let mut polls = 0_u64;
@@ -218,7 +215,9 @@ where
                 acceptance: ModelEventAcceptance::Accepted,
                 canonical_evidence_ref: Some(evidence_ref.clone()),
             };
-            event.validate().map_err(|_| HarnessRunError::InvalidRequest)?;
+            event
+                .validate()
+                .map_err(|_| HarnessRunError::InvalidRequest)?;
             sink.append_model_event(&event, EVENT_RECORD_V1)?;
             attempt.accepted_event_refs.push(evidence_ref);
 
@@ -319,14 +318,7 @@ fn finish_backend_error<E: HarnessEvidenceSink>(
             (RequestAttemptState::FailedTransient, "backend_crashed")
         }
     };
-    finish_terminal(
-        sink,
-        request,
-        attempt,
-        state,
-        terminal_time,
-        Some(failure),
-    )
+    finish_terminal(sink, request, attempt, state, terminal_time, Some(failure))
 }
 
 fn finish_terminal<E: HarnessEvidenceSink>(
@@ -521,7 +513,12 @@ mod tests {
         let mut coordinator = HarnessCoordinator::new(backend);
         let mut sink = RecordingSink::default();
         let result = coordinator
-            .run_attempt(&mut sink, &request(1, 1, 100), 10, HarnessRunControl::default())
+            .run_attempt(
+                &mut sink,
+                &request(1, 1, 100),
+                10,
+                HarnessRunControl::default(),
+            )
             .unwrap();
         assert_eq!(result.terminal_state, RequestAttemptState::Completed);
         assert_eq!(sink.prepared[0].state, RequestAttemptState::Prepared);
@@ -536,15 +533,24 @@ mod tests {
         let mut coordinator = HarnessCoordinator::new(backend);
         let mut sink = RecordingSink::default();
         let result = coordinator
-            .run_attempt(&mut sink, &request(1, 1, 100), 10, HarnessRunControl::default())
+            .run_attempt(
+                &mut sink,
+                &request(1, 1, 100),
+                10,
+                HarnessRunControl::default(),
+            )
             .unwrap();
-        assert_eq!(result.terminal_state, RequestAttemptState::FailedDeterministic);
+        assert_eq!(
+            result.terminal_state,
+            RequestAttemptState::FailedDeterministic
+        );
         assert_eq!(sink.events.len(), 1);
     }
 
     #[test]
     fn cancellation_is_distinct_and_preserves_accepted_prefix() {
-        let backend = ScriptedBackend::new(vec![vec![text_delta(0, b"prefix"), text_delta(1, b"late")]]);
+        let backend =
+            ScriptedBackend::new(vec![vec![text_delta(0, b"prefix"), text_delta(1, b"late")]]);
         let mut coordinator = HarnessCoordinator::new(backend);
         let mut sink = RecordingSink::default();
         let result = coordinator
@@ -561,12 +567,17 @@ mod tests {
         assert_eq!(result.terminal_state, RequestAttemptState::Cancelled);
         assert_eq!(sink.events.len(), 1);
         assert_eq!(sink.events[0].payload, b"prefix");
-        assert!(sink.states.iter().any(|state| state.state == RequestAttemptState::CancelRequested));
+        assert!(
+            sink.states
+                .iter()
+                .any(|state| state.state == RequestAttemptState::CancelRequested)
+        );
     }
 
     #[test]
     fn timeout_is_not_user_cancellation() {
-        let backend = ScriptedBackend::new(vec![vec![text_delta(0, b"prefix"), text_delta(1, b"late")]]);
+        let backend =
+            ScriptedBackend::new(vec![vec![text_delta(0, b"prefix"), text_delta(1, b"late")]]);
         let mut coordinator = HarnessCoordinator::new(backend);
         let mut sink = RecordingSink::default();
         let result = coordinator
@@ -579,7 +590,12 @@ mod tests {
             .unwrap();
         assert_eq!(result.terminal_state, RequestAttemptState::TimedOut);
         assert_eq!(result.failure_class.as_deref(), Some("request_timeout"));
-        assert!(!sink.states.iter().any(|state| state.state == RequestAttemptState::CancelRequested));
+        assert!(
+            !sink
+                .states
+                .iter()
+                .any(|state| state.state == RequestAttemptState::CancelRequested)
+        );
     }
 
     #[test]
@@ -599,8 +615,14 @@ mod tests {
             )
             .unwrap();
         assert_eq!(outcomes.len(), 2);
-        assert_eq!(outcomes[0].request_attempt_id, RequestAttemptId::from_u128(1));
-        assert_eq!(outcomes[1].request_attempt_id, RequestAttemptId::from_u128(2));
+        assert_eq!(
+            outcomes[0].request_attempt_id,
+            RequestAttemptId::from_u128(1)
+        );
+        assert_eq!(
+            outcomes[1].request_attempt_id,
+            RequestAttemptId::from_u128(2)
+        );
         assert_eq!(sink.prepared.len(), 2);
         assert_eq!(sink.protected_effect_dispatches, 0);
     }
