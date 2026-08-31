@@ -34,9 +34,19 @@ An `ExecutionProfile` binds:
 
 ## Identity
 
-A material field change MUST yield a distinct profile identity/content digest. This includes a changed model revision, template, backend build, quantization, harness policy, tool mode, privacy/network class or fallback rule.
+A material execution-semantic field change MUST yield a distinct profile identity/content digest. This includes a changed model revision, template, backend build, quantization, harness policy, tool mode, privacy/network class or fallback rule.
 
 Evidence recorded for profile A MUST NOT be silently reused as evidence for materially changed profile B.
+
+### Evidence backlinks are not semantic identity
+
+The frozen Spec 001 field `benchmark record references` is retained as evidence linkage, but benchmark records are created *for* an already identified profile. Therefore benchmark references are non-semantic append-only backlinks/projection metadata and are excluded from the execution-semantic `profile_id`/content digest.
+
+Otherwise a circular identity would exist: `BenchmarkRecord -> ExecutionProfileId -> benchmark_refs -> BenchmarkRecord`.
+
+Adding/removing a benchmark backlink does not change how the profile executes and therefore does not mint a new execution-semantic profile identity. Changing any execution-semantic input that the benchmark measured does change profile identity and makes the old benchmark inapplicable to the new profile.
+
+`PROFILE_IDENTITY != EVIDENCE_BACKLINK_SET`
 
 ## Selection order
 
@@ -101,12 +111,14 @@ Hardware recommendations are compatibility/performance evidence only. `HardwareP
 
 Every benchmark record MUST bind:
 - exact code revision;
-- `profile_id`;
+- execution-semantic `profile_id`;
 - `HardwareProfileId`;
 - workload fixture/version;
 - backend build/source identity;
 - harness schema/profile identity;
 - raw evidence references.
+
+The reverse benchmark-reference list on a profile is convenience evidence metadata, not the source of benchmark identity.
 
 ## Invariants
 
@@ -115,3 +127,4 @@ Every benchmark record MUST bind:
 `PROFILE_SWITCH != HISTORY_REWRITE`
 `CACHE_STATE != CANONICAL_STATE`
 `LOCAL_FAILURE != CLOUD_FALLBACK_PERMISSION`
+`PROFILE_IDENTITY != EVIDENCE_BACKLINK_SET`
