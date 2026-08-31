@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod authority;
+pub mod harness;
 pub mod paths;
 pub mod runtime_home;
 pub mod taint;
