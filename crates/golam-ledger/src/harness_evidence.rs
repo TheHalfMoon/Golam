@@ -32,7 +32,10 @@ pub const REQUIRED_HARNESS_TABLES: &[&str] = &[
 #[derive(Debug)]
 pub enum HarnessEvidenceError {
     Sqlite(rusqlite::Error),
-    FutureSchema { found: i64, supported: i64 },
+    FutureSchema {
+        found: i64,
+        supported: i64,
+    },
     InvalidRecord(&'static str),
     MissingAttempt(RequestAttemptId),
     ImmutableAttemptMismatch(RequestAttemptId),
@@ -48,14 +51,20 @@ impl fmt::Display for HarnessEvidenceError {
         match self {
             Self::Sqlite(error) => write!(f, "sqlite error: {error}"),
             Self::FutureSchema { found, supported } => {
-                write!(f, "harness schema {found} is newer than supported {supported}")
+                write!(
+                    f,
+                    "harness schema {found} is newer than supported {supported}"
+                )
             }
             Self::InvalidRecord(reason) => write!(f, "invalid harness evidence record: {reason}"),
             Self::MissingAttempt(attempt_id) => {
                 write!(f, "request attempt not found: {attempt_id}")
             }
             Self::ImmutableAttemptMismatch(attempt_id) => {
-                write!(f, "immutable request attempt identity mismatch: {attempt_id}")
+                write!(
+                    f,
+                    "immutable request attempt identity mismatch: {attempt_id}"
+                )
             }
             Self::SequenceConflict {
                 attempt_id,
@@ -227,7 +236,9 @@ impl HarnessEvidenceStore {
         evidence: ProfileSelectionEvidence<'_>,
     ) -> Result<(), HarnessEvidenceError> {
         if evidence.reason_bytes.is_empty() {
-            return Err(HarnessEvidenceError::InvalidRecord("profile selection reason"));
+            return Err(HarnessEvidenceError::InvalidRecord(
+                "profile selection reason",
+            ));
         }
         self.connection.execute(
             "INSERT INTO harness_profile_selections (\
@@ -302,8 +313,9 @@ impl HarnessEvidenceStore {
         let transaction = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let immutable = read_attempt_identity(&transaction, attempt.request_attempt_id)?
-            .ok_or(HarnessEvidenceError::MissingAttempt(attempt.request_attempt_id))?;
+        let immutable = read_attempt_identity(&transaction, attempt.request_attempt_id)?.ok_or(
+            HarnessEvidenceError::MissingAttempt(attempt.request_attempt_id),
+        )?;
         if immutable.request_series_id != attempt.request_series_id
             || immutable.session_id != session_id
             || immutable.initiator_principal_ref != attempt.initiator_principal_ref
@@ -344,7 +356,8 @@ impl HarnessEvidenceStore {
         if record_bytes.is_empty() {
             return Err(HarnessEvidenceError::InvalidRecord("model event bytes"));
         }
-        if event.acceptance == ModelEventAcceptance::Accepted && event.canonical_evidence_ref.is_none()
+        if event.acceptance == ModelEventAcceptance::Accepted
+            && event.canonical_evidence_ref.is_none()
         {
             return Err(HarnessEvidenceError::InvalidRecord(
                 "accepted model event requires canonical evidence reference",
@@ -354,7 +367,9 @@ impl HarnessEvidenceStore {
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         if read_attempt_identity(&transaction, event.request_attempt_id)?.is_none() {
-            return Err(HarnessEvidenceError::MissingAttempt(event.request_attempt_id));
+            return Err(HarnessEvidenceError::MissingAttempt(
+                event.request_attempt_id,
+            ));
         }
         let inserted = transaction.execute(
             "INSERT OR IGNORE INTO harness_model_events (\
@@ -389,7 +404,9 @@ impl HarnessEvidenceStore {
             .validate()
             .map_err(|_| HarnessEvidenceError::InvalidRecord("compaction attempt validation"))?;
         if record_bytes.is_empty() {
-            return Err(HarnessEvidenceError::InvalidRecord("compaction attempt bytes"));
+            return Err(HarnessEvidenceError::InvalidRecord(
+                "compaction attempt bytes",
+            ));
         }
         self.connection.execute(
             "INSERT INTO harness_compaction_attempts (\
@@ -428,7 +445,9 @@ impl HarnessEvidenceStore {
             .validate()
             .map_err(|_| HarnessEvidenceError::InvalidRecord("compaction artifact validation"))?;
         if record_bytes.is_empty() {
-            return Err(HarnessEvidenceError::InvalidRecord("compaction artifact bytes"));
+            return Err(HarnessEvidenceError::InvalidRecord(
+                "compaction artifact bytes",
+            ));
         }
         self.connection.execute(
             "INSERT OR IGNORE INTO harness_compaction_artifacts (\
@@ -835,7 +854,10 @@ mod tests {
     #[test]
     fn schema_is_forward_only_and_complete() {
         let store = HarnessEvidenceStore::open_in_memory().unwrap();
-        assert_eq!(store.schema_version().unwrap(), HARNESS_EVIDENCE_SCHEMA_VERSION);
+        assert_eq!(
+            store.schema_version().unwrap(),
+            HARNESS_EVIDENCE_SCHEMA_VERSION
+        );
         for table in REQUIRED_HARNESS_TABLES {
             assert!(store.has_table(table).unwrap(), "missing {table}");
         }
@@ -862,7 +884,12 @@ mod tests {
             .persist_prepared_attempt(SessionId(9), &attempt, b"prepared")
             .unwrap();
         store.append_model_event(&event, b"event-record").unwrap();
-        assert_eq!(store.accepted_event_count(attempt.request_attempt_id).unwrap(), 1);
+        assert_eq!(
+            store
+                .accepted_event_count(attempt.request_attempt_id)
+                .unwrap(),
+            1
+        );
     }
 
     #[test]
