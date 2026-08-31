@@ -30,6 +30,7 @@ pub mod egress_permit;
 pub mod egress_use_context;
 pub mod fork;
 pub mod goal;
+pub mod harness_evidence;
 pub mod integrity;
 pub mod manual_review;
 pub mod policy;
