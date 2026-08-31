@@ -218,7 +218,10 @@ impl RequestAttemptState {
 
     pub const fn can_transition_to(self, next: Self) -> bool {
         match self {
-            Self::Prepared => matches!(next, Self::Dispatched | Self::CancelRequested | Self::Cancelled),
+            Self::Prepared => matches!(
+                next,
+                Self::Dispatched | Self::CancelRequested | Self::Cancelled
+            ),
             Self::Dispatched => matches!(
                 next,
                 Self::Streaming
@@ -591,7 +594,9 @@ impl BenchmarkRecord {
         }
         validate_ref(&self.code_revision)?;
         validate_ref(&self.workload_fixture_id)?;
-        if self.backend_metrics.len() > MAX_LIST_ITEMS || self.harness_metrics.len() > MAX_LIST_ITEMS {
+        if self.backend_metrics.len() > MAX_LIST_ITEMS
+            || self.harness_metrics.len() > MAX_LIST_ITEMS
+        {
             return Err(HarnessStateError::TooManyItems);
         }
         for metric in self
