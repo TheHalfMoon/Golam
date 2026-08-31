@@ -1,4 +1,3 @@
-use golam_core::SessionId;
 use golam_core::harness::{
     CompactionId, ExecutionProfileId, HardwareProfileId, RequestAttemptId, RequestSeriesId,
     ToolCallCandidateId,
@@ -10,6 +9,7 @@ use golam_core::harness_state::{
     ModelRequest, RequestAttempt, RequestAttemptState, ToolCallCandidate, ToolCallParseStatus,
     ToolCallSourceMode,
 };
+use golam_core::SessionId;
 
 #[test]
 fn harness_identifiers_round_trip_at_boundary_values() {
