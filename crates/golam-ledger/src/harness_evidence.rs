@@ -6,7 +6,7 @@ use std::path::Path;
 
 use golam_core::SessionId;
 use golam_core::harness::{
-    CompactionId, ExecutionProfileId, HardwareProfileId, RequestAttemptId, RequestSeriesId,
+    ExecutionProfileId, HardwareProfileId, RequestAttemptId, RequestSeriesId,
 };
 use golam_core::harness_state::{
     BenchmarkRecord, CalibrationRun, CompactionArtifact, CompactionAttempt, ModelEvent,
