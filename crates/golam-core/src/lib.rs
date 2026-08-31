@@ -3,6 +3,7 @@
 pub mod authority;
 pub mod execution_profile;
 pub mod harness;
+pub mod harness_state;
 pub mod paths;
 pub mod runtime_home;
 pub mod taint;
