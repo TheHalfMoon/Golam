@@ -10,7 +10,7 @@ use golam_core::harness::{
 };
 use golam_core::harness_state::{
     BenchmarkRecord, CalibrationRun, CompactionArtifact, CompactionAttempt, ModelEvent,
-    ModelEventAcceptance, RequestAttempt, RequestAttemptState,
+    ModelEventAcceptance, ModelEventKind, RequestAttempt, RequestAttemptState,
 };
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
@@ -32,10 +32,7 @@ pub const REQUIRED_HARNESS_TABLES: &[&str] = &[
 #[derive(Debug)]
 pub enum HarnessEvidenceError {
     Sqlite(rusqlite::Error),
-    FutureSchema {
-        found: i64,
-        supported: i64,
-    },
+    FutureSchema { found: i64, supported: i64 },
     InvalidRecord(&'static str),
     MissingAttempt(RequestAttemptId),
     ImmutableAttemptMismatch(RequestAttemptId),
@@ -51,20 +48,12 @@ impl fmt::Display for HarnessEvidenceError {
         match self {
             Self::Sqlite(error) => write!(f, "sqlite error: {error}"),
             Self::FutureSchema { found, supported } => {
-                write!(
-                    f,
-                    "harness schema {found} is newer than supported {supported}"
-                )
+                write!(f, "harness schema {found} is newer than supported {supported}")
             }
             Self::InvalidRecord(reason) => write!(f, "invalid harness evidence record: {reason}"),
-            Self::MissingAttempt(attempt_id) => {
-                write!(f, "request attempt not found: {attempt_id}")
-            }
+            Self::MissingAttempt(attempt_id) => write!(f, "request attempt not found: {attempt_id}"),
             Self::ImmutableAttemptMismatch(attempt_id) => {
-                write!(
-                    f,
-                    "immutable request attempt identity mismatch: {attempt_id}"
-                )
+                write!(f, "immutable request attempt identity mismatch: {attempt_id}")
             }
             Self::SequenceConflict {
                 attempt_id,
@@ -82,12 +71,7 @@ impl Error for HarnessEvidenceError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::Sqlite(error) => Some(error),
-            Self::FutureSchema { .. }
-            | Self::InvalidRecord(_)
-            | Self::MissingAttempt(_)
-            | Self::ImmutableAttemptMismatch(_)
-            | Self::SequenceConflict { .. }
-            | Self::IntegerOverflow => None,
+            _ => None,
         }
     }
 }
@@ -136,22 +120,26 @@ pub struct StoredAttemptIdentity {
     pub state: RequestAttemptState,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StoredAcceptedModelEvent {
+    pub sequence: u64,
+    pub kind: ModelEventKind,
+    pub payload: Vec<u8>,
+    pub canonical_evidence_ref: String,
+}
+
 impl HarnessEvidenceStore {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, HarnessEvidenceError> {
-        let connection = Connection::open(path)?;
-        Self::initialize(connection)
+        Self::initialize(Connection::open(path)?)
     }
 
     pub fn open_in_memory() -> Result<Self, HarnessEvidenceError> {
-        let connection = Connection::open_in_memory()?;
-        Self::initialize(connection)
+        Self::initialize(Connection::open_in_memory()?)
     }
 
     fn initialize(connection: Connection) -> Result<Self, HarnessEvidenceError> {
         connection.execute_batch(
-            "PRAGMA foreign_keys = ON;\n\
-             PRAGMA synchronous = FULL;\n\
-             PRAGMA busy_timeout = 5000;",
+            "PRAGMA foreign_keys = ON; PRAGMA synchronous = FULL; PRAGMA busy_timeout = 5000;",
         )?;
         migrate(&connection)?;
         verify_required_tables(&connection)?;
@@ -159,24 +147,23 @@ impl HarnessEvidenceStore {
     }
 
     pub fn schema_version(&self) -> Result<i64, HarnessEvidenceError> {
-        let version = self.connection.query_row(
+        Ok(self.connection.query_row(
             "SELECT schema_version FROM harness_schema_meta WHERE singleton = 1",
             [],
             |row| row.get(0),
-        )?;
-        Ok(version)
+        )?)
     }
 
     pub fn has_table(&self, table: &str) -> Result<bool, HarnessEvidenceError> {
-        let exists = self
+        Ok(self
             .connection
             .query_row(
                 "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = ?1 LIMIT 1",
                 params![table],
                 |row| row.get::<_, i64>(0),
             )
-            .optional()?;
-        Ok(exists.is_some())
+            .optional()?
+            .is_some())
     }
 
     pub fn record_execution_profile(
@@ -186,18 +173,18 @@ impl HarnessEvidenceStore {
         if evidence.schema_version == 0 || evidence.semantic_bytes.is_empty() {
             return Err(HarnessEvidenceError::InvalidRecord("execution profile"));
         }
-        let transaction = self
+        let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        transaction.execute(
-            "INSERT INTO harness_execution_profiles (\
-               profile_id, schema_version, content_digest, semantic_bytes, benchmark_metadata_bytes\
-             ) VALUES (?1, ?2, ?3, ?4, ?5)\
-             ON CONFLICT(profile_id) DO UPDATE SET\
-               benchmark_metadata_bytes = excluded.benchmark_metadata_bytes\
-             WHERE harness_execution_profiles.schema_version = excluded.schema_version\
-               AND harness_execution_profiles.content_digest = excluded.content_digest\
-               AND harness_execution_profiles.semantic_bytes = excluded.semantic_bytes",
+        let changed = tx.execute(
+            r#"INSERT INTO harness_execution_profiles
+               (profile_id, schema_version, content_digest, semantic_bytes, benchmark_metadata_bytes)
+               VALUES (?1, ?2, ?3, ?4, ?5)
+               ON CONFLICT(profile_id) DO UPDATE SET
+                 benchmark_metadata_bytes = excluded.benchmark_metadata_bytes
+               WHERE harness_execution_profiles.schema_version = excluded.schema_version
+                 AND harness_execution_profiles.content_digest = excluded.content_digest
+                 AND harness_execution_profiles.semantic_bytes = excluded.semantic_bytes"#,
             params![
                 id_blob(evidence.profile_id.as_u128()),
                 i64::from(evidence.schema_version),
@@ -206,7 +193,12 @@ impl HarnessEvidenceStore {
                 evidence.benchmark_metadata_bytes,
             ],
         )?;
-        transaction.commit()?;
+        if changed == 0 {
+            return Err(HarnessEvidenceError::InvalidRecord(
+                "execution profile identity collision",
+            ));
+        }
+        tx.commit()?;
         Ok(())
     }
 
@@ -218,9 +210,9 @@ impl HarnessEvidenceStore {
             return Err(HarnessEvidenceError::InvalidRecord("hardware profile"));
         }
         self.connection.execute(
-            "INSERT OR IGNORE INTO harness_hardware_profiles (\
-               hardware_profile_id, observed_at_unix_ms, content_digest, record_bytes\
-             ) VALUES (?1, ?2, ?3, ?4)",
+            r#"INSERT OR IGNORE INTO harness_hardware_profiles
+               (hardware_profile_id, observed_at_unix_ms, content_digest, record_bytes)
+               VALUES (?1, ?2, ?3, ?4)"#,
             params![
                 id_blob(evidence.profile_id.as_u128()),
                 u64_to_i64(evidence.observed_at_unix_ms)?,
@@ -241,9 +233,9 @@ impl HarnessEvidenceStore {
             ));
         }
         self.connection.execute(
-            "INSERT INTO harness_profile_selections (\
-               session_id, request_attempt_id, profile_id, selected_at_unix_ms, reason_bytes\
-             ) VALUES (?1, ?2, ?3, ?4, ?5)",
+            r#"INSERT INTO harness_profile_selections
+               (session_id, request_attempt_id, profile_id, selected_at_unix_ms, reason_bytes)
+               VALUES (?1, ?2, ?3, ?4, ?5)"#,
             params![
                 id_blob(evidence.session_id.0),
                 id_blob(evidence.request_attempt_id.as_u128()),
@@ -272,15 +264,23 @@ impl HarnessEvidenceStore {
                 "attempt must be PREPARED before dispatch",
             ));
         }
-        let transaction = self
+        let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        transaction.execute(
-            "INSERT INTO harness_request_attempts (\
-               request_attempt_id, request_series_id, session_id, initiator_principal_ref,\
-               execution_profile_id, request_digest, state, prepared_at_unix_ms, terminal_at_unix_ms,\
-               backend_instance_ref, failure_class, accepted_output_digest, record_bytes\
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL, ?9, NULL, NULL, ?10)",
+        if let Some(selected) = selected_profile_id(&tx, attempt.request_attempt_id)?
+            && selected != attempt.execution_profile_id
+        {
+            return Err(HarnessEvidenceError::ImmutableAttemptMismatch(
+                attempt.request_attempt_id,
+            ));
+        }
+        tx.execute(
+            r#"INSERT INTO harness_request_attempts
+               (request_attempt_id, request_series_id, session_id, initiator_principal_ref,
+                execution_profile_id, request_digest, state, prepared_at_unix_ms,
+                terminal_at_unix_ms, backend_instance_ref, failure_class,
+                accepted_output_digest, record_bytes)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, NULL, ?9, NULL, NULL, ?10)"#,
             params![
                 id_blob(attempt.request_attempt_id.as_u128()),
                 id_blob(attempt.request_series_id.as_u128()),
@@ -294,7 +294,7 @@ impl HarnessEvidenceStore {
                 record_bytes,
             ],
         )?;
-        transaction.commit()?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -310,12 +310,11 @@ impl HarnessEvidenceStore {
         if record_bytes.is_empty() {
             return Err(HarnessEvidenceError::InvalidRecord("request attempt bytes"));
         }
-        let transaction = self
+        let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        let immutable = read_attempt_identity(&transaction, attempt.request_attempt_id)?.ok_or(
-            HarnessEvidenceError::MissingAttempt(attempt.request_attempt_id),
-        )?;
+        let immutable = read_attempt_identity(&tx, attempt.request_attempt_id)?
+            .ok_or(HarnessEvidenceError::MissingAttempt(attempt.request_attempt_id))?;
         if immutable.request_series_id != attempt.request_series_id
             || immutable.session_id != session_id
             || immutable.initiator_principal_ref != attempt.initiator_principal_ref
@@ -326,11 +325,11 @@ impl HarnessEvidenceStore {
                 attempt.request_attempt_id,
             ));
         }
-        transaction.execute(
-            "UPDATE harness_request_attempts SET\
-               state = ?1, terminal_at_unix_ms = ?2, backend_instance_ref = ?3,\
-               failure_class = ?4, accepted_output_digest = ?5, record_bytes = ?6\
-             WHERE request_attempt_id = ?7",
+        tx.execute(
+            r#"UPDATE harness_request_attempts SET
+               state = ?1, terminal_at_unix_ms = ?2, backend_instance_ref = ?3,
+               failure_class = ?4, accepted_output_digest = ?5, record_bytes = ?6
+               WHERE request_attempt_id = ?7"#,
             params![
                 request_state_code(attempt.state),
                 optional_u64_to_i64(attempt.terminal_at_unix_ms)?,
@@ -341,7 +340,7 @@ impl HarnessEvidenceStore {
                 id_blob(attempt.request_attempt_id.as_u128()),
             ],
         )?;
-        transaction.commit()?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -363,22 +362,23 @@ impl HarnessEvidenceStore {
                 "accepted model event requires canonical evidence reference",
             ));
         }
-        let transaction = self
+        let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        if read_attempt_identity(&transaction, event.request_attempt_id)?.is_none() {
+        if read_attempt_identity(&tx, event.request_attempt_id)?.is_none() {
             return Err(HarnessEvidenceError::MissingAttempt(
                 event.request_attempt_id,
             ));
         }
-        let inserted = transaction.execute(
-            "INSERT OR IGNORE INTO harness_model_events (\
-               request_attempt_id, sequence, event_kind, acceptance, payload, canonical_evidence_ref, record_bytes\
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        let inserted = tx.execute(
+            r#"INSERT OR IGNORE INTO harness_model_events
+               (request_attempt_id, sequence, event_kind, acceptance, payload,
+                canonical_evidence_ref, record_bytes)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"#,
             params![
                 id_blob(event.request_attempt_id.as_u128()),
                 u64_to_i64(event.sequence)?,
-                model_event_kind_code(event),
+                model_event_kind_code(event.kind),
                 model_event_acceptance_code(event.acceptance),
                 event.payload,
                 event.canonical_evidence_ref,
@@ -391,7 +391,7 @@ impl HarnessEvidenceStore {
                 sequence: event.sequence,
             });
         }
-        transaction.commit()?;
+        tx.commit()?;
         Ok(())
     }
 
@@ -409,16 +409,19 @@ impl HarnessEvidenceStore {
             ));
         }
         self.connection.execute(
-            "INSERT INTO harness_compaction_attempts (\
-               compaction_id, session_id, state, deterministic, producing_request_attempt_id,\
-               started_at_unix_ms, terminal_at_unix_ms, failure_class, record_bytes\
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)\
-             ON CONFLICT(compaction_id) DO UPDATE SET\
-               state = excluded.state, terminal_at_unix_ms = excluded.terminal_at_unix_ms,\
-               failure_class = excluded.failure_class, record_bytes = excluded.record_bytes\
-             WHERE harness_compaction_attempts.session_id = excluded.session_id\
-               AND harness_compaction_attempts.deterministic = excluded.deterministic\
-               AND harness_compaction_attempts.producing_request_attempt_id IS excluded.producing_request_attempt_id",
+            r#"INSERT INTO harness_compaction_attempts
+               (compaction_id, session_id, state, deterministic, producing_request_attempt_id,
+                started_at_unix_ms, terminal_at_unix_ms, failure_class, record_bytes)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+               ON CONFLICT(compaction_id) DO UPDATE SET
+                 state = excluded.state,
+                 terminal_at_unix_ms = excluded.terminal_at_unix_ms,
+                 failure_class = excluded.failure_class,
+                 record_bytes = excluded.record_bytes
+               WHERE harness_compaction_attempts.session_id = excluded.session_id
+                 AND harness_compaction_attempts.deterministic = excluded.deterministic
+                 AND harness_compaction_attempts.producing_request_attempt_id
+                     IS excluded.producing_request_attempt_id"#,
             params![
                 id_blob(attempt.compaction_id.as_u128()),
                 id_blob(attempt.session_id.0),
@@ -450,10 +453,10 @@ impl HarnessEvidenceStore {
             ));
         }
         self.connection.execute(
-            "INSERT OR IGNORE INTO harness_compaction_artifacts (\
-               compaction_id, deterministic, producing_request_attempt_id, accepted_output_ref,\
-               artifact_digest, record_bytes\
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            r#"INSERT OR IGNORE INTO harness_compaction_artifacts
+               (compaction_id, deterministic, producing_request_attempt_id,
+                accepted_output_ref, artifact_digest, record_bytes)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6)"#,
             params![
                 id_blob(artifact.compaction_id.as_u128()),
                 artifact.deterministic,
@@ -480,10 +483,10 @@ impl HarnessEvidenceStore {
             return Err(HarnessEvidenceError::InvalidRecord("benchmark bytes"));
         }
         self.connection.execute(
-            "INSERT OR IGNORE INTO harness_benchmark_records (\
-               benchmark_id, execution_profile_id, hardware_profile_id, workload_fixture_id,\
-               started_at_unix_ms, finished_at_unix_ms, record_bytes\
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            r#"INSERT OR IGNORE INTO harness_benchmark_records
+               (benchmark_id, execution_profile_id, hardware_profile_id, workload_fixture_id,
+                started_at_unix_ms, finished_at_unix_ms, record_bytes)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"#,
             params![
                 id_blob(record.benchmark_id),
                 id_blob(record.execution_profile_id.as_u128()),
@@ -508,10 +511,10 @@ impl HarnessEvidenceStore {
             return Err(HarnessEvidenceError::InvalidRecord("calibration bytes"));
         }
         self.connection.execute(
-            "INSERT OR IGNORE INTO harness_calibration_runs (\
-               calibration_id, hardware_profile_id, backend_identity_ref, workload_fixture_id,\
-               started_at_unix_ms, finished_at_unix_ms, record_bytes\
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            r#"INSERT OR IGNORE INTO harness_calibration_runs
+               (calibration_id, hardware_profile_id, backend_identity_ref, workload_fixture_id,
+                started_at_unix_ms, finished_at_unix_ms, record_bytes)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"#,
             params![
                 id_blob(run.calibration_id),
                 id_blob(run.hardware_profile_id.as_u128()),
@@ -537,8 +540,7 @@ impl HarnessEvidenceStore {
         attempt_id: RequestAttemptId,
     ) -> Result<u64, HarnessEvidenceError> {
         let count: i64 = self.connection.query_row(
-            "SELECT COUNT(*) FROM harness_model_events\
-             WHERE request_attempt_id = ?1 AND acceptance = ?2",
+            "SELECT COUNT(*) FROM harness_model_events WHERE request_attempt_id = ?1 AND acceptance = ?2",
             params![
                 id_blob(attempt_id.as_u128()),
                 model_event_acceptance_code(ModelEventAcceptance::Accepted),
@@ -547,18 +549,56 @@ impl HarnessEvidenceStore {
         )?;
         i64_to_u64(count)
     }
+
+    pub fn accepted_events(
+        &self,
+        attempt_id: RequestAttemptId,
+    ) -> Result<Vec<StoredAcceptedModelEvent>, HarnessEvidenceError> {
+        let mut statement = self.connection.prepare(
+            r#"SELECT sequence, event_kind, payload, canonical_evidence_ref
+               FROM harness_model_events
+               WHERE request_attempt_id = ?1 AND acceptance = ?2
+               ORDER BY sequence ASC"#,
+        )?;
+        let rows = statement.query_map(
+            params![
+                id_blob(attempt_id.as_u128()),
+                model_event_acceptance_code(ModelEventAcceptance::Accepted),
+            ],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, Vec<u8>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                ))
+            },
+        )?;
+        let mut accepted = Vec::new();
+        for row in rows {
+            let (sequence, kind, payload, evidence_ref) = row?;
+            accepted.push(StoredAcceptedModelEvent {
+                sequence: i64_to_u64(sequence)?,
+                kind: model_event_kind_from_code(kind)?,
+                payload,
+                canonical_evidence_ref: evidence_ref.ok_or(HarnessEvidenceError::InvalidRecord(
+                    "accepted event missing canonical evidence reference",
+                ))?,
+            });
+        }
+        Ok(accepted)
+    }
 }
 
 fn migrate(connection: &Connection) -> Result<(), HarnessEvidenceError> {
-    let existing = connection
+    let version = match connection
         .query_row(
             "SELECT schema_version FROM harness_schema_meta WHERE singleton = 1",
             [],
             |row| row.get::<_, i64>(0),
         )
-        .optional();
-
-    let version = match existing {
+        .optional()
+    {
         Ok(value) => value,
         Err(error) if is_missing_table(&error) => None,
         Err(error) => return Err(error.into()),
@@ -577,111 +617,112 @@ fn migrate(connection: &Connection) -> Result<(), HarnessEvidenceError> {
     }
 
     connection.execute_batch(
-        "BEGIN IMMEDIATE;\n\
-         CREATE TABLE IF NOT EXISTS harness_schema_meta (\n\
-           singleton INTEGER PRIMARY KEY CHECK(singleton = 1),\n\
-           schema_version INTEGER NOT NULL\n\
-         );\n\
-         CREATE TABLE IF NOT EXISTS harness_execution_profiles (\n\
-           profile_id BLOB PRIMARY KEY NOT NULL,\n\
-           schema_version INTEGER NOT NULL,\n\
-           content_digest BLOB NOT NULL,\n\
-           semantic_bytes BLOB NOT NULL,\n\
-           benchmark_metadata_bytes BLOB NOT NULL\n\
-         );\n\
-         CREATE TABLE IF NOT EXISTS harness_hardware_profiles (\n\
-           hardware_profile_id BLOB PRIMARY KEY NOT NULL,\n\
-           observed_at_unix_ms INTEGER NOT NULL,\n\
-           content_digest BLOB NOT NULL,\n\
-           record_bytes BLOB NOT NULL\n\
-         );\n\
-         CREATE TABLE IF NOT EXISTS harness_profile_selections (\n\
-           selection_seq INTEGER PRIMARY KEY AUTOINCREMENT,\n\
-           session_id BLOB NOT NULL,\n\
-           request_attempt_id BLOB NOT NULL,\n\
-           profile_id BLOB NOT NULL,\n\
-           selected_at_unix_ms INTEGER NOT NULL,\n\
-           reason_bytes BLOB NOT NULL\n\
-         );\n\
-         CREATE TABLE IF NOT EXISTS harness_request_attempts (\n\
-           request_attempt_id BLOB PRIMARY KEY NOT NULL,\n\
-           request_series_id BLOB NOT NULL,\n\
-           session_id BLOB NOT NULL,\n\
-           initiator_principal_ref TEXT NOT NULL,\n\
-           execution_profile_id BLOB NOT NULL,\n\
-           request_digest BLOB NOT NULL,\n\
-           state INTEGER NOT NULL,\n\
-           prepared_at_unix_ms INTEGER NOT NULL,\n\
-           terminal_at_unix_ms INTEGER,\n\
-           backend_instance_ref TEXT,\n\
-           failure_class TEXT,\n\
-           accepted_output_digest BLOB,\n\
-           record_bytes BLOB NOT NULL\n\
-         );\n\
-         CREATE TABLE IF NOT EXISTS harness_model_events (\n\
-           request_attempt_id BLOB NOT NULL,\n\
-           sequence INTEGER NOT NULL,\n\
-           event_kind INTEGER NOT NULL,\n\
-           acceptance INTEGER NOT NULL,\n\
-           payload BLOB NOT NULL,\n\
-           canonical_evidence_ref TEXT,\n\
-           record_bytes BLOB NOT NULL,\n\
-           PRIMARY KEY(request_attempt_id, sequence)\n\
-         );\n\
-         CREATE TABLE IF NOT EXISTS harness_compaction_attempts (\n\
-           compaction_id BLOB PRIMARY KEY NOT NULL,\n\
-           session_id BLOB NOT NULL,\n\
-           state INTEGER NOT NULL,\n\
-           deterministic INTEGER NOT NULL,\n\
-           producing_request_attempt_id BLOB,\n\
-           started_at_unix_ms INTEGER NOT NULL,\n\
-           terminal_at_unix_ms INTEGER,\n\
-           failure_class TEXT,\n\
-           record_bytes BLOB NOT NULL\n\
-         );\n\
-         CREATE TABLE IF NOT EXISTS harness_compaction_artifacts (\n\
-           compaction_id BLOB PRIMARY KEY NOT NULL,\n\
-           deterministic INTEGER NOT NULL,\n\
-           producing_request_attempt_id BLOB,\n\
-           accepted_output_ref TEXT,\n\
-           artifact_digest BLOB NOT NULL,\n\
-           record_bytes BLOB NOT NULL\n\
-         );\n\
-         CREATE TABLE IF NOT EXISTS harness_benchmark_records (\n\
-           benchmark_id BLOB PRIMARY KEY NOT NULL,\n\
-           execution_profile_id BLOB NOT NULL,\n\
-           hardware_profile_id BLOB NOT NULL,\n\
-           workload_fixture_id TEXT NOT NULL,\n\
-           started_at_unix_ms INTEGER NOT NULL,\n\
-           finished_at_unix_ms INTEGER NOT NULL,\n\
-           record_bytes BLOB NOT NULL\n\
-         );\n\
-         CREATE TABLE IF NOT EXISTS harness_calibration_runs (\n\
-           calibration_id BLOB PRIMARY KEY NOT NULL,\n\
-           hardware_profile_id BLOB NOT NULL,\n\
-           backend_identity_ref TEXT NOT NULL,\n\
-           workload_fixture_id TEXT NOT NULL,\n\
-           started_at_unix_ms INTEGER NOT NULL,\n\
-           finished_at_unix_ms INTEGER,\n\
-           record_bytes BLOB NOT NULL\n\
-         );\n\
-         INSERT INTO harness_schema_meta(singleton, schema_version) VALUES (1, 1)\n\
-           ON CONFLICT(singleton) DO UPDATE SET schema_version = excluded.schema_version;\n\
-         COMMIT;",
+        r#"BEGIN IMMEDIATE;
+        CREATE TABLE IF NOT EXISTS harness_schema_meta (
+          singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+          schema_version INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS harness_execution_profiles (
+          profile_id BLOB PRIMARY KEY NOT NULL,
+          schema_version INTEGER NOT NULL,
+          content_digest BLOB NOT NULL,
+          semantic_bytes BLOB NOT NULL,
+          benchmark_metadata_bytes BLOB NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS harness_hardware_profiles (
+          hardware_profile_id BLOB PRIMARY KEY NOT NULL,
+          observed_at_unix_ms INTEGER NOT NULL,
+          content_digest BLOB NOT NULL,
+          record_bytes BLOB NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS harness_profile_selections (
+          selection_seq INTEGER PRIMARY KEY AUTOINCREMENT,
+          session_id BLOB NOT NULL,
+          request_attempt_id BLOB NOT NULL,
+          profile_id BLOB NOT NULL,
+          selected_at_unix_ms INTEGER NOT NULL,
+          reason_bytes BLOB NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS harness_request_attempts (
+          request_attempt_id BLOB PRIMARY KEY NOT NULL,
+          request_series_id BLOB NOT NULL,
+          session_id BLOB NOT NULL,
+          initiator_principal_ref TEXT NOT NULL,
+          execution_profile_id BLOB NOT NULL,
+          request_digest BLOB NOT NULL,
+          state INTEGER NOT NULL,
+          prepared_at_unix_ms INTEGER NOT NULL,
+          terminal_at_unix_ms INTEGER,
+          backend_instance_ref TEXT,
+          failure_class TEXT,
+          accepted_output_digest BLOB,
+          record_bytes BLOB NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS harness_model_events (
+          request_attempt_id BLOB NOT NULL,
+          sequence INTEGER NOT NULL,
+          event_kind INTEGER NOT NULL,
+          acceptance INTEGER NOT NULL,
+          payload BLOB NOT NULL,
+          canonical_evidence_ref TEXT,
+          record_bytes BLOB NOT NULL,
+          PRIMARY KEY(request_attempt_id, sequence)
+        );
+        CREATE TABLE IF NOT EXISTS harness_compaction_attempts (
+          compaction_id BLOB PRIMARY KEY NOT NULL,
+          session_id BLOB NOT NULL,
+          state INTEGER NOT NULL,
+          deterministic INTEGER NOT NULL,
+          producing_request_attempt_id BLOB,
+          started_at_unix_ms INTEGER NOT NULL,
+          terminal_at_unix_ms INTEGER,
+          failure_class TEXT,
+          record_bytes BLOB NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS harness_compaction_artifacts (
+          compaction_id BLOB PRIMARY KEY NOT NULL,
+          deterministic INTEGER NOT NULL,
+          producing_request_attempt_id BLOB,
+          accepted_output_ref TEXT,
+          artifact_digest BLOB NOT NULL,
+          record_bytes BLOB NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS harness_benchmark_records (
+          benchmark_id BLOB PRIMARY KEY NOT NULL,
+          execution_profile_id BLOB NOT NULL,
+          hardware_profile_id BLOB NOT NULL,
+          workload_fixture_id TEXT NOT NULL,
+          started_at_unix_ms INTEGER NOT NULL,
+          finished_at_unix_ms INTEGER NOT NULL,
+          record_bytes BLOB NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS harness_calibration_runs (
+          calibration_id BLOB PRIMARY KEY NOT NULL,
+          hardware_profile_id BLOB NOT NULL,
+          backend_identity_ref TEXT NOT NULL,
+          workload_fixture_id TEXT NOT NULL,
+          started_at_unix_ms INTEGER NOT NULL,
+          finished_at_unix_ms INTEGER,
+          record_bytes BLOB NOT NULL
+        );
+        INSERT INTO harness_schema_meta(singleton, schema_version) VALUES (1, 1)
+          ON CONFLICT(singleton) DO UPDATE SET schema_version = excluded.schema_version;
+        COMMIT;"#,
     )?;
     Ok(())
 }
 
 fn verify_required_tables(connection: &Connection) -> Result<(), HarnessEvidenceError> {
     for table in REQUIRED_HARNESS_TABLES {
-        let exists = connection
+        if connection
             .query_row(
                 "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = ?1 LIMIT 1",
                 params![table],
                 |row| row.get::<_, i64>(0),
             )
-            .optional()?;
-        if exists.is_none() {
+            .optional()?
+            .is_none()
+        {
             return Err(HarnessEvidenceError::InvalidRecord(
                 "required harness table missing",
             ));
@@ -696,9 +737,7 @@ fn read_attempt_identity(
 ) -> Result<Option<StoredAttemptIdentity>, HarnessEvidenceError> {
     let row = connection
         .query_row(
-            "SELECT request_series_id, request_attempt_id, session_id, initiator_principal_ref,\
-             execution_profile_id, request_digest, state\
-             FROM harness_request_attempts WHERE request_attempt_id = ?1",
+            "SELECT request_series_id, request_attempt_id, session_id, initiator_principal_ref, execution_profile_id, request_digest, state FROM harness_request_attempts WHERE request_attempt_id = ?1",
             params![id_blob(attempt_id.as_u128())],
             |row| {
                 Ok((
@@ -727,6 +766,23 @@ fn read_attempt_identity(
             .map_err(|_| HarnessEvidenceError::InvalidRecord("request digest width"))?,
         state: request_state_from_code(state)?,
     }))
+}
+
+fn selected_profile_id(
+    connection: &Connection,
+    attempt_id: RequestAttemptId,
+) -> Result<Option<ExecutionProfileId>, HarnessEvidenceError> {
+    let value = connection
+        .query_row(
+            "SELECT profile_id FROM harness_profile_selections WHERE request_attempt_id = ?1 ORDER BY selection_seq DESC LIMIT 1",
+            params![id_blob(attempt_id.as_u128())],
+            |row| row.get::<_, Vec<u8>>(0),
+        )
+        .optional()?;
+    value
+        .map(blob_to_u128)
+        .transpose()
+        .map(|id| id.map(ExecutionProfileId::from_u128))
 }
 
 fn is_missing_table(error: &rusqlite::Error) -> bool {
@@ -790,9 +846,8 @@ fn request_state_from_code(code: i64) -> Result<RequestAttemptState, HarnessEvid
     }
 }
 
-fn model_event_kind_code(event: &ModelEvent) -> i64 {
-    use golam_core::harness_state::ModelEventKind;
-    match event.kind {
+fn model_event_kind_code(kind: ModelEventKind) -> i64 {
+    match kind {
         ModelEventKind::TextDelta => 0,
         ModelEventKind::ReasoningDelta => 1,
         ModelEventKind::ToolCallFragment => 2,
@@ -801,6 +856,20 @@ fn model_event_kind_code(event: &ModelEvent) -> i64 {
         ModelEventKind::Stop => 5,
         ModelEventKind::BackendWarning => 6,
         ModelEventKind::BackendError => 7,
+    }
+}
+
+fn model_event_kind_from_code(code: i64) -> Result<ModelEventKind, HarnessEvidenceError> {
+    match code {
+        0 => Ok(ModelEventKind::TextDelta),
+        1 => Ok(ModelEventKind::ReasoningDelta),
+        2 => Ok(ModelEventKind::ToolCallFragment),
+        3 => Ok(ModelEventKind::ToolCallComplete),
+        4 => Ok(ModelEventKind::Usage),
+        5 => Ok(ModelEventKind::Stop),
+        6 => Ok(ModelEventKind::BackendWarning),
+        7 => Ok(ModelEventKind::BackendError),
+        _ => Err(HarnessEvidenceError::InvalidRecord("model event kind code")),
     }
 }
 
@@ -832,7 +901,8 @@ fn compaction_state_code(attempt: &CompactionAttempt) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use golam_core::harness_state::{ModelEventKind, RequestAttemptState};
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn prepared_attempt() -> RequestAttempt {
         RequestAttempt {
@@ -851,6 +921,28 @@ mod tests {
         }
     }
 
+    fn accepted_event(attempt_id: RequestAttemptId, sequence: u64, payload: &[u8]) -> ModelEvent {
+        ModelEvent {
+            request_attempt_id: attempt_id,
+            sequence,
+            kind: ModelEventKind::TextDelta,
+            payload: payload.to_vec(),
+            acceptance: ModelEventAcceptance::Accepted,
+            canonical_evidence_ref: Some(format!("event:model:{sequence}")),
+        }
+    }
+
+    fn temp_db_path(label: &str) -> std::path::PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "golam-spec004-{label}-{}-{nonce}.sqlite3",
+            std::process::id()
+        ))
+    }
+
     #[test]
     fn schema_is_forward_only_and_complete() {
         let store = HarnessEvidenceStore::open_in_memory().unwrap();
@@ -864,22 +956,31 @@ mod tests {
     }
 
     #[test]
+    fn future_schema_is_rejected_without_rewrite() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE harness_schema_meta (singleton INTEGER PRIMARY KEY, schema_version INTEGER NOT NULL); INSERT INTO harness_schema_meta VALUES (1, 2);",
+            )
+            .unwrap();
+        assert!(matches!(
+            HarnessEvidenceStore::initialize(connection),
+            Err(HarnessEvidenceError::FutureSchema {
+                found: 2,
+                supported: 1
+            })
+        ));
+    }
+
+    #[test]
     fn prepared_attempt_must_exist_before_stream_event() {
         let mut store = HarnessEvidenceStore::open_in_memory().unwrap();
-        let event = ModelEvent {
-            request_attempt_id: RequestAttemptId::from_u128(2),
-            sequence: 0,
-            kind: ModelEventKind::TextDelta,
-            payload: b"hello".to_vec(),
-            acceptance: ModelEventAcceptance::Accepted,
-            canonical_evidence_ref: Some("event:model:1".into()),
-        };
+        let attempt = prepared_attempt();
+        let event = accepted_event(attempt.request_attempt_id, 0, b"hello");
         assert!(matches!(
             store.append_model_event(&event, b"event-record"),
             Err(HarnessEvidenceError::MissingAttempt(_))
         ));
-
-        let attempt = prepared_attempt();
         store
             .persist_prepared_attempt(SessionId(9), &attempt, b"prepared")
             .unwrap();
@@ -893,9 +994,18 @@ mod tests {
     }
 
     #[test]
-    fn immutable_attempt_identity_cannot_change_with_state() {
+    fn immutable_attempt_identity_and_profile_cannot_change_with_state() {
         let mut store = HarnessEvidenceStore::open_in_memory().unwrap();
         let mut attempt = prepared_attempt();
+        store
+            .record_profile_selection(ProfileSelectionEvidence {
+                session_id: SessionId(9),
+                request_attempt_id: attempt.request_attempt_id,
+                profile_id: attempt.execution_profile_id,
+                selected_at_unix_ms: 9,
+                reason_bytes: b"fixture pin",
+            })
+            .unwrap();
         store
             .persist_prepared_attempt(SessionId(9), &attempt, b"prepared")
             .unwrap();
@@ -904,10 +1014,28 @@ mod tests {
         store
             .persist_attempt_state(SessionId(9), &attempt, b"dispatched")
             .unwrap();
-
         attempt.execution_profile_id = ExecutionProfileId::from_u128(999);
         assert!(matches!(
             store.persist_attempt_state(SessionId(9), &attempt, b"invalid"),
+            Err(HarnessEvidenceError::ImmutableAttemptMismatch(_))
+        ));
+    }
+
+    #[test]
+    fn prepared_attempt_rejects_mismatched_selected_profile() {
+        let mut store = HarnessEvidenceStore::open_in_memory().unwrap();
+        let attempt = prepared_attempt();
+        store
+            .record_profile_selection(ProfileSelectionEvidence {
+                session_id: SessionId(9),
+                request_attempt_id: attempt.request_attempt_id,
+                profile_id: ExecutionProfileId::from_u128(999),
+                selected_at_unix_ms: 9,
+                reason_bytes: b"stale selection",
+            })
+            .unwrap();
+        assert!(matches!(
+            store.persist_prepared_attempt(SessionId(9), &attempt, b"prepared"),
             Err(HarnessEvidenceError::ImmutableAttemptMismatch(_))
         ));
     }
@@ -919,18 +1047,50 @@ mod tests {
         store
             .persist_prepared_attempt(SessionId(9), &attempt, b"prepared")
             .unwrap();
-        let event = ModelEvent {
-            request_attempt_id: attempt.request_attempt_id,
-            sequence: 0,
-            kind: ModelEventKind::TextDelta,
-            payload: b"hello".to_vec(),
-            acceptance: ModelEventAcceptance::Accepted,
-            canonical_evidence_ref: Some("event:model:1".into()),
-        };
+        let event = accepted_event(attempt.request_attempt_id, 0, b"hello");
         store.append_model_event(&event, b"one").unwrap();
         assert!(matches!(
             store.append_model_event(&event, b"two"),
             Err(HarnessEvidenceError::SequenceConflict { .. })
         ));
+    }
+
+    #[test]
+    fn accepted_partial_output_survives_reopen_and_replays_in_order() {
+        let path = temp_db_path("partial-reopen");
+        let attempt = prepared_attempt();
+        {
+            let mut store = HarnessEvidenceStore::open(&path).unwrap();
+            store
+                .persist_prepared_attempt(SessionId(9), &attempt, b"prepared")
+                .unwrap();
+            store
+                .append_model_event(
+                    &accepted_event(attempt.request_attempt_id, 0, b"hel"),
+                    b"event-0",
+                )
+                .unwrap();
+            store
+                .append_model_event(
+                    &accepted_event(attempt.request_attempt_id, 1, b"lo"),
+                    b"event-1",
+                )
+                .unwrap();
+        }
+        let reopened = HarnessEvidenceStore::open(&path).unwrap();
+        let identity = reopened
+            .attempt_identity(attempt.request_attempt_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(identity.state, RequestAttemptState::Prepared);
+        assert_eq!(identity.execution_profile_id, attempt.execution_profile_id);
+        let events = reopened.accepted_events(attempt.request_attempt_id).unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].sequence, 0);
+        assert_eq!(events[0].payload, b"hel");
+        assert_eq!(events[1].sequence, 1);
+        assert_eq!(events[1].payload, b"lo");
+        drop(reopened);
+        let _ = fs::remove_file(path);
     }
 }
