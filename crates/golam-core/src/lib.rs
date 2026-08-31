@@ -8,6 +8,7 @@ pub mod model_backend;
 pub mod paths;
 pub mod runtime_home;
 pub mod taint;
+pub mod tool_call;
 
 use core::fmt;
 
