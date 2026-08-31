@@ -654,10 +654,14 @@ fn sha256(input: &[u8]) -> [u8; 32] {
         0x5be0cd19,
     ];
 
-    for chunk in padded.chunks_exact(64) {
+    let (chunks, remainder) = padded.as_chunks::<64>();
+    debug_assert!(remainder.is_empty());
+    for chunk in chunks {
         let mut schedule = [0_u32; 64];
-        for (index, word) in chunk.chunks_exact(4).enumerate() {
-            schedule[index] = u32::from_be_bytes([word[0], word[1], word[2], word[3]]);
+        let (words, word_remainder) = chunk.as_slice().as_chunks::<4>();
+        debug_assert!(word_remainder.is_empty());
+        for (index, word) in words.iter().enumerate() {
+            schedule[index] = u32::from_be_bytes(*word);
         }
         let mut index = 16;
         while index < 64 {
