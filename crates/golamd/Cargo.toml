@@ -9,7 +9,6 @@ golam-core = { path = "../golam-core" }
 golam-effects = { path = "../golam-effects" }
 golam-ipc = { path = "../golam-ipc" }
 golam-kernel = { path = "../golam-kernel" }
-golam-ledger = { path = "../golam-ledger" }
 
 [lints]
 workspace = true
