@@ -81,6 +81,14 @@
 - [ ] T004-007 planning PR Ready + expected-head guarded merge.
 - [ ] T004-008 post-merge canonical-main CI success.
 
+### Non-self-invalidating closeout rule
+
+T004-004 through T004-008 are external/lifecycle facts whose proof is the exact PR head, GitHub Actions run, substantive reviewer result, guarded merge result and post-merge canonical-main run. After the final planning content head is frozen, **do not mutate the branch solely to tick these checkboxes**, because that would invalidate the exact-head CI/review evidence being recorded.
+
+Their authoritative completion state is recorded in PR #11 conversation/body plus GitHub merge/Actions evidence. The unchecked source boxes remain prospective mirrors of external gates, not evidence that a proven gate failed.
+
+Any content repair still requires a branch mutation and therefore legitimately resets exact-head CI/review.
+
 ## Decision
 
 `IMPLEMENTATION_READY_BY_DESIGN=YES`
