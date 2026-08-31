@@ -193,4 +193,4 @@ After A004-001, A004-011 and A004-012 repairs:
 
 `SPEC_004_PLANNING_CROSS_ARTIFACT_CONVERGENCE=MATERIAL_FINDINGS_NONE_AFTER_REPAIRS`
 
-Remaining gates are operational rather than design findings: exact-head CI, substantive independent external review, guarded merge and post-merge canonical-main CI.
+Remaining gates are operational rather than design findings: exact-head CI, substantive independent external review, T004-006 material-finding reconciliation, guarded merge and post-merge canonical-main CI. T004-006 is satisfied only after the fresh post-CI review has no unresolved material findings and every material finding from that review has been reconciled without waiver.
