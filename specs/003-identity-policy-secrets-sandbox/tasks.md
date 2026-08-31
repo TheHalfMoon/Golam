@@ -100,7 +100,7 @@ Legend:
 - [x] **T003-093** Run deterministic secret-canary leakage suite, including unknown-format values through the explicit secret-entry boundary. Existing T003-056 canary coverage remained in the full workspace suite and passed on all three platforms in CI #660 at `4430ff95ec81c1f3e0c9683de2043c3b8803fe9e`; final closeout requires fresh exact-head CI after T003-095 mutation.
 - [x] **T003-094** Run external strict-local no-egress observation across supported CI platforms over the complete Golam-managed process tree, or an equivalent sinkholed/network boundary that independently captures descendant egress. CI #660 completed the platform-applicable external strict-local observer successfully on Windows/macOS/Ubuntu at `4430ff95ec81c1f3e0c9683de2043c3b8803fe9e`.
 - [x] **T003-095** Re-run Spec Kit convergence and repair material constitution/spec/plan/contracts/tasks divergence. Re-read constitution v1.2.0, current `AGENTS.md`, spec, plan, all six Spec 003 contracts, readiness, tasks, implementation evidence and live PR state. No normative constitution/contract repair was required; stale live-state records were reconciled. Evidence: `implementation/t003-095-convergence.md`.
-- [ ] **T003-096** Obtain fresh authorized Qodo review only after exact-head CI; repair every material finding and repeat qualification after mutation.
+- [ ] **T003-096** Obtain a fresh substantive independent external semantic review only after fresh exact-head CI from an available repository-integrated reviewer other than Qodo or Codex; repair every material finding and repeat qualification after mutation. Status-only, summary-only, billing/rate-limit/unavailable, stale-head and self-review outputs do not satisfy this gate. Review-source rationale: `implementation/t003-096-review-source-amendment.md`.
 - [ ] **T003-097** Prepare exact-head closeout evidence; no Ready/merge/Spec 004 claim without repository-authorized lifecycle evidence.
 - [ ] **T003-098** After merge, require canonical `main` post-merge CI success before `SPEC_003_CLOSED_CANONICAL=YES` or starting Spec 004.
 
@@ -134,7 +134,8 @@ T003_094=PASS_PRE_CONVERGENCE
 PHASE_J_PRE_CONVERGENCE_HEAD=4430ff95ec81c1f3e0c9683de2043c3b8803fe9e
 PHASE_J_PRE_CONVERGENCE_CI_RUN=33357835321
 T003_095=PASS
-FINAL_EXACT_HEAD_CI=PENDING_AFTER_CONVERGENCE
+REVIEW_SOURCE_POLICY=INDEPENDENT_EXTERNAL_NON_QODO_NON_CODEX
+FINAL_EXACT_HEAD_CI=PENDING_AFTER_REVIEW_SOURCE_AMENDMENT
 NEXT_TASK=T003-096_AFTER_FRESH_CI
 CEDAR_POLICY_ADMITTED_EXACT=4.12.0
 SECRET_CRYPTO_AND_OS_KEY_PROTECTORS_QUALIFIED=YES

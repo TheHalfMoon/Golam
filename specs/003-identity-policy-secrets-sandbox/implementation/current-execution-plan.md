@@ -3,11 +3,11 @@
 **Status**: IMPLEMENTATION_ACTIVE — PHASE_I_COMPLETE — PHASE_J_CLOSEOUT_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current gate**: fresh post-convergence exact-head CI before `T003-096`
+**Current gate**: fresh exact-head CI after the founder review-source amendment before `T003-096`
 
 ## Authority
 
-Live GitHub truth, the constitution, canonical Spec 003 package, `tasks.md`, and exact implementation evidence govern this companion. No force-push, rebase, destructive history rewrite, waiver, CI weakening, review substitution, or closeout claim without exact evidence.
+Live GitHub truth, the constitution, canonical Spec 003 package, `tasks.md`, and exact implementation evidence govern this companion. No force-push, rebase, destructive history rewrite, waiver, CI weakening, unrecorded review substitution, or closeout claim without exact evidence.
 
 ## Completed implementation phases
 
@@ -61,11 +61,23 @@ Result:
 
 Evidence: `t003-095-convergence.md`.
 
+### Founder review-source amendment — 2026-08-31
+
+The founder explicitly directed: `skip qodo use others` after Qodo remained externally billing-blocked. Constitution v1.2.0 requires exact reproducible verification but does not bind Spec 003 to a named review vendor. This amendment therefore changes only the task-specific external-review source policy; it is not a waiver and does not remove the external semantic review gate.
+
+- Qodo is excluded from this Spec 003 closeout sequence by the latest founder direction.
+- Codex remains excluded.
+- T003-096 requires a fresh substantive independent external semantic review on the exact CI-qualified head from an available repository-integrated reviewer such as CodeRabbit, Cubic, Greptile, or an equivalent independent service.
+- A summary-only, status-only, rate-limited, billing-blocked, unavailable, stale-head or self-authored result does not satisfy T003-096.
+- Any material finding requires repair, fresh exact-head three-platform CI, and a fresh substantive independent external review.
+
+Evidence: `t003-096-review-source-amendment.md`.
+
 ## Remaining ordered gates
 
-1. Obtain fresh full Windows/macOS/Ubuntu CI on the exact post-convergence head. No prior run transfers as final closeout evidence after this mutation.
-2. **T003-096**: only after that CI succeeds, request fresh authorized Qodo review on the exact same head. Qodo is the required external review source; CodeRabbit/self-review is not a substitute.
-3. If Qodo finds any material issue, repair it, then repeat fresh exact-head CI and fresh Qodo review.
+1. Obtain fresh full Windows/macOS/Ubuntu CI on the exact post-amendment head. No earlier run transfers as final closeout evidence after this mutation.
+2. **T003-096**: only after that CI succeeds, obtain a fresh substantive independent external semantic review on the exact same head from an available repository-integrated reviewer other than Qodo or Codex. CodeRabbit, Cubic, Greptile, or an equivalent reviewer is acceptable only if it produces an actual substantive exact-head result.
+3. If the reviewer finds any material issue, repair it, then repeat fresh exact-head CI and fresh external review.
 4. **T003-097**: prepare exact-head closeout/lifecycle evidence, move PR Ready only when repository lifecycle requirements are satisfied, and merge with exact-head guard.
 5. **T003-098**: after merge, require canonical `main` post-merge CI SUCCESS before `SPEC_003_CLOSED_CANONICAL=YES` or starting Spec 004.
 
@@ -77,7 +89,8 @@ PHASE_J_CLOSEOUT_ACTIVE=YES
 PHASE_J_PRE_CONVERGENCE_HEAD=4430ff95ec81c1f3e0c9683de2043c3b8803fe9e
 PHASE_J_PRE_CONVERGENCE_CI_RUN=33357835321
 T003_095=PASS
-FINAL_EXACT_HEAD_CI=PENDING_AFTER_CONVERGENCE
+REVIEW_SOURCE_POLICY=INDEPENDENT_EXTERNAL_NON_QODO_NON_CODEX
+FINAL_EXACT_HEAD_CI=PENDING_AFTER_REVIEW_SOURCE_AMENDMENT
 NEXT_TASK=T003-096_AFTER_FRESH_CI
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO
