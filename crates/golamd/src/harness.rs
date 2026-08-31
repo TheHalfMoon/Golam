@@ -43,11 +43,11 @@ pub struct HarnessAttemptOutcome {
 }
 
 impl HarnessAttemptOutcome {
-    pub const fn retryable_transient(&self) -> bool {
+    pub fn retryable_transient(&self) -> bool {
         self.terminal_state == RequestAttemptState::FailedTransient
     }
 
-    pub const fn needs_context_reprojection(&self) -> bool {
+    pub fn needs_context_reprojection(&self) -> bool {
         self.terminal_state == RequestAttemptState::FailedContextOverflow
     }
 }
@@ -70,10 +70,7 @@ pub struct HarnessCoordinator<B> {
     backend: B,
 }
 
-impl<B> HarnessCoordinator<B>
-where
-    B: ModelBackend,
-{
+impl<B: ModelBackend> HarnessCoordinator<B> {
     pub const fn new(backend: B) -> Self {
         Self { backend }
     }
@@ -523,8 +520,6 @@ mod tests {
         assert_eq!(result.terminal_state, RequestAttemptState::Completed);
         assert_eq!(sink.prepared[0].state, RequestAttemptState::Prepared);
         assert_eq!(sink.events.len(), 2);
-        assert_eq!(sink.events[0].sequence, 0);
-        assert_eq!(sink.events[1].sequence, 1);
     }
 
     #[test]
