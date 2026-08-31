@@ -14,10 +14,10 @@
 
 ## Phase A — Planning closeout
 
-- [ ] **T004-001** Complete specify/clarify/research/plan/data-model/contracts/quickstart/checklist/tasks/analyze artifacts with zero unresolved material inconsistency.
-- [ ] **T004-002** Update branch `AGENTS.md` to the Spec 004 planning authority/read order without claiming canonical closure before merge.
-- [ ] **T004-003** Open a Draft planning PR from `spec/004-harness-local-intelligence` to current canonical `main`.
-- [ ] **T004-004** Obtain exact-head Windows/macOS/Ubuntu CI success for the planning head.
+- [x] **T004-001** Complete specify/clarify/research/plan/data-model/contracts/quickstart/checklist/tasks/analyze artifacts with zero unresolved material inconsistency.
+- [x] **T004-002** Update branch `AGENTS.md` to the Spec 004 planning authority/read order without claiming canonical closure before merge.
+- [x] **T004-003** Open a Draft planning PR from `spec/004-harness-local-intelligence` to current canonical `main`.
+- [ ] **T004-004** Obtain exact-head Windows/macOS/Ubuntu CI success for the final planning head.
 - [ ] **T004-005** Obtain the required substantive independent external semantic review under current repository review policy after exact-head CI.
 - [ ] **T004-006** Reconcile every material planning finding without waiver; after any mutation rerun exact-head CI and fresh review.
 - [ ] **T004-007** Mark planning Ready only when all planning gates pass, merge with expected-head protection and no rebase, then verify canonical `main` moved to the returned merge SHA.
@@ -31,10 +31,10 @@ Depends on T004-008.
 - [ ] **T004-011** Create `impl/004-harness-local-intelligence` from the exact canonical planning-closeout main SHA.
 - [ ] **T004-012** Map existing seven-crate ownership and prove no new crate is needed for the first bounded slice; record any justified split before creating it.
 - [ ] **T004-013** Implement pure Golam-owned core types for `ExecutionProfileId`, `HardwareProfileId`, `RequestSeriesId`, `RequestAttemptId`, `CompactionId` and `ToolCallCandidateId` with bounded validation.
-- [ ] **T004-014** Implement immutable/versioned `ExecutionProfile` representation carrying every frozen Spec 001 field and stable content identity.
-- [ ] **T004-015** Add profile validation proving material field changes alter identity and invalid profiles fail closed.
+- [ ] **T004-014** Implement immutable/versioned `ExecutionProfile` representation carrying every frozen Spec 001 field and stable execution-semantic content identity; benchmark backlinks are non-semantic evidence metadata.
+- [ ] **T004-015** Add profile validation proving material execution field changes alter identity and invalid profiles fail closed.
 - [ ] **T004-016** Implement bounded `HardwareProfile` and calibration record types without broad device fingerprinting fields.
-- [ ] **T004-017** Implement `ModelRequest`, normalized `ModelEvent`, `RequestAttempt` states and terminal reason classes.
+- [ ] **T004-017** Implement `ModelRequest`, normalized `ModelEvent`, `RequestAttempt` states, authenticated initiating-principal provenance and terminal reason classes.
 - [ ] **T004-018** Implement `ToolCallCandidate` and bounded parse/validation result classes.
 - [ ] **T004-019** Implement `ContextProjection`, `CompactionAttempt`, `CompactionArtifact` and `BenchmarkRecord` data types.
 - [ ] **T004-020** Add property/unit tests for identifier/profile digest stability, size bounds, invalid enum/state transitions and serialization round trips where durable encoding exists.
@@ -45,7 +45,7 @@ Depends on T004-013..020.
 
 - [ ] **T004-025** Define/implement forward-only ledger/operational schema additions for profile selection, request attempts, accepted model-visible evidence, compaction lifecycle and benchmark/calibration references using existing storage patterns.
 - [ ] **T004-026** Prove migrations are crash-safe, preserve existing Specs 002–003 state and reject unsupported future/inconsistent schema.
-- [ ] **T004-027** Persist request-attempt PREPARED before backend dispatch and explicit terminal evidence after accepted stream processing.
+- [ ] **T004-027** Persist request-attempt PREPARED with initiator attribution before backend dispatch and explicit terminal evidence after accepted stream processing.
 - [ ] **T004-028** Persist accepted streamed prefixes with attempt/source identity so interruption cannot erase user-visible/model-visible evidence.
 - [ ] **T004-029** Implement profile-switch canonical evidence; an in-flight attempt cannot silently change profile.
 - [ ] **T004-030** Implement replay/projection support proving model-visible request history derives from canonical evidence and not from an independent mutable transcript.
