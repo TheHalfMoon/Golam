@@ -8,9 +8,9 @@ All IDs are opaque Golam-owned identifiers. A model/provider string is never use
 
 ### `ExecutionProfileId`
 
-Stable identity for one immutable/versioned execution profile definition.
+Stable identity for one immutable/versioned execution-semantic profile definition.
 
-Material profile changes MUST create a new identity.
+Material execution-semantic profile changes MUST create a new identity. Non-semantic evidence backlinks such as the list of benchmark records do not change the execution identity.
 
 ### `HardwareProfileId`
 
@@ -72,10 +72,11 @@ content_digest
 ```
 
 Invariants:
-- `profile_id` and `content_digest` bind the complete material definition;
+- `profile_id` and `content_digest` bind the complete execution-semantic definition;
+- `benchmark_refs[]` are append-only/rebuildable evidence backlinks retained to satisfy the frozen Spec 001 contract, but they are excluded from execution-semantic identity to avoid a benchmark/profile circular reference;
 - strict-local selection requires `locality=LOCAL` and compatible network constraints;
 - fallback targets must remain inside the allowed privacy/network class;
-- benchmark refs may point to evidence but do not alter the profile definition;
+- benchmark refs may point to evidence but do not alter how the profile executes;
 - a backend/model auto-detection result cannot silently overwrite explicit profile identity.
 
 ## `BackendIdentity`
@@ -146,6 +147,7 @@ Calibration never changes privacy/locality policy itself.
 ```text
 request_series_id
 request_attempt_id
+initiator_principal_ref
 session_id
 turn_ref
 execution_profile_id
@@ -158,6 +160,8 @@ time_budget
 request_digest
 ```
 
+`initiator_principal_ref` points to authenticated canonical identity/turn evidence for attribution. It is not a capability token and is not automatically rendered into model-visible content.
+
 The request contains no authority-bearing capability/approval material that a backend could reinterpret as permission.
 
 ## `RequestAttempt`
@@ -166,6 +170,7 @@ The request contains no authority-bearing capability/approval material that a ba
 request_series_id
 request_attempt_id
 attempt_index
+initiator_principal_ref
 execution_profile_id
 request_digest
 started_at
@@ -194,7 +199,7 @@ FAILED_DETERMINISTIC
 FAILED_CONTEXT_OVERFLOW
 ```
 
-Terminal states are append-only evidence. A retry creates a new `RequestAttempt`.
+Terminal states are append-only evidence. A retry creates a new `RequestAttempt` and preserves/rebinds initiating-principal attribution.
 
 ## `ModelEvent`
 
@@ -350,7 +355,8 @@ raw_evidence_refs[]
 `HarnessMetrics` may include candidate-validity rate, retries by class, cancellation correctness/latency, compaction outcomes, deterministic fixture success and protected-effect duplicate count.
 
 Invariants:
-- no benchmark result can be reused across a materially changed profile under the same identity;
+- no benchmark result can be reused across a materially changed execution-semantic profile under the same identity;
+- adding a reverse benchmark backlink to a profile does not change the profile's execution-semantic identity;
 - real-model stochastic evidence is distinguished from scripted deterministic harness evidence;
 - benchmark scores are evidence, not authority or Task verification by themselves.
 
@@ -358,13 +364,14 @@ Invariants:
 
 Canonical/durable:
 - profile definitions and selections;
-- request series/attempt lifecycle;
+- request series/attempt lifecycle and authenticated initiator attribution;
 - accepted model-visible evidence;
 - normalized candidate evidence needed for replay/explanation;
 - compaction transaction/artifact metadata;
 - calibration/benchmark records and evidence references.
 
 Rebuildable/transient:
+- reverse benchmark backlink indexes/projections;
 - model process handles;
 - active network connections;
 - live stream buffers before acceptance;
@@ -375,8 +382,9 @@ Rebuildable/transient:
 
 ## Security classification
 
-No structure in this data model is authority-bearing merely because it names a model, tool, device or route. Existing Spec 003 protected authority state remains separate.
+No structure in this data model is authority-bearing merely because it names a model, tool, device, route or initiating principal. Existing Spec 003 protected authority state remains separate.
 
 `MODEL_STATE != AUTHORITY_STATE`
 `PROFILE_COMPATIBILITY != PERMISSION`
+`PRINCIPAL_ATTRIBUTION != CAPABILITY_TOKEN`
 `BENCHMARK_SCORE != RELEASE_OR_EFFECT_AUTHORITY`
