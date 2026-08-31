@@ -11,8 +11,12 @@ pub enum HarnessIdParseError {
 impl fmt::Display for HarnessIdParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidLength => f.write_str("harness identifier must be exactly 32 hexadecimal characters"),
-            Self::InvalidHex => f.write_str("harness identifier contains non-hexadecimal characters"),
+            Self::InvalidLength => {
+                f.write_str("harness identifier must be exactly 32 hexadecimal characters")
+            }
+            Self::InvalidHex => {
+                f.write_str("harness identifier contains non-hexadecimal characters")
+            }
         }
     }
 }
@@ -47,8 +51,8 @@ macro_rules! opaque_harness_id {
                 if value.len() != CANONICAL_ID_HEX_LEN {
                     return Err(HarnessIdParseError::InvalidLength);
                 }
-                let parsed = u128::from_str_radix(value, 16)
-                    .map_err(|_| HarnessIdParseError::InvalidHex)?;
+                let parsed =
+                    u128::from_str_radix(value, 16).map_err(|_| HarnessIdParseError::InvalidHex)?;
                 Ok(Self(parsed))
             }
         }
