@@ -72,22 +72,28 @@
 - [x] Mandatory changed-destination egress reauthorization tests defined.
 - [x] Strict-local external no-egress gate covers all managed descendants/process-tree or equivalent sinkholed boundary.
 - [x] Sandbox unsupported/enforcement gates defined.
-- [x] Windows/macOS/Linux exact-head CI and post-CI Qodo gates defined.
+- [x] Windows/macOS/Linux exact-head CI and post-CI substantive independent external semantic review gates defined.
 
-## Qodo repair reconciliation
+## Historical Qodo repair reconciliation
 
-- [x] Finding 1 accepted: optional destination revalidation was too weak; changed effective destinations require mandatory reauthorization or deny.
-- [x] Finding 2 accepted: daemon-PID-only locality observation is insufficient once managed child execution exists; observer upgrade is a predecessor gate to network-capable child launch.
-- [x] Finding 3 accepted: recognized-format-only secret ingestion was too weak; explicit user-designated secret entry treats the whole value as secret independent of detection.
+- [x] Planning finding 1 accepted: optional destination revalidation was too weak; changed effective destinations require mandatory reauthorization or deny.
+- [x] Planning finding 2 accepted: daemon-PID-only locality observation is insufficient once managed child execution exists; observer upgrade is a predecessor gate to network-capable child launch.
+- [x] Planning finding 3 accepted: recognized-format-only secret ingestion was too weak; explicit user-designated secret entry treats the whole value as secret independent of detection.
 
 ## Planning lifecycle — closed canonical
 
 - [x] Exact-head CI succeeded on the repaired final planning candidate.
-- [x] Fresh authorized Qodo review after repaired exact-head CI reported zero unresolved material findings.
+- [x] Fresh authorized Qodo review after repaired exact-head CI reported zero unresolved material findings for the historical planning PR #4 sequence.
 - [x] Planning PR #4 was merged to canonical `main`.
 - [x] Exact post-merge `main@82de7084384009ff3a00522f4e0aef09bf549529` was reread and post-merge CI #255 succeeded before implementation branch creation.
 
-The checklist above remains the planning/readiness record. Implementation-time dependency admission and task qualification are recorded under `implementation/` and `tasks.md`; the implementation PR still requires its own final exact-head CI, post-CI Qodo review, lifecycle evidence and post-merge main CI.
+## Implementation closeout state
+
+The checklist above remains the planning/readiness record. Implementation-time dependency admission and task qualification are recorded under `implementation/` and `tasks.md`.
+
+For the implementation closeout, founder direction dated 2026-08-31 excludes Qodo from the active Spec 003 review path and keeps Codex excluded. T003-096 requires a substantive independent repository-integrated external semantic review on the exact CI-qualified head.
+
+Exact reviewed head `5ce152a8a3370b3927eb7b9eeaed838a3e0c7dc6` passed CI #662 / run `33395230450` on Windows/macOS/Ubuntu. The subsequent substantive CodeRabbit review found one material governance-state inconsistency in this checklist, `tasks.md`, and `implementation/current-execution-plan.md`, and found no additional material product correctness/security defect. This repair reconciles those repository-owned records. Because the repair itself moves the branch, fresh exact-head CI and a fresh substantive external review are required before T003-097.
 
 ```text
 SPEC_002_CLOSED_CANONICAL=YES
@@ -103,7 +109,15 @@ CEDAR_POLICY_ADMITTED_EXACT=4.12.0
 WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED
 REAL_SECRETS_USED=NO
 SPEC_003_IMPLEMENTATION_AUTHORIZED=YES
-IMPLEMENTATION_FINAL_EXACT_HEAD_CI=PENDING_AFTER_T003_095
-IMPLEMENTATION_FINAL_QODO=PENDING_AFTER_EXACT_HEAD_CI
+IMPLEMENTATION_REVIEW_SOURCE_POLICY=INDEPENDENT_EXTERNAL_NON_QODO_NON_CODEX
+IMPLEMENTATION_T003_096_REVIEWED_HEAD=5ce152a8a3370b3927eb7b9eeaed838a3e0c7dc6
+IMPLEMENTATION_T003_096_REVIEWED_HEAD_CI_RUN=33395230450
+IMPLEMENTATION_T003_096_REVIEWED_HEAD_CI=PASS
+IMPLEMENTATION_T003_096_REVIEW_RESULT=MATERIAL_GOVERNANCE_FINDING_REPAIR_REQUIRED
+IMPLEMENTATION_T003_096_PRODUCT_SECURITY_FINDINGS=NONE_ADDITIONAL
+IMPLEMENTATION_T003_096_REPAIR=APPLIED_FORWARD_ONLY
+IMPLEMENTATION_FINAL_EXACT_HEAD_CI=PENDING_AFTER_T003_096_REPAIR
+IMPLEMENTATION_FINAL_EXTERNAL_REVIEW=PENDING_AFTER_FRESH_EXACT_HEAD_CI
 CODEX_REVIEW_GATE=EXCLUDED_BY_FOUNDER_DIRECTION
+QODO_ACTIVE_IMPLEMENTATION_REVIEW_GATE=EXCLUDED_BY_FOUNDER_DIRECTION
 ```

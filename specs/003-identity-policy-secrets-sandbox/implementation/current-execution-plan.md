@@ -3,7 +3,7 @@
 **Status**: IMPLEMENTATION_ACTIVE — PHASE_I_COMPLETE — PHASE_J_CLOSEOUT_ACTIVE  
 **Canonical base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`  
 **Implementation branch**: `impl/003-identity-policy-secrets-sandbox`  
-**Current gate**: fresh exact-head CI after the founder review-source amendment before `T003-096`
+**Current gate**: fresh exact-head CI after the T003-096 governance-record repair, then fresh substantive independent external review
 
 ## Authority
 
@@ -73,12 +73,20 @@ The founder explicitly directed: `skip qodo use others` after Qodo remained exte
 
 Evidence: `t003-096-review-source-amendment.md`.
 
+### T003-096 review cycle — reviewed head and repair
+
+Exact head `5ce152a8a3370b3927eb7b9eeaed838a3e0c7dc6` completed CI #662 / run `33395230450` SUCCESS on Windows/macOS/Ubuntu. A fresh substantive CodeRabbit review was then requested against that unchanged exact head.
+
+The substantive review reported one material closeout-governance finding and no additional material product correctness/security defect. The finding was stale live execution state in this file, `tasks.md`, and `checklists/implementation-readiness.md`: those records still described final CI as pending and retained stale Qodo-era wording despite CI #662 and the founder review-source amendment.
+
+This repair updates only repository-owned governance/execution records. It changes no product code, workflow, dependency, schema, test, authority, secret, taint, egress, or sandbox semantics. Because this repair mutates the branch, CI #662 and that CodeRabbit result remain valid evidence for the reviewed head but do not transfer as final qualification for the repaired head.
+
 ## Remaining ordered gates
 
-1. Obtain fresh full Windows/macOS/Ubuntu CI on the exact post-amendment head. No earlier run transfers as final closeout evidence after this mutation.
-2. **T003-096**: only after that CI succeeds, obtain a fresh substantive independent external semantic review on the exact same head from an available repository-integrated reviewer other than Qodo or Codex. CodeRabbit, Cubic, Greptile, or an equivalent reviewer is acceptable only if it produces an actual substantive exact-head result.
+1. Obtain fresh full Windows/macOS/Ubuntu CI on the exact repaired head. No prior run transfers as final closeout evidence after this mutation.
+2. **T003-096**: after that CI succeeds, obtain a fresh substantive independent external semantic review on the exact same repaired head from an available repository-integrated reviewer other than Qodo or Codex.
 3. If the reviewer finds any material issue, repair it, then repeat fresh exact-head CI and fresh external review.
-4. **T003-097**: prepare exact-head closeout/lifecycle evidence, move PR Ready only when repository lifecycle requirements are satisfied, and merge with exact-head guard.
+4. **T003-097**: only after a clean substantive exact-head review, prepare exact-head closeout/lifecycle evidence, move PR Ready when repository lifecycle requirements are satisfied, and merge with expected-head protection.
 5. **T003-098**: after merge, require canonical `main` post-merge CI SUCCESS before `SPEC_003_CLOSED_CANONICAL=YES` or starting Spec 004.
 
 ```text
@@ -90,8 +98,14 @@ PHASE_J_PRE_CONVERGENCE_HEAD=4430ff95ec81c1f3e0c9683de2043c3b8803fe9e
 PHASE_J_PRE_CONVERGENCE_CI_RUN=33357835321
 T003_095=PASS
 REVIEW_SOURCE_POLICY=INDEPENDENT_EXTERNAL_NON_QODO_NON_CODEX
-FINAL_EXACT_HEAD_CI=PENDING_AFTER_REVIEW_SOURCE_AMENDMENT
-NEXT_TASK=T003-096_AFTER_FRESH_CI
+T003_096_REVIEWED_HEAD=5ce152a8a3370b3927eb7b9eeaed838a3e0c7dc6
+T003_096_REVIEWED_HEAD_CI_RUN=33395230450
+T003_096_REVIEWED_HEAD_CI=PASS
+T003_096_REVIEW_RESULT=MATERIAL_GOVERNANCE_FINDING_REPAIR_REQUIRED
+T003_096_PRODUCT_SECURITY_FINDINGS=NONE_ADDITIONAL
+T003_096_REPAIR=APPLIED_FORWARD_ONLY
+FINAL_EXACT_HEAD_CI=PENDING_AFTER_T003_096_REPAIR
+NEXT_TASK=FRESH_EXACT_HEAD_CI_THEN_FRESH_EXTERNAL_REVIEW
 SPEC_003_IMPLEMENTATION_COMPLETE=NO
 SPEC_003_CLOSED_CANONICAL=NO
 PR_READY=NO
