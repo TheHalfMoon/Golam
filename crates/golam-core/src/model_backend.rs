@@ -1,7 +1,8 @@
 #![forbid(unsafe_code)]
 
+use crate::SessionId;
 use crate::harness::RequestAttemptId;
-use crate::harness_state::{ModelEventKind, ModelRequest};
+use crate::harness_state::{ModelEvent, ModelEventKind, ModelRequest, RequestAttempt};
 
 pub const MAX_BACKEND_EMISSION_BYTES: usize = 1024 * 1024;
 
@@ -49,16 +50,48 @@ impl BackendEmission {
 
 pub trait ModelBackendSession {
     fn backend_instance_ref(&self) -> &str;
-
     fn next_emission(&mut self) -> Result<Option<BackendEmission>, ModelBackendError>;
-
     fn request_cancel(&mut self) -> Result<(), ModelBackendError>;
 }
 
 pub trait ModelBackend {
     type Session: ModelBackendSession;
-
     fn start(&mut self, request: &ModelRequest) -> Result<Self::Session, ModelBackendError>;
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HarnessEvidenceSinkError {
+    pub message: String,
+}
+
+impl HarnessEvidenceSinkError {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+}
+
+pub trait HarnessEvidenceSink {
+    fn persist_prepared_attempt(
+        &mut self,
+        session_id: SessionId,
+        attempt: &RequestAttempt,
+        record_bytes: &[u8],
+    ) -> Result<(), HarnessEvidenceSinkError>;
+
+    fn persist_attempt_state(
+        &mut self,
+        session_id: SessionId,
+        attempt: &RequestAttempt,
+        record_bytes: &[u8],
+    ) -> Result<(), HarnessEvidenceSinkError>;
+
+    fn append_model_event(
+        &mut self,
+        event: &ModelEvent,
+        record_bytes: &[u8],
+    ) -> Result<(), HarnessEvidenceSinkError>;
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
