@@ -289,12 +289,19 @@ impl ExecutionProfile {
         self.content_digest
     }
 
-    pub fn with_benchmark_ref(&self, benchmark_ref: String) -> Result<Self, ProfileValidationError> {
+    pub fn with_benchmark_ref(
+        &self,
+        benchmark_ref: String,
+    ) -> Result<Self, ProfileValidationError> {
         validate_text("benchmark_ref", &benchmark_ref)?;
         if self.benchmark_refs.len() >= MAX_BENCHMARK_REFS {
             return Err(ProfileValidationError::ListTooLong("benchmark_refs"));
         }
-        if self.benchmark_refs.iter().any(|existing| existing == &benchmark_ref) {
+        if self
+            .benchmark_refs
+            .iter()
+            .any(|existing| existing == &benchmark_ref)
+        {
             return Err(ProfileValidationError::DuplicateBenchmarkRef);
         }
         let mut benchmark_refs = self.benchmark_refs.clone();
@@ -319,7 +326,9 @@ impl ExecutionProfile {
     }
 }
 
-fn validate_definition(definition: &ExecutionProfileDefinition) -> Result<(), ProfileValidationError> {
+fn validate_definition(
+    definition: &ExecutionProfileDefinition,
+) -> Result<(), ProfileValidationError> {
     if definition.schema_version != EXECUTION_PROFILE_SCHEMA_VERSION {
         return Err(ProfileValidationError::UnsupportedSchemaVersion);
     }
@@ -328,7 +337,10 @@ fn validate_definition(definition: &ExecutionProfileDefinition) -> Result<(), Pr
         ("model_identity", definition.model_identity.as_str()),
         ("model_revision", definition.model_revision.as_str()),
         ("tokenizer_identity", definition.tokenizer_identity.as_str()),
-        ("chat_template_identity", definition.chat_template_identity.as_str()),
+        (
+            "chat_template_identity",
+            definition.chat_template_identity.as_str(),
+        ),
         (
             "backend.source_or_distribution_id",
             definition.backend.source_or_distribution_id.as_str(),
@@ -377,7 +389,9 @@ fn validate_definition(definition: &ExecutionProfileDefinition) -> Result<(), Pr
     if definition.sampling.temperature_milli > 5_000 || definition.sampling.top_p_milli > 1_000 {
         return Err(ProfileValidationError::InvalidSampling);
     }
-    if definition.resource_budget.max_memory_bytes == 0 || definition.resource_budget.max_cpu_threads == 0 {
+    if definition.resource_budget.max_memory_bytes == 0
+        || definition.resource_budget.max_cpu_threads == 0
+    {
         return Err(ProfileValidationError::InvalidResourceBudget);
     }
     if definition.time_budget.max_load_ms == 0 || definition.time_budget.max_request_ms == 0 {
@@ -406,7 +420,10 @@ fn validate_definition(definition: &ExecutionProfileDefinition) -> Result<(), Pr
         &definition.network_constraints.allowed_endpoint_classes,
     )?;
     if definition.network_constraints.allow_network
-        != !definition.network_constraints.allowed_endpoint_classes.is_empty()
+        != !definition
+            .network_constraints
+            .allowed_endpoint_classes
+            .is_empty()
     {
         return Err(ProfileValidationError::InvalidNetworkConstraints);
     }
@@ -424,12 +441,10 @@ fn validate_benchmark_refs(benchmark_refs: &[String]) -> Result<(), ProfileValid
     if benchmark_refs.len() > MAX_BENCHMARK_REFS {
         return Err(ProfileValidationError::ListTooLong("benchmark_refs"));
     }
-    for benchmark_ref in benchmark_refs {
+    for (index, benchmark_ref) in benchmark_refs.iter().enumerate() {
         validate_text("benchmark_ref", benchmark_ref)
             .map_err(|_| ProfileValidationError::InvalidBenchmarkRef)?;
-    }
-    for window in benchmark_refs.windows(2) {
-        if window[0] == window[1] {
+        if benchmark_refs[..index].contains(benchmark_ref) {
             return Err(ProfileValidationError::DuplicateBenchmarkRef);
         }
     }
@@ -475,7 +490,9 @@ fn validate_canonical_ids(
     Ok(())
 }
 
-fn semantic_digest(definition: &ExecutionProfileDefinition) -> Result<[u8; 32], ProfileValidationError> {
+fn semantic_digest(
+    definition: &ExecutionProfileDefinition,
+) -> Result<[u8; 32], ProfileValidationError> {
     let mut encoder = CanonicalEncoder::new();
     encoder.push_u16(definition.schema_version);
     push_text(&mut encoder, &definition.model_identity)?;
@@ -501,14 +518,26 @@ fn semantic_digest(definition: &ExecutionProfileDefinition) -> Result<[u8; 32], 
     push_text(&mut encoder, &definition.context_policy)?;
     push_text(&mut encoder, &definition.prompt_prefix_cache_policy)?;
     push_text(&mut encoder, &definition.kv_cache_policy)?;
-    push_text(&mut encoder, &definition.warm_residency_policy.load_behavior)?;
-    push_text(&mut encoder, &definition.warm_residency_policy.keep_behavior)?;
-    push_text(&mut encoder, &definition.warm_residency_policy.evict_behavior)?;
+    push_text(
+        &mut encoder,
+        &definition.warm_residency_policy.load_behavior,
+    )?;
+    push_text(
+        &mut encoder,
+        &definition.warm_residency_policy.keep_behavior,
+    )?;
+    push_text(
+        &mut encoder,
+        &definition.warm_residency_policy.evict_behavior,
+    )?;
     encoder.push_u8(definition.workload_class.code());
     push_bool(&mut encoder, definition.multimodal_capabilities.text);
     push_bool(&mut encoder, definition.multimodal_capabilities.image_input);
     push_bool(&mut encoder, definition.multimodal_capabilities.audio_input);
-    push_bool(&mut encoder, definition.multimodal_capabilities.audio_output);
+    push_bool(
+        &mut encoder,
+        definition.multimodal_capabilities.audio_output,
+    );
     encoder.push_u64(definition.resource_budget.max_memory_bytes);
     encoder.push_u16(definition.resource_budget.max_cpu_threads);
     push_optional_u64(
@@ -543,7 +572,10 @@ fn semantic_digest(definition: &ExecutionProfileDefinition) -> Result<[u8; 32], 
     encoder.push_u64(definition.failure_policy.retry_backoff_ms);
     encoder.push_u8(definition.failure_policy.deterministic_failure.code());
     encoder.push_u8(definition.failure_policy.context_overflow.code());
-    push_bool(&mut encoder, definition.fallback_policy.allow_backend_change);
+    push_bool(
+        &mut encoder,
+        definition.fallback_policy.allow_backend_change,
+    );
     push_bool(&mut encoder, definition.fallback_policy.allow_model_change);
     encoder.push_u64(definition.fallback_policy.allowed_profile_ids.len() as u64);
     for profile_id in &definition.fallback_policy.allowed_profile_ids {
@@ -702,7 +734,9 @@ mod tests {
     #[test]
     fn benchmark_backlinks_are_non_semantic() {
         let profile = ExecutionProfile::new(definition(), Vec::new()).unwrap();
-        let with_benchmark = profile.with_benchmark_ref("benchmark:fixture:1".into()).unwrap();
+        let with_benchmark = profile
+            .with_benchmark_ref("benchmark:fixture:1".into())
+            .unwrap();
         assert_eq!(profile.profile_id(), with_benchmark.profile_id());
         assert_eq!(profile.content_digest(), with_benchmark.content_digest());
         assert_eq!(with_benchmark.benchmark_refs(), &["benchmark:fixture:1"]);
