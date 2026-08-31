@@ -30,6 +30,8 @@
 - [x] Harness/backend ownership boundary is explicit.
 - [x] Request series/attempt, cancellation, retry and compaction architecture is explicit.
 - [x] Frozen Spec 001 ExecutionProfile fields are fully preserved.
+- [x] Benchmark backlinks are separated from execution-semantic profile identity, avoiding circular profile/benchmark identity.
+- [x] Model request/attempt state binds authenticated initiating-principal provenance without treating it as capability authority.
 - [x] HardwareProfile/calibration boundaries are explicit.
 - [x] Model backend contract defines in-process and sidecar safety boundaries.
 - [x] llama.cpp default path keeps native C/C++ outside `golamd`.
@@ -43,6 +45,8 @@
 - [x] Attempt terminal states are explicit.
 - [x] Compaction artifacts bind exact source evidence and do not delete canonical history.
 - [x] Benchmark evidence binds exact code/profile/hardware/workload/backend identities.
+- [x] Reverse benchmark backlink metadata is non-semantic/rebuildable and does not mutate execution identity.
+- [x] Initiating-principal attribution is explicit and non-authority-bearing.
 - [x] Model/profile/benchmark state is explicitly non-authority state.
 
 ## Verification design
@@ -60,6 +64,8 @@
 
 - [x] Cross-artifact analysis completed.
 - [x] Stale current-phase `AGENTS.md` finding repaired on the planning branch.
+- [x] Profile/benchmark circular-identity finding repaired.
+- [x] Explicit requester-attribution finding repaired.
 - [x] Unresolved BLOCKER findings: 0.
 - [x] Unresolved MAJOR findings: 0.
 - [x] Noncanonical PRs #6–#8 are not treated as canonical predecessors.
@@ -68,8 +74,8 @@
 
 - [x] T004-001 planning artifacts complete.
 - [x] T004-002 branch `AGENTS.md` updated for Spec 004 planning.
-- [ ] T004-003 Draft planning PR opened.
-- [ ] T004-004 exact-head Windows/macOS/Ubuntu CI success.
+- [x] T004-003 Draft planning PR #11 opened.
+- [ ] T004-004 exact-head Windows/macOS/Ubuntu CI success on the final post-repair head.
 - [ ] T004-005 substantive independent post-CI semantic review.
 - [ ] T004-006 all material review findings reconciled with fresh evidence after mutations.
 - [ ] T004-007 planning PR Ready + expected-head guarded merge.
@@ -81,4 +87,4 @@
 
 `IMPLEMENTATION_AUTHORIZED_NOW=NO`
 
-Reason: design/readiness is complete, but the planning branch still requires its GitHub CI/review/merge/post-merge lifecycle. Product implementation MUST start only from the exact canonical main produced by that successful planning closeout.
+Reason: design/readiness is complete, but the planning branch still requires final exact-head GitHub CI/review/merge/post-merge lifecycle. Product implementation MUST start only from the exact canonical main produced by that successful planning closeout.
