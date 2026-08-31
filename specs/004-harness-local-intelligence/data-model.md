@@ -318,6 +318,7 @@ compaction_id
 source_event_refs[]
 source_digest
 summary_or_projection_ref
+producing_request_attempt_id?
 projection_digest
 taint
 method_profile_digest
@@ -330,8 +331,15 @@ invalidated_by[]
 Invariants:
 - does not delete or mutate source canonical events;
 - references exact source evidence;
+- for `MODEL_BACKED` compaction, `producing_request_attempt_id` is REQUIRED and uniquely identifies the `RequestAttempt` whose accepted model output produced `summary_or_projection_ref`;
+- for `MODEL_BACKED` compaction, `summary_or_projection_ref` MUST resolve to accepted canonical model-visible evidence listed in that same `RequestAttempt.accepted_output_refs[]`, and every producing `ModelEvent` MUST bind that same request attempt;
+- deterministic compaction MUST NOT fabricate a backend request-attempt binding;
+- implementations MUST reject or fail validation when the producing request attempt is missing, ambiguous, or does not own the accepted output reference;
+- deterministic harness tests MUST prove that a committed model-backed artifact has exactly one traceable producing backend attempt and that mismatched/missing attempt-output bindings are rejected;
 - material source/goal/policy changes may invalidate reuse;
 - `SECRET_DERIVED` and other taint remains subject to Spec 003 rules.
+
+`MODEL_BACKED_COMPACTION_ARTIFACT -> UNIQUE_PRODUCING_REQUEST_ATTEMPT -> ACCEPTED_MODEL_OUTPUT`
 
 ## `BenchmarkRecord`
 
