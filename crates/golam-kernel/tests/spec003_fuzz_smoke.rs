@@ -23,7 +23,8 @@ permit(
 "#;
 
 fn corpus_text(seed: u64, max_len: usize) -> String {
-    const ALPHABET: &[u8] = b"permitforbidprincipalactionresourceUserPhoto(){}[],:;=\" abcXYZ0123456789_./\\\n\t";
+    const ALPHABET: &[u8] =
+        b"permitforbidprincipalactionresourceUserPhoto(){}[],:;=\" abcXYZ0123456789_./\\\n\t";
     let mut state = seed ^ 0x9e37_79b9_7f4a_7c15;
     state ^= state << 13;
     state ^= state >> 7;
@@ -91,7 +92,9 @@ fn capability_scope_mutation_corpus_never_normalizes_nondeterministically() {
         }
     }
 
-    let actions = (0..33).map(|index| format!("action.{index}")).collect::<Vec<_>>();
+    let actions = (0..33)
+        .map(|index| format!("action.{index}"))
+        .collect::<Vec<_>>();
     let action_refs = actions.iter().map(String::as_str).collect::<Vec<_>>();
     assert_eq!(
         CapabilityLeaseScope::normalize(&action_refs, &["resource:bounded"], &[]),
@@ -112,7 +115,14 @@ fn sandbox_profile_validation_corpus_is_deterministic_and_bounded() {
         "",
     ];
     const ENV_NAMES: &[&str] = &["PATH", "SAFE_1", "_OK", "1BAD", " BAD", "", "A-B"];
-    const TOKENS: &[&str] = &["native:unqualified", "network", "", " bad", "bad token", "x/y"];
+    const TOKENS: &[&str] = &[
+        "native:unqualified",
+        "network",
+        "",
+        " bad",
+        "bad token",
+        "x/y",
+    ];
 
     for seed in 1_usize..=128 {
         let root = ROOTS[seed % ROOTS.len()];
