@@ -20,12 +20,16 @@ fn harness_identifiers_round_trip_at_boundary_values() {
         assert_eq!(text.parse::<RequestAttemptId>().unwrap(), id);
     }
 
-    assert!("fffffffffffffffffffffffffffffffff"
-        .parse::<CompactionId>()
-        .is_err());
-    assert!("0000000000000000000000000000000g"
-        .parse::<ToolCallCandidateId>()
-        .is_err());
+    assert!(
+        "fffffffffffffffffffffffffffffffff"
+            .parse::<CompactionId>()
+            .is_err()
+    );
+    assert!(
+        "0000000000000000000000000000000g"
+            .parse::<ToolCallCandidateId>()
+            .is_err()
+    );
 }
 
 #[test]
