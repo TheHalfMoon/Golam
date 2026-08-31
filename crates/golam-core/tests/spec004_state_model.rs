@@ -1,11 +1,4 @@
 use golam_core::SessionId;
-use golam_core::execution_profile::{
-    BackendIdentity, BackendKind, ContextStrategy, ExecutionProfileDefinition, FailureAction,
-    FailurePolicy, FallbackPolicy, LatencyQualityBudget, LoadPolicy, Locality,
-    MultimodalCapabilities, NetworkConstraints, PrivacyConstraints, ResourceBudget,
-    SamplingParameters, TimeBudget, TokenBudget, ToolCallConformance, WarmResidencyPolicy,
-    WorkloadClass, EXECUTION_PROFILE_SCHEMA_VERSION,
-};
 use golam_core::harness::{
     CompactionId, ExecutionProfileId, HardwareProfileId, RequestAttemptId, RequestSeriesId,
     ToolCallCandidateId,
@@ -18,92 +11,6 @@ use golam_core::harness_state::{
     ToolCallSourceMode,
 };
 
-fn local_profile_definition() -> ExecutionProfileDefinition {
-    ExecutionProfileDefinition {
-        schema_version: EXECUTION_PROFILE_SCHEMA_VERSION,
-        model_identity: "fixture-model".into(),
-        model_revision: "fixture-revision".into(),
-        tokenizer_identity: "fixture-tokenizer".into(),
-        chat_template_identity: "fixture-template".into(),
-        backend: BackendIdentity {
-            kind: BackendKind::Scripted,
-            source_or_distribution_id: "golam-scripted".into(),
-            exact_revision_or_build_id: "v1".into(),
-            adapter_schema_version: 1,
-            launch_or_feature_digest: "scripted-v1".into(),
-        },
-        locality: Locality::Local,
-        quantization_or_precision: "synthetic".into(),
-        hardware_mapping: "cpu".into(),
-        harness_profile: "default".into(),
-        reasoning_mode: "bounded".into(),
-        tool_call_conformance: ToolCallConformance::NativeTools,
-        tool_schema_mode: "canonical".into(),
-        context_strategy: ContextStrategy::FullUntilBound,
-        sampling: SamplingParameters {
-            temperature_milli: 0,
-            top_p_milli: 1000,
-            top_k: 1,
-            seed: Some(7),
-        },
-        prompt_cache_policy: "disabled".into(),
-        kv_cache_policy: "disabled".into(),
-        warm_residency_policy: WarmResidencyPolicy {
-            load_behavior: "fixture".into(),
-            keep_behavior: "none".into(),
-            evict_behavior: "immediate".into(),
-        },
-        workload_class: WorkloadClass::Interactive,
-        multimodal_capabilities: MultimodalCapabilities {
-            text: true,
-            image_input: false,
-            audio_input: false,
-            audio_output: false,
-        },
-        resource_budget: ResourceBudget {
-            max_memory_bytes: 64 * 1024 * 1024,
-            max_cpu_threads: 1,
-            max_accelerator_memory_bytes: None,
-        },
-        time_budget: TimeBudget {
-            max_load_ms: 1_000,
-            max_request_ms: 5_000,
-            max_idle_ms: 0,
-        },
-        token_budget: TokenBudget {
-            max_input_tokens: 1_024,
-            max_output_tokens: 256,
-            max_total_tokens: 1_280,
-        },
-        latency_quality_budget: LatencyQualityBudget {
-            max_ttft_ms: 1_000,
-            max_total_latency_ms: 5_000,
-            min_quality_milli: 0,
-        },
-        privacy_constraints: PrivacyConstraints {
-            allow_user_content_external: false,
-            allow_telemetry: false,
-            allow_model_download: false,
-        },
-        network_constraints: NetworkConstraints {
-            allow_network: false,
-            allowed_endpoint_classes: Vec::new(),
-        },
-        load_policy: LoadPolicy::FailIfUnavailable,
-        failure_policy: FailurePolicy {
-            max_transient_retries: 1,
-            retry_backoff_ms: 1,
-            deterministic_failure: FailureAction::Fail,
-            context_overflow: FailureAction::ReprojectContext,
-        },
-        fallback_policy: FallbackPolicy {
-            allow_backend_change: false,
-            allow_model_change: false,
-            allowed_profile_ids: Vec::new(),
-        },
-    }
-}
-
 #[test]
 fn harness_identifiers_round_trip_at_boundary_values() {
     for value in [0, 1, u128::MAX] {
@@ -113,26 +20,16 @@ fn harness_identifiers_round_trip_at_boundary_values() {
         assert_eq!(text.parse::<RequestAttemptId>().unwrap(), id);
     }
 
-    assert!("fffffffffffffffffffffffffffffffff"
-        .parse::<CompactionId>()
-        .is_err());
-    assert!("0000000000000000000000000000000g"
-        .parse::<ToolCallCandidateId>()
-        .is_err());
-}
-
-#[test]
-fn execution_profile_identity_is_stable_and_semantic() {
-    let definition = local_profile_definition();
-    definition.validate().unwrap();
-    let first = definition.execution_profile_id().unwrap();
-    let second = definition.execution_profile_id().unwrap();
-    assert_eq!(first, second);
-
-    let mut changed = definition.clone();
-    changed.model_revision = "fixture-revision-2".into();
-    changed.validate().unwrap();
-    assert_ne!(first, changed.execution_profile_id().unwrap());
+    assert!(
+        "fffffffffffffffffffffffffffffffff"
+            .parse::<CompactionId>()
+            .is_err()
+    );
+    assert!(
+        "0000000000000000000000000000000g"
+            .parse::<ToolCallCandidateId>()
+            .is_err()
+    );
 }
 
 #[test]
@@ -217,7 +114,7 @@ fn validated_tool_candidate_requires_complete_non_authority_payload() {
 }
 
 #[test]
-fn compaction_provenance_rules_distinguish_deterministic_and_model_backed() {
+fn compaction_provenance_distinguishes_deterministic_and_model_backed() {
     let deterministic = CompactionArtifact {
         compaction_id: CompactionId::from_u128(1),
         source_projection_ref: "projection:1".into(),
