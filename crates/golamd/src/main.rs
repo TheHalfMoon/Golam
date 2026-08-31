@@ -2,6 +2,7 @@
 
 mod connection;
 mod deadline_io;
+mod harness;
 
 use std::error::Error;
 use std::io::{self, Write};
