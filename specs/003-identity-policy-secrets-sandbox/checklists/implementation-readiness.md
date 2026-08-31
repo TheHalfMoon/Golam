@@ -58,9 +58,9 @@
 
 - [x] `Golam-Research` exact snapshot recorded and classified `REFERENCE_ONLY`.
 - [x] No donor source code admitted by planning.
-- [x] Cedar is candidate-only pending exact dependency qualification.
-- [x] Wasmtime is candidate-only pending a bounded task.
-- [x] Secret crypto/key-protection/platform backends remain implementation-time qualified.
+- [x] Cedar was candidate-only during planning; implementation qualification later admitted exactly `cedar-policy 4.12.0` with the bounded selected feature surface.
+- [x] Wasmtime remained candidate-only and implementation recorded `NOT_ADMITTED_NOT_NEEDED`.
+- [x] Secret crypto/key-protection/platform backends were implementation-time qualified before secret-value handling.
 
 ## Verification plan
 
@@ -76,28 +76,34 @@
 
 ## Qodo repair reconciliation
 
-- [x] Finding 1 accepted: optional destination revalidation was too weak; changed effective destinations now require mandatory reauthorization or deny.
-- [x] Finding 2 accepted: daemon-PID-only locality observation is insufficient once managed child execution exists; observer upgrade is now a predecessor gate to network-capable child launch.
-- [x] Finding 3 accepted: recognized-format-only secret ingestion was too weak; explicit user-designated secret entry now treats the whole value as secret independent of detection.
+- [x] Finding 1 accepted: optional destination revalidation was too weak; changed effective destinations require mandatory reauthorization or deny.
+- [x] Finding 2 accepted: daemon-PID-only locality observation is insufficient once managed child execution exists; observer upgrade is a predecessor gate to network-capable child launch.
+- [x] Finding 3 accepted: recognized-format-only secret ingestion was too weak; explicit user-designated secret entry treats the whole value as secret independent of detection.
 
-## Planning lifecycle
+## Planning lifecycle — closed canonical
 
-- [ ] Exact-head CI succeeds on the repaired final planning candidate.
-- [ ] Fresh authorized Qodo review after repaired exact-head CI reports zero unresolved material findings.
-- [ ] Planning PR is merged to canonical `main`.
-- [ ] Exact post-merge main is reread before implementation branch creation.
+- [x] Exact-head CI succeeded on the repaired final planning candidate.
+- [x] Fresh authorized Qodo review after repaired exact-head CI reported zero unresolved material findings.
+- [x] Planning PR #4 was merged to canonical `main`.
+- [x] Exact post-merge `main@82de7084384009ff3a00522f4e0aef09bf549529` was reread and post-merge CI #255 succeeded before implementation branch creation.
+
+The checklist above remains the planning/readiness record. Implementation-time dependency admission and task qualification are recorded under `implementation/` and `tasks.md`; the implementation PR still requires its own final exact-head CI, post-CI Qodo review, lifecycle evidence and post-merge main CI.
 
 ```text
 SPEC_002_CLOSED_CANONICAL=YES
-SPEC_003_PLANNING_PACKAGE=REPAIRED_PENDING_REQUALIFICATION
+SPEC_003_PLANNING_PACKAGE=CLOSED_CANONICAL
 QODO_REPAIR_FINDINGS=3_ACCEPTED_AND_RECONCILED
-FINAL_EXACT_HEAD_CI=PENDING_AFTER_REPAIR
-FINAL_POST_CI_QODO=PENDING_AFTER_REPAIR
+PLANNING_EXACT_HEAD_CI=PASS
+PLANNING_POST_CI_QODO=PASS
+PLANNING_PR_4=MERGED
+PLANNING_POST_MERGE_MAIN_CI_255=PASS
 PRODUCT_IMPLEMENTATION_IN_PLANNING_PR=NO
 DONOR_CODE_ADMITTED=NO
-CEDAR_ADMITTED=NO
-WASMTIME_ADMITTED=NO
+CEDAR_POLICY_ADMITTED_EXACT=4.12.0
+WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED
 REAL_SECRETS_USED=NO
-SPEC_003_IMPLEMENTATION_AUTHORIZED=NO_UNTIL_PLANNING_MERGE
+SPEC_003_IMPLEMENTATION_AUTHORIZED=YES
+IMPLEMENTATION_FINAL_EXACT_HEAD_CI=PENDING_AFTER_T003_095
+IMPLEMENTATION_FINAL_QODO=PENDING_AFTER_EXACT_HEAD_CI
 CODEX_REVIEW_GATE=EXCLUDED_BY_FOUNDER_DIRECTION
 ```

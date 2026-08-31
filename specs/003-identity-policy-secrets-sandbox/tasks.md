@@ -1,6 +1,6 @@
 # Tasks — Spec 003 Identity, Policy, Secrets & Sandbox
 
-**Status**: IMPLEMENTATION_ACTIVE — PHASE_H_COMPLETE — PHASE_I_ACTIVE  
+**Status**: IMPLEMENTATION_ACTIVE — PHASE_I_COMPLETE — PHASE_J_CLOSEOUT_ACTIVE  
 **Canonical implementation base**: `main@82de7084384009ff3a00522f4e0aef09bf549529`
 
 Legend:
@@ -89,17 +89,17 @@ Legend:
 - [x] **T003-080** Replace bootstrap policy evaluation in normal authority path while preserving the stable `Authorize` call contract and narrow recovery bootstrap path. Exact-head qualification: CI #616 (`33252170158`) SUCCESS at `cd721231b498450e984810b4f06c4e14bdc311e1`, tree `4c5ddb92f8764f0107510ba72e6f697a3225bd56`, on Windows/macOS/Ubuntu; focused runtime-policy run `33252055912` SUCCESS. Evidence: `implementation/t003-080-runtime-policy-qualification.md`.
 - [x] **T003-081** Add minimal authenticated CLI/admin/test surface for policy, lease, approval, canary secret, decision explain and sandbox-profile qualification. Exact source-candidate qualification: CI #630 (`33264029849`) SUCCESS at `877f8e45f8f8ba4ba4a98af036d51032b3fba684`, tree `1808de4cce60669d89a5c3a11f2c8f47b6608b2f`, on Windows/macOS/Ubuntu. Evidence: `implementation/t003-081-admin-surface-qualification.md`.
 - [x] **T003-082** Extend hostile-adapter tests: no capability minting, policy activation, approval forging, vault plaintext read, egress bypass, verifier self-registration or profile weakening. Exact-head qualification: CI #650 (`33307009245`) SUCCESS at `a312ba3d0b40454dd6bddd8eb1887e481ec5b0d3`, tree `e6123476f352d94ea10dfd2da65cb2bf9c22dc63`, on Windows/macOS/Ubuntu. Evidence: `implementation/t003-082-hostile-adapter-qualification.md`.
-- [ ] **T003-083** Preserve Spec 002 effect FSM/reconciliation, IPC, corruption and strict-local gates without regression.
-- [ ] **T003-084** Fault-inject every coupled authority mutation around SQLite transaction/commit/restart boundaries.
+- [x] **T003-083** Preserve Spec 002 effect FSM/reconciliation, IPC, corruption and strict-local gates without regression. Exact-head qualification: CI #653 (`33307346352`) SUCCESS at `3c21c0a999b946ceccbf3a9418421c357e0ef350` on Windows/macOS/Ubuntu. Evidence: `implementation/t003-083-spec002-regression-qualification.md`.
+- [x] **T003-084** Fault-inject every coupled authority mutation around SQLite transaction/commit/restart boundaries. Exact-head qualification: CI #656 (`33357216307`) SUCCESS at `a3cf1f19c28aead5b9894b579a3fe8a0b9f2a3f0` on Windows/macOS/Ubuntu; secret-specific crash/disk-full evidence remains T003-057. Evidence: `implementation/t003-084-authority-commit-fault-qualification.md`.
 
 ## Phase J — Exact-head closeout
 
-- [ ] **T003-090** Run pinned fmt/clippy/workspace tests on Windows/macOS/Linux exact head.
-- [ ] **T003-091** Run policy/lease/approval/taint/secret/egress/sandbox property/adversarial qualification.
-- [ ] **T003-092** Run bounded fuzz for newly introduced policy/profile/authority input parsers where applicable.
-- [ ] **T003-093** Run deterministic secret-canary leakage suite, including unknown-format values through the explicit secret-entry boundary.
-- [ ] **T003-094** Run external strict-local no-egress observation across supported CI platforms over the complete Golam-managed process tree, or an equivalent sinkholed/network boundary that independently captures descendant egress.
-- [ ] **T003-095** Re-run Spec Kit convergence and repair material constitution/spec/plan/contracts/tasks divergence.
+- [x] **T003-090** Run pinned fmt/clippy/workspace tests on Windows/macOS/Linux exact head. Pre-convergence exact-head evidence: CI #660 (`33357835321`) SUCCESS at `4430ff95ec81c1f3e0c9683de2043c3b8803fe9e` on Windows/macOS/Ubuntu. Final closeout requires fresh exact-head CI after T003-095 mutation.
+- [x] **T003-091** Run policy/lease/approval/taint/secret/egress/sandbox property/adversarial qualification. Pre-convergence exact-head evidence: CI #660 (`33357835321`) SUCCESS at `4430ff95ec81c1f3e0c9683de2043c3b8803fe9e`; final closeout requires fresh exact-head CI after T003-095 mutation.
+- [x] **T003-092** Run bounded fuzz for newly introduced policy/profile/authority input parsers where applicable. CI #660 explicitly ran the existing ledger fuzz smoke and `golam-kernel --test spec003_fuzz_smoke` successfully on all three platforms at `4430ff95ec81c1f3e0c9683de2043c3b8803fe9e`.
+- [x] **T003-093** Run deterministic secret-canary leakage suite, including unknown-format values through the explicit secret-entry boundary. Existing T003-056 canary coverage remained in the full workspace suite and passed on all three platforms in CI #660 at `4430ff95ec81c1f3e0c9683de2043c3b8803fe9e`; final closeout requires fresh exact-head CI after T003-095 mutation.
+- [x] **T003-094** Run external strict-local no-egress observation across supported CI platforms over the complete Golam-managed process tree, or an equivalent sinkholed/network boundary that independently captures descendant egress. CI #660 completed the platform-applicable external strict-local observer successfully on Windows/macOS/Ubuntu at `4430ff95ec81c1f3e0c9683de2043c3b8803fe9e`.
+- [x] **T003-095** Re-run Spec Kit convergence and repair material constitution/spec/plan/contracts/tasks divergence. Re-read constitution v1.2.0, current `AGENTS.md`, spec, plan, all six Spec 003 contracts, readiness, tasks, implementation evidence and live PR state. No normative constitution/contract repair was required; stale live-state records were reconciled. Evidence: `implementation/t003-095-convergence.md`.
 - [ ] **T003-096** Obtain fresh authorized Qodo review only after exact-head CI; repair every material finding and repeat qualification after mutation.
 - [ ] **T003-097** Prepare exact-head closeout evidence; no Ready/merge/Spec 004 claim without repository-authorized lifecycle evidence.
 - [ ] **T003-098** After merge, require canonical `main` post-merge CI success before `SPEC_003_CLOSED_CANONICAL=YES` or starting Spec 004.
@@ -116,130 +116,34 @@ PHASE_C_COMPLETE=YES
 PHASE_D_COMPLETE=YES
 PHASE_E_COMPLETE=YES
 PHASE_F_COMPLETE=YES
-T003_020=PASS
-T003_021=PASS
-T003_022=PASS
-T003_023=PASS
-T003_024=PASS
-T003_030=PASS
-T003_031=PASS
-T003_032=PASS
-T003_033=PASS
-T003_034=PASS
-T003_034_QUALIFIED_HEAD=0bcaffb231070082be411e2e37959004ce359ad6
-T003_034_CI_RUN=33149069868
-T003_035=PASS
-T003_035_QUALIFIED_HEAD=ffc8a66c881b1a34dafe32f79beebe03cceba939
-T003_035_CI_RUN=33149715031
-T003_040=PASS
-T003_040_QUALIFIED_HEAD=cb69d638107ca4fe0118c9a61f143ac3ba65a2d3
-T003_040_CI_RUN=33150969442
-T003_041=PASS
-T003_041_QUALIFIED_HEAD=76e1addf35c92a22d2c5826ca429278cacd598b3
-T003_041_CI_RUN=33151556481
-T003_042=PASS
-T003_042_QUALIFIED_HEAD=67f74c9b9b75e43b9fa00069050c97c041567184
-T003_042_CI_RUN=33152187952
-T003_043=PASS
-T003_043_QUALIFIED_HEAD=2f8655b5bdddd17bb9e6eab7bf00f11a210896cb
-T003_043_CI_RUN=33154505847
-T003_044=PASS
-T003_044_QUALIFIED_HEAD=1a9fcddff4c4dd6a6161547cf89a502750f9bc71
-T003_044_CI_RUN=33155122088
-T003_045=PASS
-T003_045_QUALIFIED_HEAD=e3b91dcecf0048b183c4c333cd9afda43ee25671
-T003_045_CI_RUN=33155929307
-T003_046=PASS
-T003_046_QUALIFIED_HEAD=890571fe705f36f42c1c20acff3a8a2c4fa3498e
-T003_046_CI_RUN=33157139728
-T003_050=PASS
-T003_050_QUALIFIED_HEAD=9dc77f9ff565f0540b21feb4706e25cc36087be1
-T003_050_CI_RUN=33160722873
-T003_051=PASS
-T003_051_QUALIFIED_HEAD=92acf59670024004e5fca1658021a99e3e7df913
-T003_051_CI_RUN=33161883864
-T003_052=PASS
-T003_052_QUALIFIED_HEAD=b70689c1e4836f1540541f45d66cdd5a3f514dec
-T003_052_CI_RUN=33163396509
-T003_053=PASS
-T003_053_QUALIFIED_HEAD=6f24182e1d810bc4fe6e437117149c4479241034
-T003_053_CI_RUN=33165034463
-T003_054=PASS
-T003_054_QUALIFIED_HEAD=f2cef061f4a6847a2eedf7b867b8b94e4ccadd8f
-T003_054_CI_RUN=33166659638
-T003_055=PASS
-T003_055_QUALIFIED_HEAD=b434da7c675fecf41d3f3aed2104559f959e8310
-T003_055_CI_RUN=33167705734
-T003_056=PASS
-T003_056_QUALIFIED_HEAD=b1a47898515dc06237a0d71cea00e81b19cddd0a
-T003_056_CI_RUN=33169107060
-T003_057=PASS
-T003_057_QUALIFIED_HEAD=3621b502854fd46d7b45b28f7e8d0ca071b08b68
-T003_057_CI_RUN=33195054055
-T003_060=PASS
-T003_060_QUALIFIED_HEAD=50941a6d68a7920aca3666eb786f05d8b2c145b2
-T003_060_CI_RUN=33196075286
-T003_061=PASS
-T003_061_QUALIFIED_HEAD=94d1482f8963ea4d5630a1ba4d2bdaba0e12e7ef
-T003_061_CI_RUN=33198112325
-T003_062=PASS
-T003_062_QUALIFIED_HEAD=4d730e894ebde948185597f5fe4296a142fd9ac6
-T003_062_CI_RUN=33200261387
+PHASE_G_COMPLETE=YES
+PHASE_H_COMPLETE=YES
+PHASE_I_COMPLETE=YES
+PHASE_J_CLOSEOUT_ACTIVE=YES
+T003_083=PASS
+T003_083_QUALIFIED_HEAD=3c21c0a999b946ceccbf3a9418421c357e0ef350
+T003_083_CI_RUN=33307346352
+T003_084=PASS
+T003_084_QUALIFIED_HEAD=a3cf1f19c28aead5b9894b579a3fe8a0b9f2a3f0
+T003_084_CI_RUN=33357216307
+T003_090=PASS_PRE_CONVERGENCE
+T003_091=PASS_PRE_CONVERGENCE
+T003_092=PASS_PRE_CONVERGENCE
+T003_093=PASS_PRE_CONVERGENCE
+T003_094=PASS_PRE_CONVERGENCE
+PHASE_J_PRE_CONVERGENCE_HEAD=4430ff95ec81c1f3e0c9683de2043c3b8803fe9e
+PHASE_J_PRE_CONVERGENCE_CI_RUN=33357835321
+T003_095=PASS
+FINAL_EXACT_HEAD_CI=PENDING_AFTER_CONVERGENCE
+NEXT_TASK=T003-096_AFTER_FRESH_CI
 CEDAR_POLICY_ADMITTED_EXACT=4.12.0
 SECRET_CRYPTO_AND_OS_KEY_PROTECTORS_QUALIFIED=YES
 WASMTIME_DISPOSITION=NOT_ADMITTED_NOT_NEEDED
 Golam-Research=REFERENCE_ONLY
 DONOR_CODE_ADMITTED=NO
 REAL_SECRETS_USED=NO
-T003_063=PASS
-T003_063_QUALIFIED_HEAD=a2486acc1b4dab47207ca9becdad09afe27fefe1
-T003_063_CI_RUN=33234466919
-T003_064=PASS
-T003_064_QUALIFIED_HEAD=d77cd2b8e78a41153085c279fea698bb794d2d4e
-T003_064_CI_RUN=33234807292
-PHASE_G_COMPLETE=YES
-PHASE_H_COMPLETE=YES
-PHASE_I_ACTIVE=YES
-T003_070=PASS
-T003_070_QUALIFIED_HEAD=9704318742c7622cb5304fa24f22b1c5bb35e22e
-T003_070_CI_RUN=33235986709
-T003_071=PASS
-T003_071_QUALIFIED_HEAD=5f6ea41fc8372273065376f0a5ab546d18100e43
-T003_071_CI_RUN=33237313243
-T003_072=PASS
-T003_072_QUALIFIED_HEAD=241f36a6fbbaad93d46aed1970353a9270b05431
-T003_072_QUALIFIED_TREE=37d65e8dc72f0c9ed4935ac997d2de06e653b101
-T003_072_CI_RUN=33237725527
-T003_073=PASS
-T003_073_QUALIFIED_HEAD=39b5989b18457785f0a02a952c1f6d69bb123e60
-T003_073_QUALIFIED_TREE=7b70ae25afcf6a601b376d76ea5dd99ba9f6cce4
-T003_073_CI_RUN=33246660545
-T003_074=PASS
-T003_074_QUALIFIED_HEAD=0d28681c971b3ae1f08504c7eb2448789ac8ed6e
-T003_074_QUALIFIED_TREE=32379e52964faca7db84b8354947be825ba2ef64
-T003_074_CI_RUN=33247996101
-T003_074_FOCUSED_RUN=33247892761
-T003_075=PASS
-T003_075_QUALIFIED_HEAD=6d3bf98c51ba2c44d187ff07d24bd804a3026bdd
-T003_075_QUALIFIED_TREE=ae2463fa36240fc801accdfeb5b39adf7fccde10
-T003_075_CI_RUN=33249678974
-T003_076=PASS
-T003_076_QUALIFIED_HEAD=758476315cebf48c31a8c43f84b5d9859f8e3342
-T003_076_QUALIFIED_TREE=57d4930af50f8d6c259f87332884de4f641a8261
-T003_076_CI_RUN=33250188127
-T003_076_FOCUSED_RUN=33250097386
-T003_080=PASS
-T003_080_QUALIFIED_HEAD=cd721231b498450e984810b4f06c4e14bdc311e1
-T003_080_QUALIFIED_TREE=4c5ddb92f8764f0107510ba72e6f697a3225bd56
-T003_080_CI_RUN=33252170158
-T003_080_FOCUSED_RUN=33252055912
-T003_081=PASS
-T003_081_QUALIFIED_SOURCE_HEAD=877f8e45f8f8ba4ba4a98af036d51032b3fba684
-T003_081_QUALIFIED_SOURCE_TREE=1808de4cce60669d89a5c3a11f2c8f47b6608b2f
-T003_081_CI_RUN=33264029849
-T003_082=PASS
-T003_082_QUALIFIED_HEAD=a312ba3d0b40454dd6bddd8eb1887e481ec5b0d3
-T003_082_QUALIFIED_TREE=e6123476f352d94ea10dfd2da65cb2bf9c22dc63
-T003_082_CI_RUN=33307009245
-NEXT_TASK=T003-083
+SPEC_003_IMPLEMENTATION_COMPLETE=NO
+SPEC_003_CLOSED_CANONICAL=NO
+PR_READY=NO
+WAIVER_TAKEN=NO
 ```
