@@ -583,6 +583,10 @@ mod tests {
     #[test]
     fn candidate_normalization_has_no_privileged_authority_surface() {
         let source = include_str!("tool_call.rs");
+        let production = source
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production source precedes tests");
         for forbidden in [
             "golam_kernel",
             "golam_ledger",
@@ -592,7 +596,7 @@ mod tests {
             "EffectAttemptId",
         ] {
             assert!(
-                !source.contains(forbidden),
+                !production.contains(forbidden),
                 "forbidden authority symbol: {forbidden}"
             );
         }
