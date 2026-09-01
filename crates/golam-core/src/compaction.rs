@@ -156,8 +156,14 @@ mod tests {
         assert_eq!(attempt.state, CompactionState::Committed);
         assert_eq!(attempt.terminal_at_unix_ms, Some(11));
         assert_eq!(artifact.compaction_id, CompactionId::from_u128(8));
-        assert_eq!(artifact.source_projection_ref, source_projection.projection_ref);
-        assert_eq!(artifact.source_event_refs, source_projection.source_event_refs);
+        assert_eq!(
+            artifact.source_projection_ref,
+            source_projection.projection_ref
+        );
+        assert_eq!(
+            artifact.source_event_refs,
+            source_projection.source_event_refs
+        );
         assert_eq!(artifact.goal_refs, source_projection.goal_refs);
         assert_eq!(artifact.artifact_digest, [10; 32]);
     }
