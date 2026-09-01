@@ -174,6 +174,8 @@ Planning and implementation both preserve:
 - push-triggered post-merge canonical-main verification;
 - no waiver.
 
+Qualification evidence binds the head that the pull request itself advertises. A raw branch ref that has moved but is not yet represented as the PR head is not sufficient exact-head PR evidence and MUST NOT be used to satisfy CI/review/Ready/merge gates.
+
 CI #782 / run `33516670304` succeeded on `feff88dfbbd0c54912118c5adc1cc8f6ceac028a` across Windows/macOS/Ubuntu. The present convergence repair mutates that head, so #782 becomes historical/stale for final T005-014. Fresh exact-head CI and then fresh independent review are mandatory.
 
 ## Material-risk review
