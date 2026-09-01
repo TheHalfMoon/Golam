@@ -2,9 +2,7 @@ use std::collections::BTreeSet;
 
 use crate::SessionId;
 use crate::harness::ExecutionProfileId;
-use crate::harness_state::{
-    CompactionArtifact, ContextProjection, HarnessStateError,
-};
+use crate::harness_state::{CompactionArtifact, ContextProjection, HarnessStateError};
 use crate::taint::{TaintLabel, TaintSet};
 
 const MAX_PROJECTION_ITEMS: usize = 256;
@@ -230,12 +228,8 @@ mod tests {
         let artifact = compaction_artifact();
         let canonical_goal_refs = vec!["goal:3:version:2".into()];
 
-        let projection = build_post_compaction_projection(
-            value,
-            &artifact,
-            &canonical_goal_refs,
-        )
-        .unwrap();
+        let projection =
+            build_post_compaction_projection(value, &artifact, &canonical_goal_refs).unwrap();
 
         assert_eq!(projection.goal_refs, canonical_goal_refs);
         assert_eq!(projection.compaction_refs, [CompactionId::from_u128(8)]);
