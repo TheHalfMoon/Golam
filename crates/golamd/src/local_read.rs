@@ -62,9 +62,9 @@ impl fmt::Display for LocalFileReadError {
         match self {
             Self::Resolution(error) => write!(f, "local filesystem resolution failed: {error}"),
             Self::Io(error) => write!(f, "bounded local file read I/O error: {error}"),
-            Self::InvalidBounds => {
-                f.write_str("bounded local file read requires positive finite byte and duration limits")
-            }
+            Self::InvalidBounds => f.write_str(
+                "bounded local file read requires positive finite byte and duration limits",
+            ),
             Self::UnsupportedFileKind(kind) => {
                 write!(f, "bounded local file read denies file kind: {kind:?}")
             }
@@ -162,8 +162,8 @@ pub fn read_regular_file(
         });
     }
 
-    let max_bytes = usize::try_from(bounds.max_bytes)
-        .map_err(|_| LocalFileReadError::InvalidBounds)?;
+    let max_bytes =
+        usize::try_from(bounds.max_bytes).map_err(|_| LocalFileReadError::InvalidBounds)?;
     let mut bytes = Vec::with_capacity(max_bytes.min(READ_CHUNK_BYTES));
     let mut chunk = [0_u8; READ_CHUNK_BYTES];
 
@@ -224,10 +224,7 @@ fn require_within_duration(
 #[cfg(any(target_os = "linux", target_os = "android"))]
 const O_NOFOLLOW_FLAG: i32 = 0x0002_0000;
 
-#[cfg(all(
-    unix,
-    not(any(target_os = "linux", target_os = "android"))
-))]
+#[cfg(all(unix, not(any(target_os = "linux", target_os = "android"))))]
 const O_NOFOLLOW_FLAG: i32 = 0x0000_0100;
 
 #[cfg(unix)]
