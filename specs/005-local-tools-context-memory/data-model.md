@@ -25,6 +25,8 @@ effect_semantics
 network_posture
 sandbox_requirement
 target_identity_kind
+target_identity_rules
+reconciliation_policy
 verification_policy
 ```
 
@@ -42,14 +44,20 @@ initiating_principal
 tool_id
 tool_version
 candidate_ref
+requested_operation
 requested_target
+authorized_resource_class
 target_identity_ref
+target_resolution_plan_ref
 capability_context_ref
 taint_set
 provenance_refs
 idempotency_material
+current_preconditions
 created_at
 ```
+
+`target_identity_ref` and `target_resolution_plan_ref` are operation-specific bindings: protected execution requires the exact resolved identity when already known, or an explicit bounded resolution plan whose result is re-authorized before action. `current_preconditions` binds stale-state guards such as file mutation expectations or Git HEAD/index/worktree expectations where required.
 
 ### `ToolResult`
 
@@ -119,6 +127,7 @@ profile_id
 executable_identity
 argv
 cwd_identity
+ambient_environment_policy
 explicit_env
 secret_handle_bindings
 filesystem_rights
@@ -128,9 +137,10 @@ resource_limits
 inherited_handle_rules
 timeout
 cancellation_policy
+descendant_supervision_policy
 ```
 
-A plan requires Kernel authorization and an admitted executor before launch.
+`ambient_environment_policy` is fail-closed and requires the cleared-ambient posture frozen by the execution contract unless an exact narrower exception is independently authorized. A plan requires Kernel authorization and an admitted executor before launch.
 
 ## Context model
 
@@ -245,6 +255,7 @@ status
 predecessor_versions
 conflict_refs
 promotion_evidence_ref
+created_by_principal
 created_at
 ```
 
@@ -280,6 +291,7 @@ name
 description
 package_ref
 version
+content_digest
 instruction_ref
 script_refs
 requested_capability_classes
@@ -288,7 +300,7 @@ provenance
 admission_state
 ```
 
-`script_refs` do not imply execution permission.
+`script_refs` do not imply execution permission. `admission_state` records the bounded instruction/executable lifecycle state and cannot itself grant execution authority.
 
 ### `ProtocolAdapterId`
 
@@ -302,13 +314,15 @@ server_identity
 transport
 process_profile_ref_or_remote_endpoint
 allowed_protocol_features
+golam_local_mapping_ref
 network_policy_ref
 secret_policy_ref
 taint_class
 version_lock
+lifecycle_state
 ```
 
-Server-advertised tools/resources are descriptors, not Golam capabilities.
+Server-advertised tools/resources are descriptors, not Golam capabilities. `golam_local_mapping_ref` binds the locally configured maximum mapping rather than accepting server-advertised authority.
 
 ### `ExternalToolDescriptor`
 
