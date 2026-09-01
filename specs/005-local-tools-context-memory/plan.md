@@ -137,11 +137,11 @@ Every Golam-generated managed-memory mutation is consequential. It starts as an 
 
 Only the single governed memory writer executes the prepared intent:
 
-`candidate -> validate taint/provenance -> current authorization + promotion authority -> expected-version/user-edit check -> durable PREPARED Effect -> write temp -> durability boundary -> atomic Markdown replace -> SQLite operational/version update -> invalidate derivatives -> read-back verification -> integrity-chained terminal outcome`
+`candidate -> validate taint/provenance -> current authorization + promotion authority -> expected-version/user-edit check -> durable PREPARED Effect -> write temp -> durability boundary -> immediately revalidate expected Markdown digest/version + target identity at commit time -> conditional compare-and-replace / identity-preserving Markdown replace (fail closed as USER_EDIT_DETECTED/CONFLICT on changed content/identity or unpreservable identity) -> SQLite operational/version update -> invalidate derivatives -> read-back verification -> integrity-chained terminal outcome`
 
 Every committed `MemoryVersion` preserves the initiating/creating principal, the governed writer identity and the exact mutation Effect reference. Restart reconciliation must retain these separate identities rather than collapsing attribution into a generic system actor.
 
-User hand-edits bypass the Golam writer by design and are detected via content/version mismatch. The next managed operation must reconcile rather than overwrite.
+User hand-edits bypass the Golam writer by design and are detected via content/version mismatch. The next managed operation must reconcile rather than overwrite. The governed commit boundary revalidates the expected observed digest/version and target identity immediately before replacement; an intervening edit or identity change MUST NOT be overwritten.
 
 Crash/disconnect ambiguity remains `UNKNOWN_OUTCOME`; dependent managed-memory mutations are blocked until restart reconciliation determines exact canonical state. `FORGET`/`REDACT` use the same lifecycle across Markdown, SQLite and derivative invalidation; partial multi-store completion is never silently reported as success.
 
