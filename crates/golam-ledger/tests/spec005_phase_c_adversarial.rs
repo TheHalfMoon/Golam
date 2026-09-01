@@ -14,8 +14,8 @@ use golam_core::skills_protocol::{
 use golam_core::taint::{TaintLabel, TaintSet};
 use golam_core::tool_descriptor::{ToolId, ToolVersion};
 use golam_core::tool_request::{
-    BindingDigest, PrincipalId, RequestedOperationId, RequestedTarget, ResourceClassId, ToolRequest,
-    ToolRequestId,
+    BindingDigest, PrincipalId, RequestedOperationId, RequestedTarget, ResourceClassId,
+    ToolRequest, ToolRequestId,
 };
 use golam_ledger::memory_evidence::{MemoryEvidenceError, MemoryEvidenceStore};
 use golam_ledger::tool_context_evidence::{ToolContextEvidenceError, ToolContextEvidenceStore};
