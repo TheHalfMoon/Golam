@@ -296,11 +296,18 @@ pub fn run_bounded_calibration(
         .validate_identity()
         .map_err(|_| RoutingError::CalibrationInvalid)?;
 
+    let deterministic_units = u64::from(workload.iterations)
+        .checked_mul(u64::from(workload.synthetic_work_units))
+        .ok_or(RoutingError::CalibrationInvalid)?;
+    if deterministic_units > workload.max_runtime_ms {
+        return Err(RoutingError::CalibrationInvalid);
+    }
+    let finished_at_unix_ms = started_at_unix_ms
+        .checked_add(deterministic_units)
+        .ok_or(RoutingError::CalibrationInvalid)?;
     let supported = hardware_supports_profile(hardware, profile)
         && profile.definition().resource_budget.max_memory_bytes <= workload.max_memory_bytes
         && profile.definition().time_budget.max_request_ms <= workload.max_runtime_ms;
-    let deterministic_units =
-        u64::from(workload.iterations).saturating_mul(u64::from(workload.synthetic_work_units));
     let run = CalibrationRun {
         calibration_id: workload.calibration_id,
         hardware_profile_id: hardware.hardware_profile_id,
@@ -312,7 +319,7 @@ pub fn run_bounded_calibration(
         profile_candidate_digest: profile.content_digest(),
         workload_fixture_id: workload_fixture_id.to_owned(),
         started_at_unix_ms,
-        finished_at_unix_ms: Some(started_at_unix_ms.saturating_add(deterministic_units)),
+        finished_at_unix_ms: Some(finished_at_unix_ms),
         max_memory_bytes: workload.max_memory_bytes,
         max_runtime_ms: workload.max_runtime_ms,
         observations: vec![
@@ -851,6 +858,41 @@ mod tests {
                 .evidence_refs
                 .iter()
                 .all(|reference| !reference.contains("http"))
+        );
+    }
+
+    #[test]
+    fn calibration_rejects_runtime_bound_and_timestamp_overflow() {
+        let selected = profile(Locality::Local, "backend:scripted");
+        let observed = hardware(100);
+        let too_slow = CalibrationWorkload {
+            calibration_id: 56,
+            iterations: 2,
+            synthetic_work_units: 1,
+            max_memory_bytes: 4096,
+            max_runtime_ms: 1,
+        };
+        assert_eq!(
+            run_bounded_calibration(&observed, &selected, "fixture:v1", too_slow, 200),
+            Err(RoutingError::CalibrationInvalid)
+        );
+
+        let overflow = CalibrationWorkload {
+            calibration_id: 57,
+            iterations: 1,
+            synthetic_work_units: 1,
+            max_memory_bytes: 4096,
+            max_runtime_ms: 1000,
+        };
+        assert_eq!(
+            run_bounded_calibration(
+                &observed,
+                &selected,
+                "fixture:v1",
+                overflow,
+                u64::MAX
+            ),
+            Err(RoutingError::CalibrationInvalid)
         );
     }
 
