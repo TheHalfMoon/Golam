@@ -133,15 +133,19 @@ Protected operational state must not be exposed as generic user memory files.
 
 ### Single writer + durable effect lifecycle
 
-Every Golam-generated managed-memory mutation is consequential. It starts as an immutable `MemoryMutationIntent` bound to current Kernel authorization, applicable approval/pre-registered verifier evidence, expected current versions and a unique effect identity. Promotion-authority validation is implemented and qualified **before** the writer may be enabled for mutation. The Effect Gate PREPARED record is durable before the first Markdown/SQLite canonical mutation.
+Every Golam-generated managed-memory mutation is consequential. It starts as an immutable `MemoryMutationIntent` bound to current Kernel authorization, applicable approval/pre-registered verifier evidence, expected current versions, the exact observed canonical Markdown target identity, expected Markdown digest/version, the exact dedicated memory-operational-SQLite store binding, and a unique effect identity. Promotion-authority validation is implemented and qualified **before** the writer may be enabled for mutation. The Effect Gate PREPARED record is durable before the first Markdown/SQLite canonical mutation, and all of those intent bindings survive PREPARED unchanged.
+
+Markdown body/front matter is content only. Reserved fields may not set scope, taint, provenance authority, approval, authorization, managed version identity, promotion state or Effect Gate state; such input enters explicit `USER_EDIT_DETECTED`/`CONFLICT` reconciliation/quarantine rather than becoming authority.
 
 Only the single governed memory writer executes the prepared intent:
 
-`candidate -> validate taint/provenance -> current authorization + promotion authority -> expected-version/user-edit check -> durable PREPARED Effect -> write temp -> durability boundary -> immediately revalidate expected Markdown digest/version + target identity at commit time -> conditional compare-and-replace / identity-preserving Markdown replace (fail closed as USER_EDIT_DETECTED/CONFLICT on changed content/identity or unpreservable identity) -> SQLite operational/version update -> invalidate derivatives -> read-back verification -> integrity-chained terminal outcome`
+`candidate -> validate taint/provenance -> current authorization + promotion authority -> expected-version/user-edit check -> durable PREPARED Effect -> write temp -> durability boundary -> immediately revalidate expected Markdown digest/version + target identity at commit time -> conditional compare-and-replace / identity-preserving Markdown replace (fail closed as USER_EDIT_DETECTED/CONFLICT on changed content/identity or unpreservable identity) -> SQLite operational/version update bound to the exact memory store + effect/intent digest -> invalidate derivatives -> cross-store read-back/reconciliation -> integrity-chained terminal outcome`
 
 Every committed `MemoryVersion` preserves the initiating/creating principal, the governed writer identity and the exact mutation Effect reference. Restart reconciliation must retain these separate identities rather than collapsing attribution into a generic system actor.
 
 User hand-edits bypass the Golam writer by design and are detected via content/version mismatch. The next managed operation must reconcile rather than overwrite. The governed commit boundary revalidates the expected observed digest/version and target identity immediately before replacement; an intervening edit or identity change MUST NOT be overwritten.
+
+The authority Effect Gate journal, canonical Markdown, and dedicated memory operational SQLite store are separate evidence surfaces. No cross-store atomic transaction is assumed. Terminal success requires read-back agreement across all three on the exact effect identity, mutation-intent digest, expected/committed Markdown identity+digest+version, and memory-store binding. A file-without-row, row-without-file, wrong store binding, unreadable store, stale digest/identity, or other partial cut remains failed/reconciling or `UNKNOWN_OUTCOME` until deterministic reconciliation resolves it.
 
 Crash/disconnect ambiguity remains `UNKNOWN_OUTCOME`; dependent managed-memory mutations are blocked until restart reconciliation determines exact canonical state. `FORGET`/`REDACT` use the same lifecycle across Markdown, SQLite and derivative invalidation; partial multi-store completion is never silently reported as success.
 
@@ -170,9 +174,13 @@ Start with deterministic local text/metadata indexing that is rebuildable. Dense
 
 Instruction-only skill packages use compatible `SKILL.md` concepts while adding Golam provenance/version/capability lifecycle metadata. Skill content is untrusted context. Executable scripts are disabled until production sandbox admission.
 
+Queued, prepared-but-not-dispatched, cached capability/approval and dispatch-decision state is scoped to the exact reviewed skill package/version/content digest and reviewed capability mapping. Immediately before every instruction activation or executable dispatch, Golam revalidates that exact binding and current lifecycle state. `DEPRECATED`, `REVOKED`, replaced, unknown, version/digest/mapping-mismatched state rejects the dispatch and invalidates stale queued/cached authority; a replacement requires fresh review and authority evaluation.
+
 ### MCP
 
 MCP adapter maps protocol tools/resources/prompts to untrusted candidates/results. A server's advertised capability is descriptive only. Every actual protected operation remains mapped through Golam capability/effect policy.
+
+Every MCP dispatch is bound to the exact reviewed `McpServerBinding` identity/digest, version lock and Golam-local mapping identity/digest. Immediately before local launch or remote request dispatch, Golam revalidates that exact active binding and mapping. `DEPRECATED`, `REVOKED`, replaced, unreviewed, unknown or mismatched state rejects queued/prepared calls, cached mapped descriptors, cached capability/approval decisions and stale dispatch decisions; superseded bindings cannot donate authority to replacements.
 
 Local MCP child process execution requires the production executor gate. Remote MCP requires explicit network/egress/identity/secrets policy and is disabled by strict-local unless the target qualifies as explicitly permitted local transport.
 
@@ -208,9 +216,12 @@ Required test families include:
 - context provenance/freshness/taint/ranking;
 - memory candidate/promotion/conflict/reconciliation/user-edit/restart/disk-full;
 - memory creator/writer/effect attribution through restart reconciliation;
-- managed-memory PREPARED-before-mutation, terminal outcome, `UNKNOWN_OUTCOME` and dependent-mutation blocking;
+- managed-memory PREPARED-before-mutation, exact target/digest/store bindings, commit-time conditional compare-and-replace, content-only front matter, terminal outcome, `UNKNOWN_OUTCOME` and dependent-mutation blocking;
+- authority-journal/Markdown/memory-SQLite partial cuts including stale digest, target swap, wrong store binding, file-without-row and row-without-file;
 - FORGET/REDACT partial multi-store completion + derivative rebuild;
 - malicious MCP/skill/protocol payloads and capability spoofing;
+- stale queued/prepared/cached/approved skill dispatch after version/digest/mapping replacement or revocation;
+- stale queued/prepared/cached/approved MCP dispatch after binding/version/mapping replacement or revocation;
 - Phase D proof that no external search process can launch while `native:unqualified`;
 - exact-head full CI + independent semantic review.
 

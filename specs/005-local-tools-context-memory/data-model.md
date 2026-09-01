@@ -287,6 +287,10 @@ Immutable content/provenance version identity.
 operation
 item_ids
 expected_current_versions
+expected_markdown_target_identity_ref
+expected_markdown_content_digest
+expected_markdown_version
+memory_operational_store_ref
 candidate_ref
 kernel_authorization_ref
 promotion_authority_ref
@@ -296,7 +300,11 @@ initiating_principal
 created_at
 ```
 
-The immutable intent is bound into a durable Effect Gate PREPARED record before the first canonical Markdown or SQLite mutation. `kernel_authorization_ref` and the applicable approval/pre-registered-verifier evidence must be current for the requested scope/operation; free-form content is not approval.
+The immutable intent is bound into a durable Effect Gate PREPARED record before the first canonical Markdown or memory-operational-SQLite mutation. `kernel_authorization_ref` and the applicable approval/pre-registered-verifier evidence must be current for the requested scope/operation; free-form content is not approval.
+
+`expected_markdown_target_identity_ref`, `expected_markdown_content_digest`, and `expected_markdown_version` bind the exact observed Markdown state that may be replaced. `memory_operational_store_ref` binds the exact dedicated memory operational SQLite store identity/schema frozen by T005-045 and MUST NOT alias the authority database. All of these fields participate in the mutation-intent digest and survive durable PREPARED state unchanged.
+
+Commit-time Markdown replacement revalidates the expected target identity, digest, and version immediately before replacement and uses an identity-preserving conditional compare-and-replace primitive. A changed or unpreservable identity/content precondition fails closed as `USER_EDIT_DETECTED`/`CONFLICT` and MUST NOT silently overwrite the user-edited target. Markdown/front matter remains content only; reserved authority-bearing fields are quarantined for reconciliation rather than imported as authority.
 
 ### `MemoryMutationOutcome`
 
@@ -305,12 +313,16 @@ effect_id
 mutation_intent_digest
 status: COMMITTED | REJECTED | FAILED | UNKNOWN_OUTCOME
 canonical_version_refs
+authority_journal_readback_ref
+markdown_readback_ref
+memory_sqlite_readback_ref
+reconciliation_ref
 verification_refs
 integrity_evidence_refs
 terminal_at
 ```
 
-`UNKNOWN_OUTCOME` blocks dependent managed-memory mutations until restart/reconciliation resolves the exact canonical state. Outcome and verification evidence are integrity-chained according to the existing Effect Gate/ledger boundary.
+`COMMITTED` requires read-back/reconciliation evidence across the authority journal, canonical Markdown, and the exact `memory_operational_store_ref`. Cross-store disagreement, unreadable state, or an unprovable commit boundary cannot produce success. `UNKNOWN_OUTCOME` blocks dependent managed-memory mutations until restart/reconciliation resolves the exact canonical state. Outcome and verification evidence are integrity-chained according to the existing Effect Gate/ledger boundary.
 
 ### `MemoryVersion`
 
@@ -338,7 +350,7 @@ created_at
 
 `IN_SYNC | USER_EDIT_DETECTED | CONFLICT | RECONCILED | BLOCKED`
 
-Binds last known managed version/content digest to current observed Markdown identity.
+Binds the last known managed version/content digest, exact Markdown target identity, exact memory-operational-store binding, and current observed Markdown identity/digest to the governing effect. Restart reconciliation compares all three canonical evidence surfaces: authority journal, Markdown, and memory operational SQLite.
 
 ### `DerivativeIndexGeneration`
 
@@ -377,6 +389,21 @@ admission_state
 
 `script_refs` do not imply execution permission. `admission_state` records the bounded instruction/executable lifecycle state and cannot itself grant execution authority.
 
+### `SkillDispatchBinding`
+
+```text
+skill_package_ref
+skill_version
+reviewed_content_digest
+reviewed_admission_state_ref
+reviewed_capability_mapping_ref
+queued_request_ref
+capability_decision_ref
+approval_decision_ref
+```
+
+Queued, prepared-but-not-dispatched, cached capability, cached approval, and dispatch-decision state is valid only for the exact reviewed package/version/content digest and reviewed capability mapping. Immediately before instruction activation or executable dispatch, Golam MUST re-read the current lifecycle state and revalidate this exact binding. `DEPRECATED`, `REVOKED`, replaced, unknown, version-mismatched, digest-mismatched, or mapping-mismatched state invalidates the queued/cached decision and requires fresh review/authority evaluation.
+
 ### `ProtocolAdapterId`
 
 Identifies MCP/ACP adapter implementation and version.
@@ -385,11 +412,13 @@ Identifies MCP/ACP adapter implementation and version.
 
 ```text
 binding_id
+binding_digest
 server_identity
 transport
 process_profile_ref_or_remote_endpoint
 allowed_protocol_features
 golam_local_mapping_ref
+golam_local_mapping_digest
 network_policy_ref
 secret_policy_ref
 taint_class
@@ -397,7 +426,23 @@ version_lock
 lifecycle_state
 ```
 
-Server-advertised tools/resources are descriptors, not Golam capabilities. `golam_local_mapping_ref` binds the locally configured maximum mapping rather than accepting server-advertised authority. `lifecycle_state` must fail closed for unreviewed, replaced, deprecated or revoked bindings; version replacement requires a new reviewed binding identity/mapping rather than silently reusing prior authority.
+Server-advertised tools/resources are descriptors, not Golam capabilities. `golam_local_mapping_ref` plus `golam_local_mapping_digest` binds the locally configured maximum mapping rather than accepting server-advertised authority. `lifecycle_state` must fail closed for unreviewed, replaced, deprecated or revoked bindings; version replacement requires a new reviewed binding identity/mapping rather than silently reusing prior authority.
+
+### `McpDispatchBinding`
+
+```text
+binding_id
+binding_digest
+version_lock
+golam_local_mapping_ref
+golam_local_mapping_digest
+lifecycle_state_ref
+queued_request_ref
+capability_decision_ref
+approval_decision_ref
+```
+
+Every local or remote MCP dispatch revalidates the exact active reviewed `McpServerBinding`, version lock, binding digest, and Golam-local mapping identity/digest immediately before dispatch. `DEPRECATED`, `REVOKED`, replaced, unknown, version-mismatched, digest-mismatched, or mapping-mismatched state invalidates queued calls, prepared-but-not-dispatched calls, cached mapped descriptors, cached capabilities, cached approvals, and cached dispatch decisions. A superseded binding cannot donate authority to a replacement.
 
 ### `ExternalToolDescriptor`
 
@@ -418,6 +463,8 @@ MEMORY_INDEX != CANONICAL_MEMORY
 MODEL_VERIFICATION != PROMOTION_AUTHORITY
 SECRET_DERIVED != CANONICAL_LONG_TERM_MEMORY
 SKILL != AUTHORITY
+STALE_SKILL_DISPATCH_BINDING != ACTIVE_AUTHORITY
 MCP_CAPABILITY_ADVERTISEMENT != GOLAM_CAPABILITY
+STALE_MCP_DISPATCH_BINDING != ACTIVE_AUTHORITY
 ACP_CONNECTION != AUTHENTICATED_AUTHORITY
 ```
