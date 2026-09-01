@@ -13,6 +13,7 @@ pub mod routing;
 pub mod runtime_home;
 pub mod taint;
 pub mod tool_call;
+pub mod tool_descriptor;
 
 use core::fmt;
 

@@ -2,11 +2,11 @@
 
 ## Current phase
 
-Golam is in **Spec 005 planning: Local Tools, Context & Memory** on branch `spec/005-local-tools-context-memory`.
+Golam is in **Spec 005 implementation: Local Tools, Context & Memory** on branch `impl/005-local-tools-context-memory`.
 
-Canonical `main` is `390ea842837a7d85dca165d9291d5eb54c3f11db` at Spec 004 implementation closeout merge PR #14. Push-triggered canonical-main CI #777 / run `33507343928` completed successfully on Windows, macOS and Ubuntu, including platform-applicable strict-local external observation. Spec 004 is therefore `CLOSED_CANONICAL` for successor ordering even though the historical merge message itself recorded T004-113 as pending at merge time.
+Canonical `main` is `4bd23b218304663349fb2f703cedd40c7a3038af` at Spec 005 planning closeout merge PR #19. Push-triggered canonical-main CI #798 / run `33548321187` completed successfully on Windows, macOS and Ubuntu, including platform-applicable strict-local external observation. Spec 005 planning is therefore `CLOSED_CANONICAL` for implementation ordering.
 
-Spec 001 T050–T059 authorizes bounded Spec 005 after Spec 004 closes. Spec 005 planning is not canonical until its own exact-head CI, independent semantic review, guarded merge and post-merge main CI complete.
+Spec 005 implementation begins at T005-025 and must execute `specs/005-local-tools-context-memory/tasks.md` in dependency order. Planning closure does not admit any implementation dependency, production executor, external tool, MCP runtime, shell/process path, network widening or later-spec scope.
 
 Open PRs #6–#8 are noncanonical planning proposals. They do not become predecessors or authority merely because related material overlaps Spec 005.
 
@@ -18,12 +18,12 @@ Open PRs #6–#8 are noncanonical planning proposals. They do not become predece
 4. canonical Spec 002 closeout package;
 5. canonical Spec 003 package and implementation evidence;
 6. canonical Spec 004 planning + implementation package and live closeout evidence;
-7. exact Spec 005 planning evidence on `spec/005-local-tools-context-memory`;
+7. canonical Spec 005 planning package plus exact implementation evidence on `impl/005-local-tools-context-memory`;
 8. exact Source Foundry records for any source later reaching `ADMITTED`.
 
 Nonmerged proposals, status-only bot messages, stale comments and prior handoffs cannot override live canonical truth.
 
-## Spec 005 planning read order
+## Spec 005 implementation read order
 
 1. `.specify/memory/constitution.md`
 2. `specs/001-golam-local-agent-os-foundation/spec.md`
@@ -44,6 +44,7 @@ Nonmerged proposals, status-only bot messages, stale comments and prior handoffs
 17. `specs/005-local-tools-context-memory/checklists/implementation-readiness.md`
 18. `specs/005-local-tools-context-memory/tasks.md`
 19. `specs/005-local-tools-context-memory/analysis.md`
+20. exact implementation evidence on `impl/005-local-tools-context-memory`
 
 ## Hard boundaries
 
@@ -65,7 +66,7 @@ Nonmerged proposals, status-only bot messages, stale comments and prior handoffs
 
 ## Execution discipline
 
-Execute `tasks.md` in dependency order. Do not begin implementation until planning is genuinely `CLOSED_CANONICAL` and the implementation branch is created from the exact verified post-planning main.
+Execute `tasks.md` in dependency order. Spec 005 planning is `CLOSED_CANONICAL`; implementation starts from exact verified `main@4bd23b218304663349fb2f703cedd40c7a3038af` and T005-025. Do not skip focused qualification, Source Foundry admission, production-containment gates, exact-head CI, independent review, expected-head merge or post-merge canonical-main verification.
 
 Never claim tests/CI/review/containment/platform/security behavior without exact evidence. A branch mutation invalidates CI/review evidence bound to the prior head; unchanged canonical predecessor evidence remains valid unless superseded by live truth.
 
