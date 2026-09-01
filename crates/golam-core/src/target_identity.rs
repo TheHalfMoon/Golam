@@ -152,7 +152,9 @@ pub enum TargetIdentityError {
 impl fmt::Display for TargetIdentityError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MissingAllowedOperation => f.write_str("authorized root has no allowed operation"),
+            Self::MissingAllowedOperation => {
+                f.write_str("authorized root has no allowed operation")
+            }
             Self::TooManyAllowedOperations => {
                 f.write_str("authorized root exceeds bounded operation count")
             }
