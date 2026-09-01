@@ -4,13 +4,16 @@
 
 ## 1. Canonical ownership
 
-Human-readable managed Markdown is canonical long-lived knowledge. SQLite is canonical operational state. Search indexes, embeddings, graphs, caches and summaries are rebuildable derivatives.
+Human-readable managed Markdown is canonical long-lived knowledge. A dedicated memory operational SQLite store is canonical operational memory state. Search indexes, embeddings, graphs, caches and summaries are rebuildable derivatives.
+
+The existing Effect Gate journal remains separate protected authority state in the canonical authority database addressed by `AuthorityLayout::authority_db_path()` and owned by the existing ledger/effect boundary. Spec 005 MUST NOT move Kernel authorization, approval, capability, lease, Effect Gate PREPARED/terminal authority, or audit authority into the memory operational SQLite store. T005-045 freezes the exact memory operational SQLite path/schema, but it remains a separate store from the authority database and every effect-owned memory row MUST bind the exact Effect Gate `effect_id` and mutation-intent digest.
 
 ```text
 MEMORY_CANDIDATE != DURABLE_MEMORY
 MEMORY_INDEX != CANONICAL_MEMORY
 RETRIEVAL_SCORE != MEMORY_AUTHORITY
 SECRET_DERIVED != CANONICAL_LONG_TERM_MEMORY
+MEMORY_OPERATIONAL_SQLITE != AUTHORITY_DATABASE
 ```
 
 ## 2. Scopes
@@ -53,37 +56,44 @@ A separately created candidate may be eligible only when its content is independ
 
 ## 6. Single managed writer and Effect Gate lifecycle
 
-Every Golam-generated managed-memory mutation, including `FORGET` and `REDACT`, is a consequential protected mutation. It MUST use an immutable `MemoryMutationIntent` bound to the initiating principal, current Kernel authorization, applicable promotion approval/pre-registered verifier evidence, expected current memory versions, and a unique effect identity.
+Every Golam-generated managed-memory mutation, including `FORGET` and `REDACT`, is a consequential protected mutation. It MUST use an immutable `MemoryMutationIntent` bound to the initiating principal, current Kernel authorization, applicable promotion approval/pre-registered verifier evidence, expected current memory versions, expected observed Markdown digest/identity, and a unique effect identity.
 
-Before the first canonical Markdown or SQLite mutation, the intent MUST be durably persisted as an authorized Effect Gate PREPARED transaction. Only the single governed memory writer/handler may execute that prepared mutation.
+Before the first canonical Markdown or memory operational SQLite mutation, the exact intent MUST be durably persisted and committed as an authorized Effect Gate PREPARED transaction in the existing authority database. The PREPARED commit is the authorization/durability boundary: the authority-database transaction containing the exact `effect_id`, mutation-intent digest and authorization evidence MUST reach the existing durable ledger commit semantics before the writer may mutate canonical Markdown or the memory operational SQLite store. A merely allocated in-memory effect id, uncommitted transaction, or memory-SQLite row is not PREPARED evidence.
 
-The writer lifecycle is:
+The memory operational SQLite store is intentionally separate from the authority database. Spec 005 assumes no cross-database or filesystem/database atomic transaction. The single governed writer therefore MUST bind every operational write to the exact `effect_id`, expected versions/digests and mutation-intent digest, and terminal success MUST NOT be recorded until the authority journal, canonical Markdown and memory operational SQLite state have been read back and reconciled.
+
+Only the single governed memory writer/handler may execute the prepared mutation. The writer lifecycle is:
 
 ```text
 MemoryMutationIntent
 -> validate scope + taint + provenance
 -> validate current Kernel authorization + promotion authority
--> read current canonical version and expected preconditions
+-> read current canonical version + target identity + expected observed Markdown digest
 -> detect user edit/conflict
--> persist durable Effect Gate PREPARED intent
+-> commit durable Effect Gate PREPARED intent in authority database
 -> construct next canonical state
 -> durable temporary write
--> atomic/identity-preserving Markdown replacement
--> commit/update SQLite operational/version evidence
+-> immediately revalidate expected Markdown digest/version + target identity at commit time
+-> conditional compare-and-replace / identity-preserving Markdown replacement
+-> commit memory operational SQLite rows bound to effect_id + intent digest
 -> invalidate affected derivatives before they may serve
--> post-write/read-back verification
+-> post-write/read-back verification across authority journal + Markdown + memory SQLite
 -> record integrity-chained terminal Effect Gate outcome + verification evidence
 ```
 
+The Markdown commit primitive MUST preserve the checked identity through replacement and MUST compare the commit-time observed content against the expected digest/version bound by the prepared intent. If content or identity changed after the earlier lifecycle check, or the platform cannot preserve the checked identity through commit, the writer MUST NOT replace the Markdown. It records attributable `USER_EDIT_DETECTED` or `CONFLICT` reconciliation evidence and resolves the prepared effect as rejected/failed or leaves it nonterminal when outcome evidence is ambiguous. Silent last-writer-wins replacement is forbidden.
+
 No generic filesystem tool, model, plugin, MCP server or skill may bypass this writer for Golam-generated managed memory changes.
 
-A crash, disconnect or other interruption that leaves completion ambiguous MUST produce or remain an `UNKNOWN_OUTCOME` effect state. Dependent managed-memory mutations remain blocked until restart reconciliation determines the exact Markdown/SQLite state and records attributable reconciliation evidence. Absence of a terminal record is never interpreted as success.
+A crash, disconnect or other interruption that leaves completion ambiguous MUST produce or remain an `UNKNOWN_OUTCOME` effect state. Dependent managed-memory mutations remain blocked until restart reconciliation determines the exact state and records attributable reconciliation evidence. Absence of a terminal record is never interpreted as success.
 
-Multi-store operations such as `FORGET` and `REDACT` use the same lifecycle. Canonical Markdown removal, SQLite operational/version state, derivative invalidation and any rebuild eligibility must reconcile as one effect-owned mutation outcome; partial completion cannot be silently promoted to success.
+Restart reconciliation MUST begin from every PREPARED/nonterminal memory effect in the authority database and compare, by exact `effect_id` and expected version/digest bindings: (1) the authority Effect Gate journal, (2) the canonical Markdown target/content digest/version, and (3) the memory operational SQLite rows/version/effect references. No single store is sufficient proof of success. Missing/unreadable stores, disagreement, a file-without-operational-row, an operational-row-without-the expected file, or an unprovable commit boundary remains `UNKNOWN_OUTCOME`/blocked until deterministic reconciliation resolves it. Derivatives are reconciled only after canonical Markdown and memory operational SQLite agree on the effect-owned canonical cut.
 
-## 7. User hand-edits
+Multi-store operations such as `FORGET` and `REDACT` use the same lifecycle. Canonical Markdown removal, memory operational SQLite state, derivative invalidation and any rebuild eligibility must reconcile as one effect-owned mutation outcome; partial completion cannot be silently promoted to success.
 
-User hand-editing of canonical Markdown is allowed. Golam records the last managed digest/version and compares it to current observed content before managed mutation.
+## 7. User hand-edits and Markdown authority boundary
+
+User hand-editing of canonical Markdown is allowed. Golam records the last managed digest/version and compares it to current observed content before managed mutation **and again immediately at the conditional replacement boundary**.
 
 If divergence is detected:
 
@@ -91,6 +101,10 @@ If divergence is detected:
 - Golam MUST NOT silently overwrite the user edit;
 - reconciliation preserves both the user edit and relevant managed provenance;
 - the resulting canonical version is attributable.
+
+Markdown body content and front matter are user-editable content only; they are never an authority source. Scope, taint, provenance authority class, approval, authorization, managed version identity, writer identity, promotion evidence and Effect Gate state are derived only from protected operational/ledger evidence and current Kernel decisions. The parser MUST NOT honor front-matter fields that purport to mint or change those authority-bearing properties.
+
+If user-edited Markdown introduces a reserved authority-bearing field/key or conflicts with managed metadata that is protected outside the Markdown content, the managed parser/reconciler MUST reject that file from automatic managed mutation and place the item into `USER_EDIT_DETECTED`/`CONFLICT` reconciliation (or an equivalent explicit quarantine state) while preserving the user content for review. It MUST NOT import, normalize or silently ignore such a field in a way that changes authority.
 
 ## 8. Operations
 
@@ -149,7 +163,7 @@ Every derivative generation binds implementation identity and canonical cut dige
 
 Startup and canonical memory access MUST remain functional when derivatives are absent or rebuilding. Dense/vector services are not baseline availability dependencies.
 
-A derivative-dependent operation encountering a missing/corrupt generation MUST trigger a governed rebuild from canonical state or fail that derivative-dependent operation closed. It MUST NOT fail canonical Markdown/SQLite memory access merely because the derivative is absent.
+A derivative-dependent operation encountering a missing/corrupt generation MUST trigger a governed rebuild from canonical state or fail that derivative-dependent operation closed. It MUST NOT fail canonical Markdown/memory-operational-SQLite access merely because the derivative is absent.
 
 `FORGET`/`REDACT` invalidates any derivative generation that may contain affected content before that generation may serve results again.
 
@@ -159,7 +173,9 @@ Remembered claims never outrank fresher authoritative repository/filesystem/devi
 
 ## 12. Durability and failure
 
-The writer must fail closed on disk-full, partial write, crash-before-replace, crash-after-replace-before-operational-record, or operational-record-without-readable-canonical-file cases. Restart reconciliation must converge to an attributable state without silently discarding user content or treating an ambiguous effect as successful.
+The writer must fail closed on disk-full, partial write, crash-before-replace, crash-after-replace-before-memory-SQLite-commit, memory-SQLite-commit-without-readable/expected-canonical-file, authority-PREPARED-without-memory mutation, or any disagreement among authority journal, Markdown and memory operational SQLite. Restart reconciliation must converge to an attributable state without silently discarding user content or treating an ambiguous effect as successful.
+
+No implementation may claim atomic commit across the authority database, filesystem Markdown and separate memory operational SQLite. Instead, the durable PREPARED authority record precedes mutation, every later store binds the same effect identity and expected state, and terminal Effect Gate success follows only after deterministic cross-store read-back/reconciliation.
 
 ## 13. Export/backup
 
@@ -175,13 +191,15 @@ Qualification includes:
 - candidate-selected verifier;
 - `SECRET_DERIVED` promotion attempts;
 - attempted taint downgrade via redaction/summarization/transformation;
-- user-edit races;
+- user-edit races, including an edit after the initial check but before Markdown replacement;
+- inability to preserve expected Markdown identity/digest through conditional replacement;
 - contradictory updates;
 - stale-memory vs live-state conflict;
-- crash/restart at every PREPARED/writer/Markdown/SQLite/outcome durability boundary;
+- crash/restart at every authority-PREPARED/writer/Markdown/memory-SQLite/outcome durability boundary;
+- authority database PREPARED vs Markdown vs memory-SQLite disagreement and restart reconciliation;
 - ambiguous completion and dependent-mutation blocking under `UNKNOWN_OUTCOME`;
 - creator/writer/effect attribution preservation through restart/reconciliation;
 - disk-full/permission loss;
 - FORGET/REDACT partial multi-store completion and derivative resurrection;
-- malicious Markdown/front-matter trying to mutate authority;
+- malicious Markdown/front-matter trying to mutate scope, taint, provenance, approval, authorization, version or Effect Gate authority;
 - derivative index unavailable/corrupt/rebuilt from canonical state.

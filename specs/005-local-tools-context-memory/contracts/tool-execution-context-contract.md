@@ -126,8 +126,11 @@ device rights
 resource limits
 inherited-handle rules
 timeout/cancellation policy
-descendant supervision
+descendant supervision policy
+process-tree reconciliation policy
 ```
+
+`descendant supervision policy` binds process-tree ownership/discovery, inherited-handle constraints, termination responsibility and descendant observation. `process-tree reconciliation policy` separately binds the terminal evidence required for the root process and **every descendant**, unresolved-descendant behavior and restart reconciliation. Cancellation policy is not terminal evidence.
 
 Unbrokerable secrets follow the canonical secret fallback contract and never become ambient process environment by default.
 
@@ -135,9 +138,13 @@ Unbrokerable secrets follow the canonical secret fallback contract and never bec
 
 Command strings are content, not parsed authority. If shell syntax is supported, command graph, redirections, substitutions and executable identities MUST be explicit or the request is rejected as ambiguous. Model/donor parsing claims cannot waive authorization.
 
-### 6.4 Evidence
+### 6.4 Evidence and terminal reconciliation
 
 PREPARED/authorized durable effect evidence precedes launch. Output, exit state, timeout/cancellation, descendants, redaction and reconciliation evidence are attributable to the exact request/attempt.
+
+A root-process exit, timeout signal, cancellation request, successful wait on the root, or attempted descendant termination MUST NOT be treated as terminal success by itself. Terminal success requires attributable evidence that the root and every discovered/owned descendant reached an allowed terminal state and that no unresolved descendant remains outside the admitted containment/reconciliation policy.
+
+If any descendant remains alive, unobservable, ownership-ambiguous or otherwise unresolved, the process effect remains failed/reconciling rather than successful. When consequential completion itself is ambiguous, the effect MUST remain `UNKNOWN_OUTCOME` until restart/terminal reconciliation proves the complete process-tree state; dependent consequential work remains blocked where the descriptor/effect policy requires it. Absence of descendant evidence is never proof of containment.
 
 ## 7. Browser/network tool contract
 
@@ -203,6 +210,8 @@ When a remembered or cached/contextual claim conflicts with fresher authoritativ
 
 Consequential tool completion is not satisfied by process success or model prose alone. The descriptor's verification policy determines required read-back/deterministic evidence. Verification evidence is independently attributable and cannot be fabricated by the same tool result when the contract requires an external/read-back check.
 
+For process tools, verification policy MUST include the launch plan's process-tree reconciliation policy and terminal evidence for root plus all descendants before a terminal success claim is eligible.
+
 ## 12. Required adversarial corpus
 
 Qualification includes:
@@ -216,6 +225,8 @@ Qualification includes:
 - shell parsing/metacharacter/redirection ambiguity;
 - ambient environment/secret leakage;
 - descendant escape/cancellation;
+- root exit or cancellation with a surviving/unobservable descendant;
+- restart during unresolved process-tree termination and `UNKNOWN_OUTCOME` reconciliation;
 - unauthorized network and redirect widening;
 - credential forwarding across redirect/origin/protocol changes;
 - unauthenticated TLS/endpoint identity and credential-bearing downgrade attempts;
