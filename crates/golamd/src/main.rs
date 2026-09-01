@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+pub mod benchmark;
 mod connection;
 mod deadline_io;
 pub mod harness;
