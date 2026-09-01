@@ -6,6 +6,7 @@ mod deadline_io;
 pub mod harness;
 pub mod local_fs;
 pub mod local_read;
+pub mod local_search;
 pub mod local_walk;
 #[cfg(test)]
 mod spec004_compaction_tests;
