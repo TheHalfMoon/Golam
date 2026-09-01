@@ -81,7 +81,9 @@ impl RequestedTarget {
         let value = value.into();
         if value.is_empty()
             || value.len() > MAX_TARGET_BYTES
-            || value.chars().any(|character| character == '\0' || character == '\r')
+            || value
+                .chars()
+                .any(|character| character == '\0' || character == '\r')
         {
             return Err(ToolRequestError::InvalidTarget);
         }
@@ -291,9 +293,9 @@ impl fmt::Display for ToolRequestError {
             Self::UnsortedOrDuplicate(field) => {
                 write!(f, "bindings must be strictly sorted and unique: {field}")
             }
-            Self::MissingTargetBinding => {
-                f.write_str("requested target requires an exact identity or bounded resolution plan")
-            }
+            Self::MissingTargetBinding => f.write_str(
+                "requested target requires an exact identity or bounded resolution plan",
+            ),
             Self::AmbiguousTargetBinding => {
                 f.write_str("requested target cannot bind both identity and resolution plan")
             }
@@ -455,13 +457,19 @@ mod tests {
     fn target_binding_is_exactly_one_of_identity_or_resolution_plan() {
         let mut value = request();
         value.target_identity_ref = None;
-        assert_eq!(value.validate(), Err(ToolRequestError::MissingTargetBinding));
+        assert_eq!(
+            value.validate(),
+            Err(ToolRequestError::MissingTargetBinding)
+        );
 
         value.target_resolution_plan_ref = Some(digest(8));
         assert_eq!(value.validate(), Ok(()));
 
         value.target_identity_ref = Some(digest(1));
-        assert_eq!(value.validate(), Err(ToolRequestError::AmbiguousTargetBinding));
+        assert_eq!(
+            value.validate(),
+            Err(ToolRequestError::AmbiguousTargetBinding)
+        );
     }
 
     #[test]
