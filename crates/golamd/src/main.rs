@@ -3,6 +3,8 @@
 mod connection;
 mod deadline_io;
 pub mod harness;
+#[cfg(test)]
+mod spec004_compaction_tests;
 
 use std::error::Error;
 use std::io::{self, Write};
