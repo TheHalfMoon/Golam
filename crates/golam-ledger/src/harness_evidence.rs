@@ -14,7 +14,7 @@ use golam_core::harness_state::{
 };
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
-pub const HARNESS_EVIDENCE_SCHEMA_VERSION: i64 = 1;
+pub const HARNESS_EVIDENCE_SCHEMA_VERSION: i64 = 2;
 
 pub const REQUIRED_HARNESS_TABLES: &[&str] = &[
     "harness_schema_meta",
@@ -154,6 +154,16 @@ impl HarnessEvidenceStore {
         )?;
         migrate(&connection)?;
         verify_required_tables(&connection)?;
+        verify_required_column(
+            &connection,
+            "harness_compaction_attempts",
+            "source_projection_ref",
+        )?;
+        verify_required_column(
+            &connection,
+            "harness_compaction_artifacts",
+            "source_projection_ref",
+        )?;
         Ok(Self { connection })
     }
 
@@ -467,8 +477,8 @@ impl HarnessEvidenceStore {
         let next_state = compaction_state_code(attempt);
         let existing = tx
             .query_row(
-                r#"SELECT state, session_id, deterministic, producing_request_attempt_id,
-                          started_at_unix_ms
+                r#"SELECT state, session_id, source_projection_ref, deterministic,
+                          producing_request_attempt_id, started_at_unix_ms
                    FROM harness_compaction_attempts
                    WHERE compaction_id = ?1"#,
                 params![id_blob(attempt.compaction_id.as_u128())],
@@ -476,9 +486,10 @@ impl HarnessEvidenceStore {
                     Ok((
                         row.get::<_, i64>(0)?,
                         row.get::<_, Vec<u8>>(1)?,
-                        row.get::<_, bool>(2)?,
-                        row.get::<_, Option<Vec<u8>>>(3)?,
-                        row.get::<_, i64>(4)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, bool>(3)?,
+                        row.get::<_, Option<Vec<u8>>>(4)?,
+                        row.get::<_, i64>(5)?,
                     ))
                 },
             )
@@ -490,11 +501,19 @@ impl HarnessEvidenceStore {
                     "compaction lifecycle must begin with STARTED",
                 ));
             }
-            Some((current_state, session_id, deterministic, producing_attempt_id, started_at)) => {
+            Some((
+                current_state,
+                session_id,
+                source_projection_ref,
+                deterministic,
+                producing_attempt_id,
+                started_at,
+            )) => {
                 let expected_producing_attempt = attempt
                     .producing_request_attempt_id
                     .map(|id| id_blob(id.as_u128()));
                 if session_id != id_blob(attempt.session_id.0)
+                    || source_projection_ref != attempt.source_projection_ref
                     || deterministic != attempt.deterministic
                     || producing_attempt_id != expected_producing_attempt
                     || started_at != u64_to_i64(attempt.started_at_unix_ms)?
@@ -514,15 +533,17 @@ impl HarnessEvidenceStore {
 
         let changed = tx.execute(
             r#"INSERT INTO harness_compaction_attempts
-               (compaction_id, session_id, state, deterministic, producing_request_attempt_id,
-                started_at_unix_ms, terminal_at_unix_ms, failure_class, record_bytes)
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+               (compaction_id, session_id, source_projection_ref, state, deterministic,
+                producing_request_attempt_id, started_at_unix_ms, terminal_at_unix_ms,
+                failure_class, record_bytes)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
                ON CONFLICT(compaction_id) DO UPDATE SET
                  state = excluded.state,
                  terminal_at_unix_ms = excluded.terminal_at_unix_ms,
                  failure_class = excluded.failure_class,
                  record_bytes = excluded.record_bytes
                WHERE harness_compaction_attempts.session_id = excluded.session_id
+                 AND harness_compaction_attempts.source_projection_ref = excluded.source_projection_ref
                  AND harness_compaction_attempts.deterministic = excluded.deterministic
                  AND harness_compaction_attempts.producing_request_attempt_id
                      IS excluded.producing_request_attempt_id
@@ -530,6 +551,7 @@ impl HarnessEvidenceStore {
             params![
                 id_blob(attempt.compaction_id.as_u128()),
                 id_blob(attempt.session_id.0),
+                attempt.source_projection_ref,
                 next_state,
                 attempt.deterministic,
                 attempt
@@ -566,23 +588,56 @@ impl HarnessEvidenceStore {
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        if !row_exists(
-            &tx,
-            "SELECT 1 FROM harness_compaction_attempts WHERE compaction_id = ?1",
-            id_blob(artifact.compaction_id.as_u128()),
-        )? {
+        let parent = tx
+            .query_row(
+                r#"SELECT state, source_projection_ref, deterministic,
+                          producing_request_attempt_id
+                   FROM harness_compaction_attempts
+                   WHERE compaction_id = ?1"#,
+                params![id_blob(artifact.compaction_id.as_u128())],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, bool>(2)?,
+                        row.get::<_, Option<Vec<u8>>>(3)?,
+                    ))
+                },
+            )
+            .optional()?;
+        let Some((parent_state, source_projection_ref, deterministic, producing_attempt_id)) =
+            parent
+        else {
             return Err(HarnessEvidenceError::InvalidRecord(
                 "compaction artifact parent attempt missing",
+            ));
+        };
+        if parent_state != 3 {
+            return Err(HarnessEvidenceError::InvalidRecord(
+                "compaction artifact parent attempt not committed",
+            ));
+        }
+        let expected_producing_attempt = artifact
+            .producing_request_attempt_id
+            .map(|id| id_blob(id.as_u128()));
+        if source_projection_ref != artifact.source_projection_ref
+            || deterministic != artifact.deterministic
+            || producing_attempt_id != expected_producing_attempt
+        {
+            return Err(HarnessEvidenceError::InvalidRecord(
+                "compaction artifact parent binding mismatch",
             ));
         }
         let changed = tx.execute(
             r#"INSERT INTO harness_compaction_artifacts
-               (compaction_id, deterministic, producing_request_attempt_id,
-                accepted_output_ref, artifact_digest, record_bytes)
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+               (compaction_id, source_projection_ref, deterministic,
+                producing_request_attempt_id, accepted_output_ref, artifact_digest, record_bytes)
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
                ON CONFLICT(compaction_id) DO UPDATE SET
                  compaction_id = excluded.compaction_id
-               WHERE harness_compaction_artifacts.deterministic = excluded.deterministic
+               WHERE harness_compaction_artifacts.source_projection_ref
+                     = excluded.source_projection_ref
+                 AND harness_compaction_artifacts.deterministic = excluded.deterministic
                  AND harness_compaction_artifacts.producing_request_attempt_id
                      IS excluded.producing_request_attempt_id
                  AND harness_compaction_artifacts.accepted_output_ref IS excluded.accepted_output_ref
@@ -590,6 +645,7 @@ impl HarnessEvidenceStore {
                  AND harness_compaction_artifacts.record_bytes = excluded.record_bytes"#,
             params![
                 id_blob(artifact.compaction_id.as_u128()),
+                artifact.source_projection_ref,
                 artifact.deterministic,
                 artifact
                     .producing_request_attempt_id
@@ -812,6 +868,13 @@ fn migrate(connection: &Connection) -> Result<(), HarnessEvidenceError> {
         if found == HARNESS_EVIDENCE_SCHEMA_VERSION {
             return Ok(());
         }
+        if found == 1 {
+            migrate_v1_to_v2(connection)?;
+            return Ok(());
+        }
+        return Err(HarnessEvidenceError::InvalidRecord(
+            "unsupported harness schema version",
+        ));
     }
 
     connection.execute_batch(
@@ -869,6 +932,7 @@ fn migrate(connection: &Connection) -> Result<(), HarnessEvidenceError> {
         CREATE TABLE IF NOT EXISTS harness_compaction_attempts (
           compaction_id BLOB PRIMARY KEY NOT NULL,
           session_id BLOB NOT NULL,
+          source_projection_ref TEXT NOT NULL,
           state INTEGER NOT NULL,
           deterministic INTEGER NOT NULL,
           producing_request_attempt_id BLOB,
@@ -879,6 +943,7 @@ fn migrate(connection: &Connection) -> Result<(), HarnessEvidenceError> {
         );
         CREATE TABLE IF NOT EXISTS harness_compaction_artifacts (
           compaction_id BLOB PRIMARY KEY NOT NULL,
+          source_projection_ref TEXT NOT NULL,
           deterministic INTEGER NOT NULL,
           producing_request_attempt_id BLOB,
           accepted_output_ref TEXT,
@@ -903,8 +968,34 @@ fn migrate(connection: &Connection) -> Result<(), HarnessEvidenceError> {
           finished_at_unix_ms INTEGER,
           record_bytes BLOB NOT NULL
         );
-        INSERT INTO harness_schema_meta(singleton, schema_version) VALUES (1, 1)
+        INSERT INTO harness_schema_meta(singleton, schema_version) VALUES (1, 2)
           ON CONFLICT(singleton) DO UPDATE SET schema_version = excluded.schema_version;
+        COMMIT;"#,
+    )?;
+    Ok(())
+}
+
+fn migrate_v1_to_v2(connection: &Connection) -> Result<(), HarnessEvidenceError> {
+    let attempts: i64 = connection.query_row(
+        "SELECT COUNT(*) FROM harness_compaction_attempts",
+        [],
+        |row| row.get(0),
+    )?;
+    let artifacts: i64 = connection.query_row(
+        "SELECT COUNT(*) FROM harness_compaction_artifacts",
+        [],
+        |row| row.get(0),
+    )?;
+    if attempts != 0 || artifacts != 0 {
+        return Err(HarnessEvidenceError::InvalidRecord(
+            "schema v1 compaction evidence lacks source projection binding",
+        ));
+    }
+    connection.execute_batch(
+        r#"BEGIN IMMEDIATE;
+        ALTER TABLE harness_compaction_attempts ADD COLUMN source_projection_ref TEXT;
+        ALTER TABLE harness_compaction_artifacts ADD COLUMN source_projection_ref TEXT;
+        UPDATE harness_schema_meta SET schema_version = 2 WHERE singleton = 1;
         COMMIT;"#,
     )?;
     Ok(())
@@ -927,6 +1018,23 @@ fn verify_required_tables(connection: &Connection) -> Result<(), HarnessEvidence
         }
     }
     Ok(())
+}
+
+fn verify_required_column(
+    connection: &Connection,
+    table: &str,
+    column: &str,
+) -> Result<(), HarnessEvidenceError> {
+    let mut statement = connection.prepare(&format!("PRAGMA table_info({table})"))?;
+    let mut rows = statement.query([])?;
+    while let Some(row) = rows.next()? {
+        if row.get::<_, String>(1)? == column {
+            return Ok(());
+        }
+    }
+    Err(HarnessEvidenceError::InvalidRecord(
+        "required harness column missing",
+    ))
 }
 
 fn read_attempt_identity(
@@ -1194,14 +1302,14 @@ mod tests {
         let connection = Connection::open_in_memory().unwrap();
         connection
             .execute_batch(
-                "CREATE TABLE harness_schema_meta (singleton INTEGER PRIMARY KEY, schema_version INTEGER NOT NULL); INSERT INTO harness_schema_meta VALUES (1, 2);",
+                "CREATE TABLE harness_schema_meta (singleton INTEGER PRIMARY KEY, schema_version INTEGER NOT NULL); INSERT INTO harness_schema_meta VALUES (1, 3);",
             )
             .unwrap();
         assert!(matches!(
             HarnessEvidenceStore::initialize(connection),
             Err(HarnessEvidenceError::FutureSchema {
-                found: 2,
-                supported: 1
+                found: 3,
+                supported: 2
             })
         ));
     }
@@ -1451,6 +1559,23 @@ mod tests {
     }
 
     #[test]
+    fn compaction_source_projection_is_immutable() {
+        let mut store = HarnessEvidenceStore::open_in_memory().unwrap();
+        let attempt = started_compaction();
+        store
+            .record_compaction_attempt(&attempt, b"started")
+            .unwrap();
+        let mut conflicting = attempt;
+        conflicting.source_projection_ref = "projection:source:2".into();
+        assert!(matches!(
+            store.record_compaction_attempt(&conflicting, b"conflicting"),
+            Err(HarnessEvidenceError::InvalidRecord(
+                "immutable compaction identity mismatch"
+            ))
+        ));
+    }
+
+    #[test]
     fn incomplete_compaction_start_survives_reopen() {
         let path = temp_db_path("compaction-start-reopen");
         let attempt = started_compaction();
@@ -1461,15 +1586,16 @@ mod tests {
                 .unwrap();
         }
         let reopened = HarnessEvidenceStore::open(&path).unwrap();
-        let stored_state: i64 = reopened
+        let stored: (i64, String) = reopened
             .connection
             .query_row(
-                "SELECT state FROM harness_compaction_attempts WHERE compaction_id = ?1",
+                "SELECT state, source_projection_ref FROM harness_compaction_attempts WHERE compaction_id = ?1",
                 params![id_blob(attempt.compaction_id.as_u128())],
-                |row| row.get(0),
+                |row| Ok((row.get(0)?, row.get(1)?)),
             )
             .unwrap();
-        assert_eq!(stored_state, 0);
+        assert_eq!(stored.0, 0);
+        assert_eq!(stored.1, attempt.source_projection_ref);
         drop(reopened);
         let _ = fs::remove_file(path);
     }
