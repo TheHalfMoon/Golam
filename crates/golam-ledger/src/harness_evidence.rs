@@ -1257,10 +1257,7 @@ mod tests {
         }
     }
 
-    fn dispatch_attempt(
-        store: &mut HarnessEvidenceStore,
-        attempt: &mut RequestAttempt,
-    ) {
+    fn dispatch_attempt(store: &mut HarnessEvidenceStore, attempt: &mut RequestAttempt) {
         attempt.state = RequestAttemptState::Dispatched;
         attempt.backend_instance_ref = Some("scripted:1".into());
         store
