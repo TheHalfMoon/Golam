@@ -8,8 +8,10 @@ Skills and protocols are interoperability/configuration mechanisms, never author
 
 ```text
 SKILL != AUTHORITY
+STALE_SKILL_DISPATCH_BINDING != ACTIVE_AUTHORITY
 MCP_CAPABILITY_ADVERTISEMENT != GOLAM_CAPABILITY
 MCP_RESULT != VERIFIED_TRUTH
+STALE_MCP_DISPATCH_BINDING != ACTIVE_AUTHORITY
 ACP_CONNECTION != AUTHENTICATED_AUTHORITY
 PROTOCOL_TRANSPORT != POLICY_BYPASS
 ```
@@ -31,6 +33,21 @@ A `SkillDescriptor` binds:
 
 Instruction content is untrusted model-visible context. It may request actions but cannot authorize them.
 
+A dispatchable reviewed package also has an explicit `SkillDispatchBinding`:
+
+```text
+skill package identity
+skill version
+reviewed content digest
+reviewed admission/lifecycle state reference
+reviewed Golam-local capability mapping reference/digest
+queued/prepared request reference
+capability decision reference
+approval decision reference
+```
+
+The binding is immutable evidence of what was reviewed; it is not authority by itself.
+
 ## 3. Skill lifecycle and dispatch gate
 
 Minimum lifecycle:
@@ -47,9 +64,9 @@ DISCOVERED
 
 Discovery or package presence is not admission. Updates require a new immutable version and renewed review when execution/capability semantics change.
 
-Immediately before every instruction activation or executable-skill dispatch, Golam MUST re-read the current lifecycle state and verify the exact reviewed package/version/content digest. Dispatch requires a currently active admitted state appropriate to the requested operation; `DEPRECATED`, `REVOKED`, replaced, unknown or version-mismatched packages fail closed.
+Immediately before every instruction activation or executable-skill dispatch, Golam MUST re-read the current lifecycle state and revalidate the exact `SkillDispatchBinding`: package identity, version, reviewed content digest, reviewed admission state and reviewed Golam-local capability mapping. Dispatch requires a currently active admitted state appropriate to the requested operation; `DEPRECATED`, `REVOKED`, replaced, unknown, version-mismatched, digest-mismatched or mapping-mismatched packages fail closed.
 
-Capabilities, approvals, prepared-but-not-dispatched calls, queued calls and cached dispatch decisions are scoped to the exact active package/binding version. A lifecycle transition to `DEPRECATED`/`REVOKED`, version replacement or inability to validate the current state invalidates those cached decisions and queued calls; they MUST NOT be replayed under prior authority. A replacement version requires fresh review and fresh authority evaluation.
+Capabilities, approvals, prepared-but-not-dispatched calls, queued calls and cached dispatch decisions are scoped to that exact reviewed binding. A lifecycle transition to `DEPRECATED`/`REVOKED`, package replacement, version/content/mapping change or inability to validate the current state invalidates queued/prepared calls, cached capability/approval material and cached dispatch decisions; they MUST NOT be replayed under prior authority. A replacement version requires fresh review and fresh authority evaluation.
 
 Already-running protected effects remain governed by their exact prepared effect identity and normal cancellation/reconciliation semantics. Revocation does not retroactively convert an ambiguous or still-running effect into success.
 
@@ -60,33 +77,49 @@ Executable scripts remain disabled unless:
 - exact source/permission/dependency closure is admitted;
 - the requested platform has an exact admitted production containment profile;
 - environment/FS/network/process/resource limits are explicit;
-- the active exact package version is revalidated at dispatch time;
+- the active exact `SkillDispatchBinding` is revalidated at dispatch time;
 - launch occurs as a normal governed tool/effect under current capability/approval state;
 - output is treated as untrusted/tainted;
 - cancellation and descendant supervision are qualified.
 
 No script metadata may create implicit shell/network authority.
 
-## 5. MCP server binding
+## 5. MCP server and dispatch binding
 
 An `McpServerBinding` records:
 
 ```text
 binding id
-server identity/version lock
+binding digest
+server identity
 transport
 local process profile or remote endpoint
 allowed protocol feature set
-Golam-local tool/resource mapping
+Golam-local tool/resource mapping reference
+Golam-local mapping digest
 network policy
 secret policy
 taint class
+version lock
 lifecycle state
 ```
 
 A server-advertised tool/resource/prompt is descriptive input. Golam maps it into an `ExternalToolDescriptor` whose maximum authority cannot exceed explicit local configuration and current policy/capability state.
 
-Every MCP dispatch MUST revalidate immediately before dispatch that the exact `McpServerBinding` identity/version lock remains reviewed and active and that its Golam-local mapping has not been replaced or revoked. `DEPRECATED`, `REVOKED`, replaced, unreviewed, unknown or version-mismatched bindings reject cached capabilities, cached approvals, queued calls and stale mapped descriptors. No queued/cached request may inherit authority from a superseded binding.
+Every dispatch also carries an explicit `McpDispatchBinding`:
+
+```text
+binding id
+binding digest
+version lock
+Golam-local mapping reference/digest
+lifecycle-state reference
+queued/prepared request reference
+capability decision reference
+approval decision reference
+```
+
+Immediately before every local or remote MCP dispatch, Golam MUST re-read the current lifecycle state and revalidate the exact active reviewed binding identity/digest, version lock and Golam-local mapping identity/digest. `DEPRECATED`, `REVOKED`, replaced, unreviewed, unknown, version-mismatched, digest-mismatched or mapping-mismatched state rejects queued calls, prepared-but-not-dispatched calls, stale mapped descriptors, cached capabilities, cached approvals and cached dispatch decisions. No superseded binding may donate authority to a replacement.
 
 ## 6. MCP local process
 
@@ -94,7 +127,7 @@ Local MCP child-process launch requires the same exact production containment ga
 
 The child receives a cleared ambient environment, only explicitly brokered secrets, bounded FS/network/resource access and supervised cancellation/descendants. MCP stdout/stderr/protocol results are untrusted input.
 
-The exact active binding/version and current local mapping are revalidated after queueing and immediately before process dispatch. A revocation or replacement before launch denies the dispatch rather than relying on stale capability/approval state.
+The exact active `McpDispatchBinding` is revalidated after queueing and again immediately before process dispatch. A revocation/replacement/version/digest/mapping mismatch before launch denies the dispatch rather than relying on stale capability/approval state.
 
 ## 7. MCP remote transport
 
@@ -102,7 +135,7 @@ Remote MCP requires explicit network/egress authority, endpoint identity policy,
 
 Strict-local denies external remote MCP. Loopback/local IPC remains separately governed and still requires authenticated binding where relevant.
 
-The exact active binding/version and mapping are revalidated immediately before any remote request is sent. Revocation/replacement invalidates queued remote calls and cached authorization decisions.
+The exact active `McpDispatchBinding` is revalidated immediately before any remote request is sent. Revocation/replacement/version/digest/mapping mismatch invalidates queued remote calls, prepared-but-not-dispatched calls and cached authorization/dispatch decisions.
 
 ## 8. MCP protocol errors and unsupported states
 
@@ -110,7 +143,7 @@ Unsupported/unqualified protocol features fail explicitly; Golam does not silent
 
 Protocol/schema violations, oversized messages, unknown content types and malformed tool descriptors fail closed under bounded parsing limits.
 
-Lifecycle/version validation failure is an unsupported dispatch state and fails closed; it never falls back to a stale cached binding or broader transport.
+Lifecycle/version/digest/mapping validation failure is an unsupported dispatch state and fails closed; it never falls back to a stale cached binding or broader transport.
 
 ## 9. MCP authority mapping
 
@@ -124,7 +157,7 @@ A server cannot:
 - bypass the Effect Gate by naming a tool `read_only` or equivalent;
 - widen network/filesystem authority through nested tool calls.
 
-Every consequential mapped operation is independently authorized at the Golam action boundary after the active exact MCP binding/version and Golam-local mapping are revalidated. Cached capability/approval material never outlives the binding/version for which it was evaluated.
+Every consequential mapped operation is independently authorized at the Golam action boundary after the exact active `McpDispatchBinding` and current Golam-local mapping are revalidated. Cached descriptor/capability/approval/dispatch material never outlives the exact binding/version/mapping for which it was evaluated.
 
 ## 10. ACP boundary
 
@@ -155,9 +188,12 @@ Qualification includes:
 - descendant/network escape;
 - remote endpoint/redirect confusion;
 - stale/replaced server version lock;
+- skill package version/content-digest/capability-mapping mismatch at activation/dispatch;
+- MCP binding/version/binding-digest/local-mapping mismatch at local and remote dispatch;
 - cached capability/approval reuse after skill/MCP replacement or revocation;
-- queued instruction/executable/MCP calls surviving `DEPRECATED`/`REVOKED` transitions;
-- dispatch-time lifecycle/version validation unavailable or mismatched;
+- queued and prepared-but-not-dispatched instruction/executable/MCP calls surviving `DEPRECATED`/`REVOKED` transitions;
+- stale mapped descriptors or cached dispatch decisions after replacement/revocation;
+- dispatch-time lifecycle/version/digest/mapping validation unavailable or mismatched;
 - protocol disconnect/restart during an ambiguous consequential effect;
 - ACP unauthenticated/local-spoof attempts;
 - skill package update replacing reviewed executable content without version change.
