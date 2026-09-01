@@ -1,6 +1,7 @@
 #![forbid(unsafe_code)]
 
 pub mod authority;
+pub mod context_projection;
 pub mod execution_profile;
 pub mod harness;
 pub mod harness_state;
