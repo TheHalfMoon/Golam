@@ -435,10 +435,10 @@ impl MemoryEvidenceStore {
         let Some(stored) = stored else {
             return Err(MemoryEvidenceError::MissingPreparedIntent(effect_id));
         };
-        if let Some(expected) = expected_digest {
-            if stored.as_slice() != expected.bytes() {
-                return Err(MemoryEvidenceError::IntentDigestMismatch);
-            }
+        if let Some(expected) = expected_digest
+            && stored.as_slice() != expected.bytes()
+        {
+            return Err(MemoryEvidenceError::IntentDigestMismatch);
         }
         Ok(())
     }
