@@ -79,6 +79,7 @@ pub fn build_post_compaction_projection(
     if attempt.state != CompactionState::Committed
         || attempt.terminal_at_unix_ms.is_none()
         || attempt.compaction_id != artifact.compaction_id
+        || attempt.source_projection_ref != artifact.source_projection_ref
         || attempt.deterministic != artifact.deterministic
         || attempt.producing_request_attempt_id != artifact.producing_request_attempt_id
         || canonical_goal_refs.is_empty()
@@ -301,6 +302,20 @@ mod tests {
 
         assert_eq!(
             build_post_compaction_projection(value, &attempt, &artifact, &changed_goal_refs),
+            Err(HarnessStateError::InvalidBounds)
+        );
+    }
+
+    #[test]
+    fn post_compaction_projection_rejects_source_projection_mismatch() {
+        let value = input();
+        let attempt = committed_compaction();
+        let mut artifact = compaction_artifact();
+        artifact.source_projection_ref = "projection:session-1:other-source".into();
+        let canonical_goal_refs = vec!["goal:3:version:2".into()];
+
+        assert_eq!(
+            build_post_compaction_projection(value, &attempt, &artifact, &canonical_goal_refs),
             Err(HarnessStateError::InvalidBounds)
         );
     }
