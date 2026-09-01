@@ -70,6 +70,18 @@ pub struct RouteCandidate<'a> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct HardwareFixtureInput {
+    pub hardware_profile_id: HardwareProfileId,
+    pub observed_at_unix_ms: u64,
+    pub platform: String,
+    pub architecture: String,
+    pub cpu_capabilities: Vec<String>,
+    pub memory_capacity_or_bucket: String,
+    pub accelerators: Vec<AcceleratorObservation>,
+    pub backend_capabilities: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RoutingDecision {
     pub selected_profile_id: ExecutionProfileId,
     pub hardware_profile_id: HardwareProfileId,
@@ -228,39 +240,25 @@ pub fn probe_local_hardware(
         .map(|value| value.get())
         .unwrap_or(1)
         .min(MAX_LOCAL_PROBE_CAPABILITIES);
-    hardware_profile(
-        hardware_profile_id,
-        observed_at_unix_ms,
-        std::env::consts::OS,
-        std::env::consts::ARCH,
-        vec![format!("logical-cpus:{logical_cpus}")],
-        "not-probed",
-        Vec::new(),
-        Vec::new(),
+    build_hardware_profile(
+        HardwareFixtureInput {
+            hardware_profile_id,
+            observed_at_unix_ms,
+            platform: std::env::consts::OS.to_owned(),
+            architecture: std::env::consts::ARCH.to_owned(),
+            cpu_capabilities: vec![format!("logical-cpus:{logical_cpus}")],
+            memory_capacity_or_bucket: "not-probed".into(),
+            accelerators: Vec::new(),
+            backend_capabilities: Vec::new(),
+        },
         HardwareProfileSource::LocalProbe,
         HardwarePrivacyClass::LocalOperational,
     )
 }
 
-pub fn hardware_fixture(
-    hardware_profile_id: HardwareProfileId,
-    observed_at_unix_ms: u64,
-    platform: impl Into<String>,
-    architecture: impl Into<String>,
-    cpu_capabilities: Vec<String>,
-    memory_capacity_or_bucket: impl Into<String>,
-    accelerators: Vec<AcceleratorObservation>,
-    backend_capabilities: Vec<String>,
-) -> Result<HardwareProfile, RoutingError> {
-    hardware_profile(
-        hardware_profile_id,
-        observed_at_unix_ms,
-        platform,
-        architecture,
-        cpu_capabilities,
-        memory_capacity_or_bucket,
-        accelerators,
-        backend_capabilities,
+pub fn hardware_fixture(input: HardwareFixtureInput) -> Result<HardwareProfile, RoutingError> {
+    build_hardware_profile(
+        input,
         HardwareProfileSource::Fixture,
         HardwarePrivacyClass::FixtureSynthetic,
     )
@@ -385,47 +383,11 @@ pub fn recommendation_from_decision(
     }
 }
 
-struct HardwareProfileInput {
-    hardware_profile_id: HardwareProfileId,
-    observed_at_unix_ms: u64,
-    platform: String,
-    architecture: String,
-    cpu_capabilities: Vec<String>,
-    memory_capacity_or_bucket: String,
-    accelerators: Vec<AcceleratorObservation>,
-    backend_capabilities: Vec<String>,
-    source: HardwareProfileSource,
-    privacy_class: HardwarePrivacyClass,
-}
-
-#[allow(clippy::too_many_arguments)]
-fn hardware_profile(
-    hardware_profile_id: HardwareProfileId,
-    observed_at_unix_ms: u64,
-    platform: impl Into<String>,
-    architecture: impl Into<String>,
-    cpu_capabilities: Vec<String>,
-    memory_capacity_or_bucket: impl Into<String>,
-    accelerators: Vec<AcceleratorObservation>,
-    backend_capabilities: Vec<String>,
+fn build_hardware_profile(
+    input: HardwareFixtureInput,
     source: HardwareProfileSource,
     privacy_class: HardwarePrivacyClass,
 ) -> Result<HardwareProfile, RoutingError> {
-    build_hardware_profile(HardwareProfileInput {
-        hardware_profile_id,
-        observed_at_unix_ms,
-        platform: platform.into(),
-        architecture: architecture.into(),
-        cpu_capabilities,
-        memory_capacity_or_bucket: memory_capacity_or_bucket.into(),
-        accelerators,
-        backend_capabilities,
-        source,
-        privacy_class,
-    })
-}
-
-fn build_hardware_profile(input: HardwareProfileInput) -> Result<HardwareProfile, RoutingError> {
     let content_digest = hardware_digest(
         &input.platform,
         &input.architecture,
@@ -443,8 +405,8 @@ fn build_hardware_profile(input: HardwareProfileInput) -> Result<HardwareProfile
         memory_capacity_or_bucket: input.memory_capacity_or_bucket,
         accelerators: input.accelerators,
         backend_capabilities: input.backend_capabilities,
-        source: input.source,
-        privacy_class: input.privacy_class,
+        source,
+        privacy_class,
         content_digest,
     };
     profile
@@ -708,16 +670,16 @@ mod tests {
     }
 
     fn hardware(observed_at: u64) -> HardwareProfile {
-        hardware_fixture(
-            HardwareProfileId::from_u128(7),
-            observed_at,
-            "fixture-os",
-            "fixture-arch",
-            vec!["logical-cpus:8".into()],
-            "8-gib",
-            Vec::new(),
-            vec!["scripted".into()],
-        )
+        hardware_fixture(HardwareFixtureInput {
+            hardware_profile_id: HardwareProfileId::from_u128(7),
+            observed_at_unix_ms: observed_at,
+            platform: "fixture-os".into(),
+            architecture: "fixture-arch".into(),
+            cpu_capabilities: vec!["logical-cpus:8".into()],
+            memory_capacity_or_bucket: "8-gib".into(),
+            accelerators: Vec::new(),
+            backend_capabilities: vec!["scripted".into()],
+        })
         .unwrap()
     }
 
@@ -963,22 +925,22 @@ mod tests {
         let mut definition = definition(Locality::Local, "accelerator:gpu-0");
         definition.resource_budget.max_accelerator_memory_bytes = Some(2048);
         let selected = ExecutionProfile::new(definition, Vec::new()).unwrap();
-        let observed = hardware_fixture(
-            HardwareProfileId::from_u128(88),
-            100,
-            "fixture-os",
-            "fixture-arch",
-            vec!["logical-cpus:8".into()],
-            "8-gib",
-            vec![AcceleratorObservation {
+        let observed = hardware_fixture(HardwareFixtureInput {
+            hardware_profile_id: HardwareProfileId::from_u128(88),
+            observed_at_unix_ms: 100,
+            platform: "fixture-os".into(),
+            architecture: "fixture-arch".into(),
+            cpu_capabilities: vec!["logical-cpus:8".into()],
+            memory_capacity_or_bucket: "8-gib".into(),
+            accelerators: vec![AcceleratorObservation {
                 backend_device_id: "gpu-0".into(),
                 device_class: "fixture-gpu".into(),
                 memory_capacity_bytes: Some(1024),
                 feature_flags: Vec::new(),
                 measurement_status: MeasurementStatus::Observed,
             }],
-            Vec::new(),
-        )
+            backend_capabilities: Vec::new(),
+        })
         .unwrap();
         assert!(!hardware_supports_profile(&observed, &selected));
     }
