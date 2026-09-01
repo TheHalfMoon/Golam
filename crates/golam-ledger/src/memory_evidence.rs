@@ -10,7 +10,7 @@ use golam_core::memory::{
 };
 use golam_core::tool_request::{BindingDigest, PrincipalId};
 use golam_core::{CanonicalEncoder, EffectId};
-use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBehavior};
+use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
 pub const MEMORY_EVIDENCE_SCHEMA_VERSION: i64 = 1;
 const MEMORY_SECURITY_CHAIN_DOMAIN: &[u8] = b"golam:memory-security-chain:v1";
@@ -69,9 +69,11 @@ impl fmt::Display for MemoryEvidenceError {
             Self::ImmutableEvidenceMismatch(kind) => {
                 write!(f, "immutable {kind} evidence identity collision")
             }
-            Self::MissingPreparedIntent(effect_id) => {
-                write!(f, "memory effect {} has no durable PREPARED intent", effect_id.0)
-            }
+            Self::MissingPreparedIntent(effect_id) => write!(
+                f,
+                "memory effect {} has no durable PREPARED intent",
+                effect_id.0
+            ),
             Self::IntentDigestMismatch => {
                 f.write_str("memory evidence does not bind the durable PREPARED intent digest")
             }
@@ -138,8 +140,13 @@ impl MemoryEvidenceStore {
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        if existing_hash(&tx, "memory_prepared_intents", "effect_id", &id_blob(intent.effect_id.0))?
-            .is_some_and(|existing| existing == integrity_hash)
+        if existing_hash(
+            &tx,
+            "memory_prepared_intents",
+            "effect_id",
+            &id_blob(intent.effect_id.0),
+        )?
+        .is_some_and(|existing| existing == integrity_hash)
         {
             tx.commit()?;
             return Ok(());
@@ -167,12 +174,7 @@ impl MemoryEvidenceStore {
                 &integrity_hash[..],
             ],
         )?;
-        append_security_chain(
-            &tx,
-            1,
-            &id_blob(intent.effect_id.0),
-            integrity_hash,
-        )?;
+        append_security_chain(&tx, 1, &id_blob(intent.effect_id.0), integrity_hash)?;
         tx.commit()?;
         Ok(())
     }
@@ -262,7 +264,9 @@ impl MemoryEvidenceStore {
                 &evidence.candidate_id.0.bytes()[..],
                 &evidence.promotion_authority_ref.bytes()[..],
                 evidence.approving_principal.map(PrincipalId::as_str),
-                evidence.verifier_policy_ref.map(|value| value.bytes().to_vec()),
+                evidence
+                    .verifier_policy_ref
+                    .map(|value| value.bytes().to_vec()),
                 evidence.record_bytes,
                 &integrity_hash[..],
             ],
@@ -307,9 +311,15 @@ impl MemoryEvidenceStore {
                 &key[..],
                 id_blob(evidence.effect_id.0),
                 reconciliation_state_code(evidence.state),
-                evidence.authority_journal_readback_ref.map(|value| value.bytes().to_vec()),
-                evidence.markdown_readback_ref.map(|value| value.bytes().to_vec()),
-                evidence.memory_sqlite_readback_ref.map(|value| value.bytes().to_vec()),
+                evidence
+                    .authority_journal_readback_ref
+                    .map(|value| value.bytes().to_vec()),
+                evidence
+                    .markdown_readback_ref
+                    .map(|value| value.bytes().to_vec()),
+                evidence
+                    .memory_sqlite_readback_ref
+                    .map(|value| value.bytes().to_vec()),
                 evidence.record_bytes,
                 &integrity_hash[..],
             ],
@@ -333,7 +343,8 @@ impl MemoryEvidenceStore {
                 "memory terminal outcome bytes",
             ));
         }
-        if outcome.status == MemoryMutationStatus::UnknownOutcome && outcome.reconciliation_ref.is_none()
+        if outcome.status == MemoryMutationStatus::UnknownOutcome
+            && outcome.reconciliation_ref.is_none()
         {
             return Err(MemoryEvidenceError::InvalidRecord(
                 "UNKNOWN_OUTCOME requires reconciliation evidence identity",
@@ -345,14 +356,23 @@ impl MemoryEvidenceStore {
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         let key = terminal_evidence_id.bytes();
-        if existing_hash(&tx, "memory_terminal_outcomes", "terminal_evidence_id", &key)?
-            .is_some_and(|existing| existing == integrity_hash)
+        if existing_hash(
+            &tx,
+            "memory_terminal_outcomes",
+            "terminal_evidence_id",
+            &key,
+        )?
+        .is_some_and(|existing| existing == integrity_hash)
         {
             tx.commit()?;
             return Ok(());
         }
-        if row_exists(&tx, "memory_terminal_outcomes", "terminal_evidence_id", &key)?
-            || effect_exists(&tx, "memory_terminal_outcomes", outcome.effect_id)?
+        if row_exists(
+            &tx,
+            "memory_terminal_outcomes",
+            "terminal_evidence_id",
+            &key,
+        )? || effect_exists(&tx, "memory_terminal_outcomes", outcome.effect_id)?
         {
             return Err(MemoryEvidenceError::ImmutableEvidenceMismatch(
                 "memory terminal outcome",
@@ -369,10 +389,18 @@ impl MemoryEvidenceStore {
                 id_blob(outcome.effect_id.0),
                 &outcome.mutation_intent_digest.bytes()[..],
                 mutation_status_code(outcome.status),
-                outcome.authority_journal_readback_ref.map(|value| value.bytes().to_vec()),
-                outcome.markdown_readback_ref.map(|value| value.bytes().to_vec()),
-                outcome.memory_sqlite_readback_ref.map(|value| value.bytes().to_vec()),
-                outcome.reconciliation_ref.map(|value| value.bytes().to_vec()),
+                outcome
+                    .authority_journal_readback_ref
+                    .map(|value| value.bytes().to_vec()),
+                outcome
+                    .markdown_readback_ref
+                    .map(|value| value.bytes().to_vec()),
+                outcome
+                    .memory_sqlite_readback_ref
+                    .map(|value| value.bytes().to_vec()),
+                outcome
+                    .reconciliation_ref
+                    .map(|value| value.bytes().to_vec()),
                 record_bytes,
                 &integrity_hash[..],
             ],
@@ -383,9 +411,11 @@ impl MemoryEvidenceStore {
     }
 
     pub fn security_chain_len(&self) -> Result<u64, MemoryEvidenceError> {
-        let count: i64 = self
-            .connection
-            .query_row("SELECT COUNT(*) FROM memory_security_chain", [], |row| row.get(0))?;
+        let count: i64 = self.connection.query_row(
+            "SELECT COUNT(*) FROM memory_security_chain",
+            [],
+            |row| row.get(0),
+        )?;
         u64::try_from(count).map_err(|_| MemoryEvidenceError::IntegerOverflow)
     }
 
@@ -610,7 +640,9 @@ fn effect_exists(
 ) -> Result<bool, MemoryEvidenceError> {
     let sql = format!("SELECT 1 FROM {table} WHERE effect_id = ?1 LIMIT 1");
     Ok(tx
-        .query_row(&sql, params![id_blob(effect_id.0)], |row| row.get::<_, i64>(0))
+        .query_row(&sql, params![id_blob(effect_id.0)], |row| {
+            row.get::<_, i64>(0)
+        })
         .optional()?
         .is_some())
 }
