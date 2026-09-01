@@ -220,10 +220,15 @@ impl HarnessEvidenceStore {
         if evidence.record_bytes.is_empty() {
             return Err(HarnessEvidenceError::InvalidRecord("hardware profile"));
         }
-        self.connection.execute(
-            r#"INSERT OR IGNORE INTO harness_hardware_profiles
+        let changed = self.connection.execute(
+            r#"INSERT INTO harness_hardware_profiles
                (hardware_profile_id, observed_at_unix_ms, content_digest, record_bytes)
-               VALUES (?1, ?2, ?3, ?4)"#,
+               VALUES (?1, ?2, ?3, ?4)
+               ON CONFLICT(hardware_profile_id) DO UPDATE SET
+                 hardware_profile_id = excluded.hardware_profile_id
+               WHERE harness_hardware_profiles.observed_at_unix_ms = excluded.observed_at_unix_ms
+                 AND harness_hardware_profiles.content_digest = excluded.content_digest
+                 AND harness_hardware_profiles.record_bytes = excluded.record_bytes"#,
             params![
                 id_blob(evidence.profile_id.as_u128()),
                 u64_to_i64(evidence.observed_at_unix_ms)?,
@@ -231,6 +236,11 @@ impl HarnessEvidenceStore {
                 evidence.record_bytes,
             ],
         )?;
+        if changed != 1 {
+            return Err(HarnessEvidenceError::InvalidRecord(
+                "hardware profile identity collision",
+            ));
+        }
         Ok(())
     }
 
@@ -531,11 +541,19 @@ impl HarnessEvidenceStore {
                 "compaction artifact bytes",
             ));
         }
-        self.connection.execute(
-            r#"INSERT OR IGNORE INTO harness_compaction_artifacts
+        let changed = self.connection.execute(
+            r#"INSERT INTO harness_compaction_artifacts
                (compaction_id, deterministic, producing_request_attempt_id,
                 accepted_output_ref, artifact_digest, record_bytes)
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6)"#,
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+               ON CONFLICT(compaction_id) DO UPDATE SET
+                 compaction_id = excluded.compaction_id
+               WHERE harness_compaction_artifacts.deterministic = excluded.deterministic
+                 AND harness_compaction_artifacts.producing_request_attempt_id
+                     IS excluded.producing_request_attempt_id
+                 AND harness_compaction_artifacts.accepted_output_ref IS excluded.accepted_output_ref
+                 AND harness_compaction_artifacts.artifact_digest = excluded.artifact_digest
+                 AND harness_compaction_artifacts.record_bytes = excluded.record_bytes"#,
             params![
                 id_blob(artifact.compaction_id.as_u128()),
                 artifact.deterministic,
@@ -547,6 +565,11 @@ impl HarnessEvidenceStore {
                 record_bytes,
             ],
         )?;
+        if changed != 1 {
+            return Err(HarnessEvidenceError::InvalidRecord(
+                "compaction artifact identity collision",
+            ));
+        }
         Ok(())
     }
 
@@ -561,11 +584,19 @@ impl HarnessEvidenceStore {
         if record_bytes.is_empty() {
             return Err(HarnessEvidenceError::InvalidRecord("benchmark bytes"));
         }
-        self.connection.execute(
-            r#"INSERT OR IGNORE INTO harness_benchmark_records
+        let changed = self.connection.execute(
+            r#"INSERT INTO harness_benchmark_records
                (benchmark_id, execution_profile_id, hardware_profile_id, workload_fixture_id,
                 started_at_unix_ms, finished_at_unix_ms, record_bytes)
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"#,
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+               ON CONFLICT(benchmark_id) DO UPDATE SET
+                 benchmark_id = excluded.benchmark_id
+               WHERE harness_benchmark_records.execution_profile_id = excluded.execution_profile_id
+                 AND harness_benchmark_records.hardware_profile_id = excluded.hardware_profile_id
+                 AND harness_benchmark_records.workload_fixture_id = excluded.workload_fixture_id
+                 AND harness_benchmark_records.started_at_unix_ms = excluded.started_at_unix_ms
+                 AND harness_benchmark_records.finished_at_unix_ms = excluded.finished_at_unix_ms
+                 AND harness_benchmark_records.record_bytes = excluded.record_bytes"#,
             params![
                 id_blob(record.benchmark_id),
                 id_blob(record.execution_profile_id.as_u128()),
@@ -576,6 +607,11 @@ impl HarnessEvidenceStore {
                 record_bytes,
             ],
         )?;
+        if changed != 1 {
+            return Err(HarnessEvidenceError::InvalidRecord(
+                "benchmark identity collision",
+            ));
+        }
         Ok(())
     }
 
@@ -589,11 +625,19 @@ impl HarnessEvidenceStore {
         if record_bytes.is_empty() {
             return Err(HarnessEvidenceError::InvalidRecord("calibration bytes"));
         }
-        self.connection.execute(
-            r#"INSERT OR IGNORE INTO harness_calibration_runs
+        let changed = self.connection.execute(
+            r#"INSERT INTO harness_calibration_runs
                (calibration_id, hardware_profile_id, backend_identity_ref, workload_fixture_id,
                 started_at_unix_ms, finished_at_unix_ms, record_bytes)
-               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"#,
+               VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+               ON CONFLICT(calibration_id) DO UPDATE SET
+                 calibration_id = excluded.calibration_id
+               WHERE harness_calibration_runs.hardware_profile_id = excluded.hardware_profile_id
+                 AND harness_calibration_runs.backend_identity_ref = excluded.backend_identity_ref
+                 AND harness_calibration_runs.workload_fixture_id = excluded.workload_fixture_id
+                 AND harness_calibration_runs.started_at_unix_ms = excluded.started_at_unix_ms
+                 AND harness_calibration_runs.finished_at_unix_ms IS excluded.finished_at_unix_ms
+                 AND harness_calibration_runs.record_bytes = excluded.record_bytes"#,
             params![
                 id_blob(run.calibration_id),
                 id_blob(run.hardware_profile_id.as_u128()),
@@ -604,6 +648,11 @@ impl HarnessEvidenceStore {
                 record_bytes,
             ],
         )?;
+        if changed != 1 {
+            return Err(HarnessEvidenceError::InvalidRecord(
+                "calibration identity collision",
+            ));
+        }
         Ok(())
     }
 
