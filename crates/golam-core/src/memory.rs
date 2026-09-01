@@ -4,7 +4,7 @@ use core::fmt;
 
 use crate::digest::sha256;
 use crate::taint::{
-    validate_canonical_long_term_memory_admission, CanonicalMemoryAdmissionError, TaintSet,
+    CanonicalMemoryAdmissionError, TaintSet, validate_canonical_long_term_memory_admission,
 };
 use crate::tool_request::{BindingDigest, PrincipalId};
 use crate::{CanonicalEncoder, CoreError, EffectId};
@@ -47,12 +47,8 @@ pub enum MemoryAuthorityClass {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PromotionRequirement {
-    AttributableHumanApproval {
-        approval_policy_ref: BindingDigest,
-    },
-    DeterministicPreregisteredVerifier {
-        verifier_policy_ref: BindingDigest,
-    },
+    AttributableHumanApproval { approval_policy_ref: BindingDigest },
+    DeterministicPreregisteredVerifier { verifier_policy_ref: BindingDigest },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -134,10 +130,7 @@ pub struct MemoryMutationIntent {
 impl MemoryMutationIntent {
     pub fn validate(&self) -> Result<(), MemoryValidationError> {
         validate_ordered_unique(&self.item_ids, "item_ids")?;
-        validate_ordered_unique(
-            &self.expected_current_versions,
-            "expected_current_versions",
-        )?;
+        validate_ordered_unique(&self.expected_current_versions, "expected_current_versions")?;
         if self.item_ids.is_empty() {
             return Err(MemoryValidationError::MissingRequirement("item_ids"));
         }
@@ -175,14 +168,14 @@ impl MemoryMutationIntent {
                 expected.expected_version.map(|version| version.0),
             )?;
         }
-        push_digest(
-            &mut encoder,
-            self.expected_markdown_target_identity_ref,
-        )?;
+        push_digest(&mut encoder, self.expected_markdown_target_identity_ref)?;
         push_digest(&mut encoder, self.expected_markdown_content_digest)?;
         push_digest(&mut encoder, self.expected_markdown_version.0)?;
         push_digest(&mut encoder, self.memory_operational_store_ref.0)?;
-        push_optional_digest(&mut encoder, self.candidate_ref.map(|candidate| candidate.0))?;
+        push_optional_digest(
+            &mut encoder,
+            self.candidate_ref.map(|candidate| candidate.0),
+        )?;
         push_digest(&mut encoder, self.kernel_authorization_ref)?;
         push_digest(&mut encoder, self.promotion_authority_ref)?;
         encoder.push_u128(self.effect_id.0);
@@ -510,10 +503,7 @@ mod tests {
             scope: MemoryScope::Project,
             proposed_content_ref: digest(2),
             provenance_refs: vec![digest(3)],
-            taint_set: TaintSet::from_labels([
-                TaintLabel::UserTrusted,
-                TaintLabel::SecretDerived,
-            ]),
+            taint_set: TaintSet::from_labels([TaintLabel::UserTrusted, TaintLabel::SecretDerived]),
             authority_class: MemoryAuthorityClass::UserAttributed,
             created_by_principal: PrincipalId::new("principal.local").unwrap(),
             created_at_unix_ms: 4,
@@ -575,7 +565,10 @@ mod tests {
         };
         assert_eq!(value.validate(), Ok(()));
         assert_eq!(value.created_by_principal.as_str(), "principal.creator");
-        assert_eq!(value.committed_by_writer_identity, MemoryWriterId(digest(7)));
+        assert_eq!(
+            value.committed_by_writer_identity,
+            MemoryWriterId(digest(7))
+        );
         assert_eq!(value.mutation_effect_ref, EffectId(8));
     }
 }

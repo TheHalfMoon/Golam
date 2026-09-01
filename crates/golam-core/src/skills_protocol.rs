@@ -315,9 +315,7 @@ impl fmt::Display for DispatchValidationError {
             Self::SkillAdmissionStateMismatch => {
                 f.write_str("skill admission-state evidence changed")
             }
-            Self::SkillCapabilityMappingMismatch => {
-                f.write_str("skill capability mapping changed")
-            }
+            Self::SkillCapabilityMappingMismatch => f.write_str("skill capability mapping changed"),
             Self::SkillLifecycleNotDispatchable => {
                 f.write_str("skill lifecycle state is not dispatchable")
             }
@@ -328,9 +326,7 @@ impl fmt::Display for DispatchValidationError {
             Self::McpBindingDigestMismatch => f.write_str("MCP binding digest changed"),
             Self::McpVersionMismatch => f.write_str("MCP version lock changed"),
             Self::McpMappingMismatch => f.write_str("MCP local mapping changed"),
-            Self::McpLifecycleStateMismatch => {
-                f.write_str("MCP lifecycle-state evidence changed")
-            }
+            Self::McpLifecycleStateMismatch => f.write_str("MCP lifecycle-state evidence changed"),
             Self::McpLifecycleNotDispatchable => {
                 f.write_str("MCP lifecycle state is not dispatchable")
             }
@@ -373,10 +369,7 @@ impl fmt::Display for ProtocolValidationError {
 
 impl std::error::Error for ProtocolValidationError {}
 
-fn validate_identifier(
-    value: &str,
-    field: &'static str,
-) -> Result<(), ProtocolValidationError> {
+fn validate_identifier(value: &str, field: &'static str) -> Result<(), ProtocolValidationError> {
     if value.is_empty() || value.len() > MAX_IDENTIFIER_BYTES {
         return Err(ProtocolValidationError::InvalidIdentifier(field));
     }
@@ -517,9 +510,7 @@ mod tests {
             content_digest: digest(4),
             instruction_ref: digest(5),
             script_refs: vec![],
-            requested_capability_classes: vec![
-                CapabilityClassId::new("workspace.read").unwrap(),
-            ],
+            requested_capability_classes: vec![CapabilityClassId::new("workspace.read").unwrap()],
             network_posture: ToolNetworkPosture::Denied,
             provenance_refs: vec![digest(6)],
             admission_state: SkillAdmissionState::InstructionAdmitted,
