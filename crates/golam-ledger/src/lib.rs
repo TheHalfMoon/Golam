@@ -66,6 +66,7 @@ pub mod storage;
 #[cfg(test)]
 mod taint_adversarial;
 pub mod taint_attestation;
+pub mod tool_context_evidence;
 pub mod verifier_registry;
 
 use golam_core::{CanonicalEncoder, CoreError, EventId, SessionId};
