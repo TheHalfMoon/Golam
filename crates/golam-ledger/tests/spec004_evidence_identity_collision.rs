@@ -84,6 +84,36 @@ fn calibration(workload: &str) -> CalibrationRun {
     }
 }
 
+fn commit_compaction(store: &mut HarnessEvidenceStore, compaction_id: CompactionId) {
+    let mut attempt = CompactionAttempt {
+        compaction_id,
+        session_id: SessionId(1),
+        source_projection_ref: "projection:1".into(),
+        state: CompactionState::Started,
+        deterministic: true,
+        producing_request_attempt_id: None,
+        started_at_unix_ms: 1,
+        terminal_at_unix_ms: None,
+        failure_class: None,
+    };
+    store
+        .record_compaction_attempt(&attempt, b"compaction-start")
+        .unwrap();
+    attempt.transition(CompactionState::Deriving).unwrap();
+    store
+        .record_compaction_attempt(&attempt, b"compaction-deriving")
+        .unwrap();
+    attempt.transition(CompactionState::Validating).unwrap();
+    store
+        .record_compaction_attempt(&attempt, b"compaction-validating")
+        .unwrap();
+    attempt.transition(CompactionState::Committed).unwrap();
+    attempt.terminal_at_unix_ms = Some(2);
+    store
+        .record_compaction_attempt(&attempt, b"compaction-committed")
+        .unwrap();
+}
+
 #[test]
 fn hardware_profile_identity_is_idempotent_only_for_exact_evidence() {
     let mut store = HarnessEvidenceStore::open_in_memory().unwrap();
@@ -119,22 +149,7 @@ fn hardware_profile_identity_is_idempotent_only_for_exact_evidence() {
 fn compaction_artifact_identity_rejects_conflicting_payload() {
     let mut store = HarnessEvidenceStore::open_in_memory().unwrap();
     let compaction_id = CompactionId::from_u128(5);
-    store
-        .record_compaction_attempt(
-            &CompactionAttempt {
-                compaction_id,
-                session_id: SessionId(1),
-                source_projection_ref: "projection:1".into(),
-                state: CompactionState::Started,
-                deterministic: true,
-                producing_request_attempt_id: None,
-                started_at_unix_ms: 1,
-                terminal_at_unix_ms: None,
-                failure_class: None,
-            },
-            b"compaction-start",
-        )
-        .unwrap();
+    commit_compaction(&mut store, compaction_id);
     let first = CompactionArtifact {
         compaction_id,
         source_projection_ref: "projection:1".into(),
@@ -157,6 +172,63 @@ fn compaction_artifact_identity_rejects_conflicting_payload() {
     assert_identity_collision(
         store.record_compaction_artifact(&conflicting, b"artifact-b"),
         "compaction artifact identity collision",
+    );
+}
+
+#[test]
+fn compaction_artifact_rejects_source_projection_mismatch() {
+    let mut store = HarnessEvidenceStore::open_in_memory().unwrap();
+    let compaction_id = CompactionId::from_u128(6);
+    commit_compaction(&mut store, compaction_id);
+    let artifact = CompactionArtifact {
+        compaction_id,
+        source_projection_ref: "projection:other".into(),
+        source_event_refs: vec!["event:1".into()],
+        goal_refs: vec!["goal:1".into()],
+        deterministic: true,
+        producing_request_attempt_id: None,
+        accepted_output_ref: None,
+        artifact_digest: [5; 32],
+    };
+    assert_identity_collision(
+        store.record_compaction_artifact(&artifact, b"artifact"),
+        "compaction artifact parent binding mismatch",
+    );
+}
+
+#[test]
+fn compaction_artifact_requires_committed_parent() {
+    let mut store = HarnessEvidenceStore::open_in_memory().unwrap();
+    let compaction_id = CompactionId::from_u128(8);
+    store
+        .record_compaction_attempt(
+            &CompactionAttempt {
+                compaction_id,
+                session_id: SessionId(1),
+                source_projection_ref: "projection:1".into(),
+                state: CompactionState::Started,
+                deterministic: true,
+                producing_request_attempt_id: None,
+                started_at_unix_ms: 1,
+                terminal_at_unix_ms: None,
+                failure_class: None,
+            },
+            b"compaction-start",
+        )
+        .unwrap();
+    let artifact = CompactionArtifact {
+        compaction_id,
+        source_projection_ref: "projection:1".into(),
+        source_event_refs: vec!["event:1".into()],
+        goal_refs: vec!["goal:1".into()],
+        deterministic: true,
+        producing_request_attempt_id: None,
+        accepted_output_ref: None,
+        artifact_digest: [5; 32],
+    };
+    assert_identity_collision(
+        store.record_compaction_artifact(&artifact, b"artifact"),
+        "compaction artifact parent attempt not committed",
     );
 }
 
