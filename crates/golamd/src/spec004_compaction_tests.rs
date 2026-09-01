@@ -151,7 +151,13 @@ fn context_overflow_compacts_reprojects_and_dispatches_fresh_attempt() {
     assert_eq!(first.request_series_id, second.request_series_id);
     assert_ne!(first.request_attempt_id, second.request_attempt_id);
     assert_eq!(sink.prepared.len(), 2);
-    assert_eq!(sink.prepared[0].request_attempt_id, RequestAttemptId::from_u128(1));
-    assert_eq!(sink.prepared[1].request_attempt_id, RequestAttemptId::from_u128(2));
+    assert_eq!(
+        sink.prepared[0].request_attempt_id,
+        RequestAttemptId::from_u128(1)
+    );
+    assert_eq!(
+        sink.prepared[1].request_attempt_id,
+        RequestAttemptId::from_u128(2)
+    );
     assert_eq!(coordinator.backend().starts(), 2);
 }
