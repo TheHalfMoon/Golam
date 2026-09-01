@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use crate::SessionId;
-use crate::harness::ExecutionProfileId;
+use crate::harness::{CompactionId, ExecutionProfileId};
 use crate::harness_state::{
     CompactionArtifact, CompactionAttempt, CompactionState, ContextProjection, HarnessStateError,
 };
@@ -17,7 +17,7 @@ pub struct ContextProjectionInput {
     pub source_event_refs: Vec<String>,
     pub source_artifact_refs: Vec<String>,
     pub goal_refs: Vec<String>,
-    pub compaction_refs: Vec<crate::harness::CompactionId>,
+    pub compaction_refs: Vec<CompactionId>,
     pub taint_refs: Vec<String>,
     /// Monotonic aggregate provenance derived from the exact canonical source
     /// references above. The builder never clears ordinary provenance and
@@ -35,12 +35,9 @@ pub fn build_context_projection(
     reject_duplicate_refs(&input.source_event_refs)?;
     reject_duplicate_refs(&input.source_artifact_refs)?;
     reject_duplicate_refs(&input.goal_refs)?;
+    reject_duplicate_compaction_refs(&input.compaction_refs)?;
     reject_duplicate_refs(&input.taint_refs)?;
     validate_model_visible_taint(input.source_taint)?;
-
-    if input.compaction_refs.len() > MAX_PROJECTION_ITEMS {
-        return Err(HarnessStateError::TooManyItems);
-    }
 
     let projection = ContextProjection {
         projection_ref: input.projection_ref,
@@ -78,6 +75,7 @@ pub fn build_post_compaction_projection(
     attempt.validate()?;
     artifact.validate()?;
     reject_duplicate_refs(canonical_goal_refs)?;
+    reject_duplicate_compaction_refs(&input.compaction_refs)?;
     if attempt.state != CompactionState::Committed
         || attempt.terminal_at_unix_ms.is_none()
         || attempt.compaction_id != artifact.compaction_id
@@ -116,10 +114,22 @@ fn reject_duplicate_refs(refs: &[String]) -> Result<(), HarnessStateError> {
     Ok(())
 }
 
+fn reject_duplicate_compaction_refs(refs: &[CompactionId]) -> Result<(), HarnessStateError> {
+    if refs.len() > MAX_PROJECTION_ITEMS {
+        return Err(HarnessStateError::TooManyItems);
+    }
+    let mut seen = BTreeSet::new();
+    for reference in refs {
+        if !seen.insert(*reference) {
+            return Err(HarnessStateError::InvalidBounds);
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::harness::{CompactionId, ExecutionProfileId};
 
     fn input() -> ContextProjectionInput {
         ContextProjectionInput {
@@ -181,6 +191,25 @@ mod tests {
         value.source_event_refs.push("event:10".into());
         assert_eq!(
             build_context_projection(value),
+            Err(HarnessStateError::InvalidBounds)
+        );
+    }
+
+    #[test]
+    fn builder_rejects_duplicate_compaction_references() {
+        let mut value = input();
+        value.compaction_refs.push(CompactionId::from_u128(4));
+        assert_eq!(
+            build_context_projection(value.clone()),
+            Err(HarnessStateError::InvalidBounds)
+        );
+        assert_eq!(
+            build_post_compaction_projection(
+                value,
+                &committed_compaction(),
+                &compaction_artifact(),
+                &["goal:3:version:2".into()],
+            ),
             Err(HarnessStateError::InvalidBounds)
         );
     }
