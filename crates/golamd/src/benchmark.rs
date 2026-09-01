@@ -212,9 +212,7 @@ pub fn run_scripted_harness_benchmark(
         return Err(BenchmarkRunError::InvalidProfile);
     }
     let binding = HarnessBenchmarkBinding::from_inputs(code_revision, profile, hardware, fixture)?;
-    let maximum_fixture_runtime = fixture
-        .max_polls
-        .saturating_mul(fixture.poll_duration_ms);
+    let maximum_fixture_runtime = fixture.max_polls.saturating_mul(fixture.poll_duration_ms);
     if maximum_fixture_runtime > profile.definition().time_budget.max_request_ms {
         return Err(BenchmarkRunError::InvalidFixture);
     }
