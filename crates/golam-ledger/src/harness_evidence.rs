@@ -395,12 +395,13 @@ impl HarnessEvidenceStore {
         if record_bytes.is_empty() {
             return Err(HarnessEvidenceError::InvalidRecord("model event bytes"));
         }
-        if event.acceptance == ModelEventAcceptance::Accepted
-            && event.canonical_evidence_ref.is_none()
-        {
-            return Err(HarnessEvidenceError::InvalidRecord(
-                "accepted model event requires canonical evidence reference",
-            ));
+        if event.acceptance == ModelEventAcceptance::Accepted {
+            let expected_ref = canonical_model_event_ref(event.request_attempt_id, event.sequence);
+            if event.canonical_evidence_ref.as_deref() != Some(expected_ref.as_str()) {
+                return Err(HarnessEvidenceError::InvalidRecord(
+                    "accepted model event canonical evidence reference mismatch",
+                ));
+            }
         }
         let tx = self
             .connection
@@ -408,9 +409,12 @@ impl HarnessEvidenceStore {
         let attempt = read_attempt_identity(&tx, event.request_attempt_id)?.ok_or(
             HarnessEvidenceError::MissingAttempt(event.request_attempt_id),
         )?;
-        if attempt.state.is_terminal() {
+        if !matches!(
+            attempt.state,
+            RequestAttemptState::Dispatched | RequestAttemptState::Streaming
+        ) {
             return Err(HarnessEvidenceError::InvalidRecord(
-                "model event after terminal request attempt",
+                "model event requires dispatched request attempt",
             ));
         }
         let latest_sequence = tx.query_row(
@@ -1109,6 +1113,10 @@ fn is_missing_table(error: &rusqlite::Error) -> bool {
     )
 }
 
+fn canonical_model_event_ref(attempt_id: RequestAttemptId, sequence: u64) -> String {
+    format!("model-event:{attempt_id}:{sequence}")
+}
+
 fn id_blob(value: u128) -> Vec<u8> {
     value.to_be_bytes().to_vec()
 }
@@ -1249,6 +1257,17 @@ mod tests {
         }
     }
 
+    fn dispatch_attempt(
+        store: &mut HarnessEvidenceStore,
+        attempt: &mut RequestAttempt,
+    ) {
+        attempt.state = RequestAttemptState::Dispatched;
+        attempt.backend_instance_ref = Some("scripted:1".into());
+        store
+            .persist_attempt_state(SessionId(9), attempt, b"dispatched")
+            .unwrap();
+    }
+
     fn accepted_event(attempt_id: RequestAttemptId, sequence: u64, payload: &[u8]) -> ModelEvent {
         ModelEvent {
             request_attempt_id: attempt_id,
@@ -1256,7 +1275,7 @@ mod tests {
             kind: ModelEventKind::TextDelta,
             payload: payload.to_vec(),
             acceptance: ModelEventAcceptance::Accepted,
-            canonical_evidence_ref: Some(format!("event:model:{sequence}")),
+            canonical_evidence_ref: Some(canonical_model_event_ref(attempt_id, sequence)),
         }
     }
 
@@ -1315,9 +1334,9 @@ mod tests {
     }
 
     #[test]
-    fn prepared_attempt_must_exist_before_stream_event() {
+    fn model_event_requires_durable_dispatch() {
         let mut store = HarnessEvidenceStore::open_in_memory().unwrap();
-        let attempt = prepared_attempt();
+        let mut attempt = prepared_attempt();
         let event = accepted_event(attempt.request_attempt_id, 0, b"hello");
         assert!(matches!(
             store.append_model_event(&event, b"event-record"),
@@ -1326,6 +1345,13 @@ mod tests {
         store
             .persist_prepared_attempt(SessionId(9), &attempt, b"prepared")
             .unwrap();
+        assert!(matches!(
+            store.append_model_event(&event, b"event-record"),
+            Err(HarnessEvidenceError::InvalidRecord(
+                "model event requires dispatched request attempt"
+            ))
+        ));
+        dispatch_attempt(&mut store, &mut attempt);
         store.append_model_event(&event, b"event-record").unwrap();
         assert_eq!(
             store
@@ -1333,6 +1359,24 @@ mod tests {
                 .unwrap(),
             1
         );
+    }
+
+    #[test]
+    fn accepted_event_reference_must_match_row_identity() {
+        let mut store = HarnessEvidenceStore::open_in_memory().unwrap();
+        let mut attempt = prepared_attempt();
+        store
+            .persist_prepared_attempt(SessionId(9), &attempt, b"prepared")
+            .unwrap();
+        dispatch_attempt(&mut store, &mut attempt);
+        let mut event = accepted_event(attempt.request_attempt_id, 0, b"hello");
+        event.canonical_evidence_ref = Some("model-event:wrong:0".into());
+        assert!(matches!(
+            store.append_model_event(&event, b"event-record"),
+            Err(HarnessEvidenceError::InvalidRecord(
+                "accepted model event canonical evidence reference mismatch"
+            ))
+        ));
     }
 
     #[test]
@@ -1398,6 +1442,7 @@ mod tests {
         store
             .persist_prepared_attempt(SessionId(9), &attempt, b"prepared")
             .unwrap();
+        dispatch_attempt(&mut store, &mut attempt);
         assert!(matches!(
             store.append_model_event(
                 &accepted_event(attempt.request_attempt_id, 1, b"out-of-order"),
@@ -1422,7 +1467,7 @@ mod tests {
                 b"event-1"
             ),
             Err(HarnessEvidenceError::InvalidRecord(
-                "model event after terminal request attempt"
+                "model event requires dispatched request attempt"
             ))
         ));
     }
@@ -1449,10 +1494,11 @@ mod tests {
     #[test]
     fn duplicate_event_sequence_is_rejected() {
         let mut store = HarnessEvidenceStore::open_in_memory().unwrap();
-        let attempt = prepared_attempt();
+        let mut attempt = prepared_attempt();
         store
             .persist_prepared_attempt(SessionId(9), &attempt, b"prepared")
             .unwrap();
+        dispatch_attempt(&mut store, &mut attempt);
         let event = accepted_event(attempt.request_attempt_id, 0, b"hello");
         store.append_model_event(&event, b"one").unwrap();
         assert!(matches!(
@@ -1464,12 +1510,13 @@ mod tests {
     #[test]
     fn accepted_partial_output_survives_reopen_and_replays_in_order() {
         let path = temp_db_path("partial-reopen");
-        let attempt = prepared_attempt();
+        let mut attempt = prepared_attempt();
         {
             let mut store = HarnessEvidenceStore::open(&path).unwrap();
             store
                 .persist_prepared_attempt(SessionId(9), &attempt, b"prepared")
                 .unwrap();
+            dispatch_attempt(&mut store, &mut attempt);
             store
                 .append_model_event(
                     &accepted_event(attempt.request_attempt_id, 0, b"hel"),
@@ -1488,7 +1535,7 @@ mod tests {
             .attempt_identity(attempt.request_attempt_id)
             .unwrap()
             .unwrap();
-        assert_eq!(identity.state, RequestAttemptState::Prepared);
+        assert_eq!(identity.state, RequestAttemptState::Dispatched);
         assert_eq!(identity.execution_profile_id, attempt.execution_profile_id);
         let events = reopened
             .accepted_events(attempt.request_attempt_id)
