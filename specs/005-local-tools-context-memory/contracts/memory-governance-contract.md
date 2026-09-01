@@ -45,7 +45,9 @@ Free-form text saying `remember`, `approved`, `yes`, or equivalent is content, n
 
 Taint survives candidate creation, synthesis and memory operations. `SECRET_DERIVED` candidates are rejected from canonical long-term memory.
 
-A separately evidenced representation may become eligible only if canonical taint rules demonstrate that it is no longer secret-derived; mere redaction language from a model is insufficient.
+Within Spec 005, `SECRET_DERIVED` provenance is monotonic and MUST NOT be cleared by redaction, summarization, transformation, deterministic verification, model claims, or any memory operation. Sanitizing text is not declassification authority.
+
+A separately created candidate may be eligible only when its content is independently sourced from evidence whose own provenance never includes `SECRET_DERIVED`; it is a new provenance chain, not a downgraded representation of secret-derived content.
 
 ## 6. Single managed writer
 
@@ -151,6 +153,7 @@ Qualification includes:
 - forged/free-form promotion approval;
 - candidate-selected verifier;
 - `SECRET_DERIVED` promotion attempts;
+- attempted taint downgrade via redaction/summarization/transformation;
 - user-edit races;
 - contradictory updates;
 - stale-memory vs live-state conflict;
