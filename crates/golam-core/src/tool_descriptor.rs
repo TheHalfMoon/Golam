@@ -105,8 +105,7 @@ impl ToolDurationBounds {
     pub fn validate(self) -> Result<(), ToolValidationError> {
         self.max_total_duration_ms
             .validate("max_total_duration_ms")?;
-        self.max_idle_duration_ms
-            .validate("max_idle_duration_ms")?;
+        self.max_idle_duration_ms.validate("max_idle_duration_ms")?;
         if self.max_total_duration_ms.finite_value().is_none() {
             return Err(ToolValidationError::MissingFiniteBound(
                 "max_total_duration_ms",
@@ -290,7 +289,10 @@ impl ToolVerificationPolicy {
                 "failure_evidence_requirements",
             ));
         }
-        match (self.independent_readback_required, self.readback_source_class) {
+        match (
+            self.independent_readback_required,
+            self.readback_source_class,
+        ) {
             (true, None) => Err(ToolValidationError::MissingRequirement(
                 "readback_source_class",
             )),
@@ -412,13 +414,22 @@ impl fmt::Display for ToolValidationError {
         match self {
             Self::InvalidIdentifier(field) => write!(f, "invalid bounded identifier: {field}"),
             Self::ZeroFiniteBound(field) => write!(f, "finite bound must be positive: {field}"),
-            Self::MissingFiniteBound(field) => write!(f, "required finite bound is missing: {field}"),
+            Self::MissingFiniteBound(field) => {
+                write!(f, "required finite bound is missing: {field}")
+            }
             Self::TooManyRequirements(field) => write!(f, "too many bounded requirements: {field}"),
             Self::UnsortedOrDuplicate(field) => {
-                write!(f, "requirements must be strictly sorted and unique: {field}")
+                write!(
+                    f,
+                    "requirements must be strictly sorted and unique: {field}"
+                )
             }
-            Self::MissingRequirement(field) => write!(f, "required descriptor evidence is missing: {field}"),
-            Self::IncompatibleDescriptor(reason) => write!(f, "incompatible tool descriptor: {reason}"),
+            Self::MissingRequirement(field) => {
+                write!(f, "required descriptor evidence is missing: {field}")
+            }
+            Self::IncompatibleDescriptor(reason) => {
+                write!(f, "incompatible tool descriptor: {reason}")
+            }
         }
     }
 }
