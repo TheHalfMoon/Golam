@@ -3,6 +3,8 @@
 **Decision**: `DEFER`  
 **Candidate**: `llama.cpp v0.3.0`  
 **Upstream**: `ggml-org/llama.cpp`  
+**Qualified observation date**: `2026-09-01`  
+**Release-selection source**: upstream GitHub `releases/latest` API response observed on the qualification date  
 **Annotated tag object**: `918bca552078be4b3437f93117f542ea39972f5f`  
 **Exact release commit**: `c1d0e7a004015f23bc0233470b747b596f29b264`  
 **License**: MIT  
@@ -12,9 +14,11 @@ This is a compatibility qualification only. No llama.cpp executable, library, mo
 
 ## T004-085 — Exact candidate and configuration
 
-The selected compatibility candidate is the latest stable upstream release observed during qualification:
+On `2026-09-01`, the upstream GitHub `releases/latest` API identified the non-draft, non-prerelease release `v0.3.0`, published `2026-08-25`, with target commit `c1d0e7a004015f23bc0233470b747b596f29b264`. The qualification is bound to that dated observation and exact release identity; it does not make a time-unbounded claim about what upstream will call latest in the future.
 
 ```text
+qualified_at = 2026-09-01
+release_selection_source = GitHub releases/latest API
 release = v0.3.0
 release_commit = c1d0e7a004015f23bc0233470b747b596f29b264
 ```
@@ -169,6 +173,8 @@ The already-qualified generic Golam `ModelBackend` and deterministic scripted ba
 ## Exact evidence index
 
 ```text
+QUALIFIED_AT=2026-09-01
+RELEASE_SELECTION_SOURCE=UPSTREAM_GITHUB_RELEASES_LATEST_API
 UPSTREAM_REPOSITORY=ggml-org/llama.cpp
 UPSTREAM_RELEASE=v0.3.0
 UPSTREAM_TAG_OBJECT=918bca552078be4b3437f93117f542ea39972f5f
