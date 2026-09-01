@@ -3,7 +3,12 @@
 **Disposition**: `REFERENCE_ONLY`  
 **Upstream**: `https://github.com/chaitanyagiri/munder-difflin`  
 **Observed branch**: `main`  
+**Refreshed observation date**: `2026-09-01`  
+**Refreshed observed commit**: `d27303e8a4cc86a98cfef408bb7e7b1fadb5ccad`  
+**Observation source**: upstream GitHub `commits/main` API response  
 **License**: MIT for source code; bundled art has separate attribution/license requirements.
+
+The branch name is recorded only as discovery context. Reproducibility for this closeout note is bound to the exact observed commit above; no claim depends on the future contents of mutable `main`.
 
 ## Why it is relevant
 
@@ -57,6 +62,8 @@ No source code is copied, ported, vendored or depended on by Spec 004. This reco
 
 ```text
 MUNDER_DIFFLIN_DISPOSITION=REFERENCE_ONLY
+MUNDER_DIFFLIN_OBSERVED_AT=2026-09-01
+MUNDER_DIFFLIN_OBSERVED_COMMIT=d27303e8a4cc86a98cfef408bb7e7b1fadb5ccad
 SOURCE_CODE_REUSED=NO
 DEPENDENCY_ADDED=NO
 SPEC_004_SCOPE_EXPANDED=NO
