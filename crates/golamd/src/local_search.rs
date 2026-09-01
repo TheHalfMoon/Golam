@@ -12,9 +12,7 @@ use crate::local_fs::LocalFsResolver;
 use crate::local_read::{
     LocalFileReadBounds, LocalFileReadError, read_regular_file, stat_regular_file,
 };
-use crate::local_walk::{
-    LocalDirectoryWalkBounds, LocalDirectoryWalkError, walk_directory,
-};
+use crate::local_walk::{LocalDirectoryWalkBounds, LocalDirectoryWalkError, walk_directory};
 
 const MAX_QUERY_BYTES: usize = 4 * 1024;
 
@@ -89,9 +87,17 @@ pub enum LocalTextSearchError {
     Read(LocalFileReadError),
     InvalidBounds,
     InvalidQuery,
-    FileLimitExceeded { observed: u64, limit: u64 },
-    TotalByteLimitExceeded { observed: u64, limit: u64 },
-    MatchLimitExceeded { limit: u64 },
+    FileLimitExceeded {
+        observed: u64,
+        limit: u64,
+    },
+    TotalByteLimitExceeded {
+        observed: u64,
+        limit: u64,
+    },
+    MatchLimitExceeded {
+        limit: u64,
+    },
     LineLimitExceeded {
         path: RequestedTarget,
         line_number: u64,
@@ -196,7 +202,8 @@ pub fn search_literal_text(
         .iter()
         .filter(|entry| entry.identity.file_kind == ObservedFileKind::RegularFile)
         .collect::<Vec<_>>();
-    let file_count = u64::try_from(files.len()).map_err(|_| LocalTextSearchError::CounterOverflow)?;
+    let file_count =
+        u64::try_from(files.len()).map_err(|_| LocalTextSearchError::CounterOverflow)?;
     if file_count > bounds.max_files {
         return Err(LocalTextSearchError::FileLimitExceeded {
             observed: file_count,
@@ -253,7 +260,10 @@ pub fn search_literal_text(
             .ok_or(LocalTextSearchError::CounterOverflow)?;
         result.bytes_observed = result
             .bytes_observed
-            .checked_add(u64::try_from(read.bytes.len()).map_err(|_| LocalTextSearchError::CounterOverflow)?)
+            .checked_add(
+                u64::try_from(read.bytes.len())
+                    .map_err(|_| LocalTextSearchError::CounterOverflow)?,
+            )
             .ok_or(LocalTextSearchError::CounterOverflow)?;
         if result.bytes_observed > bounds.max_total_bytes {
             return Err(LocalTextSearchError::TotalByteLimitExceeded {
@@ -277,10 +287,10 @@ pub fn search_literal_text(
 
         for (line_index, line) in text.lines().enumerate() {
             remaining_duration(started, bounds.max_duration)?;
-            let line_number = u64::try_from(line_index + 1)
-                .map_err(|_| LocalTextSearchError::CounterOverflow)?;
-            let line_bytes = u64::try_from(line.len())
-                .map_err(|_| LocalTextSearchError::CounterOverflow)?;
+            let line_number =
+                u64::try_from(line_index + 1).map_err(|_| LocalTextSearchError::CounterOverflow)?;
+            let line_bytes =
+                u64::try_from(line.len()).map_err(|_| LocalTextSearchError::CounterOverflow)?;
             if line_bytes > bounds.max_line_bytes {
                 return Err(LocalTextSearchError::LineLimitExceeded {
                     path: entry.requested_path.clone(),
@@ -421,7 +431,12 @@ mod tests {
         assert_eq!(basename(&result.matches[1].requested_path), "b.txt");
         assert_eq!(result.matches[1].line_number, 2);
         assert_eq!(result.matches[1].line_content, "needle two");
-        assert!(result.matches.iter().all(|item| item.identity.resolved_target_identity.is_some()));
+        assert!(
+            result
+                .matches
+                .iter()
+                .all(|item| item.identity.resolved_target_identity.is_some())
+        );
         assert!(result.skipped_files.is_empty());
         fs::remove_dir_all(root).unwrap();
     }
