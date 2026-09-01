@@ -10,7 +10,9 @@ use golam_core::digest::sha256;
 use golam_core::target_identity::{
     AuthorizedRoot, ObservedFileKind, PlatformFamily, ResolvedTargetIdentity, TargetIdentityError,
 };
-use golam_core::tool_request::{BindingDigest, RequestedOperationId, RequestedTarget, ResourceClassId};
+use golam_core::tool_request::{
+    BindingDigest, RequestedOperationId, RequestedTarget, ResourceClassId,
+};
 use golam_core::{CanonicalEncoder, CoreError};
 
 const IDENTITY_DOMAIN: &[u8] = b"golam:local-fs-identity:v1";
@@ -355,7 +357,10 @@ fn requested_from_path(path: &Path) -> Result<RequestedTarget, LocalFsResolution
     RequestedTarget::new(value).map_err(|_| LocalFsResolutionError::InvalidRequestedPath)
 }
 
-fn identity_digest(path: &Path, metadata: &fs::Metadata) -> Result<BindingDigest, LocalFsResolutionError> {
+fn identity_digest(
+    path: &Path,
+    metadata: &fs::Metadata,
+) -> Result<BindingDigest, LocalFsResolutionError> {
     let mut encoder = CanonicalEncoder::new();
     encoder.push_bytes(IDENTITY_DOMAIN)?;
     encoder.push_bytes(&path_bytes(path))?;
@@ -363,7 +368,10 @@ fn identity_digest(path: &Path, metadata: &fs::Metadata) -> Result<BindingDigest
     Ok(BindingDigest::new(sha256(&encoder.finish())))
 }
 
-fn metadata_digest(path: &Path, metadata: &fs::Metadata) -> Result<BindingDigest, LocalFsResolutionError> {
+fn metadata_digest(
+    path: &Path,
+    metadata: &fs::Metadata,
+) -> Result<BindingDigest, LocalFsResolutionError> {
     let mut encoder = CanonicalEncoder::new();
     encoder.push_bytes(METADATA_DOMAIN)?;
     encoder.push_bytes(&path_bytes(path))?;
@@ -373,7 +381,10 @@ fn metadata_digest(path: &Path, metadata: &fs::Metadata) -> Result<BindingDigest
     Ok(BindingDigest::new(sha256(&encoder.finish())))
 }
 
-fn missing_digest(path: &Path, parent_identity: BindingDigest) -> Result<BindingDigest, LocalFsResolutionError> {
+fn missing_digest(
+    path: &Path,
+    parent_identity: BindingDigest,
+) -> Result<BindingDigest, LocalFsResolutionError> {
     let mut encoder = CanonicalEncoder::new();
     encoder.push_bytes(MISSING_DOMAIN)?;
     encoder.push_bytes(&path_bytes(path))?;
