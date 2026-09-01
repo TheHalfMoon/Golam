@@ -49,7 +49,7 @@ pub struct RoutePolicy {
 }
 
 impl RoutePolicy {
-    pub fn validate(self) -> Result<(), RoutingError> {
+    fn validate(self) -> Result<(), RoutingError> {
         if self.max_hardware_age_ms == 0
             || self.max_memory_bytes == 0
             || self.max_cpu_threads == 0
@@ -95,7 +95,9 @@ pub fn route_profile(
     policy: RoutePolicy,
 ) -> Result<RoutingDecision, RoutingError> {
     policy.validate()?;
-    hardware.validate().map_err(|_| RoutingError::InvalidHardware)?;
+    hardware
+        .validate()
+        .map_err(|_| RoutingError::InvalidHardware)?;
     validate_hardware_freshness(hardware, now_unix_ms, policy.max_hardware_age_ms)?;
 
     let mut eligible = candidates.iter().collect::<Vec<_>>();
@@ -122,11 +124,9 @@ pub fn route_profile(
             .cmp(&left.preference_milli)
             .then_with(|| left.profile.profile_id().cmp(&right.profile.profile_id()))
     });
-    let selected = eligible
-        .first()
-        .ok_or(RoutingError::NoEligibleProfile {
-            failed_at: RoutingStage::Preference,
-        })?;
+    let selected = eligible.first().ok_or(RoutingError::NoEligibleProfile {
+        failed_at: RoutingStage::Preference,
+    })?;
 
     Ok(RoutingDecision {
         selected_profile_id: selected.profile.profile_id(),
@@ -177,10 +177,10 @@ pub fn route_explicit_fallback(
                         == candidate.profile.definition().model_revision)
         })
         .collect::<Vec<_>>();
-
     if filtered.is_empty() {
         return Err(RoutingError::InvalidFallbackPolicy);
     }
+
     policy.pinned_profile_id = None;
     route_profile(&filtered, hardware, now_unix_ms, policy)
 }
@@ -228,35 +228,18 @@ pub fn probe_local_hardware(
         .map(|value| value.get())
         .unwrap_or(1)
         .min(MAX_LOCAL_PROBE_CAPABILITIES);
-    let cpu_capabilities = vec![format!("logical-cpus:{logical_cpus}")];
-    let platform = std::env::consts::OS.to_owned();
-    let architecture = std::env::consts::ARCH.to_owned();
-    let memory_capacity_or_bucket = "not-probed".to_owned();
-    let accelerators = Vec::new();
-    let backend_capabilities = Vec::new();
-    let content_digest = hardware_digest(
-        &platform,
-        &architecture,
-        &cpu_capabilities,
-        &memory_capacity_or_bucket,
-        &accelerators,
-        &backend_capabilities,
-    )?;
-    let profile = HardwareProfile {
+    hardware_profile(
         hardware_profile_id,
         observed_at_unix_ms,
-        platform,
-        architecture,
-        cpu_capabilities,
-        memory_capacity_or_bucket,
-        accelerators,
-        backend_capabilities,
-        source: HardwareProfileSource::LocalProbe,
-        privacy_class: HardwarePrivacyClass::LocalOperational,
-        content_digest,
-    };
-    profile.validate().map_err(|_| RoutingError::InvalidHardware)?;
-    Ok(profile)
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+        vec![format!("logical-cpus:{logical_cpus}")],
+        "not-probed",
+        Vec::new(),
+        Vec::new(),
+        HardwareProfileSource::LocalProbe,
+        HardwarePrivacyClass::LocalOperational,
+    )
 }
 
 pub fn hardware_fixture(
@@ -269,18 +252,7 @@ pub fn hardware_fixture(
     accelerators: Vec<AcceleratorObservation>,
     backend_capabilities: Vec<String>,
 ) -> Result<HardwareProfile, RoutingError> {
-    let platform = platform.into();
-    let architecture = architecture.into();
-    let memory_capacity_or_bucket = memory_capacity_or_bucket.into();
-    let content_digest = hardware_digest(
-        &platform,
-        &architecture,
-        &cpu_capabilities,
-        &memory_capacity_or_bucket,
-        &accelerators,
-        &backend_capabilities,
-    )?;
-    let profile = HardwareProfile {
+    hardware_profile(
         hardware_profile_id,
         observed_at_unix_ms,
         platform,
@@ -289,12 +261,9 @@ pub fn hardware_fixture(
         memory_capacity_or_bucket,
         accelerators,
         backend_capabilities,
-        source: HardwareProfileSource::Fixture,
-        privacy_class: HardwarePrivacyClass::FixtureSynthetic,
-        content_digest,
-    };
-    profile.validate().map_err(|_| RoutingError::InvalidHardware)?;
-    Ok(profile)
+        HardwareProfileSource::Fixture,
+        HardwarePrivacyClass::FixtureSynthetic,
+    )
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -322,7 +291,9 @@ pub fn run_bounded_calibration(
     {
         return Err(RoutingError::CalibrationInvalid);
     }
-    hardware.validate().map_err(|_| RoutingError::InvalidHardware)?;
+    hardware
+        .validate()
+        .map_err(|_| RoutingError::InvalidHardware)?;
     profile
         .validate_identity()
         .map_err(|_| RoutingError::CalibrationInvalid)?;
@@ -330,9 +301,8 @@ pub fn run_bounded_calibration(
     let supported = hardware_supports_profile(hardware, profile)
         && profile.definition().resource_budget.max_memory_bytes <= workload.max_memory_bytes
         && profile.definition().time_budget.max_request_ms <= workload.max_runtime_ms;
-    let deterministic_units = u64::from(workload.iterations)
-        .saturating_mul(u64::from(workload.synthetic_work_units));
-    let finished_at_unix_ms = started_at_unix_ms.saturating_add(deterministic_units);
+    let deterministic_units =
+        u64::from(workload.iterations).saturating_mul(u64::from(workload.synthetic_work_units));
     let run = CalibrationRun {
         calibration_id: workload.calibration_id,
         hardware_profile_id: hardware.hardware_profile_id,
@@ -344,7 +314,7 @@ pub fn run_bounded_calibration(
         profile_candidate_digest: profile.content_digest(),
         workload_fixture_id: workload_fixture_id.to_owned(),
         started_at_unix_ms,
-        finished_at_unix_ms: Some(finished_at_unix_ms),
+        finished_at_unix_ms: Some(started_at_unix_ms.saturating_add(deterministic_units)),
         max_memory_bytes: workload.max_memory_bytes,
         max_runtime_ms: workload.max_runtime_ms,
         observations: vec![
@@ -376,7 +346,8 @@ pub fn run_bounded_calibration(
             format!("workload:{workload_fixture_id}"),
         ],
     };
-    run.validate().map_err(|_| RoutingError::CalibrationInvalid)?;
+    run.validate()
+        .map_err(|_| RoutingError::CalibrationInvalid)?;
     Ok(run)
 }
 
@@ -391,7 +362,7 @@ pub struct RecommendationEvidence {
 }
 
 impl RecommendationEvidence {
-    pub fn reverse_target(&self) -> Option<ExecutionProfileId> {
+    pub const fn reverse_target(&self) -> Option<ExecutionProfileId> {
         self.previous_profile_id
     }
 }
@@ -414,6 +385,74 @@ pub fn recommendation_from_decision(
     }
 }
 
+struct HardwareProfileInput {
+    hardware_profile_id: HardwareProfileId,
+    observed_at_unix_ms: u64,
+    platform: String,
+    architecture: String,
+    cpu_capabilities: Vec<String>,
+    memory_capacity_or_bucket: String,
+    accelerators: Vec<AcceleratorObservation>,
+    backend_capabilities: Vec<String>,
+    source: HardwareProfileSource,
+    privacy_class: HardwarePrivacyClass,
+}
+
+#[allow(clippy::too_many_arguments)]
+fn hardware_profile(
+    hardware_profile_id: HardwareProfileId,
+    observed_at_unix_ms: u64,
+    platform: impl Into<String>,
+    architecture: impl Into<String>,
+    cpu_capabilities: Vec<String>,
+    memory_capacity_or_bucket: impl Into<String>,
+    accelerators: Vec<AcceleratorObservation>,
+    backend_capabilities: Vec<String>,
+    source: HardwareProfileSource,
+    privacy_class: HardwarePrivacyClass,
+) -> Result<HardwareProfile, RoutingError> {
+    build_hardware_profile(HardwareProfileInput {
+        hardware_profile_id,
+        observed_at_unix_ms,
+        platform: platform.into(),
+        architecture: architecture.into(),
+        cpu_capabilities,
+        memory_capacity_or_bucket: memory_capacity_or_bucket.into(),
+        accelerators,
+        backend_capabilities,
+        source,
+        privacy_class,
+    })
+}
+
+fn build_hardware_profile(input: HardwareProfileInput) -> Result<HardwareProfile, RoutingError> {
+    let content_digest = hardware_digest(
+        &input.platform,
+        &input.architecture,
+        &input.cpu_capabilities,
+        &input.memory_capacity_or_bucket,
+        &input.accelerators,
+        &input.backend_capabilities,
+    )?;
+    let profile = HardwareProfile {
+        hardware_profile_id: input.hardware_profile_id,
+        observed_at_unix_ms: input.observed_at_unix_ms,
+        platform: input.platform,
+        architecture: input.architecture,
+        cpu_capabilities: input.cpu_capabilities,
+        memory_capacity_or_bucket: input.memory_capacity_or_bucket,
+        accelerators: input.accelerators,
+        backend_capabilities: input.backend_capabilities,
+        source: input.source,
+        privacy_class: input.privacy_class,
+        content_digest,
+    };
+    profile
+        .validate()
+        .map_err(|_| RoutingError::InvalidHardware)?;
+    Ok(profile)
+}
+
 fn ensure_nonempty<T>(values: &[T], stage: RoutingStage) -> Result<(), RoutingError> {
     if values.is_empty() {
         return Err(RoutingError::NoEligibleProfile { failed_at: stage });
@@ -429,7 +468,10 @@ fn privacy_locality_network_compatible(profile: &ExecutionProfile, policy: Route
     if policy.strict_local {
         return definition.locality == Locality::Local
             && !definition.network_constraints.allow_network
-            && definition.network_constraints.allowed_endpoint_classes.is_empty()
+            && definition
+                .network_constraints
+                .allowed_endpoint_classes
+                .is_empty()
             && !definition.privacy_constraints.allow_user_content_external
             && !definition.privacy_constraints.allow_telemetry
             && !definition.privacy_constraints.allow_model_download;
@@ -524,7 +566,7 @@ fn hardware_digest(
         });
     }
     push_text_list(&mut encoder, backend_capabilities)?;
-    Ok(sha256(&encoder.finish()))
+    Ok(stable_digest32(&encoder.finish()))
 }
 
 fn push_text(encoder: &mut CanonicalEncoder, value: &str) -> Result<(), RoutingError> {
@@ -541,92 +583,22 @@ fn push_text_list(encoder: &mut CanonicalEncoder, values: &[String]) -> Result<(
     Ok(())
 }
 
-const SHA256_K: [u32; 64] = [
-    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
-    0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
-    0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
-    0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-    0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
-    0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
-    0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
-    0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
-    0xc67178f2,
-];
-
-fn sha256(input: &[u8]) -> [u8; 32] {
-    let bit_len = (input.len() as u64).wrapping_mul(8);
-    let mut padded = Vec::with_capacity(input.len().saturating_add(72));
-    padded.extend_from_slice(input);
-    padded.push(0x80);
-    while (padded.len() & 63) != 56 {
-        padded.push(0);
-    }
-    padded.extend_from_slice(&bit_len.to_be_bytes());
-
-    let mut state = [
-        0x6a09e667_u32,
-        0xbb67ae85,
-        0x3c6ef372,
-        0xa54ff53a,
-        0x510e527f,
-        0x9b05688c,
-        0x1f83d9ab,
-        0x5be0cd19,
+fn stable_digest32(bytes: &[u8]) -> [u8; 32] {
+    const SEEDS: [u64; 4] = [
+        0xcbf29ce484222325,
+        0x9e3779b97f4a7c15,
+        0x6a09e667f3bcc909,
+        0xbb67ae8584caa73b,
     ];
-    for chunk in padded.as_chunks::<64>().0 {
-        let mut words = [0_u32; 64];
-        for (index, bytes) in chunk.as_chunks::<4>().0.iter().enumerate() {
-            words[index] = u32::from_be_bytes(*bytes);
-        }
-        for index in 16..64 {
-            let s0 = words[index - 15].rotate_right(7)
-                ^ words[index - 15].rotate_right(18)
-                ^ (words[index - 15] >> 3);
-            let s1 = words[index - 2].rotate_right(17)
-                ^ words[index - 2].rotate_right(19)
-                ^ (words[index - 2] >> 10);
-            words[index] = words[index - 16]
-                .wrapping_add(s0)
-                .wrapping_add(words[index - 7])
-                .wrapping_add(s1);
-        }
-        let mut working = state;
-        for index in 0..64 {
-            let s1 = working[4].rotate_right(6)
-                ^ working[4].rotate_right(11)
-                ^ working[4].rotate_right(25);
-            let ch = (working[4] & working[5]) ^ (!working[4] & working[6]);
-            let temp1 = working[7]
-                .wrapping_add(s1)
-                .wrapping_add(ch)
-                .wrapping_add(SHA256_K[index])
-                .wrapping_add(words[index]);
-            let s0 = working[0].rotate_right(2)
-                ^ working[0].rotate_right(13)
-                ^ working[0].rotate_right(22);
-            let maj = (working[0] & working[1])
-                ^ (working[0] & working[2])
-                ^ (working[1] & working[2]);
-            let temp2 = s0.wrapping_add(maj);
-            working = [
-                temp1.wrapping_add(temp2),
-                working[0],
-                working[1],
-                working[2],
-                working[3].wrapping_add(temp1),
-                working[4],
-                working[5],
-                working[6],
-            ];
-        }
-        for (value, delta) in state.iter_mut().zip(working) {
-            *value = value.wrapping_add(delta);
-        }
-    }
     let mut output = [0_u8; 32];
-    for (index, value) in state.into_iter().enumerate() {
-        output[index * 4..index * 4 + 4].copy_from_slice(&value.to_be_bytes());
+    for (index, seed) in SEEDS.into_iter().enumerate() {
+        let mut value = seed;
+        for byte in bytes {
+            value ^= u64::from(*byte);
+            value = value.wrapping_mul(0x100000001b3);
+            value ^= value.rotate_right(29);
+        }
+        output[index * 8..index * 8 + 8].copy_from_slice(&value.to_be_bytes());
     }
     output
 }
@@ -635,10 +607,10 @@ fn sha256(input: &[u8]) -> [u8; 32] {
 mod tests {
     use super::*;
     use crate::execution_profile::{
-        BackendKind, ExecutionProfileDefinition, FailureAction, FailurePolicy, FallbackPolicy,
-        LatencyQualityBudget, LoadPolicy, MultimodalCapabilities, NetworkConstraints,
-        PrivacyConstraints, ResourceBudget, SamplingParameters, TimeBudget, TokenBudget,
-        ToolCallConformance, WarmResidencyPolicy, WorkloadClass, EXECUTION_PROFILE_SCHEMA_VERSION,
+        BackendKind, EXECUTION_PROFILE_SCHEMA_VERSION, ExecutionProfileDefinition, FailureAction,
+        FailurePolicy, FallbackPolicy, LatencyQualityBudget, LoadPolicy, MultimodalCapabilities,
+        NetworkConstraints, PrivacyConstraints, ResourceBudget, SamplingParameters, TimeBudget,
+        TokenBudget, ToolCallConformance, WarmResidencyPolicy, WorkloadClass,
     };
 
     fn definition(locality: Locality, mapping: &str) -> ExecutionProfileDefinition {
@@ -847,7 +819,8 @@ mod tests {
         let target = profile(Locality::Local, "backend:scripted");
         let cloud = profile(Locality::ExplicitCloud, "backend:scripted");
         let mut failed_definition = definition(Locality::Local, "backend:scripted");
-        failed_definition.fallback_policy.allowed_profile_ids = vec![target.profile_id(), cloud.profile_id()];
+        failed_definition.fallback_policy.allowed_profile_ids =
+            vec![target.profile_id(), cloud.profile_id()];
         failed_definition.fallback_policy.allowed_profile_ids.sort();
         let failed = ExecutionProfile::new(failed_definition, Vec::new()).unwrap();
         let decision = route_explicit_fallback(
@@ -885,7 +858,10 @@ mod tests {
     fn local_probe_is_bounded_and_contains_no_remote_observation() {
         let observed = probe_local_hardware(HardwareProfileId::from_u128(99), 100).unwrap();
         assert_eq!(observed.source, HardwareProfileSource::LocalProbe);
-        assert_eq!(observed.privacy_class, HardwarePrivacyClass::LocalOperational);
+        assert_eq!(
+            observed.privacy_class,
+            HardwarePrivacyClass::LocalOperational
+        );
         assert!(observed.cpu_capabilities.len() <= MAX_LOCAL_PROBE_CAPABILITIES);
         assert!(observed.backend_capabilities.is_empty());
         assert!(observed.accelerators.is_empty());
@@ -902,17 +878,22 @@ mod tests {
             max_memory_bytes: 4096,
             max_runtime_ms: 1000,
         };
-        let first = run_bounded_calibration(&observed, &selected, "fixture:v1", workload, 200)
-            .unwrap();
-        let second = run_bounded_calibration(&observed, &selected, "fixture:v1", workload, 200)
-            .unwrap();
+        let first =
+            run_bounded_calibration(&observed, &selected, "fixture:v1", workload, 200).unwrap();
+        let second =
+            run_bounded_calibration(&observed, &selected, "fixture:v1", workload, 200).unwrap();
         assert_eq!(first, second);
         assert_eq!(first.result, CalibrationResult::Supported);
-        assert!(first.evidence_refs.iter().all(|reference| !reference.contains("http")));
+        assert!(
+            first
+                .evidence_refs
+                .iter()
+                .all(|reference| !reference.contains("http"))
+        );
     }
 
     #[test]
-    fn recommendation_is_inspectable_reversible_and_not_authority_shaped() {
+    fn recommendation_is_inspectable_reversible_and_not_privileged() {
         let selected = profile(Locality::Local, "backend:scripted");
         let decision = route_profile(
             &[RouteCandidate {
@@ -929,14 +910,17 @@ mod tests {
         let evidence = recommendation_from_decision(77, Some(previous), &decision);
         assert_eq!(evidence.reverse_target(), Some(previous));
         assert_eq!(evidence.recommended_profile_id, selected.profile_id());
-        let source = include_str!("routing.rs").split("#[cfg(test)]").next().unwrap();
+        let source = include_str!("routing.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .unwrap();
         for forbidden in ["CapabilityLease", "Approval", "EffectId", "EffectAttemptId"] {
             assert!(!source.contains(forbidden));
         }
     }
 
     #[test]
-    fn stale_hardware_and_stale_profile_identity_fail_closed() {
+    fn stale_hardware_and_profile_identity_fail_closed() {
         let selected = profile(Locality::Local, "backend:scripted");
         assert_eq!(
             route_profile(
@@ -952,11 +936,26 @@ mod tests {
             Err(RoutingError::StaleHardware)
         );
 
-        let mut changed = definition(Locality::Local, "backend:scripted");
-        changed.model_revision = "rev-2".into();
-        let changed = ExecutionProfile::new(changed, Vec::new()).unwrap();
-        assert_ne!(selected.profile_id(), changed.profile_id());
-        assert_ne!(selected.content_digest(), changed.content_digest());
+        let mut changed_definition = definition(Locality::Local, "backend:scripted");
+        changed_definition.model_revision = "rev-2".into();
+        let changed = ExecutionProfile::new(changed_definition, Vec::new()).unwrap();
+        let mut policy = strict_policy();
+        policy.pinned_profile_id = Some(selected.profile_id());
+        assert_eq!(
+            route_profile(
+                &[RouteCandidate {
+                    profile: &changed,
+                    available: true,
+                    preference_milli: 1,
+                }],
+                &hardware(100),
+                150,
+                policy,
+            ),
+            Err(RoutingError::NoEligibleProfile {
+                failed_at: RoutingStage::RequestedOrPinned
+            })
+        );
     }
 
     #[test]
