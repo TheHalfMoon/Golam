@@ -2,7 +2,7 @@
 
 use core::fmt;
 
-use crate::taint::{TaintLabel, TaintSet};
+use crate::taint::TaintSet;
 use crate::tool_request::BindingDigest;
 
 const MAX_REQUIREMENT_ITEMS: usize = 128;
@@ -313,6 +313,7 @@ fn validate_ordered_unique<T: Ord>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::taint::TaintLabel;
 
     fn digest(value: u8) -> BindingDigest {
         BindingDigest::new([value; 32])
