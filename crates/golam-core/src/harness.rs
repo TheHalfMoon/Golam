@@ -51,7 +51,10 @@ macro_rules! opaque_harness_id {
                 if value.len() != CANONICAL_ID_HEX_LEN {
                     return Err(HarnessIdParseError::InvalidLength);
                 }
-                if !value.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)) {
+                if !value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+                {
                     return Err(HarnessIdParseError::InvalidHex);
                 }
                 let parsed =
