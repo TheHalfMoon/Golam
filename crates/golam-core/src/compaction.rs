@@ -278,8 +278,15 @@ mod tests {
 
         for changed in cases {
             let mut candidate = transaction.clone();
-            assert!(candidate.invalidate_if_source_changed(&changed, [9; 32], 11).unwrap());
-            assert_eq!(candidate.attempt.state, CompactionState::FailedChangedSource);
+            assert!(
+                candidate
+                    .invalidate_if_source_changed(&changed, [9; 32], 11)
+                    .unwrap()
+            );
+            assert_eq!(
+                candidate.attempt.state,
+                CompactionState::FailedChangedSource
+            );
             assert_eq!(candidate.attempt.terminal_at_unix_ms, Some(11));
             assert_eq!(
                 candidate.attempt.failure_class.as_deref(),
