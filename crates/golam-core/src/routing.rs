@@ -885,13 +885,7 @@ mod tests {
             max_runtime_ms: 1000,
         };
         assert_eq!(
-            run_bounded_calibration(
-                &observed,
-                &selected,
-                "fixture:v1",
-                overflow,
-                u64::MAX
-            ),
+            run_bounded_calibration(&observed, &selected, "fixture:v1", overflow, u64::MAX),
             Err(RoutingError::CalibrationInvalid)
         );
     }
