@@ -2,79 +2,79 @@
 
 ## Current phase
 
-Golam is in **Spec 004 implementation closeout: Harness & Local Intelligence** on branch `impl/004-harness-local-intelligence`.
+Golam is in **Spec 005 planning: Local Tools, Context & Memory** on branch `spec/005-local-tools-context-memory`.
 
-Spec 002 — Kernel & Durable Session Spine — is `CLOSED_CANONICAL`.
+Canonical `main` is `390ea842837a7d85dca165d9291d5eb54c3f11db` at Spec 004 implementation closeout merge PR #14. Push-triggered canonical-main CI #777 / run `33507343928` completed successfully on Windows, macOS and Ubuntu, including platform-applicable strict-local external observation. Spec 004 is therefore `CLOSED_CANONICAL` for successor ordering even though the historical merge message itself recorded T004-113 as pending at merge time.
 
-Spec 003 — Identity, Policy, Secrets & Sandbox — is `CLOSED_CANONICAL` at its qualified predecessor lineage.
+Spec 001 T050–T059 authorizes bounded Spec 005 after Spec 004 closes. Spec 005 planning is not canonical until its own exact-head CI, independent semantic review, guarded merge and post-merge main CI complete.
 
-Spec 004 planning is `CLOSED_CANONICAL` at `main@8b08ae9f787cb85f1257641d6d332810d7de9fa4` after guarded planning merge PR #12 and push-triggered post-merge CI #680 / run `33425624764` completed successfully on Windows, macOS and Ubuntu.
-
-Spec 004 implementation Phases B–J have completed their selected bounded implementation posture. Phase K convergence, final exact-head qualification, independent semantic review, guarded merge and post-merge canonical-main verification remain required before canonical closure.
-
-No later-spec scope and no production inference dependency is admitted merely by implementation progress.
+Open PRs #6–#8 are noncanonical planning proposals. They do not become predecessors or authority merely because related material overlaps Spec 005.
 
 ## Authority order
 
 1. exact live GitHub/repository truth;
 2. `.specify/memory/constitution.md` v1.2.0 or later;
-3. frozen Spec 001 program architecture, tasks, contracts and source-permission attestation;
-4. canonical Spec 002 package and closeout evidence;
-5. canonical Spec 003 package, implementation evidence and closeout truth;
-6. canonical Spec 004 planning package and planning closeout evidence;
-7. exact implementation evidence on `impl/004-harness-local-intelligence`;
-8. exact Source Foundry records for any source that later reaches `ADMITTED`.
+3. frozen Spec 001 program architecture/tasks/contracts/source-permission attestation;
+4. canonical Spec 002 closeout package;
+5. canonical Spec 003 package and implementation evidence;
+6. canonical Spec 004 planning + implementation package and live closeout evidence;
+7. exact Spec 005 planning evidence on `spec/005-local-tools-context-memory`;
+8. exact Source Foundry records for any source later reaching `ADMITTED`.
 
-Open proposals or nonmerged PRs are not canonical predecessors merely because they exist.
+Nonmerged proposals, status-only bot messages, stale comments and prior handoffs cannot override live canonical truth.
 
-## Spec 004 implementation read order
+## Spec 005 planning read order
 
 1. `.specify/memory/constitution.md`
 2. `specs/001-golam-local-agent-os-foundation/spec.md`
 3. `specs/001-golam-local-agent-os-foundation/plan.md`
 4. `specs/001-golam-local-agent-os-foundation/tasks.md`
-5. `specs/001-golam-local-agent-os-foundation/contracts/execution-profile-contract.md`
-6. `specs/001-golam-local-agent-os-foundation/source-permission-attestation.md`
-7. canonical Spec 002 closeout package/evidence
-8. canonical Spec 003 package and `implementation/` closeout evidence
-9. `specs/004-harness-local-intelligence/spec.md`
-10. `specs/004-harness-local-intelligence/clarification-closeout.md`
-11. `specs/004-harness-local-intelligence/research.md`
-12. `specs/004-harness-local-intelligence/donor-qualification.md`
-13. `specs/004-harness-local-intelligence/plan.md`
-14. `specs/004-harness-local-intelligence/data-model.md`
-15. all `specs/004-harness-local-intelligence/contracts/`
-16. `specs/004-harness-local-intelligence/quickstart.md`
-17. `specs/004-harness-local-intelligence/checklists/implementation-readiness.md`
-18. `specs/004-harness-local-intelligence/tasks.md`
-19. `specs/004-harness-local-intelligence/analysis.md`
-20. `specs/004-harness-local-intelligence/implementation/BASELINE.md` and later exact implementation evidence
+5. `specs/001-golam-local-agent-os-foundation/source-permission-attestation.md`
+6. canonical Spec 002 closeout evidence
+7. canonical Spec 003 package, especially production sandbox/executor qualification evidence
+8. canonical Spec 004 package and implementation closeout evidence
+9. `specs/005-local-tools-context-memory/spec.md`
+10. `specs/005-local-tools-context-memory/clarification-closeout.md`
+11. `specs/005-local-tools-context-memory/research.md`
+12. `specs/005-local-tools-context-memory/donor-qualification.md`
+13. `specs/005-local-tools-context-memory/plan.md`
+14. `specs/005-local-tools-context-memory/data-model.md`
+15. all `specs/005-local-tools-context-memory/contracts/`
+16. `specs/005-local-tools-context-memory/quickstart.md`
+17. `specs/005-local-tools-context-memory/checklists/implementation-readiness.md`
+18. `specs/005-local-tools-context-memory/tasks.md`
+19. `specs/005-local-tools-context-memory/analysis.md`
 
-## Spec 004 hard boundaries
+## Hard boundaries
 
-- Preserve the existing seven-package workspace initially. Do not create empty `golam-harness` or `golam-models` crates. Split only when implementation evidence proves an independent ownership/testing boundary.
-- `golam-core` owns pure bounded harness/profile/backend protocol types, validation and deterministic state transitions without privileged state.
-- `golam-ledger` owns canonical request/profile/compaction evidence persistence and projections using the existing append-oriented durability model.
-- `golamd` owns unprivileged harness coordination, backend lifecycle/supervision and routing under kernel decisions.
-- `golam-kernel` and `golam-effects` MUST NOT acquire model-specific semantics; the harness consumes their existing authority/effect boundaries.
-- The model backend is replaceable and unprivileged. It never becomes KernelApi, Effect Gate, policy/lease/approval authority, secret authority, memory truth or Task verification truth.
-- `MODEL_TOOL_CALL != AUTHORITY_OR_EFFECT_COMMIT`. Backend-native tool/agent/MCP/shell/code-execution features are not Golam authority paths.
-- Canonical session/event evidence remains the source of truth. Model-visible history is a projection. `FULL_CANONICAL_HISTORY_SURVIVES_COMPACTION` remains binding.
-- Compaction creates provenance-bound projections/artifacts and never rewrites or deletes canonical history. Goal/non-negotiable constraint evidence remains independently durable.
-- Cancellation and timeout are explicit states. Accepted streamed prefixes remain attributable evidence. Retry creates a new request attempt and never rewrites prior evidence.
-- Harness retry cannot blind-replay protected effects and cannot clear existing `UNKNOWN_OUTCOME` state.
-- Preserve every frozen Spec 001 `ExecutionProfile` field. Material execution-semantic changes produce distinct immutable/versioned identity. Benchmark backlinks remain non-semantic evidence metadata.
-- Strict-local hard denial remains above routing. Local backend failure never silently selects cloud or enables model download, telemetry, RPC or other network widening.
-- `HardwareProfile` and calibration are bounded execution evidence, not device authority or a telemetry/fingerprinting surface.
-- Ordinary CI must not depend on model downloads, cloud credentials or specialized accelerators. A deterministic scripted backend is the mandatory harness-semantics oracle.
-- Exact `mistral.rs v0.9.0` qualification is `REJECTED` for Spec 004. No mistral.rs dependency/runtime artifact is admitted. Reopening requires a fresh exact Source Foundry qualification against changed evidence.
-- Exact `llama.cpp v0.3.0` compatibility qualification is `DEFERRED` at the canonical Spec 003 native-executor containment gate. No llama.cpp binary/runtime artifact is admitted and no sidecar runtime/no-egress evidence is claimed.
-- Golam-Research, grok-build, Goose, DeepSeek Harness and Munder Difflin remain `REFERENCE_ONLY` unless a bounded exact Source Foundry record later admits selected code.
-- No product filesystem/shell/git/browser tools, canonical long-term memory product, Desktop/computer control, GolamConnect/channels, workers/scheduler, broad parity or final release qualification in Spec 004.
-- Never claim CI/tests/review PASS without exact-head evidence. A branch mutation invalidates only CI/review evidence tied to that branch's prior exact head; unchanged canonical predecessor evidence remains valid unless superseded by live repository truth.
-- Execute `tasks.md` in dependency order. Do not skip Source Foundry, exact-head CI, independent semantic review, expected-head merge or post-merge canonical-main CI gates.
-- Do not start Spec 005 until Spec 004 implementation is genuinely `CLOSED_CANONICAL` after T004-113/T004-114.
+- Preserve the current seven-crate workspace initially. Do not create empty architecture crates.
+- Tool/model/protocol output is not authority. Consequential execution stays behind Kernel policy/capability and the Effect Gate.
+- Generic filesystem authority never includes protected Golam kernel resources.
+- Path strings are not authority. Symlink/reparse/junction/mount aliases and TOCTOU behavior are first-class security constraints.
+- Canonical Spec 003 records `PRODUCTION_NATIVE_EXECUTOR_ADMITTED=NO`. Shell/process/local executable MCP/skill launch remains unavailable until Spec 005 independently admits an exact production containment profile.
+- The inspected Golam-Research `skipApproval: true` shell semantic is explicitly rejected. Never reproduce donor approval bypass.
+- L0 files/search/Git context is required. Tree-sitter/LSP is conditional on measured need; graph/dataflow/vector/runtime indexing is not a baseline requirement.
+- Managed Markdown is canonical durable memory; SQLite is canonical operational state; derivatives are rebuildable and optional.
+- Memory candidates are not durable truth. Promotion requires attributable approval or deterministic pre-registered authoritative verification.
+- `SECRET_DERIVED` content cannot enter canonical long-term memory.
+- User hand-edited Markdown must be reconciled rather than silently overwritten.
+- Agent Skills/MCP/ACP remain untrusted interoperability/configuration boundaries and cannot mint Golam authority.
+- Strict-local hard denial dominates tool/protocol/network routing. Local failure never authorizes cloud/remote fallback.
+- No planning source is automatically admitted as code/dependency. Exact Source Foundry admission remains required.
+- No Desktop/computer control, GolamConnect/channels, workers/scheduler/autonomous learning, broad parity or final release scope in Spec 005.
+
+## Execution discipline
+
+Execute `tasks.md` in dependency order. Do not begin implementation until planning is genuinely `CLOSED_CANONICAL` and the implementation branch is created from the exact verified post-planning main.
+
+Never claim tests/CI/review/containment/platform/security behavior without exact evidence. A branch mutation invalidates CI/review evidence bound to the prior head; unchanged canonical predecessor evidence remains valid unless superseded by live truth.
+
+Do not force-push, rebase shared history or destructively rewrite published history.
 
 ## Review discipline
 
-Use the exact live repository review policy at each closeout. Codex review remains excluded by founder direction. Qodo is not a required Spec 004 reviewer. Do not treat status-only, billing/rate-limit/unavailable responses, automated summaries, stale-head output, CI alone or self-review as a substantive independent semantic review. A qualifying final review must be bound to the exact unchanged implementation head after exact-head CI and must have no unresolved material findings before Ready/merge authorization.
+Final planning and implementation review must be substantive, independent, exact-head and obtained after exact-head CI. Status-only, billing/rate-limit/unavailable messages, automated summaries, stale-head output, CI alone or self-review are insufficient.
+
+Codex review remains excluded by founder direction. Use the live repository's available independent review mechanism and require semantic findings/reconciliation, not merely a bot presence signal.
+
+Ready/merge authorization is fail-closed. If the Draft→Ready connector transition is unavailable, a lifecycle relay is permitted only when live canonical precedent applies: identical base/head/tree, zero content delta, its own CI, independent relay-consistency review, then expected-head guarded merge.
