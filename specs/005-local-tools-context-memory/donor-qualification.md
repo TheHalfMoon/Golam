@@ -105,7 +105,14 @@ Instruction packaging may be implemented independently. Executable skill behavio
 
 **Disposition**: `L0_SEARCH_CANDIDATE_NOT_ADMITTED`
 
-Implementation must decide whether to use selected Rust crates, a pinned external binary, or a Golam-owned bounded search path. The choice must compare dependency/process/sandbox/performance/ignore semantics and strict-local behavior before admission.
+While production native execution remains `native:unqualified`, the Phase D search path is restricted to an in-process implementation: either a Golam-owned bounded search path or exactly Source-Foundry-qualified Rust crate surface. No external ripgrep executable may be launched or treated as an eligible Phase D implementation.
+
+A pinned ripgrep binary remains only a later process-backed candidate. It may be reconsidered **after** an exact production containment profile reaches `ADMITTED`; its own Source Foundry record must then bind exact executable/build identity, license/notices, process/sandbox profile, FS/network/resource/descendant behavior, strict-local posture and the normal governed process/tool boundary. Dependency/source qualification alone is not process-launch authority.
+
+```text
+PHASE_D_EXTERNAL_RIPGREP_BINARY=DENIED_NATIVE_UNQUALIFIED
+RIPGREP_BINARY_RECONSIDERATION_DEPENDS_ON=T005-077
+```
 
 ## Tree-sitter
 
@@ -132,6 +139,7 @@ PLANNING_DEPENDENCY_ADDED=NO
 PRODUCTION_NATIVE_EXECUTOR_ADMITTED=NO
 MCP_RUST_SDK_ADMITTED=NO
 RIPGREP_ADMITTED=NO
+RIPGREP_BINARY_PHASE_D_ADMITTED=NO
 TREE_SITTER_ADMITTED=NO
 MEM0_ADMITTED=NO
 QDRANT_ADMITTED=NO
@@ -141,8 +149,9 @@ NONCANONICAL_PR_6_7_8_PROMOTED_TO_AUTHORITY=NO
 
 ## Implementation Source Foundry order
 
-1. qualify the exact L0 search implementation before adding it;
-2. qualify production native executor containment before shell/process/executable MCP/skill launch;
-3. qualify the exact MCP implementation dependency only if MCP implementation requires it;
-4. qualify Tree-sitter/LSP only after measured L0 insufficiency;
-5. qualify any derivative memory index only after measured need; canonical memory remains independent.
+1. qualify the exact **in-process** L0 search implementation before adding it in Phase D;
+2. qualify production native executor containment before any child-process-backed tool, shell, executable MCP/skill or external search binary;
+3. only after T005-077, optionally qualify an external search binary against the admitted process profile; otherwise keep that path not applicable;
+4. qualify the exact MCP implementation dependency only if MCP implementation requires it;
+5. qualify Tree-sitter/LSP only after measured L0 insufficiency;
+6. qualify any derivative memory index only after measured need; canonical memory remains independent.

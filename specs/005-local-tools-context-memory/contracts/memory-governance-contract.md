@@ -41,6 +41,8 @@ Durable promotion requires one of:
 
 Free-form text saying `remember`, `approved`, `yes`, or equivalent is content, not authority. A model/candidate/worker cannot register, select, weaken or reinterpret its own verifier into authority.
 
+Promotion-authority validation is a prerequisite to enabling the managed writer for mutations that require promotion. The writer MUST NOT initially implement a direct-write path and defer authorization semantics to a later phase.
+
 ## 5. Taint and secrets
 
 Taint survives candidate creation, synthesis and memory operations. `SECRET_DERIVED` candidates are rejected from canonical long-term memory.
@@ -131,8 +133,13 @@ taint set
 active/conflict/expired/redacted state
 predecessor version refs
 promotion evidence
-creation identity/time
+initiating/creating principal identity
+governed committing-writer identity
+exact mutation Effect reference
+creation time
 ```
+
+The initiating/creating principal, committing writer and mutation Effect are separate identities. Restart/reconciliation MUST preserve all three; a recovered version cannot be relabeled as generically “system-created” merely because the writer committed it after restart.
 
 Material content/provenance change creates a new version; history is not rewritten to make prior versions appear never to have existed, except where canonical REDACT/FORGET semantics require removal of forbidden plaintext while retaining bounded audit facts.
 
@@ -163,6 +170,7 @@ Human-readable canonical Markdown remains exportable within policy. Protected op
 Qualification includes:
 
 - forged/free-form promotion approval;
+- writer enablement attempted before promotion-authority validation is available;
 - stale/revoked Kernel authorization or approval between intent and prepare;
 - candidate-selected verifier;
 - `SECRET_DERIVED` promotion attempts;
@@ -172,6 +180,7 @@ Qualification includes:
 - stale-memory vs live-state conflict;
 - crash/restart at every PREPARED/writer/Markdown/SQLite/outcome durability boundary;
 - ambiguous completion and dependent-mutation blocking under `UNKNOWN_OUTCOME`;
+- creator/writer/effect attribution preservation through restart/reconciliation;
 - disk-full/permission loss;
 - FORGET/REDACT partial multi-store completion and derivative resurrection;
 - malicious Markdown/front-matter trying to mutate authority;

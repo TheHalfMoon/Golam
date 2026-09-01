@@ -20,7 +20,7 @@ Desktop/computer control, GolamConnect/channels, workers/scheduler, autonomous l
 
 The package relies on canonical Specs 001–004 only. PRs #6–#8 remain noncanonical proposals and are not implementation predecessors.
 
-Canonical Spec 003 explicitly leaves production native execution unadmitted. The Spec 005 plan therefore does not assume shell/process/local MCP execution exists and orders production containment qualification before those features.
+Canonical Spec 003 explicitly leaves production native execution unadmitted. The Spec 005 plan therefore does not assume shell/process/local MCP execution exists and orders production containment qualification before those features or any external utility process.
 
 ## Authority consistency
 
@@ -57,7 +57,7 @@ Recent reference-source symlink/file-hardening observations support, but do not 
 
 ## Tool-request and bounds consistency
 
-The planning model now makes bounded execution semantics explicit rather than relying on undefined aggregate fields:
+The planning model makes bounded execution semantics explicit rather than relying on undefined aggregate fields:
 
 - `ToolIoBounds` carries finite byte/count/nesting/field limits;
 - `ToolDurationBounds` carries finite total/idle duration limits where applicable;
@@ -67,9 +67,28 @@ The planning model now makes bounded execution semantics explicit rather than re
 
 This closes the prior data-model under-binding that could have allowed an implementation to claim conformance while omitting duration or stale-state constraints.
 
+## Process and L0-search sequencing consistency
+
+Production native execution remains `native:unqualified`. That denial applies to **every** child process, including utility binaries that might otherwise look like implementation details.
+
+The planning package now makes the boundary explicit:
+
+- Phase D L0 search is in-process only;
+- the eligible Phase D choices are a Golam-owned bounded implementation or an exact Source-Foundry-admitted Rust crate surface that executes in-process;
+- no external ripgrep/search executable may launch while production remains `native:unqualified`;
+- an external search binary may be reconsidered only after an exact production containment profile reaches `ADMITTED` at T005-077 and then requires its own exact Source Foundry record plus the normal governed process/tool boundary;
+- `ProcessLaunchPlan` separately binds descendant supervision and process-tree terminal reconciliation; cancellation is not proof that descendants terminated.
+
+```text
+NATIVE_UNQUALIFIED != EXTERNAL_SEARCH_BINARY_AUTHORITY
+PROCESS_CANCEL_REQUEST != PROCESS_TREE_TERMINAL_PROOF
+```
+
+This closes the earlier sequencing ambiguity where dependency admission for a search binary could have been mistaken for process-launch authority before containment qualification.
+
 ## Context consistency
 
-L0 is mandatory and designed to make the first slice useful without heavy retrieval infrastructure. L1 requires measured need and exact Source Foundry admission. L2 graph/dataflow/vector/runtime infrastructure is deferred.
+L0 is mandatory and designed to make the first slice useful without heavy retrieval infrastructure. Initial L0 text search is explicitly in-process. L1 requires measured need and exact Source Foundry admission. L2 graph/dataflow/vector/runtime infrastructure is deferred.
 
 Every context representation preserves provenance/authority/taint/permission/freshness metadata. Ranking/similarity cannot upgrade authority. Live authoritative state wins conflicts with stale memory.
 
@@ -81,11 +100,14 @@ All planning artifacts now agree that:
 - SQLite is canonical operational state;
 - derivatives are rebuildable and optional;
 - one Golam writer owns Golam-generated managed memory mutation;
+- promotion-authority validation is implemented and qualified before that writer may be enabled for mutation;
 - every managed mutation is a protected Effect Gate transaction with immutable `MemoryMutationIntent`;
 - current Kernel authorization plus applicable approval/pre-registered verifier evidence is bound before mutation;
 - authorized PREPARED evidence is durable before the first canonical Markdown/SQLite mutation;
 - terminal outcome/read-back verification is integrity-chained;
 - ambiguous completion remains `UNKNOWN_OUTCOME` and blocks dependent managed-memory mutation until reconciliation;
+- every committed `MemoryVersion` separately preserves initiating/creating principal, governed committing-writer identity and exact mutation Effect attribution;
+- restart/reconciliation preserves those identities rather than collapsing attribution into a generic system creator;
 - FORGET/REDACT use the same lifecycle across Markdown, SQLite and derivative invalidation;
 - user edits are detected/reconciled;
 - promotion requires attributable approval or deterministic pre-registered verification;
@@ -95,6 +117,12 @@ All planning artifacts now agree that:
 - FORGET/REDACT removes active canonical content and invalidates derivatives without falsely claiming external erasure.
 
 No external memory framework is made canonical or a startup dependency.
+
+```text
+MEMORY_WRITER_ENABLEMENT_REQUIRES_PROMOTION_AUTHORITY_VALIDATOR
+MEMORY_CREATOR_IDENTITY != GOVERNED_WRITER_IDENTITY
+MEMORY_VERSION_REQUIRES_MUTATION_EFFECT_ATTRIBUTION
+```
 
 ## Network credential consistency
 
@@ -110,21 +138,29 @@ EGRESS_ALLOWED != CREDENTIAL_DISCLOSURE_AUTHORIZED
 
 Agent Skills, MCP and ACP are compatibility/interoperability surfaces only. Executable skills/local MCP child processes share the production containment gate. Remote MCP shares network/egress/authenticated-endpoint/credential-scope/strict-local gates. ACP shares authenticated local-client semantics.
 
+`McpServerBinding` binds the reviewed Golam-local maximum mapping and explicit lifecycle state. Version replacement, revocation or an unreviewed binding cannot silently inherit prior authority. T005-030, T005-089, T005-092 and T005-094 explicitly qualify narrowing/replacement/revocation semantics.
+
 The official MCP Rust SDK remains a candidate pending exact minimal dependency qualification.
 
 ## Review finding reconciliation
 
-A substantive CodeRabbit review on historical planning head `779a5c8a49f1004c43182e123afe503037e34659` produced four actionable findings. That review is not final T005-015 evidence because later forward-only repairs changed the branch and the final review must occur after fresh exact-head CI. The findings remain valid defect evidence and were reconciled as follows:
+A substantive CodeRabbit review on historical planning head `779a5c8a49f1004c43182e123afe503037e34659` first produced four actionable findings. Later CodeRabbit semantic analysis on that historical review state also surfaced additional contract/order gaps. Historical-head review output is defect evidence, not final T005-015 evidence; final review must occur after fresh exact-head CI on the final unchanged planning head.
 
-1. **Credential-bearing network redirects** — repaired by requiring authenticated encrypted endpoint identity, credential-origin/operation scope, strip/revalidate/re-broker semantics and downgrade denial across redirects/origin/protocol/proxy transitions.
-2. **ToolDescriptor/ToolRequest under-binding** — repaired with explicit finite I/O/duration schemas, reconciliation/verification schemas, requested operation/resource/precondition bindings and post-PREPARED immutability.
-3. **Derivative availability contradiction** — repaired so missing/corrupt derivatives never block canonical Markdown/SQLite startup or ordinary reads; only derivative-dependent operations rebuild or fail that operation closed.
-4. **Managed-memory mutation lifecycle** — repaired across spec, plan, contract, data model, readiness, clarification, quickstart and task ordering: every Golam-generated managed mutation is PREPARED durably through the Effect Gate before canonical mutation, executes only through the governed writer, records integrity-chained terminal/verification evidence, and keeps ambiguous completion `UNKNOWN_OUTCOME` until reconciliation.
+The known finding set is reconciled as follows:
 
-Earlier convergence also repaired two additional planning ambiguities before final qualification:
+1. **Credential-bearing network redirects** — authenticated encrypted endpoint identity, credential-origin/operation scope, strip/revalidate/re-broker semantics and downgrade denial are required across redirects/origin/protocol/proxy transitions.
+2. **ToolDescriptor/ToolRequest under-binding** — explicit finite I/O/duration schemas, reconciliation/verification schemas, requested operation/resource/precondition bindings and post-PREPARED immutability are present.
+3. **Derivative availability contradiction** — missing/corrupt derivatives never block canonical Markdown/SQLite startup or ordinary reads; only derivative-dependent operations rebuild or fail that operation closed.
+4. **Managed-memory mutation lifecycle** — every Golam-generated managed mutation is PREPARED durably through the Effect Gate before canonical mutation, executes only through the governed writer, records integrity-chained terminal/verification evidence, and keeps ambiguous completion `UNKNOWN_OUTCOME` until reconciliation.
+5. **Process descendant supervision under-binding** — `ProcessLaunchPlan` now separately binds descendant supervision and terminal process-tree reconciliation; cancellation is not terminal proof.
+6. **MCP local-mapping/lifecycle under-binding** — the data model and task ledger explicitly bind reviewed local mapping identity, lifecycle state, replacement and revocation qualification.
+7. **Memory version creation attribution under-binding** — `MemoryVersion` now preserves initiating/creating principal, committing writer identity and mutation Effect reference through restart/reconciliation.
+8. **Promotion validator ordered after writer enablement** — T005-051 is now an explicit prerequisite that MUST execute before T005-048 despite numeric ordering; the writer has no direct-write pre-validator phase.
+9. **Phase D external search binary before containment admission** — Phase D is now in-process only. External search binaries are ineligible until after T005-077 and then require exact Source Foundry + admitted process-boundary qualification.
+10. **Ambient environment ambiguity** — process launch continues to require a cleared ambient environment with only explicitly bound values/secret handles.
+11. **Secret-taint downgrade ambiguity** — `SECRET_DERIVED` provenance cannot be downgraded by redaction/summarization/transformation/verification; only independently sourced non-secret evidence may begin a separate candidate provenance chain.
 
-- the process launch model now requires a cleared ambient environment exactly as the execution contract requires;
-- `SECRET_DERIVED` provenance cannot be downgraded by redaction/summarization/transformation/verification; only independently sourced non-secret evidence may begin a separate candidate provenance chain.
+The four original inline finding threads were previously reconciled and resolved against `feff88dfbbd0c54912118c5adc1cc8f6ceac028a` after CI #782. This second convergence repair changes the branch again, so those confirmations remain historical defect-resolution evidence but are stale as final exact-head qualification.
 
 ## Verification consistency
 
@@ -138,13 +174,13 @@ Planning and implementation both preserve:
 - push-triggered post-merge canonical-main verification;
 - no waiver.
 
-CI #781 / run `33513454450` succeeded on pre-reconciliation head `237562b7ad3368c548e07d535e5c9306a8afe8fe` across Windows/macOS/Ubuntu, but this repair commit mutates the branch, so #781 becomes historical/stale for the final T005-014 gate. Fresh exact-head CI and then fresh independent review are mandatory.
+CI #782 / run `33516670304` succeeded on `feff88dfbbd0c54912118c5adc1cc8f6ceac028a` across Windows/macOS/Ubuntu. The present convergence repair mutates that head, so #782 becomes historical/stale for final T005-014. Fresh exact-head CI and then fresh independent review are mandatory.
 
 ## Material-risk review
 
 ### Risk 1 — production process containment could become a cross-platform scope sink
 
-Mitigation: containment is admitted per exact platform/profile. Unsupported platforms remain explicit denial states; no cross-platform equivalence is inferred.
+Mitigation: containment is admitted per exact platform/profile. Unsupported platforms remain explicit denial states; no cross-platform equivalence is inferred. Utility binaries do not receive an exception.
 
 ### Risk 2 — generic file tools could undermine kernel protections
 
@@ -154,35 +190,41 @@ Mitigation: protected-resource exclusion is independent of lexical path authorit
 
 Mitigation: candidate/promotion separation, explicit authority class, live-state precedence, attributable promotion, contradiction preservation, derivative non-authority and monotonic secret-derived taint.
 
-### Risk 4 — memory durability could bypass Effect Gate truth
+### Risk 4 — memory durability or attribution could bypass Effect Gate truth
 
-Mitigation: every Golam-generated managed-memory mutation uses durable PREPARED Effect Gate evidence before canonical Markdown/SQLite mutation, one governed writer, integrity-chained terminal/read-back evidence and fail-closed `UNKNOWN_OUTCOME` reconciliation.
+Mitigation: promotion-authority validation precedes writer enablement; every Golam-generated managed-memory mutation uses durable PREPARED Effect Gate evidence before canonical Markdown/SQLite mutation, one governed writer, creator/writer/effect attribution, integrity-chained terminal/read-back evidence and fail-closed `UNKNOWN_OUTCOME` reconciliation.
 
 ### Risk 5 — MCP/skills could smuggle shell/network authority
 
-Mitigation: protocol/package metadata cannot mint capabilities; executable paths require production containment plus current Kernel/Effect Gate authority; remote transports require egress plus endpoint/credential authority.
+Mitigation: protocol/package metadata cannot mint capabilities; executable paths require production containment plus current Kernel/Effect Gate authority; remote transports require egress plus endpoint/credential authority; MCP local mappings/lifecycle state are reviewed and revocation fails closed.
 
-### Risk 6 — optional retrieval infrastructure could become a hidden dependency
+### Risk 6 — optional retrieval infrastructure could become a hidden dependency or hidden child process
 
-Mitigation: L0 is complete enough for the initial slice; missing/corrupt derivatives do not block canonical memory; derivative-dependent operations rebuild or fail locally; L1/vector admission is evidence-dependent.
+Mitigation: L0 is complete enough for the initial slice; Phase D search is in-process; no external utility launches while `native:unqualified`; missing/corrupt derivatives do not block canonical memory; derivative-dependent operations rebuild or fail locally; L1/vector admission is evidence-dependent.
 
 ### Risk 7 — redirects could leak brokered credentials despite valid egress
 
 Mitigation: credential disclosure has a separate authenticated endpoint/scope gate and sensitive material is stripped across changed hops until fresh authorization re-brokers it.
 
+### Risk 8 — cancellation could be mistaken for process-tree termination
+
+Mitigation: descendant supervision and terminal process-tree reconciliation are separate mandatory bindings/evidence; unresolved descendants are a failure/reconciliation state, not success.
+
 ## Planning convergence result
 
-The current repair candidate reconciles every presently known material internal/review finding across the normative planning package. This is a convergence statement, not final qualification: the branch mutation intentionally invalidates prior exact-head CI/review evidence.
+The second convergence repair candidate reconciles every presently known material internal/review finding across the normative planning package. This is a self-analysis statement, not final qualification: the branch mutation intentionally invalidates prior exact-head CI/review evidence.
 
 This self-analysis is **not** independent semantic review and does not satisfy T005-015.
 
 ```text
 T005_PLANNING_INTERNAL_CONVERGENCE=MATERIAL_FINDINGS_REPAIRED_REQUALIFICATION_REQUIRED
 PRODUCTION_NATIVE_EXECUTOR_ADMITTED=NO
+PHASE_D_EXTERNAL_SEARCH_BINARY=DENIED_NATIVE_UNQUALIFIED
+MEMORY_WRITER_PRE_VALIDATOR_DIRECT_WRITE=DENIED
 PLANNING_CODE_REUSED=NO
 PLANNING_DEPENDENCY_ADDED=NO
 NONCANONICAL_PR_6_7_8_PROMOTED_TO_AUTHORITY=NO
-PRE_REPAIR_CI_781=SUCCESS_STALE_AFTER_REPAIR
+PRE_REPAIR_CI_782=SUCCESS_STALE_AFTER_REPAIR
 INDEPENDENT_REVIEW=PENDING_FRESH_POST_CI
 PR_READY=NO
 MERGE_AUTHORIZED=NO

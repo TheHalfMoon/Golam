@@ -21,15 +21,15 @@ Spec 005 extends the current seven-crate workspace without creating empty archit
 Deliver useful safe local behavior before broad execution:
 
 1. pure contracts/state and evidence;
-2. filesystem read + L0 context + Git read;
+2. filesystem read + **in-process** L0 text search + L0 context + Git read;
 3. canonical managed memory + reconciliation;
 4. filesystem mutations through Effect Gate;
 5. production native-executor Source Foundry/containment qualification;
-6. only then shell/process and executable MCP/skills;
+6. only then process-backed tools, shell, external search binaries and executable MCP/skills;
 7. browser/network bounded surfaces under egress;
 8. adversarial convergence and closeout.
 
-This avoids making production sandbox availability a blocker for all of Spec 005 while still respecting T052.
+This avoids making production sandbox availability a blocker for all of Spec 005 while still respecting T052. It also prevents a “utility binary” exception from bypassing the same production process-containment gate that applies to every other child process.
 
 ## Tool architecture
 
@@ -68,7 +68,9 @@ Requirements:
 
 The canonical production capability remains `native:unqualified`. The first process implementation task is therefore **qualification**, not launch feature enablement.
 
-A production profile must define platform identity, executable/cwd identity, cleared environment, explicit env/handles/FS/network/device/resource rights, descendant supervision, timeout/cancel, secret injection/redaction, external no-egress observation and fail-closed unsupported platforms.
+A production profile must define platform identity, executable/cwd identity, cleared environment, explicit env/handles/FS/network/device/resource rights, descendant supervision, process-tree ownership/discovery, timeout/cancel, terminal descendant observation/reconciliation, secret injection/redaction, external no-egress observation and fail-closed unsupported platforms.
+
+A cancellation request is not proof that the root or descendants terminated. The launch plan and terminal evidence must independently bind process-tree reconciliation and unresolved-descendant behavior.
 
 Command strings alone are not trusted parsed authority. If shell syntax is supported, parsing/command graph ambiguity and redirections/substitutions must be explicit evidence; no donor `skipApproval` behavior is permitted.
 
@@ -94,9 +96,11 @@ Pipeline:
 
 - user-selected files;
 - bounded filesystem reads;
-- bounded text search;
+- bounded **in-process** text search while production native execution remains unadmitted;
 - Git status/diff/log/tree/blob identity;
 - canonical Golam goals/evidence and permitted managed memory.
+
+The Phase D baseline MUST NOT spawn an external search binary. It may use a Golam-owned bounded implementation or exactly admitted Rust crates executing in-process. A pinned ripgrep executable remains a later process-backed option only after an exact production containment profile reaches `ADMITTED`; it must then be launched through the admitted process/tool boundary and receive its own exact Source Foundry qualification.
 
 ### L1
 
@@ -129,11 +133,13 @@ Protected operational state must not be exposed as generic user memory files.
 
 ### Single writer + durable effect lifecycle
 
-Every Golam-generated managed-memory mutation is consequential. It starts as an immutable `MemoryMutationIntent` bound to current Kernel authorization, applicable approval/pre-registered verifier evidence, expected current versions and a unique effect identity. The Effect Gate PREPARED record is durable before the first Markdown/SQLite canonical mutation.
+Every Golam-generated managed-memory mutation is consequential. It starts as an immutable `MemoryMutationIntent` bound to current Kernel authorization, applicable approval/pre-registered verifier evidence, expected current versions and a unique effect identity. Promotion-authority validation is implemented and qualified **before** the writer may be enabled for mutation. The Effect Gate PREPARED record is durable before the first Markdown/SQLite canonical mutation.
 
 Only the single governed memory writer executes the prepared intent:
 
 `candidate -> validate taint/provenance -> current authorization + promotion authority -> expected-version/user-edit check -> durable PREPARED Effect -> write temp -> durability boundary -> atomic Markdown replace -> SQLite operational/version update -> invalidate derivatives -> read-back verification -> integrity-chained terminal outcome`
+
+Every committed `MemoryVersion` preserves the initiating/creating principal, the governed writer identity and the exact mutation Effect reference. Restart reconciliation must retain these separate identities rather than collapsing attribution into a generic system actor.
 
 User hand-edits bypass the Golam writer by design and are detected via content/version mismatch. The next managed operation must reconcile rather than overwrite.
 
@@ -176,11 +182,12 @@ ACP is an authenticated client interoperability adapter; it does not replace Ker
 
 ## Source Foundry plan
 
-1. L0 search exact implementation decision: selected ripgrep crates/binary or Golam-owned bounded implementation.
-2. production native executor per platform/profile before process-backed tools.
-3. MCP Rust SDK exact minimal surface if used.
-4. Tree-sitter/LSP only after measured L0 gap.
-5. derivative vector/index system only after measured need.
+1. Phase D L0 search: qualify only a Golam-owned bounded implementation or exact Rust crate surface that executes in-process; no external binary may be admitted/launched while production remains `native:unqualified`.
+2. qualify the production native executor per exact platform/profile before any process-backed tool.
+3. only after an exact profile is `ADMITTED`, optionally qualify a pinned external search binary (including executable identity, process/sandbox/resource/network closure) and launch it through the admitted process boundary; otherwise record the binary path `NOT_APPLICABLE`.
+4. qualify the exact MCP implementation dependency only if MCP implementation requires it.
+5. qualify Tree-sitter/LSP only after measured L0 gap.
+6. qualify any derivative memory index only after measured need; canonical memory remains independent.
 
 No source admission may bundle unrelated agent authority, channels, scheduler, learning or computer-control features.
 
@@ -194,14 +201,17 @@ Required test families include:
 - protected-resource escape;
 - effect durability/reconciliation/restart;
 - process env/secret/descendant/network containment where admitted;
+- process-tree terminal reconciliation and unresolved-descendant behavior;
 - strict-local external observation;
 - credential-bearing redirect/origin/protocol transition and downgrade denial;
 - Git stale-head/index/worktree expectations;
 - context provenance/freshness/taint/ranking;
 - memory candidate/promotion/conflict/reconciliation/user-edit/restart/disk-full;
+- memory creator/writer/effect attribution through restart reconciliation;
 - managed-memory PREPARED-before-mutation, terminal outcome, `UNKNOWN_OUTCOME` and dependent-mutation blocking;
 - FORGET/REDACT partial multi-store completion + derivative rebuild;
 - malicious MCP/skill/protocol payloads and capability spoofing;
+- Phase D proof that no external search process can launch while `native:unqualified`;
 - exact-head full CI + independent semantic review.
 
 ## Planning closeout

@@ -186,9 +186,14 @@ inherited_handle_rules
 timeout
 cancellation_policy
 descendant_supervision_policy
+process_tree_reconciliation_policy
 ```
 
-`ambient_environment_policy` is fail-closed and requires a cleared ambient environment; only explicitly bound environment values and secret-handle bindings may be introduced under the launch contract. A plan requires Kernel authorization and an admitted executor before launch.
+`ambient_environment_policy` is fail-closed and requires a cleared ambient environment; only explicitly bound environment values and secret-handle bindings may be introduced under the launch contract.
+
+`descendant_supervision_policy` binds process-tree ownership/discovery, inherited-handle rules, termination responsibility and descendant observation. `process_tree_reconciliation_policy` binds terminal evidence requirements for the root and descendants, unresolved-descendant behavior and restart reconciliation. Cancellation alone is not process-tree supervision or proof of terminal containment.
+
+A plan requires Kernel authorization and an admitted executor before launch.
 
 ## Context model
 
@@ -322,8 +327,12 @@ predecessor_versions
 conflict_refs
 promotion_evidence_ref
 created_by_principal
+committed_by_writer_identity
+mutation_effect_ref
 created_at
 ```
+
+`created_by_principal` preserves the attributable initiating/creating principal. `committed_by_writer_identity` identifies the admitted governed writer implementation/instance responsible for committing the version, and `mutation_effect_ref` binds the resulting version to the exact protected Effect Gate lifecycle. Restart/reconciliation MUST preserve all three identities; recovering from SQLite/Markdown state may not collapse them into a generic system creator.
 
 ### `MemoryReconciliationState`
 
@@ -388,7 +397,7 @@ version_lock
 lifecycle_state
 ```
 
-Server-advertised tools/resources are descriptors, not Golam capabilities. `golam_local_mapping_ref` binds the locally configured maximum mapping rather than accepting server-advertised authority.
+Server-advertised tools/resources are descriptors, not Golam capabilities. `golam_local_mapping_ref` binds the locally configured maximum mapping rather than accepting server-advertised authority. `lifecycle_state` must fail closed for unreviewed, replaced, deprecated or revoked bindings; version replacement requires a new reviewed binding identity/mapping rather than silently reusing prior authority.
 
 ### `ExternalToolDescriptor`
 
@@ -401,6 +410,7 @@ TOOL_DESCRIPTOR != CAPABILITY
 TOOL_CALL_CANDIDATE != EFFECT_AUTHORIZATION
 PATH_STRING != TARGET_IDENTITY
 SANDBOX_PROFILE_ADVERTISEMENT != RUN_PERMISSION
+PROCESS_CANCEL_REQUEST != PROCESS_TREE_TERMINAL_PROOF
 CONTEXT_RANK != AUTHORITY
 CONTEXT_CAPSULE != CANONICAL_SOURCE
 MEMORY_CANDIDATE != DURABLE_MEMORY

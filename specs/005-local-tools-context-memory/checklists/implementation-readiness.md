@@ -25,6 +25,7 @@
 
 - [x] Planning explicitly records `PRODUCTION_NATIVE_EXECUTOR_ADMITTED=NO` from canonical Spec 003.
 - [x] Shell/process/local executable MCP/skill launch remains disabled until exact production containment admission.
+- [x] Phase D L0 search is explicitly in-process; an external search binary is denied while `native:unqualified` and can only be reconsidered after an exact production containment profile is admitted.
 - [x] Donor `skipApproval` semantics are explicitly rejected.
 - [x] Unsupported platforms/profiles fail closed.
 
@@ -39,10 +40,12 @@
 - [x] Git writes are effects; destructive history rewriting is excluded.
 - [x] Browser/network tools are egress-gated and do not pull Desktop control into scope.
 - [x] Credential-bearing network hops require authenticated encrypted endpoint identity; redirects/origin/protocol changes strip and revalidate/re-broker sensitive material or fail closed.
+- [x] Process launch binds descendant supervision **and** process-tree terminal reconciliation; cancellation alone is not proof that descendants terminated.
 
 ## Context
 
 - [x] L0 evidence is required and sufficient for the initial slice.
+- [x] Initial L0 text search is in-process and cannot create a hidden pre-containment child-process dependency.
 - [x] L1 Tree-sitter/LSP requires measured need + exact admission.
 - [x] L2 graph/dataflow/vector/runtime indexing is deferred.
 - [x] Every context item carries provenance, authority, taint, permission and freshness metadata.
@@ -55,9 +58,11 @@
 - [x] SQLite is canonical operational state.
 - [x] Derived indexes are rebuildable and optional; missing derivatives do not block canonical memory access.
 - [x] One governed writer owns Golam-generated managed memory mutation.
+- [x] Promotion-authority validation is an explicit prerequisite before the managed writer may be enabled for mutation.
 - [x] Every managed mutation binds current Kernel authorization plus applicable approval/verifier evidence in an immutable `MemoryMutationIntent`.
 - [x] A durable authorized Effect Gate PREPARED intent exists before the first canonical Markdown/SQLite mutation.
 - [x] Terminal outcome and required read-back/verification evidence are integrity-chained; ambiguous completion remains `UNKNOWN_OUTCOME` and blocks dependent memory mutations until reconciliation.
+- [x] Every committed managed version preserves initiating/creating principal, governed writer identity and exact mutation Effect attribution through restart/reconciliation.
 - [x] User hand-edits are detected/reconciled rather than overwritten.
 - [x] Promotion requires attributable approval or deterministic pre-registered verification.
 - [x] `SECRET_DERIVED` is excluded from canonical long-term memory and cannot be cleared by redaction/summarization/transformation/verification.
@@ -68,6 +73,7 @@
 - [x] Instruction-only skills may precede executable skills.
 - [x] Executable skills are production-sandbox gated.
 - [x] MCP advertisements/results remain untrusted and cannot mint Golam capabilities.
+- [x] MCP local mappings and lifecycle state are explicit; replaced/revoked bindings cannot silently retain authority.
 - [x] Remote MCP is egress/strict-local/endpoint-identity/credential-scope gated.
 - [x] ACP preserves authenticated local-client semantics.
 - [x] Official MCP Rust SDK is a candidate, not automatically admitted.
@@ -75,7 +81,7 @@
 ## Verification posture
 
 - [x] Ordinary CI remains hermetic and credential/model/service independent.
-- [x] Path/protected-resource, process containment, network credential, context, memory and protocol adversarial families are enumerated.
+- [x] Path/protected-resource, process containment/reconciliation, network credential, context, memory and protocol adversarial families are enumerated.
 - [x] Planning closeout requires exact-head Windows/macOS/Ubuntu CI.
 - [x] Planning closeout requires substantive independent semantic review on the unchanged head.
 - [x] Material findings must be repaired and requalified before Ready/merge.
