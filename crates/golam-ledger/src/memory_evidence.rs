@@ -411,11 +411,11 @@ impl MemoryEvidenceStore {
     }
 
     pub fn security_chain_len(&self) -> Result<u64, MemoryEvidenceError> {
-        let count: i64 = self.connection.query_row(
-            "SELECT COUNT(*) FROM memory_security_chain",
-            [],
-            |row| row.get(0),
-        )?;
+        let count: i64 =
+            self.connection
+                .query_row("SELECT COUNT(*) FROM memory_security_chain", [], |row| {
+                    row.get(0)
+                })?;
         u64::try_from(count).map_err(|_| MemoryEvidenceError::IntegerOverflow)
     }
 
