@@ -4,6 +4,7 @@ pub mod benchmark;
 mod connection;
 mod deadline_io;
 pub mod harness;
+pub mod local_fs;
 #[cfg(test)]
 mod spec004_compaction_tests;
 
