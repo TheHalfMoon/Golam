@@ -2,7 +2,7 @@
 
 ## Current phase
 
-Golam is in **Spec 004 implementation: Harness & Local Intelligence** on branch `impl/004-harness-local-intelligence`.
+Golam is in **Spec 004 implementation closeout: Harness & Local Intelligence** on branch `impl/004-harness-local-intelligence`.
 
 Spec 002 — Kernel & Durable Session Spine — is `CLOSED_CANONICAL`.
 
@@ -10,7 +10,9 @@ Spec 003 — Identity, Policy, Secrets & Sandbox — is `CLOSED_CANONICAL` at it
 
 Spec 004 planning is `CLOSED_CANONICAL` at `main@8b08ae9f787cb85f1257641d6d332810d7de9fa4` after guarded planning merge PR #12 and push-triggered post-merge CI #680 / run `33425624764` completed successfully on Windows, macOS and Ubuntu.
 
-Spec 004 product implementation is authorized only from that exact canonical main. No later-spec scope and no production inference dependency is admitted merely by implementation authorization.
+Spec 004 implementation Phases B–J have completed their selected bounded implementation posture. Phase K convergence, final exact-head qualification, independent semantic review, guarded merge and post-merge canonical-main verification remain required before canonical closure.
+
+No later-spec scope and no production inference dependency is admitted merely by implementation progress.
 
 ## Authority order
 
@@ -65,9 +67,9 @@ Open proposals or nonmerged PRs are not canonical predecessors merely because th
 - Strict-local hard denial remains above routing. Local backend failure never silently selects cloud or enables model download, telemetry, RPC or other network widening.
 - `HardwareProfile` and calibration are bounded execution evidence, not device authority or a telemetry/fingerprinting surface.
 - Ordinary CI must not depend on model downloads, cloud credentials or specialized accelerators. A deterministic scripted backend is the mandatory harness-semantics oracle.
-- `mistral.rs` remains `PRIMARY_CANDIDATE_NOT_YET_ADMITTED`. Do not add it until T004-075..080 produce a complete exact Source Foundry admission decision.
-- `llama.cpp` remains `COMPATIBILITY_CANDIDATE_NOT_YET_ADMITTED`. If later admitted, default to a supervised out-of-process sidecar with authenticated/private local transport; no direct C/C++ FFI inside `golamd`.
-- Golam-Research, grok-build, Goose and DeepSeek Harness remain `REFERENCE_ONLY` unless a bounded exact Source Foundry record later admits selected code.
+- Exact `mistral.rs v0.9.0` qualification is `REJECTED` for Spec 004. No mistral.rs dependency/runtime artifact is admitted. Reopening requires a fresh exact Source Foundry qualification against changed evidence.
+- Exact `llama.cpp v0.3.0` compatibility qualification is `DEFERRED` at the canonical Spec 003 native-executor containment gate. No llama.cpp binary/runtime artifact is admitted and no sidecar runtime/no-egress evidence is claimed.
+- Golam-Research, grok-build, Goose, DeepSeek Harness and Munder Difflin remain `REFERENCE_ONLY` unless a bounded exact Source Foundry record later admits selected code.
 - No product filesystem/shell/git/browser tools, canonical long-term memory product, Desktop/computer control, GolamConnect/channels, workers/scheduler, broad parity or final release qualification in Spec 004.
 - Never claim CI/tests/review PASS without exact-head evidence. A branch mutation invalidates only CI/review evidence tied to that branch's prior exact head; unchanged canonical predecessor evidence remains valid unless superseded by live repository truth.
 - Execute `tasks.md` in dependency order. Do not skip Source Foundry, exact-head CI, independent semantic review, expected-head merge or post-merge canonical-main CI gates.
