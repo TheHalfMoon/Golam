@@ -140,7 +140,7 @@ cancellation_policy
 descendant_supervision_policy
 ```
 
-`ambient_environment_policy` is fail-closed and requires the cleared-ambient posture frozen by the execution contract unless an exact narrower exception is independently authorized. A plan requires Kernel authorization and an admitted executor before launch.
+`ambient_environment_policy` is fail-closed and requires a cleared ambient environment; only explicitly bound environment values and secret-handle bindings may be introduced under the launch contract. A plan requires Kernel authorization and an admitted executor before launch.
 
 ## Context model
 
