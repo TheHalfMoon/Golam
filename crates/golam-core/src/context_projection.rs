@@ -3,6 +3,7 @@ use std::collections::BTreeSet;
 use crate::SessionId;
 use crate::harness::ExecutionProfileId;
 use crate::harness_state::{ContextProjection, HarnessStateError};
+use crate::taint::{TaintLabel, TaintSet};
 
 const MAX_PROJECTION_ITEMS: usize = 256;
 
@@ -16,6 +17,10 @@ pub struct ContextProjectionInput {
     pub goal_refs: Vec<String>,
     pub compaction_refs: Vec<crate::harness::CompactionId>,
     pub taint_refs: Vec<String>,
+    /// Monotonic aggregate provenance derived from the exact canonical source
+    /// references above. The builder never clears ordinary provenance and
+    /// rejects SECRET_DERIVED at the model-visible projection boundary.
+    pub source_taint: TaintSet,
     pub max_tokens: u32,
     pub render_policy_digest: [u8; 32],
     pub rendered_digest: [u8; 32],
@@ -29,6 +34,7 @@ pub fn build_context_projection(
     reject_duplicate_refs(&input.source_artifact_refs)?;
     reject_duplicate_refs(&input.goal_refs)?;
     reject_duplicate_refs(&input.taint_refs)?;
+    validate_model_visible_taint(input.source_taint)?;
 
     if input.compaction_refs.len() > MAX_PROJECTION_ITEMS {
         return Err(HarnessStateError::TooManyItems);
@@ -50,6 +56,13 @@ pub fn build_context_projection(
     };
     projection.validate()?;
     Ok(projection)
+}
+
+fn validate_model_visible_taint(taint: TaintSet) -> Result<(), HarnessStateError> {
+    if taint.contains(TaintLabel::SecretDerived) {
+        return Err(HarnessStateError::InvalidBounds);
+    }
+    Ok(())
 }
 
 fn reject_duplicate_refs(refs: &[String]) -> Result<(), HarnessStateError> {
@@ -80,6 +93,7 @@ mod tests {
             goal_refs: vec!["goal:3:version:2".into()],
             compaction_refs: vec![CompactionId::from_u128(4)],
             taint_refs: vec!["taint:model-generated".into()],
+            source_taint: TaintSet::from_labels([TaintLabel::ModelGenerated]),
             max_tokens: 4096,
             render_policy_digest: [5; 32],
             rendered_digest: [6; 32],
@@ -123,6 +137,47 @@ mod tests {
         assert_eq!(
             build_context_projection(value),
             Err(HarnessStateError::InvalidBounds)
+        );
+    }
+
+    #[test]
+    fn builder_rejects_secret_derived_model_visibility() {
+        let mut value = input();
+        value.source_taint = TaintSet::from_labels([
+            TaintLabel::UserTrusted,
+            TaintLabel::SecretDerived,
+            TaintLabel::ModelGenerated,
+        ]);
+        value.taint_refs = vec!["taint:secret-derived".into()];
+
+        assert_eq!(
+            build_context_projection(value),
+            Err(HarnessStateError::InvalidBounds)
+        );
+    }
+
+    #[test]
+    fn builder_preserves_non_secret_untrusted_provenance_refs() {
+        let mut value = input();
+        value.source_taint = TaintSet::from_labels([
+            TaintLabel::WebUntrusted,
+            TaintLabel::McpUntrusted,
+            TaintLabel::ModelGenerated,
+        ]);
+        value.taint_refs = vec![
+            "taint:web-untrusted".into(),
+            "taint:mcp-untrusted".into(),
+            "taint:model-generated".into(),
+        ];
+
+        let projection = build_context_projection(value).unwrap();
+        assert_eq!(
+            projection.taint_refs,
+            [
+                "taint:web-untrusted",
+                "taint:mcp-untrusted",
+                "taint:model-generated",
+            ]
         );
     }
 }
