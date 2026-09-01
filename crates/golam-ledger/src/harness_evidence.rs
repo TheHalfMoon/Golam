@@ -347,6 +347,14 @@ impl HarnessEvidenceStore {
                 attempt.request_attempt_id,
             ));
         }
+        if immutable.state.is_terminal()
+            || (immutable.state != attempt.state
+                && !immutable.state.can_transition_to(attempt.state))
+        {
+            return Err(HarnessEvidenceError::InvalidRecord(
+                "invalid durable request attempt state transition",
+            ));
+        }
         tx.execute(
             r#"UPDATE harness_request_attempts SET
                state = ?1, terminal_at_unix_ms = ?2, backend_instance_ref = ?3,
@@ -387,13 +395,33 @@ impl HarnessEvidenceStore {
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        if read_attempt_identity(&tx, event.request_attempt_id)?.is_none() {
-            return Err(HarnessEvidenceError::MissingAttempt(
-                event.request_attempt_id,
+        let attempt = read_attempt_identity(&tx, event.request_attempt_id)?.ok_or(
+            HarnessEvidenceError::MissingAttempt(event.request_attempt_id),
+        )?;
+        if attempt.state.is_terminal() {
+            return Err(HarnessEvidenceError::InvalidRecord(
+                "model event after terminal request attempt",
             ));
         }
-        let inserted = tx.execute(
-            r#"INSERT OR IGNORE INTO harness_model_events
+        let latest_sequence = tx.query_row(
+            "SELECT MAX(sequence) FROM harness_model_events WHERE request_attempt_id = ?1",
+            params![id_blob(event.request_attempt_id.as_u128())],
+            |row| row.get::<_, Option<i64>>(0),
+        )?;
+        let expected_sequence = match latest_sequence {
+            Some(sequence) => i64_to_u64(sequence)?
+                .checked_add(1)
+                .ok_or(HarnessEvidenceError::IntegerOverflow)?,
+            None => 0,
+        };
+        if event.sequence != expected_sequence {
+            return Err(HarnessEvidenceError::SequenceConflict {
+                attempt_id: event.request_attempt_id,
+                sequence: event.sequence,
+            });
+        }
+        tx.execute(
+            r#"INSERT INTO harness_model_events
                (request_attempt_id, sequence, event_kind, acceptance, payload,
                 canonical_evidence_ref, record_bytes)
                VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"#,
@@ -407,12 +435,6 @@ impl HarnessEvidenceStore {
                 record_bytes,
             ],
         )?;
-        if inserted != 1 {
-            return Err(HarnessEvidenceError::SequenceConflict {
-                attempt_id: event.request_attempt_id,
-                sequence: event.sequence,
-            });
-        }
         tx.commit()?;
         Ok(())
     }
@@ -541,7 +563,19 @@ impl HarnessEvidenceStore {
                 "compaction artifact bytes",
             ));
         }
-        let changed = self.connection.execute(
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if !row_exists(
+            &tx,
+            "SELECT 1 FROM harness_compaction_attempts WHERE compaction_id = ?1",
+            id_blob(artifact.compaction_id.as_u128()),
+        )? {
+            return Err(HarnessEvidenceError::InvalidRecord(
+                "compaction artifact parent attempt missing",
+            ));
+        }
+        let changed = tx.execute(
             r#"INSERT INTO harness_compaction_artifacts
                (compaction_id, deterministic, producing_request_attempt_id,
                 accepted_output_ref, artifact_digest, record_bytes)
@@ -570,6 +604,7 @@ impl HarnessEvidenceStore {
                 "compaction artifact identity collision",
             ));
         }
+        tx.commit()?;
         Ok(())
     }
 
@@ -584,7 +619,28 @@ impl HarnessEvidenceStore {
         if record_bytes.is_empty() {
             return Err(HarnessEvidenceError::InvalidRecord("benchmark bytes"));
         }
-        let changed = self.connection.execute(
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if !row_exists(
+            &tx,
+            "SELECT 1 FROM harness_execution_profiles WHERE profile_id = ?1",
+            id_blob(record.execution_profile_id.as_u128()),
+        )? {
+            return Err(HarnessEvidenceError::InvalidRecord(
+                "benchmark execution profile parent missing",
+            ));
+        }
+        if !row_exists(
+            &tx,
+            "SELECT 1 FROM harness_hardware_profiles WHERE hardware_profile_id = ?1",
+            id_blob(record.hardware_profile_id.as_u128()),
+        )? {
+            return Err(HarnessEvidenceError::InvalidRecord(
+                "benchmark hardware profile parent missing",
+            ));
+        }
+        let changed = tx.execute(
             r#"INSERT INTO harness_benchmark_records
                (benchmark_id, execution_profile_id, hardware_profile_id, workload_fixture_id,
                 started_at_unix_ms, finished_at_unix_ms, record_bytes)
@@ -612,6 +668,7 @@ impl HarnessEvidenceStore {
                 "benchmark identity collision",
             ));
         }
+        tx.commit()?;
         Ok(())
     }
 
@@ -625,7 +682,19 @@ impl HarnessEvidenceStore {
         if record_bytes.is_empty() {
             return Err(HarnessEvidenceError::InvalidRecord("calibration bytes"));
         }
-        let changed = self.connection.execute(
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if !row_exists(
+            &tx,
+            "SELECT 1 FROM harness_hardware_profiles WHERE hardware_profile_id = ?1",
+            id_blob(run.hardware_profile_id.as_u128()),
+        )? {
+            return Err(HarnessEvidenceError::InvalidRecord(
+                "calibration hardware profile parent missing",
+            ));
+        }
+        let changed = tx.execute(
             r#"INSERT INTO harness_calibration_runs
                (calibration_id, hardware_profile_id, backend_identity_ref, workload_fixture_id,
                 started_at_unix_ms, finished_at_unix_ms, record_bytes)
@@ -653,6 +722,7 @@ impl HarnessEvidenceStore {
                 "calibration identity collision",
             ));
         }
+        tx.commit()?;
         Ok(())
     }
 
@@ -913,6 +983,17 @@ fn selected_profile_id(
         .map(|id| id.map(ExecutionProfileId::from_u128))
 }
 
+fn row_exists(
+    connection: &Connection,
+    query: &str,
+    id: Vec<u8>,
+) -> Result<bool, HarnessEvidenceError> {
+    Ok(connection
+        .query_row(query, params![id], |row| row.get::<_, i64>(0))
+        .optional()?
+        .is_some())
+}
+
 fn is_missing_table(error: &rusqlite::Error) -> bool {
     matches!(
         error,
@@ -1171,6 +1252,70 @@ mod tests {
         assert!(matches!(
             store.persist_attempt_state(SessionId(9), &attempt, b"invalid"),
             Err(HarnessEvidenceError::ImmutableAttemptMismatch(_))
+        ));
+    }
+
+    #[test]
+    fn durable_request_lifecycle_rejects_terminal_rewrite() {
+        let mut store = HarnessEvidenceStore::open_in_memory().unwrap();
+        let mut attempt = prepared_attempt();
+        store
+            .persist_prepared_attempt(SessionId(9), &attempt, b"prepared")
+            .unwrap();
+        attempt.state = RequestAttemptState::Dispatched;
+        attempt.backend_instance_ref = Some("scripted:1".into());
+        store
+            .persist_attempt_state(SessionId(9), &attempt, b"dispatched")
+            .unwrap();
+        attempt.state = RequestAttemptState::Completed;
+        attempt.terminal_at_unix_ms = Some(20);
+        store
+            .persist_attempt_state(SessionId(9), &attempt, b"completed")
+            .unwrap();
+
+        attempt.state = RequestAttemptState::FailedTransient;
+        attempt.failure_class = Some("rewrite".into());
+        assert!(matches!(
+            store.persist_attempt_state(SessionId(9), &attempt, b"rewrite"),
+            Err(HarnessEvidenceError::InvalidRecord(
+                "invalid durable request attempt state transition"
+            ))
+        ));
+    }
+
+    #[test]
+    fn model_events_require_next_sequence_and_nonterminal_attempt() {
+        let mut store = HarnessEvidenceStore::open_in_memory().unwrap();
+        let mut attempt = prepared_attempt();
+        store
+            .persist_prepared_attempt(SessionId(9), &attempt, b"prepared")
+            .unwrap();
+        assert!(matches!(
+            store.append_model_event(
+                &accepted_event(attempt.request_attempt_id, 1, b"out-of-order"),
+                b"event-1"
+            ),
+            Err(HarnessEvidenceError::SequenceConflict { .. })
+        ));
+        store
+            .append_model_event(
+                &accepted_event(attempt.request_attempt_id, 0, b"first"),
+                b"event-0",
+            )
+            .unwrap();
+        attempt.state = RequestAttemptState::Cancelled;
+        attempt.terminal_at_unix_ms = Some(20);
+        store
+            .persist_attempt_state(SessionId(9), &attempt, b"cancelled")
+            .unwrap();
+        assert!(matches!(
+            store.append_model_event(
+                &accepted_event(attempt.request_attempt_id, 1, b"late"),
+                b"event-1"
+            ),
+            Err(HarnessEvidenceError::InvalidRecord(
+                "model event after terminal request attempt"
+            ))
         ));
     }
 
