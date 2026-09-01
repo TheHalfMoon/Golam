@@ -17,7 +17,7 @@
 - [x] Tool/model/protocol output cannot self-authorize.
 - [x] Consequential mutations remain behind the Effect Gate.
 - [x] Secrets/taint rules survive tool/context/memory derivation; `SECRET_DERIVED` cannot be downgraded inside Spec 005.
-- [x] Markdown/SQLite canonical memory model is preserved.
+- [x] Managed Markdown plus dedicated memory-operational SQLite canonical-memory model is preserved without aliasing authority state.
 - [x] Source Foundry gates are explicit before dependency/code admission.
 - [x] Exact-head verification and independent review remain mandatory.
 
@@ -55,16 +55,17 @@
 ## Memory
 
 - [x] Managed Markdown is canonical durable knowledge.
-- [x] SQLite is canonical operational state.
+- [x] A dedicated memory-operational SQLite store is canonical operational state and is separate from the protected authority database.
 - [x] Derived indexes are rebuildable and optional; missing derivatives do not block canonical memory access.
 - [x] One governed writer owns Golam-generated managed memory mutation.
 - [x] Promotion-authority validation is an explicit prerequisite before the managed writer may be enabled for mutation.
 - [x] Every managed mutation binds current Kernel authorization plus applicable approval/verifier evidence in an immutable `MemoryMutationIntent`.
-- [x] `MemoryMutationIntent` also binds exact expected Markdown target identity, expected digest/version, exact dedicated memory-operational-SQLite store identity/schema and unique Effect identity; these bindings survive PREPARED unchanged.
-- [x] A durable authorized Effect Gate PREPARED intent exists in the authority database before the first canonical Markdown/SQLite mutation; the memory operational SQLite store is separate and is never treated as authority.
+- [x] `MemoryMutationIntent` also binds exact expected Markdown target identity, expected digest/version, exact dedicated memory-operational-SQLite store identity/schema and unique Effect identity; every protected binding participates in the immutable intent digest and survives PREPARED unchanged.
+- [x] A durable authorized Effect Gate PREPARED intent exists in the authority database before the first canonical Markdown/memory-SQLite mutation; the memory-operational store is separate and is never treated as authority.
+- [x] Every effect-owned memory-operational row binds the exact memory-store identity/schema, Effect identity, mutation-intent digest and relevant expected/committed version state.
 - [x] Markdown replacement performs immediate commit-time target-identity + digest/version revalidation and conditional compare-and-replace/identity-preserving replacement; mismatch or unpreservable identity fails closed as `USER_EDIT_DETECTED`/`CONFLICT`.
-- [x] Markdown body/front matter is content only; reserved authority-bearing fields are rejected/quarantined for explicit reconciliation rather than setting scope, taint, provenance authority, approval, authorization, managed version identity or Effect Gate state.
-- [x] Terminal success requires read-back/reconciliation across the authority journal, exact Markdown identity/digest/version and exact memory operational SQLite store/effect rows; file-without-row, row-without-file, wrong-store, stale-digest/identity and unreadable/partial cuts cannot become success.
+- [x] Markdown body/front matter is content only; reserved authority-bearing fields are rejected/quarantined for explicit reconciliation rather than setting scope, taint, provenance authority, approval, authorization, managed version identity, promotion state or Effect Gate state.
+- [x] Terminal success requires read-back/reconciliation across the authority journal, exact Markdown identity/digest/version and exact memory-operational-store/effect rows; file-without-row, row-without-file, wrong-store, stale-digest/identity and unreadable/partial cuts cannot become success.
 - [x] Terminal outcome and required read-back/verification evidence are integrity-chained; ambiguous completion remains `UNKNOWN_OUTCOME` and blocks dependent memory mutations until reconciliation.
 - [x] Every committed managed version preserves initiating/creating principal, governed writer identity and exact mutation Effect attribution through restart/reconciliation.
 - [x] User hand-edits are detected/reconciled rather than overwritten.
@@ -76,10 +77,11 @@
 
 - [x] Instruction-only skills may precede executable skills.
 - [x] Executable skills are production-sandbox gated.
-- [x] Exact reviewed skill package/version/content digest and reviewed capability mapping are revalidated immediately before every instruction activation or executable dispatch; deprecated/revoked/replaced/mismatched state invalidates queued, prepared-but-not-dispatched, cached capability/approval and dispatch-decision state.
+- [x] `SkillDispatchBinding` explicitly binds the exact reviewed package/version/content digest, reviewed lifecycle/admission state, reviewed Golam-local capability mapping and queued/prepared/cached decision references.
+- [x] Exact skill dispatch bindings are revalidated immediately before every instruction activation or executable dispatch; deprecated/revoked/replaced/unknown/version/digest/mapping-mismatched state invalidates queued, prepared-but-not-dispatched, cached capability/approval and dispatch-decision state.
 - [x] MCP advertisements/results remain untrusted and cannot mint Golam capabilities.
-- [x] MCP local mappings and lifecycle state are explicit; replaced/revoked bindings cannot silently retain authority.
-- [x] Exact active MCP binding identity/digest, version lock and Golam-local mapping identity/digest are revalidated immediately before every local or remote dispatch; stale queued/prepared calls, mapped descriptors, capability/approval caches and dispatch decisions fail closed.
+- [x] `McpDispatchBinding` explicitly binds exact reviewed binding identity/digest, version lock, Golam-local mapping identity/digest, lifecycle state and queued/prepared/cached decision references.
+- [x] Exact MCP dispatch bindings are revalidated immediately before every local or remote dispatch; stale/replaced/revoked/unreviewed/unknown/version/digest/mapping-mismatched state invalidates queued/prepared calls, mapped descriptors, capability/approval caches and dispatch decisions.
 - [x] Remote MCP is egress/strict-local/endpoint-identity/credential-scope gated.
 - [x] ACP preserves authenticated local-client semantics.
 - [x] Official MCP Rust SDK is a candidate, not automatically admitted.
@@ -89,7 +91,7 @@
 - [x] Ordinary CI remains hermetic and credential/model/service independent.
 - [x] Path/protected-resource, process containment/reconciliation, network credential, context, memory and protocol adversarial families are enumerated.
 - [x] Memory adversarial readiness explicitly covers stale Markdown digest/version, target-identity swap, authority-bearing front matter, wrong memory-store binding and every authority-journal/Markdown/memory-SQLite partial-store cut.
-- [x] Skill/MCP adversarial readiness covers dispatch after deprecation/revocation/replacement and rejection of stale queued/prepared/cached/approved decisions.
+- [x] Skill/MCP adversarial readiness covers dispatch after deprecation/revocation/replacement/version/digest/mapping mismatch and rejection of stale queued/prepared/cached/approved decisions.
 - [x] Planning closeout requires exact-head Windows/macOS/Ubuntu CI.
 - [x] Planning closeout requires substantive independent semantic review on the unchanged head.
 - [x] Material findings must be repaired and requalified before Ready/merge.
@@ -97,11 +99,11 @@
 
 ## Remaining planning gates
 
-- [ ] Planning package is committed atomically to the planning branch.
-- [ ] Planning analysis confirms no internal contradiction/material omission.
-- [ ] Exact-head planning CI succeeds.
-- [ ] Independent semantic review succeeds on that exact head.
-- [ ] Reconciliation closes all material findings without waiver.
+- [x] Planning package is committed as bounded planning artifacts on the planning branch.
+- [x] Internal convergence analysis now propagates all presently known memory/store/CAS/front-matter/skill/MCP review contracts across the normative planning package.
+- [ ] Fresh exact-head planning CI succeeds after the final convergence propagation commit.
+- [ ] Independent semantic review succeeds on that same unchanged exact head after CI.
+- [ ] Reconciliation closes all material findings without waiver and without stale evidence.
 - [ ] Planning PR becomes non-Draft only after required gates.
 - [ ] Guarded expected-head planning merge succeeds.
 - [ ] Push-triggered canonical-main CI succeeds.
