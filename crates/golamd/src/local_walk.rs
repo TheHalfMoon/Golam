@@ -83,7 +83,10 @@ impl fmt::Display for LocalDirectoryWalkError {
                 path.display()
             ),
             Self::NotDirectory(kind) => {
-                write!(f, "bounded local directory walk requires a directory, observed: {kind:?}")
+                write!(
+                    f,
+                    "bounded local directory walk requires a directory, observed: {kind:?}"
+                )
             }
             Self::UnsupportedFileKind { path, kind } => write!(
                 f,
@@ -91,7 +94,10 @@ impl fmt::Display for LocalDirectoryWalkError {
                 path.as_str()
             ),
             Self::EntryLimitExceeded { limit } => {
-                write!(f, "bounded local directory walk entry limit exceeded: limit={limit}")
+                write!(
+                    f,
+                    "bounded local directory walk entry limit exceeded: limit={limit}"
+                )
             }
             Self::DurationLimitExceeded => {
                 f.write_str("bounded local directory walk duration limit exceeded")
@@ -158,11 +164,8 @@ pub fn walk_directory(
 
     while let Some(directory) = pending.pop_front() {
         require_within_duration(started, bounds.max_duration)?;
-        let current = resolver.resolve_read_target(
-            &directory.requested,
-            operation,
-            observed_at_unix_ms,
-        )?;
+        let current =
+            resolver.resolve_read_target(&directory.requested, operation, observed_at_unix_ms)?;
         require_directory(&current)?;
         if current.resolved_target_identity != directory.expected_target_identity
             || current.observed_metadata_digest != directory.expected_metadata_digest
@@ -201,10 +204,7 @@ pub fn walk_directory(
             match identity.file_kind {
                 ObservedFileKind::RegularFile | ObservedFileKind::Directory => {}
                 kind => {
-                    return Err(LocalDirectoryWalkError::UnsupportedFileKind {
-                        path: child,
-                        kind,
-                    });
+                    return Err(LocalDirectoryWalkError::UnsupportedFileKind { path: child, kind });
                 }
             }
 
