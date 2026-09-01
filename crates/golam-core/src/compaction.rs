@@ -228,6 +228,25 @@ mod tests {
     }
 
     #[test]
+    fn successful_compaction_never_mutates_canonical_source_projection() {
+        let source_projection = projection();
+        let original = source_projection.clone();
+        let mut transaction = begin_deterministic_compaction(
+            CompactionId::from_u128(8),
+            &source_projection,
+            [9; 32],
+            10,
+        )
+        .unwrap();
+        transaction.begin_derivation().unwrap();
+        let (_, artifact) = transaction.commit([10; 32], 11).unwrap();
+
+        assert_eq!(source_projection, original);
+        assert_eq!(artifact.source_event_refs, original.source_event_refs);
+        assert_eq!(artifact.goal_refs, original.goal_refs);
+    }
+
+    #[test]
     fn commit_rejects_terminal_time_before_start() {
         let source_projection = projection();
         let mut transaction = begin_deterministic_compaction(
@@ -294,6 +313,41 @@ mod tests {
             assert_eq!(
                 candidate.attempt.failure_class.as_deref(),
                 Some("changed_source_context")
+            );
+        }
+    }
+
+    #[test]
+    fn failed_compaction_never_claims_activation_or_artifact_commit() {
+        let source_projection = projection();
+        let transaction = begin_deterministic_compaction(
+            CompactionId::from_u128(8),
+            &source_projection,
+            [9; 32],
+            10,
+        )
+        .unwrap();
+
+        for changed_digest_byte in 0_u8..16 {
+            let mut candidate = transaction.clone();
+            let mut changed_digest = [9; 32];
+            changed_digest[0] = changed_digest_byte;
+            if changed_digest == [9; 32] {
+                continue;
+            }
+
+            assert!(
+                candidate
+                    .invalidate_if_source_changed(&source_projection, changed_digest, 11)
+                    .unwrap()
+            );
+            assert_eq!(
+                candidate.attempt.state,
+                CompactionState::FailedChangedSource
+            );
+            assert_eq!(
+                candidate.commit([10; 32], 12),
+                Err(HarnessStateError::InvalidTransition)
             );
         }
     }
