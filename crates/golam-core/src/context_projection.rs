@@ -2,7 +2,9 @@ use std::collections::BTreeSet;
 
 use crate::SessionId;
 use crate::harness::ExecutionProfileId;
-use crate::harness_state::{ContextProjection, HarnessStateError};
+use crate::harness_state::{
+    CompactionArtifact, ContextProjection, HarnessStateError,
+};
 use crate::taint::{TaintLabel, TaintSet};
 
 const MAX_PROJECTION_ITEMS: usize = 256;
@@ -58,6 +60,32 @@ pub fn build_context_projection(
     Ok(projection)
 }
 
+/// Builds a model-visible projection after a committed compaction while
+/// reintroducing Goal/non-negotiable constraints from independently durable
+/// canonical GoalVersion evidence instead of trusting summary text.
+///
+/// `canonical_goal_refs` must be read from canonical Goal state by the caller.
+/// The compaction artifact is used only to prove that the committed compaction
+/// was bound to the same GoalVersion identity; it is never the authority for
+/// replacing or rewriting that Goal state.
+pub fn build_post_compaction_projection(
+    mut input: ContextProjectionInput,
+    artifact: &CompactionArtifact,
+    canonical_goal_refs: &[String],
+) -> Result<ContextProjection, HarnessStateError> {
+    artifact.validate()?;
+    reject_duplicate_refs(canonical_goal_refs)?;
+    if canonical_goal_refs.is_empty() || artifact.goal_refs != canonical_goal_refs {
+        return Err(HarnessStateError::InvalidBounds);
+    }
+
+    input.goal_refs = canonical_goal_refs.to_vec();
+    if !input.compaction_refs.contains(&artifact.compaction_id) {
+        input.compaction_refs.push(artifact.compaction_id);
+    }
+    build_context_projection(input)
+}
+
 fn validate_model_visible_taint(taint: TaintSet) -> Result<(), HarnessStateError> {
     if taint.contains(TaintLabel::SecretDerived) {
         return Err(HarnessStateError::InvalidBounds);
@@ -98,6 +126,19 @@ mod tests {
             render_policy_digest: [5; 32],
             rendered_digest: [6; 32],
             created_at_unix_ms: 7,
+        }
+    }
+
+    fn compaction_artifact() -> CompactionArtifact {
+        CompactionArtifact {
+            compaction_id: CompactionId::from_u128(8),
+            source_projection_ref: "projection:session-1:turn-1".into(),
+            source_event_refs: vec!["event:1".into(), "event:2".into()],
+            goal_refs: vec!["goal:3:version:2".into()],
+            deterministic: true,
+            producing_request_attempt_id: None,
+            accepted_output_ref: None,
+            artifact_digest: [9; 32],
         }
     }
 
@@ -178,6 +219,37 @@ mod tests {
                 "taint:mcp-untrusted",
                 "taint:model-generated",
             ]
+        );
+    }
+
+    #[test]
+    fn post_compaction_projection_reinjects_canonical_goal_state_independently() {
+        let mut value = input();
+        value.goal_refs = vec!["summary:must-not-own-goal".into()];
+        value.compaction_refs.clear();
+        let artifact = compaction_artifact();
+        let canonical_goal_refs = vec!["goal:3:version:2".into()];
+
+        let projection = build_post_compaction_projection(
+            value,
+            &artifact,
+            &canonical_goal_refs,
+        )
+        .unwrap();
+
+        assert_eq!(projection.goal_refs, canonical_goal_refs);
+        assert_eq!(projection.compaction_refs, [CompactionId::from_u128(8)]);
+    }
+
+    #[test]
+    fn post_compaction_projection_rejects_stale_goal_binding() {
+        let value = input();
+        let artifact = compaction_artifact();
+        let changed_goal_refs = vec!["goal:3:version:3".into()];
+
+        assert_eq!(
+            build_post_compaction_projection(value, &artifact, &changed_goal_refs),
+            Err(HarnessStateError::InvalidBounds)
         );
     }
 }
