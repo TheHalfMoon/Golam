@@ -4,11 +4,9 @@ use std::error::Error;
 use std::fmt;
 use std::path::Path;
 
-use golam_core::context_evidence::{
-    ContextEvidence, EvidenceAuthorityClass, EvidenceSourceKind,
-};
+use golam_core::context_evidence::{ContextEvidence, EvidenceAuthorityClass, EvidenceSourceKind};
 use golam_core::tool_request::{ToolRequest, ToolRequestId, ToolResult};
-use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
+use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
 pub const TOOL_CONTEXT_EVIDENCE_SCHEMA_VERSION: i64 = 1;
 
@@ -372,9 +370,7 @@ const fn authority_class_code(class: EvidenceAuthorityClass) -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use golam_core::context_evidence::{
-        EvidenceSourceId, FreshnessPolicy, PermissionScopeId,
-    };
+    use golam_core::context_evidence::{EvidenceSourceId, FreshnessPolicy, PermissionScopeId};
     use golam_core::harness::ToolCallCandidateId;
     use golam_core::taint::{TaintLabel, TaintSet};
     use golam_core::tool_descriptor::{ToolId, ToolVersion};
@@ -421,7 +417,9 @@ mod tests {
         changed.created_at_unix_ms += 1;
         assert!(matches!(
             store.persist_tool_request(&changed),
-            Err(ToolContextEvidenceError::ImmutableEvidenceMismatch("tool request"))
+            Err(ToolContextEvidenceError::ImmutableEvidenceMismatch(
+                "tool request"
+            ))
         ));
     }
 
