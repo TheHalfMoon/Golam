@@ -51,6 +51,9 @@ macro_rules! opaque_harness_id {
                 if value.len() != CANONICAL_ID_HEX_LEN {
                     return Err(HarnessIdParseError::InvalidLength);
                 }
+                if !value.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)) {
+                    return Err(HarnessIdParseError::InvalidHex);
+                }
                 let parsed =
                     u128::from_str_radix(value, 16).map_err(|_| HarnessIdParseError::InvalidHex)?;
                 Ok(Self(parsed))
@@ -93,6 +96,14 @@ mod tests {
         );
         assert_eq!(
             "0000000000000000000000000000000z".parse::<ExecutionProfileId>(),
+            Err(HarnessIdParseError::InvalidHex)
+        );
+        assert_eq!(
+            "+0000000000000000000000000000001".parse::<ExecutionProfileId>(),
+            Err(HarnessIdParseError::InvalidHex)
+        );
+        assert_eq!(
+            "0000000000000000000000000000000A".parse::<ExecutionProfileId>(),
             Err(HarnessIdParseError::InvalidHex)
         );
     }
