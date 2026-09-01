@@ -1,12 +1,13 @@
 #![forbid(unsafe_code)]
 
+use golam_core::SessionId;
 use golam_core::harness::{CompactionId, ExecutionProfileId, HardwareProfileId};
 use golam_core::harness_state::{
     BenchmarkMetrics, BenchmarkRecord, BenchmarkResult, CalibrationObservation, CalibrationResult,
-    CalibrationRun, CompactionArtifact,
+    CalibrationRun, CompactionArtifact, CompactionAttempt, CompactionState,
 };
 use golam_ledger::harness_evidence::{
-    HardwareProfileEvidence, HarnessEvidenceError, HarnessEvidenceStore,
+    ExecutionProfileEvidence, HardwareProfileEvidence, HarnessEvidenceError, HarnessEvidenceStore,
 };
 
 fn assert_identity_collision(result: Result<(), HarnessEvidenceError>, expected: &'static str) {
@@ -14,6 +15,26 @@ fn assert_identity_collision(result: Result<(), HarnessEvidenceError>, expected:
         result,
         Err(HarnessEvidenceError::InvalidRecord(reason)) if reason == expected
     ));
+}
+
+fn record_profile_parents(store: &mut HarnessEvidenceStore, profile_id: u128) {
+    store
+        .record_execution_profile(ExecutionProfileEvidence {
+            profile_id: ExecutionProfileId::from_u128(profile_id),
+            schema_version: 1,
+            content_digest: [u8::try_from(profile_id).unwrap_or(1); 32],
+            semantic_bytes: b"execution-profile",
+            benchmark_metadata_bytes: b"benchmark-metadata",
+        })
+        .unwrap();
+    store
+        .record_hardware_profile(HardwareProfileEvidence {
+            profile_id: HardwareProfileId::from_u128(2),
+            observed_at_unix_ms: 10,
+            content_digest: [2; 32],
+            record_bytes: b"hardware-parent",
+        })
+        .unwrap();
 }
 
 fn benchmark(profile_id: u128, workload: &str) -> BenchmarkRecord {
@@ -97,8 +118,25 @@ fn hardware_profile_identity_is_idempotent_only_for_exact_evidence() {
 #[test]
 fn compaction_artifact_identity_rejects_conflicting_payload() {
     let mut store = HarnessEvidenceStore::open_in_memory().unwrap();
+    let compaction_id = CompactionId::from_u128(5);
+    store
+        .record_compaction_attempt(
+            &CompactionAttempt {
+                compaction_id,
+                session_id: SessionId(1),
+                source_projection_ref: "projection:1".into(),
+                state: CompactionState::Started,
+                deterministic: true,
+                producing_request_attempt_id: None,
+                started_at_unix_ms: 1,
+                terminal_at_unix_ms: None,
+                failure_class: None,
+            },
+            b"compaction-start",
+        )
+        .unwrap();
     let first = CompactionArtifact {
-        compaction_id: CompactionId::from_u128(5),
+        compaction_id,
         source_projection_ref: "projection:1".into(),
         source_event_refs: vec!["event:1".into()],
         goal_refs: vec!["goal:1".into()],
@@ -125,10 +163,12 @@ fn compaction_artifact_identity_rejects_conflicting_payload() {
 #[test]
 fn benchmark_identity_rejects_stale_binding_reuse() {
     let mut store = HarnessEvidenceStore::open_in_memory().unwrap();
+    record_profile_parents(&mut store, 1);
     let first = benchmark(1, "fixture:a");
     store.record_benchmark(&first, b"benchmark-a").unwrap();
     store.record_benchmark(&first, b"benchmark-a").unwrap();
 
+    record_profile_parents(&mut store, 99);
     let conflicting = benchmark(99, "fixture:b");
     assert_identity_collision(
         store.record_benchmark(&conflicting, b"benchmark-b"),
@@ -139,6 +179,7 @@ fn benchmark_identity_rejects_stale_binding_reuse() {
 #[test]
 fn calibration_identity_rejects_conflicting_binding() {
     let mut store = HarnessEvidenceStore::open_in_memory().unwrap();
+    record_profile_parents(&mut store, 1);
     let first = calibration("fixture:a");
     store.record_calibration(&first, b"calibration-a").unwrap();
     store.record_calibration(&first, b"calibration-a").unwrap();
@@ -147,5 +188,32 @@ fn calibration_identity_rejects_conflicting_binding() {
     assert_identity_collision(
         store.record_calibration(&conflicting, b"calibration-b"),
         "calibration identity collision",
+    );
+}
+
+#[test]
+fn evidence_records_reject_missing_parents() {
+    let mut store = HarnessEvidenceStore::open_in_memory().unwrap();
+    let artifact = CompactionArtifact {
+        compaction_id: CompactionId::from_u128(55),
+        source_projection_ref: "projection:1".into(),
+        source_event_refs: vec!["event:1".into()],
+        goal_refs: vec!["goal:1".into()],
+        deterministic: true,
+        producing_request_attempt_id: None,
+        accepted_output_ref: None,
+        artifact_digest: [5; 32],
+    };
+    assert_identity_collision(
+        store.record_compaction_artifact(&artifact, b"artifact"),
+        "compaction artifact parent attempt missing",
+    );
+    assert_identity_collision(
+        store.record_benchmark(&benchmark(1, "fixture:a"), b"benchmark"),
+        "benchmark execution profile parent missing",
+    );
+    assert_identity_collision(
+        store.record_calibration(&calibration("fixture:a"), b"calibration"),
+        "calibration hardware profile parent missing",
     );
 }
