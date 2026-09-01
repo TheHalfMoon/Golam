@@ -110,6 +110,7 @@ All planning artifacts now agree that:
 - restart/reconciliation preserves those identities rather than collapsing attribution into a generic system creator;
 - FORGET/REDACT use the same lifecycle across Markdown, SQLite and derivative invalidation;
 - user edits are detected/reconciled;
+- the commit boundary immediately revalidates expected Markdown digest/version and target identity and uses conditional compare-and-replace / identity-preserving replacement, so an intervening edit cannot become silent last-writer-wins overwrite;
 - promotion requires attributable approval or deterministic pre-registered verification;
 - `SECRET_DERIVED` is excluded and monotonic within Spec 005; sanitization is not declassification;
 - contradiction/supersession lineage is explicit;
@@ -144,7 +145,7 @@ The official MCP Rust SDK remains a candidate pending exact minimal dependency q
 
 ## Review finding reconciliation
 
-A substantive CodeRabbit review on historical planning head `779a5c8a49f1004c43182e123afe503037e34659` first produced four actionable findings. Later CodeRabbit semantic analysis on that historical review state also surfaced additional contract/order gaps. Historical-head review output is defect evidence, not final T005-015 evidence; final review must occur after fresh exact-head CI on the final unchanged planning head.
+Historical substantive reviews are defect-discovery evidence, not final T005-015 evidence. Final qualification must bind the final unchanged planning head after fresh exact-head CI.
 
 The known finding set is reconciled as follows:
 
@@ -159,8 +160,9 @@ The known finding set is reconciled as follows:
 9. **Phase D external search binary before containment admission** — Phase D is now in-process only. External search binaries are ineligible until after T005-077 and then require exact Source Foundry + admitted process-boundary qualification.
 10. **Ambient environment ambiguity** — process launch continues to require a cleared ambient environment with only explicitly bound values/secret handles.
 11. **Secret-taint downgrade ambiguity** — `SECRET_DERIVED` provenance cannot be downgraded by redaction/summarization/transformation/verification; only independently sourced non-secret evidence may begin a separate candidate provenance chain.
-
-The four original inline finding threads were previously reconciled and resolved against `feff88dfbbd0c54912118c5adc1cc8f6ceac028a` after CI #782. This second convergence repair changes the branch again, so those confirmations remain historical defect-resolution evidence but are stale as final exact-head qualification.
+12. **Managed-memory plan omitted the commit-time TOCTOU guard** — the plan lifecycle now explicitly revalidates expected Markdown digest/version plus target identity immediately at the commit boundary and requires conditional compare-and-replace / identity-preserving replacement with fail-closed `USER_EDIT_DETECTED`/`CONFLICT` behavior.
+13. **Verification narrative could be read as a self-updating qualification ledger** — final exact-head CI/review dispositions are recorded in immutable GitHub PR/check/review evidence rather than committed back into this file after qualification, because such a post-qualification content mutation would itself invalidate the qualified head.
+14. **Spec 004 closeout checklist challenge** — rejected as not valid against live authority. PR #14 records T004-113 post-merge canonical-main CI PASS on CI #777 / run `33507343928`, `SPEC_004_IMPLEMENTATION_COMPLETE=YES`, and `SPEC_004_CLOSED_CANONICAL=YES` at exact `main@390ea842837a7d85dca165d9291d5eb54c3f11db`. That live merge/post-merge evidence explicitly records T004-113/T004-114 without a self-invalidating content mutation; live GitHub truth outranks stale unchecked historical ledger boxes.
 
 ## Verification consistency
 
@@ -176,7 +178,9 @@ Planning and implementation both preserve:
 
 Qualification evidence binds the head that the pull request itself advertises. A raw branch ref that has moved but is not yet represented as the PR head is not sufficient exact-head PR evidence and MUST NOT be used to satisfy CI/review/Ready/merge gates.
 
-CI #782 / run `33516670304` succeeded on `feff88dfbbd0c54912118c5adc1cc8f6ceac028a` across Windows/macOS/Ubuntu. The present convergence repair mutates that head, so #782 becomes historical/stale for final T005-014. Fresh exact-head CI and then fresh independent review are mandatory.
+Historical qualification evidence is kept attributable rather than rewritten as current evidence. CI #782 / run `33516670304` succeeded on `feff88dfbbd0c54912118c5adc1cc8f6ceac028a` and became stale after later repair. CI #785 / run `33523752838` then succeeded on `b73b10c0c0416b55df3e2999229b799fc098a728` and enabled an independent Cubic 14-file review that found three reported issues: one Spec 004-closeout false positive contradicted by live canonical evidence, one material managed-memory plan omission, and one verification-narrative consistency issue. The present forward-only repair supersedes `b73b10c0...`, so CI #785 and that Cubic review are historical/stale for final qualification.
+
+The successor exact planning head MUST obtain fresh Windows/macOS/Ubuntu exact-head CI and, only after that CI succeeds, a fresh substantive independent semantic review. Terminal PASS/FAIL dispositions for those gates MUST be recorded in GitHub PR/check/review evidence and MUST NOT be committed back into this file after qualification merely to mirror the result: that would mutate the qualified head and immediately make the evidence stale. This section therefore records the verification procedure and historical lineage, not a self-referential current PASS checkbox.
 
 ## Material-risk review
 
@@ -214,7 +218,7 @@ Mitigation: descendant supervision and terminal process-tree reconciliation are 
 
 ## Planning convergence result
 
-The second convergence repair candidate reconciles every presently known material internal/review finding across the normative planning package. This is a self-analysis statement, not final qualification: the branch mutation intentionally invalidates prior exact-head CI/review evidence.
+The current convergence repair candidate reconciles every presently known material internal/review finding across the normative planning package. This is a self-analysis statement, not final qualification: the branch mutation intentionally invalidates prior exact-head CI/review evidence.
 
 This self-analysis is **not** independent semantic review and does not satisfy T005-015.
 
@@ -227,7 +231,10 @@ PLANNING_CODE_REUSED=NO
 PLANNING_DEPENDENCY_ADDED=NO
 NONCANONICAL_PR_6_7_8_PROMOTED_TO_AUTHORITY=NO
 PRE_REPAIR_CI_782=SUCCESS_STALE_AFTER_REPAIR
-INDEPENDENT_REVIEW=PENDING_FRESH_POST_CI
+PRE_REPAIR_CI_785=SUCCESS_STALE_AFTER_REPAIR
+PRE_REPAIR_CUBIC_REVIEW=THREE_REPORTED_ONE_FALSE_POSITIVE_TWO_REPAIRED_STALE_AFTER_REPAIR
+FINAL_EXACT_HEAD_CI=REQUIRED_EXTERNAL_GITHUB_EVIDENCE
+FINAL_INDEPENDENT_REVIEW=REQUIRED_EXTERNAL_GITHUB_EVIDENCE_AFTER_CI
 PR_READY=NO
 MERGE_AUTHORIZED=NO
 WAIVER_TAKEN=NO
