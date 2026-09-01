@@ -420,7 +420,67 @@ impl HarnessEvidenceStore {
                 "compaction attempt bytes",
             ));
         }
-        self.connection.execute(
+        if attempt
+            .terminal_at_unix_ms
+            .is_some_and(|terminal| terminal < attempt.started_at_unix_ms)
+        {
+            return Err(HarnessEvidenceError::InvalidRecord(
+                "compaction terminal precedes start",
+            ));
+        }
+
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let next_state = compaction_state_code(attempt);
+        let existing = tx
+            .query_row(
+                r#"SELECT state, session_id, deterministic, producing_request_attempt_id,
+                          started_at_unix_ms
+                   FROM harness_compaction_attempts
+                   WHERE compaction_id = ?1"#,
+                params![id_blob(attempt.compaction_id.as_u128())],
+                |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, Vec<u8>>(1)?,
+                        row.get::<_, bool>(2)?,
+                        row.get::<_, Option<Vec<u8>>>(3)?,
+                        row.get::<_, i64>(4)?,
+                    ))
+                },
+            )
+            .optional()?;
+
+        match existing {
+            None if next_state != 0 => {
+                return Err(HarnessEvidenceError::InvalidRecord(
+                    "compaction lifecycle must begin with STARTED",
+                ));
+            }
+            Some((current_state, session_id, deterministic, producing_attempt_id, started_at)) => {
+                let expected_producing_attempt = attempt
+                    .producing_request_attempt_id
+                    .map(|id| id_blob(id.as_u128()));
+                if session_id != id_blob(attempt.session_id.0)
+                    || deterministic != attempt.deterministic
+                    || producing_attempt_id != expected_producing_attempt
+                    || started_at != u64_to_i64(attempt.started_at_unix_ms)?
+                {
+                    return Err(HarnessEvidenceError::InvalidRecord(
+                        "immutable compaction identity mismatch",
+                    ));
+                }
+                if !compaction_state_transition_allowed(current_state, next_state) {
+                    return Err(HarnessEvidenceError::InvalidRecord(
+                        "invalid durable compaction state transition",
+                    ));
+                }
+            }
+            None => {}
+        }
+
+        let changed = tx.execute(
             r#"INSERT INTO harness_compaction_attempts
                (compaction_id, session_id, state, deterministic, producing_request_attempt_id,
                 started_at_unix_ms, terminal_at_unix_ms, failure_class, record_bytes)
@@ -433,11 +493,12 @@ impl HarnessEvidenceStore {
                WHERE harness_compaction_attempts.session_id = excluded.session_id
                  AND harness_compaction_attempts.deterministic = excluded.deterministic
                  AND harness_compaction_attempts.producing_request_attempt_id
-                     IS excluded.producing_request_attempt_id"#,
+                     IS excluded.producing_request_attempt_id
+                 AND harness_compaction_attempts.started_at_unix_ms = excluded.started_at_unix_ms"#,
             params![
                 id_blob(attempt.compaction_id.as_u128()),
                 id_blob(attempt.session_id.0),
-                compaction_state_code(attempt),
+                next_state,
                 attempt.deterministic,
                 attempt
                     .producing_request_attempt_id
@@ -448,6 +509,12 @@ impl HarnessEvidenceStore {
                 record_bytes,
             ],
         )?;
+        if changed != 1 {
+            return Err(HarnessEvidenceError::InvalidRecord(
+                "compaction lifecycle persistence conflict",
+            ));
+        }
+        tx.commit()?;
         Ok(())
     }
 
@@ -910,9 +977,20 @@ fn compaction_state_code(attempt: &CompactionAttempt) -> i64 {
     }
 }
 
+fn compaction_state_transition_allowed(current: i64, next: i64) -> bool {
+    match current {
+        0 => matches!(next, 1 | 4 | 5 | 8),
+        1 => matches!(next, 2 | 4 | 5 | 6 | 7 | 8),
+        2 => matches!(next, 3 | 4 | 5 | 7 | 8),
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use golam_core::harness::CompactionId;
+    use golam_core::harness_state::CompactionState;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -941,6 +1019,20 @@ mod tests {
             payload: payload.to_vec(),
             acceptance: ModelEventAcceptance::Accepted,
             canonical_evidence_ref: Some(format!("event:model:{sequence}")),
+        }
+    }
+
+    fn started_compaction() -> CompactionAttempt {
+        CompactionAttempt {
+            compaction_id: CompactionId::from_u128(21),
+            session_id: SessionId(9),
+            source_projection_ref: "projection:source:1".into(),
+            state: CompactionState::Started,
+            deterministic: true,
+            producing_request_attempt_id: None,
+            started_at_unix_ms: 100,
+            terminal_at_unix_ms: None,
+            failure_class: None,
         }
     }
 
@@ -1104,6 +1196,86 @@ mod tests {
         assert_eq!(events[0].payload, b"hel");
         assert_eq!(events[1].sequence, 1);
         assert_eq!(events[1].payload, b"lo");
+        drop(reopened);
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn compaction_lifecycle_must_begin_with_started() {
+        let mut store = HarnessEvidenceStore::open_in_memory().unwrap();
+        let mut attempt = started_compaction();
+        attempt.state = CompactionState::Deriving;
+        assert!(matches!(
+            store.record_compaction_attempt(&attempt, b"deriving"),
+            Err(HarnessEvidenceError::InvalidRecord(
+                "compaction lifecycle must begin with STARTED"
+            ))
+        ));
+    }
+
+    #[test]
+    fn compaction_lifecycle_rejects_regression_and_terminal_rewrite() {
+        let mut store = HarnessEvidenceStore::open_in_memory().unwrap();
+        let mut attempt = started_compaction();
+        store
+            .record_compaction_attempt(&attempt, b"started")
+            .unwrap();
+
+        attempt.transition(CompactionState::Deriving).unwrap();
+        store
+            .record_compaction_attempt(&attempt, b"deriving")
+            .unwrap();
+
+        let mut regression = attempt.clone();
+        regression.state = CompactionState::Started;
+        assert!(matches!(
+            store.record_compaction_attempt(&regression, b"regression"),
+            Err(HarnessEvidenceError::InvalidRecord(
+                "invalid durable compaction state transition"
+            ))
+        ));
+
+        attempt.transition(CompactionState::Validating).unwrap();
+        store
+            .record_compaction_attempt(&attempt, b"validating")
+            .unwrap();
+        attempt.transition(CompactionState::Committed).unwrap();
+        attempt.terminal_at_unix_ms = Some(120);
+        store
+            .record_compaction_attempt(&attempt, b"committed")
+            .unwrap();
+
+        let mut rewrite = attempt.clone();
+        rewrite.state = CompactionState::Cancelled;
+        rewrite.terminal_at_unix_ms = Some(121);
+        assert!(matches!(
+            store.record_compaction_attempt(&rewrite, b"rewrite"),
+            Err(HarnessEvidenceError::InvalidRecord(
+                "invalid durable compaction state transition"
+            ))
+        ));
+    }
+
+    #[test]
+    fn incomplete_compaction_start_survives_reopen() {
+        let path = temp_db_path("compaction-start-reopen");
+        let attempt = started_compaction();
+        {
+            let mut store = HarnessEvidenceStore::open(&path).unwrap();
+            store
+                .record_compaction_attempt(&attempt, b"started")
+                .unwrap();
+        }
+        let reopened = HarnessEvidenceStore::open(&path).unwrap();
+        let stored_state: i64 = reopened
+            .connection
+            .query_row(
+                "SELECT state FROM harness_compaction_attempts WHERE compaction_id = ?1",
+                params![id_blob(attempt.compaction_id.as_u128())],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(stored_state, 0);
         drop(reopened);
         let _ = fs::remove_file(path);
     }
