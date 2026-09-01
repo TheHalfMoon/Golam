@@ -2,6 +2,7 @@
 
 use golam_core::CanonicalEncoder;
 use golam_core::SessionId;
+use golam_core::digest::sha256;
 use golam_core::execution_profile::{BackendKind, ExecutionProfile};
 use golam_core::harness::{RequestAttemptId, RequestSeriesId};
 use golam_core::harness_state::{
@@ -80,7 +81,7 @@ impl HarnessBenchmarkFixture {
         }
         encoder.push_u64(self.poll_duration_ms);
         encoder.push_u64(self.max_polls);
-        Ok(stable_digest32(&encoder.finish()))
+        Ok(sha256(&encoder.finish()))
     }
 }
 
@@ -333,7 +334,7 @@ fn hardware_observation_digest(hardware: &HardwareProfile) -> [u8; 32] {
     encoder.push_u128(hardware.hardware_profile_id.as_u128());
     encoder.push_u64(hardware.observed_at_unix_ms);
     let _ = encoder.push_bytes(&hardware.content_digest);
-    stable_digest32(&encoder.finish())
+    sha256(&encoder.finish())
 }
 
 fn backend_identity_digest(profile: &ExecutionProfile) -> Result<[u8; 32], BenchmarkRunError> {
@@ -355,27 +356,7 @@ fn backend_identity_digest(profile: &ExecutionProfile) -> Result<[u8; 32], Bench
     encoder
         .push_bytes(backend.launch_or_feature_digest.as_bytes())
         .map_err(|_| BenchmarkRunError::InvalidBinding)?;
-    Ok(stable_digest32(&encoder.finish()))
-}
-
-fn stable_digest32(bytes: &[u8]) -> [u8; 32] {
-    const SEEDS: [u64; 4] = [
-        0xcbf29ce484222325,
-        0x9e3779b97f4a7c15,
-        0x6a09e667f3bcc909,
-        0xbb67ae8584caa73b,
-    ];
-    let mut output = [0_u8; 32];
-    for (index, seed) in SEEDS.into_iter().enumerate() {
-        let mut value = seed;
-        for byte in bytes {
-            value ^= u64::from(*byte);
-            value = value.wrapping_mul(0x100000001b3);
-            value ^= value.rotate_right(29);
-        }
-        output[index * 8..index * 8 + 8].copy_from_slice(&value.to_be_bytes());
-    }
-    output
+    Ok(sha256(&encoder.finish()))
 }
 
 fn hex32(bytes: [u8; 32]) -> String {
@@ -619,6 +600,25 @@ mod tests {
             &run.record,
             &changed_backend
         ));
+    }
+
+    #[test]
+    fn binding_digests_use_canonical_sha256() {
+        let fixture = HarnessBenchmarkFixture::spec004_scripted_v1();
+        let digest = fixture.content_digest().unwrap();
+        let mut encoder = CanonicalEncoder::new();
+        encoder
+            .push_bytes(b"golam:harness-benchmark-fixture:v1")
+            .unwrap();
+        encoder.push_bytes(fixture.fixture_id.as_bytes()).unwrap();
+        encoder.push_u16(fixture.fixture_version);
+        encoder.push_u64(fixture.text_fragments.len() as u64);
+        for fragment in &fixture.text_fragments {
+            encoder.push_bytes(fragment).unwrap();
+        }
+        encoder.push_u64(fixture.poll_duration_ms);
+        encoder.push_u64(fixture.max_polls);
+        assert_eq!(digest, sha256(&encoder.finish()));
     }
 
     #[test]
