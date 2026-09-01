@@ -34,6 +34,7 @@ pub mod harness_evidence;
 mod harness_sink;
 pub mod integrity;
 pub mod manual_review;
+pub mod memory_evidence;
 pub mod policy;
 pub mod protocol_audit;
 pub mod recovery;
