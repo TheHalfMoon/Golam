@@ -133,7 +133,7 @@ impl<B: ModelBackend> HarnessCoordinator<B> {
                     &mut attempt,
                     RequestAttemptState::CancelRequested,
                 )?;
-                session.request_cancel().map_err(HarnessRunError::Backend)?;
+                let cancel_result = session.request_cancel();
                 finish_terminal(
                     sink,
                     request,
@@ -142,11 +142,12 @@ impl<B: ModelBackend> HarnessCoordinator<B> {
                     now,
                     None,
                 )?;
+                cancel_result.map_err(HarnessRunError::Backend)?;
                 return Ok(outcome(&attempt));
             }
 
             if elapsed_ms >= request.max_runtime_ms {
-                session.request_cancel().map_err(HarnessRunError::Backend)?;
+                let cancel_result = session.request_cancel();
                 finish_terminal(
                     sink,
                     request,
@@ -155,6 +156,7 @@ impl<B: ModelBackend> HarnessCoordinator<B> {
                     now,
                     Some("request_timeout"),
                 )?;
+                cancel_result.map_err(HarnessRunError::Backend)?;
                 return Ok(outcome(&attempt));
             }
 
@@ -590,6 +592,82 @@ mod tests {
                 .states
                 .iter()
                 .any(|state| state.state == RequestAttemptState::CancelRequested)
+        );
+    }
+
+    #[derive(Default)]
+    struct CancelFailBackend;
+
+    struct CancelFailSession;
+
+    impl ModelBackend for CancelFailBackend {
+        type Session = CancelFailSession;
+
+        fn start(&mut self, _request: &ModelRequest) -> Result<Self::Session, ModelBackendError> {
+            Ok(CancelFailSession)
+        }
+    }
+
+    impl ModelBackendSession for CancelFailSession {
+        fn backend_instance_ref(&self) -> &str {
+            "cancel-fail:session"
+        }
+
+        fn next_emission(&mut self) -> Result<Option<BackendEmission>, ModelBackendError> {
+            Ok(Some(BackendEmission {
+                sequence: 0,
+                kind: ModelEventKind::TextDelta,
+                payload: b"prefix".to_vec(),
+            }))
+        }
+
+        fn request_cancel(&mut self) -> Result<(), ModelBackendError> {
+            Err(ModelBackendError::new(
+                ModelBackendFailureClass::Transient,
+                "cancel failed",
+            ))
+        }
+    }
+
+    #[test]
+    fn cancel_backend_error_still_persists_cancelled_terminal_state() {
+        let mut coordinator = HarnessCoordinator::new(CancelFailBackend);
+        let mut sink = RecordingSink::default();
+        let result = coordinator.run_attempt(
+            &mut sink,
+            &request(1, 1, 100),
+            10,
+            HarnessRunControl {
+                cancel_after_polls: Some(0),
+                ..HarnessRunControl::default()
+            },
+        );
+        assert!(matches!(result, Err(HarnessRunError::Backend(_))));
+        assert_eq!(
+            sink.states.last().map(|attempt| attempt.state),
+            Some(RequestAttemptState::Cancelled)
+        );
+        assert!(sink.states.last().unwrap().terminal_at_unix_ms.is_some());
+    }
+
+    #[test]
+    fn timeout_cancel_backend_error_still_persists_timed_out_terminal_state() {
+        let mut coordinator = HarnessCoordinator::new(CancelFailBackend);
+        let mut sink = RecordingSink::default();
+        let result = coordinator.run_attempt(
+            &mut sink,
+            &request(1, 1, 1),
+            10,
+            HarnessRunControl::default(),
+        );
+        assert!(matches!(result, Err(HarnessRunError::Backend(_))));
+        assert_eq!(
+            sink.states.last().map(|attempt| attempt.state),
+            Some(RequestAttemptState::TimedOut)
+        );
+        assert_eq!(
+            sink.states.last().unwrap().failure_class.as_deref(),
+            Some("request_timeout")
         );
     }
 
