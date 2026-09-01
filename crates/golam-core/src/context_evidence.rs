@@ -192,29 +192,21 @@ pub struct ContextCapsule {
 
 impl ContextCapsule {
     pub fn validate(&self) -> Result<(), ContextValidationError> {
-        validate_ordered_unique(
-            &self.requirement_refs,
-            "requirement_refs",
-            MAX_CONTEXT_REFS,
-        )?;
+        validate_ordered_unique(&self.requirement_refs, "requirement_refs", MAX_CONTEXT_REFS)?;
         validate_ordered_unique(&self.evidence_refs, "evidence_refs", MAX_CONTEXT_REFS)?;
         validate_ordered_unique(&self.memory_refs, "memory_refs", MAX_CONTEXT_REFS)?;
-        validate_ordered_unique(
-            &self.ranking_evidence,
-            "ranking_evidence",
-            MAX_CONTEXT_REFS,
-        )?;
+        validate_ordered_unique(&self.ranking_evidence, "ranking_evidence", MAX_CONTEXT_REFS)?;
         validate_ordered_unique(
             &self.missing_requirements,
             "missing_requirements",
             MAX_CONTEXT_REFS,
         )?;
 
-        if self
-            .ranking_evidence
-            .iter()
-            .any(|ranking| self.evidence_refs.binary_search(&ranking.evidence_ref).is_err())
-        {
+        if self.ranking_evidence.iter().any(|ranking| {
+            self.evidence_refs
+                .binary_search(&ranking.evidence_ref)
+                .is_err()
+        }) {
             return Err(ContextValidationError::RankingReferencesUnknownEvidence);
         }
 
@@ -284,7 +276,10 @@ impl fmt::Display for ContextValidationError {
             }
             Self::TooManyItems(field) => write!(f, "context item bound exceeded: {field}"),
             Self::UnsortedOrDuplicate(field) => {
-                write!(f, "context references must be strictly sorted and unique: {field}")
+                write!(
+                    f,
+                    "context references must be strictly sorted and unique: {field}"
+                )
             }
             Self::RankingReferencesUnknownEvidence => {
                 f.write_str("ranking evidence references an item outside the capsule")
