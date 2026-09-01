@@ -1,4 +1,4 @@
-use crate::harness::CompactionId;
+use crate::harness::{CompactionId, ExecutionProfileId};
 use crate::harness_state::{
     CompactionArtifact, CompactionAttempt, CompactionState, ContextProjection, HarnessStateError,
 };
@@ -9,7 +9,35 @@ pub struct CompactionSourceBinding {
     pub source_event_refs: Vec<String>,
     pub source_artifact_refs: Vec<String>,
     pub goal_refs: Vec<String>,
+    pub source_compaction_refs: Vec<CompactionId>,
+    pub source_taint_refs: Vec<String>,
+    pub source_execution_profile_id: ExecutionProfileId,
+    pub source_max_tokens: u32,
+    pub source_render_policy_digest: [u8; 32],
+    pub source_rendered_digest: [u8; 32],
     pub source_digest: [u8; 32],
+}
+
+impl CompactionSourceBinding {
+    pub fn matches_projection(
+        &self,
+        current_projection: &ContextProjection,
+        current_source_digest: [u8; 32],
+    ) -> Result<bool, HarnessStateError> {
+        current_projection.validate()?;
+
+        Ok(self.source_projection_ref == current_projection.projection_ref
+            && self.source_event_refs == current_projection.source_event_refs
+            && self.source_artifact_refs == current_projection.source_artifact_refs
+            && self.goal_refs == current_projection.goal_refs
+            && self.source_compaction_refs == current_projection.compaction_refs
+            && self.source_taint_refs == current_projection.taint_refs
+            && self.source_execution_profile_id == current_projection.execution_profile_id
+            && self.source_max_tokens == current_projection.max_tokens
+            && self.source_render_policy_digest == current_projection.render_policy_digest
+            && self.source_rendered_digest == current_projection.rendered_digest
+            && self.source_digest == current_source_digest)
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -31,6 +59,12 @@ pub fn begin_deterministic_compaction(
         source_event_refs: source_projection.source_event_refs.clone(),
         source_artifact_refs: source_projection.source_artifact_refs.clone(),
         goal_refs: source_projection.goal_refs.clone(),
+        source_compaction_refs: source_projection.compaction_refs.clone(),
+        source_taint_refs: source_projection.taint_refs.clone(),
+        source_execution_profile_id: source_projection.execution_profile_id,
+        source_max_tokens: source_projection.max_tokens,
+        source_render_policy_digest: source_projection.render_policy_digest,
+        source_rendered_digest: source_projection.rendered_digest,
         source_digest,
     };
     let attempt = CompactionAttempt {
@@ -52,6 +86,29 @@ pub fn begin_deterministic_compaction(
 impl DeterministicCompactionTransaction {
     pub fn begin_derivation(&mut self) -> Result<(), HarnessStateError> {
         self.attempt.transition(CompactionState::Deriving)
+    }
+
+    pub fn invalidate_if_source_changed(
+        &mut self,
+        current_projection: &ContextProjection,
+        current_source_digest: [u8; 32],
+        observed_at_unix_ms: u64,
+    ) -> Result<bool, HarnessStateError> {
+        if self
+            .source
+            .matches_projection(current_projection, current_source_digest)?
+        {
+            return Ok(false);
+        }
+        if observed_at_unix_ms < self.attempt.started_at_unix_ms {
+            return Err(HarnessStateError::InvalidBounds);
+        }
+
+        self.attempt.transition(CompactionState::FailedChangedSource)?;
+        self.attempt.terminal_at_unix_ms = Some(observed_at_unix_ms);
+        self.attempt.failure_class = Some("changed_source_context".into());
+        self.attempt.validate()?;
+        Ok(true)
     }
 
     pub fn commit(
@@ -88,7 +145,6 @@ impl DeterministicCompactionTransaction {
 mod tests {
     use super::*;
     use crate::SessionId;
-    use crate::harness::ExecutionProfileId;
 
     fn projection() -> ContextProjection {
         ContextProjection {
@@ -184,5 +240,69 @@ mod tests {
             transaction.commit([10; 32], 9),
             Err(HarnessStateError::InvalidBounds)
         );
+    }
+
+    #[test]
+    fn material_source_goal_profile_or_policy_change_invalidates_compaction() {
+        let source_projection = projection();
+        let transaction = begin_deterministic_compaction(
+            CompactionId::from_u128(8),
+            &source_projection,
+            [9; 32],
+            10,
+        )
+        .unwrap();
+
+        let cases = [
+            {
+                let mut changed = source_projection.clone();
+                changed.source_event_refs.push("event:12".into());
+                changed
+            },
+            {
+                let mut changed = source_projection.clone();
+                changed.goal_refs = vec!["goal:3:version:3".into()];
+                changed
+            },
+            {
+                let mut changed = source_projection.clone();
+                changed.execution_profile_id = ExecutionProfileId::from_u128(3);
+                changed
+            },
+            {
+                let mut changed = source_projection.clone();
+                changed.render_policy_digest = [7; 32];
+                changed
+            },
+        ];
+
+        for changed in cases {
+            let mut candidate = transaction.clone();
+            assert!(candidate.invalidate_if_source_changed(&changed, [9; 32], 11).unwrap());
+            assert_eq!(candidate.attempt.state, CompactionState::FailedChangedSource);
+            assert_eq!(candidate.attempt.terminal_at_unix_ms, Some(11));
+            assert_eq!(
+                candidate.attempt.failure_class.as_deref(),
+                Some("changed_source_context")
+            );
+        }
+    }
+
+    #[test]
+    fn unchanged_source_context_remains_valid() {
+        let source_projection = projection();
+        let mut transaction = begin_deterministic_compaction(
+            CompactionId::from_u128(8),
+            &source_projection,
+            [9; 32],
+            10,
+        )
+        .unwrap();
+
+        assert!(!transaction
+            .invalidate_if_source_changed(&source_projection, [9; 32], 11)
+            .unwrap());
+        assert_eq!(transaction.attempt.state, CompactionState::Started);
+        assert_eq!(transaction.attempt.terminal_at_unix_ms, None);
     }
 }
