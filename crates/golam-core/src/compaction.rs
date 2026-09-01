@@ -26,17 +26,19 @@ impl CompactionSourceBinding {
     ) -> Result<bool, HarnessStateError> {
         current_projection.validate()?;
 
-        Ok(self.source_projection_ref == current_projection.projection_ref
-            && self.source_event_refs == current_projection.source_event_refs
-            && self.source_artifact_refs == current_projection.source_artifact_refs
-            && self.goal_refs == current_projection.goal_refs
-            && self.source_compaction_refs == current_projection.compaction_refs
-            && self.source_taint_refs == current_projection.taint_refs
-            && self.source_execution_profile_id == current_projection.execution_profile_id
-            && self.source_max_tokens == current_projection.max_tokens
-            && self.source_render_policy_digest == current_projection.render_policy_digest
-            && self.source_rendered_digest == current_projection.rendered_digest
-            && self.source_digest == current_source_digest)
+        Ok(
+            self.source_projection_ref == current_projection.projection_ref
+                && self.source_event_refs == current_projection.source_event_refs
+                && self.source_artifact_refs == current_projection.source_artifact_refs
+                && self.goal_refs == current_projection.goal_refs
+                && self.source_compaction_refs == current_projection.compaction_refs
+                && self.source_taint_refs == current_projection.taint_refs
+                && self.source_execution_profile_id == current_projection.execution_profile_id
+                && self.source_max_tokens == current_projection.max_tokens
+                && self.source_render_policy_digest == current_projection.render_policy_digest
+                && self.source_rendered_digest == current_projection.rendered_digest
+                && self.source_digest == current_source_digest,
+        )
     }
 }
 
@@ -104,7 +106,8 @@ impl DeterministicCompactionTransaction {
             return Err(HarnessStateError::InvalidBounds);
         }
 
-        self.attempt.transition(CompactionState::FailedChangedSource)?;
+        self.attempt
+            .transition(CompactionState::FailedChangedSource)?;
         self.attempt.terminal_at_unix_ms = Some(observed_at_unix_ms);
         self.attempt.failure_class = Some("changed_source_context".into());
         self.attempt.validate()?;
@@ -306,9 +309,11 @@ mod tests {
         )
         .unwrap();
 
-        assert!(!transaction
-            .invalidate_if_source_changed(&source_projection, [9; 32], 11)
-            .unwrap());
+        assert!(
+            !transaction
+                .invalidate_if_source_changed(&source_projection, [9; 32], 11)
+                .unwrap()
+        );
         assert_eq!(transaction.attempt.state, CompactionState::Started);
         assert_eq!(transaction.attempt.terminal_at_unix_ms, None);
     }
