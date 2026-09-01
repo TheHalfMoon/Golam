@@ -78,6 +78,7 @@ pub fn build_post_compaction_projection(
     reject_duplicate_compaction_refs(&input.compaction_refs)?;
     if attempt.state != CompactionState::Committed
         || attempt.terminal_at_unix_ms.is_none()
+        || attempt.session_id != input.session_id
         || attempt.compaction_id != artifact.compaction_id
         || attempt.source_projection_ref != artifact.source_projection_ref
         || attempt.deterministic != artifact.deterministic
@@ -312,6 +313,20 @@ mod tests {
         let attempt = committed_compaction();
         let mut artifact = compaction_artifact();
         artifact.source_projection_ref = "projection:session-1:other-source".into();
+        let canonical_goal_refs = vec!["goal:3:version:2".into()];
+
+        assert_eq!(
+            build_post_compaction_projection(value, &attempt, &artifact, &canonical_goal_refs),
+            Err(HarnessStateError::InvalidBounds)
+        );
+    }
+
+    #[test]
+    fn post_compaction_projection_rejects_cross_session_attempt() {
+        let mut value = input();
+        value.session_id = SessionId(2);
+        let attempt = committed_compaction();
+        let artifact = compaction_artifact();
         let canonical_goal_refs = vec!["goal:3:version:2".into()];
 
         assert_eq!(
