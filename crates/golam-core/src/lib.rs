@@ -12,6 +12,7 @@ pub mod paths;
 pub mod routing;
 pub mod runtime_home;
 pub mod taint;
+pub mod target_identity;
 pub mod tool_call;
 pub mod tool_descriptor;
 pub mod tool_request;
