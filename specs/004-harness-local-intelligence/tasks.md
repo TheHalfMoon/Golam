@@ -166,10 +166,10 @@ Phase J qualification: CI #748 / run `33491296471` on `de71bd924c01f7f4f2523c377
 
 Depends on all tasks required by the selected bounded implementation posture.
 
-- [ ] **T004-105** Run full cross-artifact/code convergence against constitution, canonical Specs 001–003, Spec 004 package and exact admitted-source records.
-- [ ] **T004-106** Run focused harness/profile/compaction/cancellation/tool-call/strict-local/property/fault-injection qualification.
-- [ ] **T004-107** Run full workspace format + Clippy warnings denied + full tests + existing property/fuzz/IPC/authority/no-egress gates.
-- [ ] **T004-108** Obtain exact-head Windows/macOS/Ubuntu CI success.
+- [x] **T004-105** Run full cross-artifact/code convergence against constitution, canonical Specs 001–003, Spec 004 package and exact admitted-source records. Evidence: `implementation/convergence-closeout.md`; silent identity-collision persistence defect repaired fail-closed.
+- [x] **T004-106** Run focused harness/profile/compaction/cancellation/tool-call/strict-local/property/fault-injection qualification. Evidence: `implementation/convergence-closeout.md` and the qualified repository test surface.
+- [x] **T004-107** Run full workspace format + Clippy warnings denied + full tests + existing property/fuzz/IPC/authority/no-egress gates. Evidence: CI #752 / run `33492514474` on pre-documentation head `eb79dc7de021601a3dff28a27543eec652bd35c2` — Windows/macOS/Ubuntu SUCCESS.
+- [ ] **T004-108** Obtain exact-head Windows/macOS/Ubuntu CI success for the final closeout documentation head.
 - [ ] **T004-109** Obtain fresh substantive independent external semantic review after exact-head CI under current repository policy.
 - [ ] **T004-110** Repair every material finding without waiver; any mutation requires fresh exact-head CI and fresh review.
 - [ ] **T004-111** Mark implementation Ready only after all required tasks/evidence are complete and review is clean.
