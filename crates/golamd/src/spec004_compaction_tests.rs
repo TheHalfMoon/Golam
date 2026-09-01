@@ -131,6 +131,7 @@ fn context_overflow_compacts_reprojects_and_dispatches_fresh_attempt() {
     let canonical_goal_refs = vec!["goal:7:version:3".into()];
     let reprojected = build_post_compaction_projection(
         projection_input("projection:after-compaction", 2048),
+        &compaction_attempt,
         &artifact,
         &canonical_goal_refs,
     )
