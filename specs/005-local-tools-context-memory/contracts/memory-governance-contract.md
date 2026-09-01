@@ -49,25 +49,35 @@ Within Spec 005, `SECRET_DERIVED` provenance is monotonic and MUST NOT be cleare
 
 A separately created candidate may be eligible only when its content is independently sourced from evidence whose own provenance never includes `SECRET_DERIVED`; it is a new provenance chain, not a downgraded representation of secret-derived content.
 
-## 6. Single managed writer
+## 6. Single managed writer and Effect Gate lifecycle
 
-Golam-generated managed-vault mutation flows through one governed writer:
+Every Golam-generated managed-memory mutation, including `FORGET` and `REDACT`, is a consequential protected mutation. It MUST use an immutable `MemoryMutationIntent` bound to the initiating principal, current Kernel authorization, applicable promotion approval/pre-registered verifier evidence, expected current memory versions, and a unique effect identity.
+
+Before the first canonical Markdown or SQLite mutation, the intent MUST be durably persisted as an authorized Effect Gate PREPARED transaction. Only the single governed memory writer/handler may execute that prepared mutation.
+
+The writer lifecycle is:
 
 ```text
-candidate/intent
+MemoryMutationIntent
 -> validate scope + taint + provenance
--> validate promotion authority
--> read current canonical version
+-> validate current Kernel authorization + promotion authority
+-> read current canonical version and expected preconditions
 -> detect user edit/conflict
--> construct next version
+-> persist durable Effect Gate PREPARED intent
+-> construct next canonical state
 -> durable temporary write
--> atomic/identity-preserving replacement
--> record operational/version evidence
--> invalidate derivatives
--> post-write verification
+-> atomic/identity-preserving Markdown replacement
+-> commit/update SQLite operational/version evidence
+-> invalidate affected derivatives before they may serve
+-> post-write/read-back verification
+-> record integrity-chained terminal Effect Gate outcome + verification evidence
 ```
 
 No generic filesystem tool, model, plugin, MCP server or skill may bypass this writer for Golam-generated managed memory changes.
+
+A crash, disconnect or other interruption that leaves completion ambiguous MUST produce or remain an `UNKNOWN_OUTCOME` effect state. Dependent managed-memory mutations remain blocked until restart reconciliation determines the exact Markdown/SQLite state and records attributable reconciliation evidence. Absence of a terminal record is never interpreted as success.
+
+Multi-store operations such as `FORGET` and `REDACT` use the same lifecycle. Canonical Markdown removal, SQLite operational/version state, derivative invalidation and any rebuild eligibility must reconcile as one effect-owned mutation outcome; partial completion cannot be silently promoted to success.
 
 ## 7. User hand-edits
 
@@ -132,6 +142,8 @@ Every derivative generation binds implementation identity and canonical cut dige
 
 Startup and canonical memory access MUST remain functional when derivatives are absent or rebuilding. Dense/vector services are not baseline availability dependencies.
 
+A derivative-dependent operation encountering a missing/corrupt generation MUST trigger a governed rebuild from canonical state or fail that derivative-dependent operation closed. It MUST NOT fail canonical Markdown/SQLite memory access merely because the derivative is absent.
+
 `FORGET`/`REDACT` invalidates any derivative generation that may contain affected content before that generation may serve results again.
 
 ## 11. Live-state precedence
@@ -140,7 +152,7 @@ Remembered claims never outrank fresher authoritative repository/filesystem/devi
 
 ## 12. Durability and failure
 
-The writer must fail closed on disk-full, partial write, crash-before-replace, crash-after-replace-before-operational-record, or operational-record-without-readable-canonical-file cases. Restart reconciliation must converge to an attributable state without silently discarding user content.
+The writer must fail closed on disk-full, partial write, crash-before-replace, crash-after-replace-before-operational-record, or operational-record-without-readable-canonical-file cases. Restart reconciliation must converge to an attributable state without silently discarding user content or treating an ambiguous effect as successful.
 
 ## 13. Export/backup
 
@@ -151,14 +163,16 @@ Human-readable canonical Markdown remains exportable within policy. Protected op
 Qualification includes:
 
 - forged/free-form promotion approval;
+- stale/revoked Kernel authorization or approval between intent and prepare;
 - candidate-selected verifier;
 - `SECRET_DERIVED` promotion attempts;
 - attempted taint downgrade via redaction/summarization/transformation;
 - user-edit races;
 - contradictory updates;
 - stale-memory vs live-state conflict;
-- crash/restart at every writer durability boundary;
+- crash/restart at every PREPARED/writer/Markdown/SQLite/outcome durability boundary;
+- ambiguous completion and dependent-mutation blocking under `UNKNOWN_OUTCOME`;
 - disk-full/permission loss;
-- FORGET/REDACT derivative resurrection;
+- FORGET/REDACT partial multi-store completion and derivative resurrection;
 - malicious Markdown/front-matter trying to mutate authority;
 - derivative index unavailable/corrupt/rebuilt from canonical state.

@@ -51,7 +51,8 @@ All consequential writes and external effects remain authorized by the existing 
 - user hand-edits remain allowed and are detected through content/version reconciliation;
 - operations: `ADD`, `UPDATE`, `SUPERSEDE`, `CONTRADICT`, `MERGE`, `EXPIRE`, `FORGET`, `REDACT`;
 - durable promotion requires attributable approval or deterministic verification against a pre-registered authoritative source/rule;
-- `SECRET_DERIVED` content is rejected from canonical long-term memory;
+- every Golam-generated managed-memory mutation is a protected Effect Gate transaction with durable PREPARED intent before canonical mutation, terminal outcome/verification evidence, and fail-closed `UNKNOWN_OUTCOME` reconciliation;
+- `SECRET_DERIVED` content is rejected from canonical long-term memory and its taint cannot be downgraded within Spec 005;
 - live repository/filesystem/device/authoritative external state outranks remembered content.
 
 ### Skills and protocols
@@ -80,34 +81,34 @@ All consequential writes and external effects remain authorized by the existing 
 
 ## Functional requirements
 
-- **FR-001** Tool descriptors MUST declare stable identity, operation class, input/output bounds, required capability class, effect semantics, network posture, sandbox requirement and verifier expectations.
-- **FR-002** Tool invocation MUST bind initiating principal, exact tool identity/version, requested target, capability/effect context, taint/provenance and idempotency material before consequential execution.
+- **FR-001** Tool descriptors MUST declare stable identity, operation class, explicit finite input/output byte/count bounds and duration bounds, required capability class, effect semantics, network posture, sandbox requirement, target-identity semantics and verifier/reconciliation expectations.
+- **FR-002** Tool invocation MUST bind initiating principal, exact tool identity/version, requested operation/target, authorized resource class, capability/effect context, taint/provenance, idempotency material and current preconditions before consequential execution; a durably prepared protected request is immutable.
 - **FR-003** Filesystem operations MUST resolve target identity within explicitly authorized roots and reject escapes through symlink/reparse/junction or equivalent aliases.
 - **FR-004** Protected kernel resources MUST remain unreachable through generic filesystem or tool capability.
 - **FR-005** Race-sensitive writes MUST either use platform primitives that preserve the checked target identity through commit or fail closed when identity cannot be maintained.
 - **FR-006** Shell/process execution MUST remain unavailable until an exact production native-executor qualification is admitted for the requested platform/profile.
 - **FR-007** Managed process launch MUST clear ambient environment, expose only explicitly authorized environment/handles/filesystem/network/resources, bind executable and cwd identity, supervise descendants, support cancellation and preserve terminal evidence.
 - **FR-008** Git reads MAY feed context; Git writes MUST be consequential effects. Force push, destructive history rewrite and model-authorized bypass remain out of scope.
-- **FR-009** Browser/network activity MUST require explicit egress authority and preserve URL/origin/redirect/download provenance. Strict-local MUST deny external network activity.
+- **FR-009** Browser/network activity MUST require explicit egress authority and preserve URL/origin/redirect/download provenance. Credential-bearing hops MUST use authenticated encrypted transport, bind secrets to the authorized endpoint/origin, and strip/revalidate/re-broker sensitive material across redirects or endpoint/protocol changes. Strict-local MUST deny external network activity.
 - **FR-010** Context evidence MUST retain source, observation identity/time, content digest/ref, authority class, taint and permission metadata.
 - **FR-011** Context selection/ranking MUST NOT raise source authority or clear taint.
 - **FR-012** Live authoritative state MUST supersede stale memory/context projections when they conflict.
-- **FR-013** Managed memory mutation MUST occur only through one governed writer after validation and authorization.
+- **FR-013** Every Golam-generated managed-memory mutation MUST use an immutable `MemoryMutationIntent` bound to the initiating principal, current Kernel authorization, applicable promotion approval/pre-registered verifier evidence, expected current versions and a unique effect identity. The authorized Effect Gate intent MUST be durably PREPARED before the first canonical Markdown or SQLite mutation; only the single governed memory writer/handler may execute it. Integrity-chained terminal outcome plus required read-back/verification evidence MUST be recorded. Crash or disconnect ambiguity MUST remain `UNKNOWN_OUTCOME` and block dependent managed-memory mutations until reconciliation. This lifecycle applies to all operations, including multi-store `FORGET` and `REDACT`.
 - **FR-014** User hand-edited Markdown MUST be detected and reconciled; Golam MUST NOT silently overwrite divergent user edits.
 - **FR-015** Memory promotion MUST require attributable approval or deterministic pre-registered authoritative verification; model/worker self-verification is invalid.
-- **FR-016** `SECRET_DERIVED` content MUST NOT enter canonical long-term memory.
-- **FR-017** `FORGET`/`REDACT` MUST remove affected active canonical content and invalidate/rebuild derivatives while honestly retaining the fact that already-emitted external artifacts cannot be retroactively unseen.
-- **FR-018** Derived indexes MUST be rebuildable from canonical Markdown/operational evidence and may not become a hidden availability dependency.
+- **FR-016** `SECRET_DERIVED` content MUST NOT enter canonical long-term memory, and Spec 005 MUST NOT clear/downgrade `SECRET_DERIVED` provenance through redaction, summarization, transformation or verification.
+- **FR-017** `FORGET`/`REDACT` MUST remove affected active canonical content and invalidate/rebuild derivatives while honestly retaining the fact that already-emitted external artifacts cannot be retroactively unseen; partial/ambiguous multi-store completion follows FR-013 reconciliation rather than being reported as success.
+- **FR-018** Derived indexes MUST be rebuildable from canonical Markdown/operational evidence and may not become a hidden availability dependency. Canonical memory access MUST remain available when derivatives are absent; derivative-dependent operations rebuild or fail only that operation closed.
 - **FR-019** Instruction-only skills MAY be admitted after provenance/capability review; executable scripts require qualified sandbox containment.
 - **FR-020** MCP server output MUST be treated as untrusted/tainted input and server-advertised tools/resources MUST NOT mint Golam authority.
-- **FR-021** Remote MCP/network protocol use MUST pass normal egress, identity, secret and strict-local gates.
+- **FR-021** Remote MCP/network protocol use MUST pass normal egress, authenticated endpoint identity, credential-scope, secret and strict-local gates.
 - **FR-022** ACP clients MUST authenticate through the existing local-client trust boundary; transport connection or localhost presence is insufficient.
 - **FR-023** Ordinary CI MUST not require cloud credentials, external network, Docker, model downloads or specialized hardware.
 - **FR-024** Every release-gating claim MUST be exact-head reproducible and independently reviewed according to live repository policy.
 
 ## Security/adversarial requirements
 
-Qualification MUST include path alias/symlink races, protected-resource escape, stale refs, oversized/special files, shell metacharacter ambiguity, ambient secret leakage, descendant process escape, strict-local egress, malicious MCP schemas/results, skill prompt injection, memory poisoning, stale-memory conflict, user-edit races, forged promotion approval, `SECRET_DERIVED` promotion, FORGET/REDACT rebuild correctness, and crash/restart during memory/tool transactions.
+Qualification MUST include path alias/symlink races, protected-resource escape, stale refs, oversized/special files, shell metacharacter ambiguity, ambient secret leakage, descendant process escape, strict-local egress, credential-forwarding/transport-downgrade redirects, malicious MCP schemas/results, skill prompt injection, memory poisoning, stale-memory conflict, user-edit races, forged/stale promotion approval, `SECRET_DERIVED` promotion/taint-downgrade attempts, memory Effect Gate crash/`UNKNOWN_OUTCOME` reconciliation, FORGET/REDACT partial completion/rebuild correctness, and crash/restart during memory/tool transactions.
 
 ## Out of scope
 
@@ -126,6 +127,6 @@ Qualification MUST include path alias/symlink races, protected-resource escape, 
 - **SC-003** Path escape and protected-resource attack corpus fails closed across supported platforms.
 - **SC-004** Shell/process/MCP executable features remain unavailable on unqualified production sandbox profiles and become usable only after exact admitted qualification.
 - **SC-005** Memory survives restart, reconciles a user hand-edit, surfaces contradictions, and never lets stale memory outrank fresher authoritative state.
-- **SC-006** FORGET/REDACT removes active canonical knowledge and rebuilds every enabled derivative deterministically.
+- **SC-006** Managed-memory mutations prove PREPARED-before-mutation Effect Gate evidence, terminal/verification evidence and `UNKNOWN_OUTCOME` reconciliation; FORGET/REDACT removes active canonical knowledge and rebuilds every enabled derivative deterministically.
 - **SC-007** Malicious skill/MCP/memory inputs cannot mint authority, clear taint or bypass Effect Gate.
 - **SC-008** final exact-head Windows/macOS/Ubuntu CI and a substantive independent semantic review are clean before merge.

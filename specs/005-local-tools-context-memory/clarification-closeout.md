@@ -52,11 +52,13 @@
 
 ## C12 — What happens to secret-derived content?
 
-**Decision**: `SECRET_DERIVED` content is rejected from canonical long-term memory. Redaction or a separately evidenced non-secret-derived representation must occur through governed flow.
+**Decision**: `SECRET_DERIVED` content is rejected from canonical long-term memory. Within Spec 005 that provenance is monotonic: redaction, summarization, transformation, deterministic verification or model claims cannot clear or downgrade it. Only a separately created candidate whose independently sourced provenance never includes `SECRET_DERIVED` may be considered under the normal promotion flow.
+
+`SANITIZATION != DECLASSIFICATION_AUTHORITY`
 
 ## C13 — What do FORGET and REDACT mean?
 
-**Decision**: Remove the affected active canonical content, preserve required audit/governance evidence without retaining forbidden plaintext, invalidate/rebuild every derived index/cache and state honestly that previously emitted external artifacts cannot be retroactively unseen.
+**Decision**: They are managed-memory mutations under the same protected lifecycle as every other Golam-generated memory mutation. An immutable `MemoryMutationIntent` binds the initiating principal, current Kernel authorization, applicable approval/pre-registered verifier evidence, expected current versions and a unique effect identity. An authorized Effect Gate PREPARED record must be durable before the first canonical Markdown or SQLite mutation; only the governed memory writer may execute it; terminal outcome and required read-back/verification evidence are integrity-chained. Ambiguous crash/disconnect completion remains `UNKNOWN_OUTCOME` and blocks dependent managed-memory mutations until reconciliation. FORGET/REDACT then remove affected active canonical content, preserve only required non-plaintext audit/governance facts, invalidate/rebuild affected derivatives, and never claim previously emitted external artifacts were retroactively erased.
 
 ## C14 — Are Mem0/Qdrant/vector databases canonical or required?
 
@@ -93,3 +95,19 @@
 ## C22 — How is strict-local preserved?
 
 **Decision**: Strict-local is a kernel-level hard denial for all managed components. A missing local tool/index/model/MCP capability fails clearly; it never authorizes cloud, remote provider, telemetry, download or network fallback.
+
+## C23 — How are credential-bearing network hops and redirects handled?
+
+**Decision**: General egress permission is insufficient to disclose a credential. Before a brokered secret or sensitive authorization material is attached, the hop must use authenticated encrypted endpoint transport and the credential must be scoped to that authorized origin/endpoint and operation. Redirects, proxy transitions, origin changes or protocol changes strip sensitive headers/cookies/bodies, revalidate egress and endpoint identity, and re-broker credentials only under fresh explicit scope. Credential-bearing downgrade or unprovable endpoint identity fails closed.
+
+`EGRESS_ALLOWED != CREDENTIAL_DISCLOSURE_AUTHORIZED`
+
+## C24 — Can a missing derivative index block canonical memory?
+
+**Decision**: No. Canonical Markdown/SQLite startup and ordinary canonical memory reads remain available while derivatives are absent or rebuilding. A derivative-dependent operation must trigger governed rebuild from canonical state; if the required derivative cannot be rebuilt and qualified, only that derivative-dependent operation fails closed.
+
+`DERIVATIVE_UNAVAILABLE != CANONICAL_MEMORY_UNAVAILABLE`
+
+## C25 — Can a protected ToolRequest change after durable prepare?
+
+**Decision**: No. Authority-relevant request bindings are immutable after durable prepare. Retry, target/operation/precondition changes, authority-context changes, or a materially different resolution result require a new request/effect identity.

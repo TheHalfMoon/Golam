@@ -24,7 +24,7 @@ Every executable or read-only tool surface MUST expose an immutable versioned de
 
 - stable `ToolId` and `ToolVersion`;
 - operation class;
-- explicit input/output byte, count and duration bounds;
+- explicit input/output byte and count bounds plus finite duration bounds;
 - required Golam capability class;
 - effect semantics (`READ_ONLY`, `IDEMPOTENT_AT_LEAST_ONCE`, `AT_MOST_ONCE`, `COMPENSATABLE`, `IRREVERSIBLE` as applicable);
 - network posture;
@@ -51,7 +51,7 @@ idempotency material
 current preconditions
 ```
 
-User/model strings do not become authority by being present in the request.
+User/model strings do not become authority by being present in the request. Once a protected request is durably prepared, its authority-relevant binding is immutable. A retry, materially changed target, changed operation, changed precondition set or changed authority context requires a new request/effect identity rather than mutation of the prepared request.
 
 ## 4. Filesystem target contract
 
@@ -145,6 +145,16 @@ Spec 005 browser scope is bounded document/web tooling, not Desktop/computer con
 
 External network actions require explicit egress authority and bind method, URL/origin, redirect policy, request-body source, secret brokerage, target class, output/download bounds and taint/provenance. Redirects are revalidated against egress policy.
 
+A credential-bearing hop MUST additionally satisfy credential transport and origin binding before any brokered secret or sensitive authorization material is attached:
+
+- use an authenticated encrypted transport with endpoint identity/certificate validation (for HTTP, HTTPS with valid TLS peer/hostname validation; protocol-specific equivalents require their own exact qualification);
+- bind the brokered credential to the authorized origin/endpoint and permitted operation scope independently of general egress permission;
+- never automatically forward authorization headers, cookies, brokered secrets or secret-bearing request bodies across an origin change, redirect, proxy transition or protocol change;
+- on every redirect or endpoint/protocol change, strip sensitive material, revalidate egress and endpoint identity, re-evaluate credential scope, and re-broker only when the new hop is explicitly authorized;
+- deny credential-bearing transport downgrade or any hop whose authenticated transport/credential scope cannot be proven.
+
+Egress authorization alone never authorizes credential disclosure.
+
 Strict-local external network denial is absolute. Local capability failure never creates cloud/browser/remote-MCP fallback permission.
 
 ## 8. Context evidence contract
@@ -207,5 +217,7 @@ Qualification includes:
 - ambient environment/secret leakage;
 - descendant escape/cancellation;
 - unauthorized network and redirect widening;
+- credential forwarding across redirect/origin/protocol changes;
+- unauthenticated TLS/endpoint identity and credential-bearing downgrade attempts;
 - malicious tool output trying to mint authority or clear taint;
 - stale context outranking fresher authoritative state.

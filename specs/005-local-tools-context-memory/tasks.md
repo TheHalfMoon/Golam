@@ -39,15 +39,15 @@ Execute strictly in dependency order. A checked planning task means the artifact
 
 ## Phase C — Core tool/context/memory contracts in Rust
 
-- [ ] **T005-025** Implement pure versioned `ToolId`, `ToolVersion`, `ToolDescriptor`, operation/bounds/network/sandbox/verification enums and validation in `golam-core` without privileged state.
-- [ ] **T005-026** Implement immutable `ToolRequest`, `ToolResult`, candidate binding and deterministic serialization/digest semantics.
+- [ ] **T005-025** Implement pure versioned `ToolId`, `ToolVersion`, `ToolIoBounds`, `ToolDurationBounds`, `ToolReconciliationPolicy`, `ToolVerificationPolicy`, `ToolDescriptor`, operation/network/sandbox enums and deterministic validation in `golam-core` without privileged state. Bounds applicable to executable/read operations must be explicit and finite; “unbounded by omission” is invalid.
+- [ ] **T005-026** Implement immutable `ToolRequest`, `ToolResult`, candidate binding and deterministic serialization/digest semantics. Once a protected request is durably prepared, target/operation/precondition/authority changes require a new request/effect identity.
 - [ ] **T005-027** Implement pure authorized-root, resolved-target-identity and file-mutation-expectation types with platform-neutral invariants.
 - [ ] **T005-028** Implement `ContextEvidence`, `EvidenceRequirement`, `ContextCapsule` and sufficiency/freshness/authority/taint validation types.
-- [ ] **T005-029** Implement memory candidate/item/version/operation/reconciliation/derivative-generation types and deterministic validation.
+- [ ] **T005-029** Implement memory candidate/item/version/operation/reconciliation/derivative-generation types plus `MemoryMutationIntent`/terminal outcome types with deterministic validation and no authority-bearing free-form fields.
 - [ ] **T005-030** Implement skill/protocol descriptor/binding types that cannot encode authority-bearing capability material.
 - [ ] **T005-031** Extend durable ledger evidence for tool requests/results and context provenance without making projections canonical authority.
-- [ ] **T005-032** Extend durable memory governance/version/reconciliation/promotion evidence with required integrity behavior for security-critical records.
-- [ ] **T005-033** Add focused property/adversarial tests proving invalid descriptors/requests/candidates cannot mint authority, clear taint or encode unbounded operations.
+- [ ] **T005-032** Extend durable memory governance/version/reconciliation/promotion/effect evidence with required integrity behavior for security-critical records, including PREPARED intent and terminal/`UNKNOWN_OUTCOME` evidence identities.
+- [ ] **T005-033** Add focused property/adversarial tests proving invalid descriptors/requests/candidates cannot mint authority, clear taint, encode unbounded operations or mutate a durably prepared protected request.
 - [ ] **T005-034** Run focused exact-head qualification for Phase C before proceeding.
 
 ## Phase D — Bounded filesystem reads and L0 context
@@ -65,20 +65,22 @@ Execute strictly in dependency order. A checked planning task means the artifact
 
 ## Phase E — Canonical managed memory
 
+T005-048 depends explicitly on T005-031..032 and T005-045..047. T005-049..058 depend on the durable mutation lifecycle established by T005-048 unless a task is strictly read-only.
+
 - [ ] **T005-045** Freeze exact managed-vault on-disk Markdown and SQLite operational schema from the planning model without exposing protected control state as generic memory files.
 - [ ] **T005-046** Implement canonical Markdown parser/serializer with stable item/version identity and bounded front-matter/content handling.
-- [ ] **T005-047** Implement SQLite operational state for versions, promotion evidence, reconciliation, conflicts, supersession and derivative generations.
-- [ ] **T005-048** Implement one governed memory writer with durable temp-write/atomic-replace/operational-record sequencing and post-write verification.
-- [ ] **T005-049** Implement restart reconciliation for every writer durability cut, including file-without-record and record-without-readable-file cases.
+- [ ] **T005-047** Implement SQLite operational state for versions, promotion evidence, reconciliation, conflicts, supersession, derivative generations and effect-owned mutation state.
+- [ ] **T005-048** Implement the single governed memory writer as an Effect Gate handler. Every Golam-generated `MemoryMutationIntent` must bind initiating principal, current Kernel authorization, applicable approval/pre-registered verifier evidence, expected current versions and unique effect identity; persist authorized PREPARED intent before the first canonical Markdown/SQLite mutation; perform durability/atomic replacement and operational updates; invalidate affected derivatives; then record integrity-chained terminal outcome plus required read-back/verification evidence. Ambiguous completion remains `UNKNOWN_OUTCOME` and blocks dependent managed-memory mutation until reconciliation.
+- [ ] **T005-049** Implement restart reconciliation for every PREPARED/writer/Markdown/SQLite/terminal durability cut, including file-without-record, record-without-readable-file and `UNKNOWN_OUTCOME` cases; absence of terminal evidence is never success.
 - [ ] **T005-050** Implement user hand-edit detection and fail-closed reconciliation without silent overwrite.
-- [ ] **T005-051** Implement attributable human-promotion authority validation and deterministic pre-registered verifier promotion; reject free-form/model self-approval.
-- [ ] **T005-052** Enforce `SECRET_DERIVED` rejection at the canonical memory admission boundary.
-- [ ] **T005-053** Implement `ADD`, `UPDATE`, `SUPERSEDE`, `CONTRADICT`, `MERGE`, and `EXPIRE` with immutable version lineage.
-- [ ] **T005-054** Implement `FORGET` and `REDACT` with active canonical-content removal, bounded non-plaintext audit facts and explicit external-artifact honesty.
+- [ ] **T005-051** Implement attributable human-promotion authority validation and deterministic pre-registered verifier promotion; reject free-form/model self-approval and stale/revoked authorization.
+- [ ] **T005-052** Enforce monotonic `SECRET_DERIVED` rejection at the canonical memory admission boundary; redaction/summarization/transformation/verification cannot downgrade the taint. Only independently sourced non-secret provenance may form a separate candidate.
+- [ ] **T005-053** Implement `ADD`, `UPDATE`, `SUPERSEDE`, `CONTRADICT`, `MERGE`, and `EXPIRE` with immutable version lineage through T005-048's prepared-effect lifecycle.
+- [ ] **T005-054** Implement `FORGET` and `REDACT` through the same T005-048 effect lifecycle with active canonical-content removal, bounded non-plaintext audit facts, Markdown/SQLite/derivative reconciliation and explicit external-artifact honesty; partial multi-store completion cannot become success.
 - [ ] **T005-055** Implement deterministic local derivative text/metadata index generation that is discardable and rebuildable from canonical memory.
-- [ ] **T005-056** Ensure missing/corrupt derivatives do not block canonical memory startup/access and trigger governed rebuild instead.
+- [ ] **T005-056** Ensure missing/corrupt derivatives do not block canonical memory startup/access. Derivative-dependent operations trigger governed rebuild from canonical state and fail only that dependent operation closed if rebuild/qualification cannot complete.
 - [ ] **T005-057** Prove live authoritative repository/filesystem state outranks stale memory and surfaces conflict evidence.
-- [ ] **T005-058** Run memory-poisoning, forged-promotion, secret-derived, user-edit-race, disk-full/crash, stale-memory and FORGET/REDACT resurrection qualification.
+- [ ] **T005-058** Run memory-poisoning, forged/stale-promotion, secret-derived/taint-downgrade, user-edit-race, disk-full/crash, PREPARED/terminal/`UNKNOWN_OUTCOME`, dependent-mutation blocking, stale-memory and FORGET/REDACT partial-completion/resurrection qualification.
 
 ## Phase F — Consequential filesystem/Git mutations
 
@@ -114,7 +116,7 @@ Execute strictly in dependency order. A checked planning task means the artifact
 - [ ] **T005-088** Qualify the exact MCP implementation strategy; if using official Rust SDK, select minimal exact crates/features/transitive/network/process closure before dependency admission.
 - [ ] **T005-089** Implement MCP descriptor/resource/prompt normalization into untrusted Golam protocol/tool types with bounded parsing and stable server/version identity.
 - [ ] **T005-090** Implement local MCP binding/launch only through an admitted production containment profile and current policy/capability/effect authority.
-- [ ] **T005-091** Implement remote MCP binding only under explicit network/egress/identity/secret policy; strict-local denies external remote MCP.
+- [ ] **T005-091** Implement remote MCP binding only under explicit network/egress/authenticated-endpoint/credential-scope/secret policy; strict-local denies external remote MCP.
 - [ ] **T005-092** Prove MCP advertisements/nested calls cannot mint or widen Golam capabilities, set approvals, clear taint or directly mutate protected state.
 - [ ] **T005-093** Implement ACP adapter preserving authenticated local-client enrollment and scoped capability semantics without privileged KernelApi exposure.
 - [ ] **T005-094** Run malicious schema/payload/capability-spoof/version-replacement/disconnect-during-effect adversarial protocol qualification.
@@ -122,20 +124,20 @@ Execute strictly in dependency order. A checked planning task means the artifact
 
 ## Phase I — Bounded browser/network tools and optional context decisions
 
-- [ ] **T005-100** Implement bounded HTTP/document fetch only if required by selected Spec 005 outcomes, binding method/origin/redirect/output limits/taint and explicit egress authority.
+- [ ] **T005-100** Implement bounded HTTP/document fetch only if required by selected Spec 005 outcomes, binding method/origin/redirect/output limits/taint and explicit egress authority. Any credential-bearing hop requires authenticated encrypted endpoint identity, credential scope bound to the authorized origin/operation, and strip/revalidate/re-broker semantics on redirects/origin/protocol/proxy changes; downgrade or unprovable scope is denied.
 - [ ] **T005-101** Prove strict-local denial dominates browser/network selection and prevents remote fallback/telemetry/download widening.
 - [ ] **T005-102** Keep OS window/input/accessibility/screenshot-as-control behavior out of Spec 005 and fail closed rather than smuggling Spec 006 semantics into a browser tool.
 - [ ] **T005-103** Run representative L0 context evaluation and record whether a material structural-evidence gap exists.
 - [ ] **T005-104** If and only if T005-103 proves need, Source-Foundry-qualify exact Tree-sitter/LSP components and implement bounded L1 evidence. Otherwise record `L1=DEFER_NOT_NEEDED`.
 - [ ] **T005-105** Evaluate whether dense/vector derivative search has reproducible value beyond local deterministic indexing. If not, record `DENSE_VECTOR_INDEX=DEFER_NOT_NEEDED`; if yes, create a separate exact Source Foundry admission gate before any dependency.
-- [ ] **T005-106** Run browser/network/context optionality qualification with no hidden service dependency.
+- [ ] **T005-106** Run browser/network/context optionality qualification including credential forwarding, endpoint identity, origin/protocol redirects, downgrade denial and no hidden service dependency.
 
 ## Phase J — Core Alpha evidence and Spec 005 convergence
 
 - [ ] **T005-110** Execute a real local repository task using governed read/search/context plus an authorized file edit and deterministic verification; record exact evidence without claiming broader product parity.
 - [ ] **T005-111** Execute a strict-local end-to-end task with externally observed zero unauthorized egress.
-- [ ] **T005-112** Execute memory restart/user-edit/conflict/live-state-precedence/FORGET/REDACT scenarios against canonical storage and derivative rebuilds.
-- [ ] **T005-113** Execute malicious skill/MCP/memory/path corpus proving no authority minting, taint clearing or protected-state bypass.
+- [ ] **T005-112** Execute memory restart/user-edit/conflict/live-state-precedence/PREPARED/`UNKNOWN_OUTCOME`/FORGET/REDACT scenarios against canonical storage and derivative rebuilds.
+- [ ] **T005-113** Execute malicious skill/MCP/memory/path/network-credential corpus proving no authority minting, taint clearing, secret redirect leakage or protected-state bypass.
 - [ ] **T005-114** Run convergence across requirements/contracts/tasks/implementation/evidence and repair every material inconsistency forward-only.
 - [ ] **T005-115** Run focused qualification for every Spec 005 implementation boundary on the exact head.
 - [ ] **T005-116** Run full repository qualification locally/officially as permitted without fabricating platform evidence.
@@ -159,8 +161,13 @@ PROTECTED_STATE != GENERIC_FILESYSTEM_RESOURCE
 NATIVE_UNQUALIFIED != RUNNABLE_PROFILE
 MODEL_ASSERTION != MEMORY_PROMOTION_AUTHORITY
 SECRET_DERIVED != CANONICAL_LONG_TERM_MEMORY
+SANITIZATION != DECLASSIFICATION_AUTHORITY
 RETRIEVAL_SCORE != SOURCE_AUTHORITY
 DERIVATIVE_INDEX != CANONICAL_MEMORY
+DERIVATIVE_UNAVAILABLE != CANONICAL_MEMORY_UNAVAILABLE
+EGRESS_ALLOWED != CREDENTIAL_DISCLOSURE_AUTHORIZED
+PREPARED_MEMORY_EFFECT != MUTABLE_REQUEST
+UNKNOWN_OUTCOME != SUCCESS
 SKILL != AUTHORITY
 MCP_CAPABILITY_ADVERTISEMENT != GOLAM_CAPABILITY
 ACP_CONNECTION != AUTHENTICATED_AUTHORITY

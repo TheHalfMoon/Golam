@@ -12,22 +12,68 @@ Stable Golam-owned identifier for one logical tool family.
 
 Immutable implementation/contract version. Material execution or validation changes require a new version.
 
+### `ToolIoBounds`
+
+Finite operation-appropriate I/O limits:
+
+```text
+max_bytes
+max_items
+max_nesting_depth
+max_field_bytes
+```
+
+Every applicable dimension is explicit and finite. A dimension that is structurally not applicable is encoded as `NOT_APPLICABLE`; omission or a sentinel meaning “unbounded” is invalid.
+
+### `ToolDurationBounds`
+
+```text
+max_total_duration_ms
+max_idle_duration_ms
+```
+
+Both values are finite when the corresponding execution mode can block or stream. No tool obtains an implicit unlimited duration.
+
+### `ToolReconciliationPolicy`
+
+```text
+reconcile_on[]
+unknown_outcome_behavior
+dependent_effect_behavior
+observation_requirements
+terminal_evidence_requirements
+```
+
+`UNKNOWN_OUTCOME` never means success. When the policy requires reconciliation, dependent consequential work remains blocked until attributable evidence resolves the outcome.
+
+### `ToolVerificationPolicy`
+
+```text
+success_evidence_requirements
+independent_readback_required
+readback_source_class
+failure_evidence_requirements
+```
+
+Verification requirements are immutable descriptor semantics, not tool-result claims.
+
 ### `ToolDescriptor`
 
 ```text
 tool_id
 version
 operation_class
-input_bounds
-output_bounds
+input_bounds: ToolIoBounds
+output_bounds: ToolIoBounds
+duration_bounds: ToolDurationBounds
 required_capability_class
 effect_semantics
 network_posture
 sandbox_requirement
 target_identity_kind
 target_identity_rules
-reconciliation_policy
-verification_policy
+reconciliation_policy: ToolReconciliationPolicy
+verification_policy: ToolVerificationPolicy
 ```
 
 Descriptor availability is mechanism evidence only.
@@ -58,6 +104,8 @@ created_at
 ```
 
 `target_identity_ref` and `target_resolution_plan_ref` are operation-specific bindings: protected execution requires the exact resolved identity when already known, or an explicit bounded resolution plan whose result is re-authorized before action. `current_preconditions` binds stale-state guards such as file mutation expectations or Git HEAD/index/worktree expectations where required.
+
+Once the protected request is durably prepared, all authority-relevant fields above are immutable. Retry, target/operation/precondition changes, authority-context changes, or a materially different resolution result require a new request/effect identity rather than rewriting the prepared request.
 
 ### `ToolResult`
 
@@ -235,11 +283,29 @@ operation
 item_ids
 expected_current_versions
 candidate_ref
+kernel_authorization_ref
 promotion_authority_ref
+effect_id
 reason
 initiating_principal
 created_at
 ```
+
+The immutable intent is bound into a durable Effect Gate PREPARED record before the first canonical Markdown or SQLite mutation. `kernel_authorization_ref` and the applicable approval/pre-registered-verifier evidence must be current for the requested scope/operation; free-form content is not approval.
+
+### `MemoryMutationOutcome`
+
+```text
+effect_id
+mutation_intent_digest
+status: COMMITTED | REJECTED | FAILED | UNKNOWN_OUTCOME
+canonical_version_refs
+verification_refs
+integrity_evidence_refs
+terminal_at
+```
+
+`UNKNOWN_OUTCOME` blocks dependent managed-memory mutations until restart/reconciliation resolves the exact canonical state. Outcome and verification evidence are integrity-chained according to the existing Effect Gate/ledger boundary.
 
 ### `MemoryVersion`
 

@@ -37,7 +37,7 @@ Every tool has a versioned `ToolDescriptor` with:
 
 - stable tool identity/version;
 - operation category;
-- input/output byte/count/time bounds;
+- explicit finite input/output byte/count bounds and duration bounds;
 - required Golam capability class;
 - read-only vs consequential Effect semantics;
 - network posture;
@@ -45,7 +45,7 @@ Every tool has a versioned `ToolDescriptor` with:
 - target identity rules;
 - verifier/reconciliation requirements.
 
-The harness/model produces only `ToolCallCandidate`. The dispatcher validates it into a `ToolRequest`; the Kernel/Effect Gate independently evaluates authority.
+The harness/model produces only `ToolCallCandidate`. The dispatcher validates it into an immutable bounded `ToolRequest`; the Kernel/Effect Gate independently evaluates authority. Once a protected request is durably prepared, materially changed target/operation/preconditions/authority require a new request/effect identity.
 
 ### Filesystem target resolution
 
@@ -81,6 +81,8 @@ Write surface: add/write/commit/branch operations are effects and bind repositor
 ### Browser/network
 
 Spec 005 browser scope is document/web tool behavior, not OS computer control. Network operations bind URL/origin, redirect policy, method, target class, download/output limits, taint and egress authority. Strict-local external network denial is absolute.
+
+Credential-bearing network hops add a separate disclosure gate: authenticated encrypted endpoint transport, exact endpoint/origin credential scope, and no automatic forwarding of credentials or secret-bearing bodies across redirects/origin/protocol changes. Every changed hop strips sensitive material, revalidates egress + endpoint identity + credential scope, and re-brokers only when explicitly authorized; downgrade/unprovable scope is denied.
 
 ## Context Compiler
 
@@ -125,13 +127,17 @@ memory/
 
 Protected operational state must not be exposed as generic user memory files.
 
-### Single writer
+### Single writer + durable effect lifecycle
 
-Golam-generated managed memory mutation flows through one writer transaction:
+Every Golam-generated managed-memory mutation is consequential. It starts as an immutable `MemoryMutationIntent` bound to current Kernel authorization, applicable approval/pre-registered verifier evidence, expected current versions and a unique effect identity. The Effect Gate PREPARED record is durable before the first Markdown/SQLite canonical mutation.
 
-`candidate -> validate taint/provenance -> promotion authority -> read current version -> conflict/reconcile -> write temp -> durability boundary -> atomic replace -> record canonical version -> invalidate derivatives`
+Only the single governed memory writer executes the prepared intent:
+
+`candidate -> validate taint/provenance -> current authorization + promotion authority -> expected-version/user-edit check -> durable PREPARED Effect -> write temp -> durability boundary -> atomic Markdown replace -> SQLite operational/version update -> invalidate derivatives -> read-back verification -> integrity-chained terminal outcome`
 
 User hand-edits bypass the Golam writer by design and are detected via content/version mismatch. The next managed operation must reconcile rather than overwrite.
+
+Crash/disconnect ambiguity remains `UNKNOWN_OUTCOME`; dependent managed-memory mutations are blocked until restart reconciliation determines exact canonical state. `FORGET`/`REDACT` use the same lifecycle across Markdown, SQLite and derivative invalidation; partial multi-store completion is never silently reported as success.
 
 ### Memory operations
 
@@ -146,9 +152,11 @@ User hand-edits bypass the Golam writer by design and are detected via content/v
 
 `MEMORY_CANDIDATE != DURABLE_MEMORY`
 
+`SECRET_DERIVED` provenance is monotonic within Spec 005. Redaction/summarization/transformation does not create declassification authority; only independently sourced non-secret evidence begins a separate eligible provenance chain.
+
 ### Derived search/index
 
-Start with deterministic local text/metadata indexing that is rebuildable. Dense/vector indexing remains deferred until representative evaluation proves need. No derivative service is a startup dependency for canonical memory.
+Start with deterministic local text/metadata indexing that is rebuildable. Dense/vector indexing remains deferred until representative evaluation proves need. No derivative service is a startup dependency for canonical memory. Canonical memory access proceeds when a derivative is missing; only a derivative-dependent operation must rebuild it or fail that operation closed.
 
 ## Skills and protocol adapters
 
@@ -187,10 +195,12 @@ Required test families include:
 - effect durability/reconciliation/restart;
 - process env/secret/descendant/network containment where admitted;
 - strict-local external observation;
+- credential-bearing redirect/origin/protocol transition and downgrade denial;
 - Git stale-head/index/worktree expectations;
 - context provenance/freshness/taint/ranking;
 - memory candidate/promotion/conflict/reconciliation/user-edit/restart/disk-full;
-- FORGET/REDACT derivative rebuild;
+- managed-memory PREPARED-before-mutation, terminal outcome, `UNKNOWN_OUTCOME` and dependent-mutation blocking;
+- FORGET/REDACT partial multi-store completion + derivative rebuild;
 - malicious MCP/skill/protocol payloads and capability spoofing;
 - exact-head full CI + independent semantic review.
 

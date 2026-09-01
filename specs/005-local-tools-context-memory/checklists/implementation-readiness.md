@@ -16,7 +16,7 @@
 - [x] Rust owns trusted-path semantics; adapters remain untrusted/replaceable.
 - [x] Tool/model/protocol output cannot self-authorize.
 - [x] Consequential mutations remain behind the Effect Gate.
-- [x] Secrets/taint rules survive tool/context/memory derivation.
+- [x] Secrets/taint rules survive tool/context/memory derivation; `SECRET_DERIVED` cannot be downgraded inside Spec 005.
 - [x] Markdown/SQLite canonical memory model is preserved.
 - [x] Source Foundry gates are explicit before dependency/code admission.
 - [x] Exact-head verification and independent review remain mandatory.
@@ -30,6 +30,7 @@
 
 ## Tool safety
 
+- [x] Tool I/O byte/count and duration bounds are explicit and finite; protected requests become immutable once durably prepared.
 - [x] Path strings are not authority.
 - [x] Symlink/reparse/junction/mount alias handling is explicit.
 - [x] Protected Golam resources are excluded from generic filesystem authority.
@@ -37,6 +38,7 @@
 - [x] Mutation TOCTOU/precondition behavior is explicit.
 - [x] Git writes are effects; destructive history rewriting is excluded.
 - [x] Browser/network tools are egress-gated and do not pull Desktop control into scope.
+- [x] Credential-bearing network hops require authenticated encrypted endpoint identity; redirects/origin/protocol changes strip and revalidate/re-broker sensitive material or fail closed.
 
 ## Context
 
@@ -51,26 +53,29 @@
 
 - [x] Managed Markdown is canonical durable knowledge.
 - [x] SQLite is canonical operational state.
-- [x] Derived indexes are rebuildable and optional.
+- [x] Derived indexes are rebuildable and optional; missing derivatives do not block canonical memory access.
 - [x] One governed writer owns Golam-generated managed memory mutation.
+- [x] Every managed mutation binds current Kernel authorization plus applicable approval/verifier evidence in an immutable `MemoryMutationIntent`.
+- [x] A durable authorized Effect Gate PREPARED intent exists before the first canonical Markdown/SQLite mutation.
+- [x] Terminal outcome and required read-back/verification evidence are integrity-chained; ambiguous completion remains `UNKNOWN_OUTCOME` and blocks dependent memory mutations until reconciliation.
 - [x] User hand-edits are detected/reconciled rather than overwritten.
 - [x] Promotion requires attributable approval or deterministic pre-registered verification.
-- [x] `SECRET_DERIVED` is excluded from canonical long-term memory.
-- [x] `FORGET`/`REDACT` invalidates/rebuilds derivatives and makes no false external-erasure claim.
+- [x] `SECRET_DERIVED` is excluded from canonical long-term memory and cannot be cleared by redaction/summarization/transformation/verification.
+- [x] `FORGET`/`REDACT` uses the same durable effect lifecycle, invalidates/rebuilds derivatives, reconciles partial multi-store completion, and makes no false external-erasure claim.
 
 ## Skills and protocols
 
 - [x] Instruction-only skills may precede executable skills.
 - [x] Executable skills are production-sandbox gated.
 - [x] MCP advertisements/results remain untrusted and cannot mint Golam capabilities.
-- [x] Remote MCP is egress/strict-local gated.
+- [x] Remote MCP is egress/strict-local/endpoint-identity/credential-scope gated.
 - [x] ACP preserves authenticated local-client semantics.
 - [x] Official MCP Rust SDK is a candidate, not automatically admitted.
 
 ## Verification posture
 
 - [x] Ordinary CI remains hermetic and credential/model/service independent.
-- [x] Path/protected-resource, process containment, context, memory and protocol adversarial families are enumerated.
+- [x] Path/protected-resource, process containment, network credential, context, memory and protocol adversarial families are enumerated.
 - [x] Planning closeout requires exact-head Windows/macOS/Ubuntu CI.
 - [x] Planning closeout requires substantive independent semantic review on the unchanged head.
 - [x] Material findings must be repaired and requalified before Ready/merge.
