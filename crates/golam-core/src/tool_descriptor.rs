@@ -3,7 +3,7 @@
 use core::fmt;
 
 const MAX_IDENTIFIER_BYTES: usize = 128;
-const MAX_POLICY_REQUIREMENTS: usize = 32;
+const MAX_REQUIREMENTS: usize = 32;
 
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct ToolId(String);
@@ -35,10 +35,7 @@ impl ToolVersion {
     }
 }
 
-/// A bounded reference to a Golam-owned capability class.
-///
-/// This is classification metadata only. It is not a capability lease,
-/// approval, authorization, or other authority-bearing material.
+/// Classification metadata only; this is not a lease, approval, or authority.
 #[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct CapabilityClassId(String);
 
@@ -131,10 +128,17 @@ pub enum ToolOperationClass {
 }
 
 impl ToolOperationClass {
-    const fn is_intrinsically_read_only(self) -> bool {
+    const fn is_read_only(self) -> bool {
         matches!(
             self,
             Self::Read | Self::List | Self::Search | Self::ContextCompile | Self::GitRead
+        )
+    }
+
+    const fn is_mutating(self) -> bool {
+        matches!(
+            self,
+            Self::Mutation | Self::GitMutation | Self::MemoryMutation
         )
     }
 }
@@ -352,32 +356,18 @@ impl ToolDescriptor {
             _ => {}
         }
 
-        if self.operation_class.is_intrinsically_read_only()
+        if self.operation_class.is_read_only()
             && self.effect_semantics != ToolEffectSemantics::ReadOnly
         {
             return Err(ToolValidationError::IncompatibleDescriptor(
-                "intrinsically read-only operation must use ReadOnly effect semantics",
+                "read-only operation must use ReadOnly effect semantics",
             ));
         }
-        if self.operation_class == ToolOperationClass::Mutation
+        if self.operation_class.is_mutating()
             && self.effect_semantics == ToolEffectSemantics::ReadOnly
         {
             return Err(ToolValidationError::IncompatibleDescriptor(
-                "mutation operation cannot use ReadOnly effect semantics",
-            ));
-        }
-        if self.operation_class == ToolOperationClass::GitMutation
-            && self.effect_semantics == ToolEffectSemantics::ReadOnly
-        {
-            return Err(ToolValidationError::IncompatibleDescriptor(
-                "Git mutation cannot use ReadOnly effect semantics",
-            ));
-        }
-        if self.operation_class == ToolOperationClass::MemoryMutation
-            && self.effect_semantics == ToolEffectSemantics::ReadOnly
-        {
-            return Err(ToolValidationError::IncompatibleDescriptor(
-                "memory mutation cannot use ReadOnly effect semantics",
+                "mutating operation cannot use ReadOnly effect semantics",
             ));
         }
         if self.operation_class == ToolOperationClass::ProcessExecution
@@ -417,7 +407,9 @@ impl fmt::Display for ToolValidationError {
             Self::MissingFiniteBound(field) => {
                 write!(f, "required finite bound is missing: {field}")
             }
-            Self::TooManyRequirements(field) => write!(f, "too many bounded requirements: {field}"),
+            Self::TooManyRequirements(field) => {
+                write!(f, "too many bounded requirements: {field}")
+            }
             Self::UnsortedOrDuplicate(field) => {
                 write!(
                     f,
@@ -452,7 +444,7 @@ fn validate_ordered_unique<T: Ord>(
     values: &[T],
     field: &'static str,
 ) -> Result<(), ToolValidationError> {
-    if values.len() > MAX_POLICY_REQUIREMENTS {
+    if values.len() > MAX_REQUIREMENTS {
         return Err(ToolValidationError::TooManyRequirements(field));
     }
     if values.windows(2).any(|pair| pair[0] >= pair[1]) {
@@ -519,20 +511,20 @@ mod tests {
     }
 
     #[test]
-    fn identifiers_are_bounded_and_not_authority_payloads() {
+    fn identifiers_are_bounded() {
         assert!(ToolId::new("").is_err());
         assert!(ToolId::new("../../escape").is_err());
         assert!(CapabilityClassId::new("filesystem.read").is_ok());
     }
 
     #[test]
-    fn finite_bounds_reject_zero_and_total_duration_is_mandatory() {
-        let invalid_io = ToolIoBounds {
+    fn finite_bounds_fail_closed() {
+        let invalid = ToolIoBounds {
             max_bytes: BoundDimension::Finite(0),
             ..finite_io()
         };
         assert_eq!(
-            invalid_io.validate(),
+            invalid.validate(),
             Err(ToolValidationError::ZeroFiniteBound("max_bytes"))
         );
 
@@ -549,7 +541,7 @@ mod tests {
     }
 
     #[test]
-    fn policy_vectors_must_be_sorted_and_unique() {
+    fn policy_vectors_are_strictly_ordered() {
         let mut policy = reconciliation();
         policy.reconcile_on = vec![ToolReconcileTrigger::Restart, ToolReconcileTrigger::Restart];
         assert_eq!(
@@ -559,7 +551,7 @@ mod tests {
     }
 
     #[test]
-    fn descriptor_enforces_read_only_and_target_identity_semantics() {
+    fn descriptor_rejects_authority_widening_shapes() {
         let mut descriptor = read_descriptor();
         assert_eq!(descriptor.validate(), Ok(()));
 
