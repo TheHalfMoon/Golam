@@ -22,14 +22,67 @@ jobs:
           fetch-depth: 0
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal
-      - name: Generate and commit exact dependency lock evidence
+      - name: Generate minimal admitted dependency lock update
         run: |
-          cargo +1.98.0 generate-lockfile
-          git diff --exit-code -- Cargo.lock && exit 0
+          git show d45ddcf47836f14183afd06e242c228f3d831e15:Cargo.lock > Cargo.lock
+          cp Cargo.lock /tmp/Cargo.lock.before
+          cargo +1.98.0 check -p golamd
+          python3 - <<'PY'
+          import tomllib
+          from pathlib import Path
+
+          before = tomllib.loads(Path('/tmp/Cargo.lock.before').read_text())['package']
+          after = tomllib.loads(Path('Cargo.lock').read_text())['package']
+
+          def key(pkg):
+              return (pkg['name'], pkg['version'], pkg.get('source'))
+
+          before_map = {key(pkg): pkg for pkg in before}
+          after_map = {key(pkg): pkg for pkg in after}
+
+          expected_new = {
+              ('adler2', '2.0.1', 'registry+https://github.com/rust-lang/crates.io-index'),
+              ('miniz_oxide', '0.9.1', 'registry+https://github.com/rust-lang/crates.io-index'),
+          }
+          actual_new = set(after_map) - set(before_map)
+          removed = set(before_map) - set(after_map)
+          if actual_new != expected_new or removed:
+              raise SystemExit(f'unexpected lock graph change: new={sorted(actual_new)} removed={sorted(removed)}')
+
+          for package_key, old in before_map.items():
+              new = after_map[package_key]
+              if package_key[0] == 'golamd':
+                  old_deps = set(old.get('dependencies', []))
+                  new_deps = set(new.get('dependencies', []))
+                  if new_deps != old_deps | {'adler2', 'miniz_oxide'}:
+                      raise SystemExit(f'unexpected golamd dependency change: {sorted(new_deps - old_deps)}')
+                  old_cmp = dict(old)
+                  new_cmp = dict(new)
+                  old_cmp['dependencies'] = sorted(old_deps)
+                  new_cmp['dependencies'] = sorted(new_deps - {'adler2', 'miniz_oxide'})
+                  if old_cmp != new_cmp:
+                      raise SystemExit('unexpected non-dependency golamd lock change')
+              elif old != new:
+                  raise SystemExit(f'unexpected existing package mutation: {package_key}')
+
+          adler = after_map[('adler2', '2.0.1', 'registry+https://github.com/rust-lang/crates.io-index')]
+          if adler.get('checksum') != '320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa':
+              raise SystemExit('adler2 checksum mismatch')
+          if adler.get('dependencies'):
+              raise SystemExit('adler2 selected closure unexpectedly has dependencies')
+
+          miniz = after_map[('miniz_oxide', '0.9.1', 'registry+https://github.com/rust-lang/crates.io-index')]
+          if miniz.get('checksum') != 'b63fbc4a50860e98e7b2aa7804ded1db5cbc3aff9193adaff57a6931bf7c4b4c':
+              raise SystemExit('miniz_oxide checksum mismatch')
+          if miniz.get('dependencies') != ['adler2']:
+              raise SystemExit(f'unexpected miniz_oxide closure: {miniz.get("dependencies")}')
+
+          print('MINIMAL_LOCK_CLOSURE=PASS')
+          PY
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add Cargo.lock
-          git commit -m 'chore(005): regenerate admitted dependency lockfile'
+          git commit -m 'fix(005): narrow admitted dependency lockfile'
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
 
   rust:
