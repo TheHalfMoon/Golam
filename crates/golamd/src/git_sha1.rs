@@ -64,14 +64,10 @@ impl GitObjectSha1 {
             }
         }
 
-        let mut chunks = input.chunks_exact(SHA1_BLOCK_BYTES);
-        for chunk in &mut chunks {
-            let block: &[u8; SHA1_BLOCK_BYTES] = chunk
-                .try_into()
-                .map_err(|_| GitObjectSha1Error::InternalBlockLength)?;
+        let (blocks, remainder) = input.as_chunks::<SHA1_BLOCK_BYTES>();
+        for block in blocks {
             self.compress_block(block);
         }
-        let remainder = chunks.remainder();
         self.buffer[..remainder.len()].copy_from_slice(remainder);
         self.buffer_len = remainder.len();
         Ok(())
@@ -116,8 +112,8 @@ impl GitObjectSha1 {
 
     fn compress_block(&mut self, block: &[u8; SHA1_BLOCK_BYTES]) {
         let mut schedule = [0_u32; 80];
-        for (index, word) in block.chunks_exact(4).enumerate() {
-            schedule[index] = u32::from_be_bytes([word[0], word[1], word[2], word[3]]);
+        for (index, word) in block.as_chunks::<4>().0.iter().enumerate() {
+            schedule[index] = u32::from_be_bytes(*word);
         }
         for index in 16..80 {
             schedule[index] = (schedule[index - 3]
@@ -164,7 +160,6 @@ impl GitObjectSha1 {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum GitObjectSha1Error {
     MessageTooLong,
-    InternalBlockLength,
 }
 
 impl fmt::Display for GitObjectSha1Error {
@@ -172,9 +167,6 @@ impl fmt::Display for GitObjectSha1Error {
         match self {
             Self::MessageTooLong => {
                 f.write_str("Git object SHA-1 input length exceeds the algorithm limit")
-            }
-            Self::InternalBlockLength => {
-                f.write_str("Git object SHA-1 internal block length invariant failed")
             }
         }
     }
