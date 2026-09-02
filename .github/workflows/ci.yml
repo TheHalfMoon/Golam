@@ -9,6 +9,20 @@ permissions:
   contents: read
 
 jobs:
+  format-evidence:
+    name: format-evidence-ubuntu
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust formatter
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt
+      - name: Emit rustfmt result
+        run: |
+          cargo +1.98.0 fmt --all
+          printf 'RUSTFMT_GIT_READ_BASE64='
+          base64 -w 0 crates/golamd/src/git_read.rs
+          printf '\n'
+
   rust:
     name: rust-${{ matrix.os }}
     strategy:
