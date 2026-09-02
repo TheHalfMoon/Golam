@@ -234,14 +234,18 @@ pub fn search_literal_text(
             observed_at_unix_ms,
         ) {
             Ok(stat) => stat,
-            Err(LocalFileReadError::SizeLimitExceeded { observed, limit }) => {
+            Err(LocalFileReadError::SizeLimitExceeded {
+                identity,
+                observed,
+                limit,
+            }) => {
                 result.files_observed = result
                     .files_observed
                     .checked_add(1)
                     .ok_or(LocalTextSearchError::CounterOverflow)?;
                 result.skipped_files.push(SkippedTextFile {
                     requested_path: entry.requested_path.clone(),
-                    identity: entry.identity.clone(),
+                    identity,
                     content_digest: None,
                     reason: SkippedTextFileReason::SizeLimitExceeded { observed, limit },
                 });
@@ -574,6 +578,7 @@ mod tests {
                 limit: 8
             }
         );
+        assert!(result.skipped_files[0].identity.resolved_target_identity.is_some());
         fs::remove_dir_all(root).unwrap();
     }
 
