@@ -147,7 +147,11 @@ impl EvidenceRequirement {
         {
             return Ok(false);
         }
-        if evidence.taint_set.intersects(self.forbidden_taint) {
+        if self
+            .forbidden_taint
+            .labels()
+            .any(|label| evidence.taint_set.contains(label))
+        {
             return Ok(false);
         }
         if self
