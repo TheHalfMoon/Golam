@@ -5,10 +5,12 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+adler2 = { version = "=2.0.1", default-features = false }
 golam-core = { path = "../golam-core" }
 golam-effects = { path = "../golam-effects" }
 golam-ipc = { path = "../golam-ipc" }
 golam-kernel = { path = "../golam-kernel" }
+miniz_oxide = { version = "=0.9.1", default-features = false }
 
 [lints]
 workspace = true
