@@ -245,7 +245,7 @@ pub fn search_literal_text(
                     .ok_or(LocalTextSearchError::CounterOverflow)?;
                 result.skipped_files.push(SkippedTextFile {
                     requested_path: entry.requested_path.clone(),
-                    identity,
+                    identity: *identity,
                     content_digest: None,
                     reason: SkippedTextFileReason::SizeLimitExceeded { observed, limit },
                 });
