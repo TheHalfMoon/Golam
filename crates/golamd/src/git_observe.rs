@@ -12,8 +12,8 @@ use golam_core::target_identity::ObservedFileKind;
 use golam_core::tool_request::{RequestedOperationId, RequestedTarget};
 
 use crate::git_pack::{
-    GitPackBounds, GitPackError, GitPackIndex, PackObjectId, PackedObjectKind,
-    parse_pack_index_v2, read_packed_object,
+    GitPackBounds, GitPackError, GitPackIndex, PackObjectId, PackedObjectKind, parse_pack_index_v2,
+    read_packed_object,
 };
 use crate::git_read::{
     GitObject, GitObjectId, GitObjectKind, GitReadBounds, GitReadError, GitRepositoryEvidence,
@@ -175,8 +175,6 @@ struct LoadedPack {
 }
 
 pub struct GitObservationReader<'a> {
-    resolver: &'a LocalFsResolver,
-    operation: RequestedOperationId,
     repository: GitRepositoryReader<'a>,
     packs: Vec<LoadedPack>,
     bounds: GitObservationBounds,
@@ -191,17 +189,11 @@ impl<'a> GitObservationReader<'a> {
         observed_at_unix_ms: u64,
     ) -> Result<Self, GitObservationError> {
         bounds.validate()?;
-        let repository = GitRepositoryReader::open(
-            resolver,
-            operation,
-            bounds.git,
-            observed_at_unix_ms,
-        )?;
+        let repository =
+            GitRepositoryReader::open(resolver, operation, bounds.git, observed_at_unix_ms)?;
         reject_alternate_object_store(resolver, operation, observed_at_unix_ms)?;
         let packs = load_packs(resolver, operation, bounds, observed_at_unix_ms)?;
         Ok(Self {
-            resolver,
-            operation: operation.clone(),
             repository,
             packs,
             bounds,
@@ -257,8 +249,8 @@ impl<'a> GitObservationReader<'a> {
             PackedObjectKind::Blob => GitObjectKind::Blob,
             PackedObjectKind::Tag => GitObjectKind::Tag,
         };
-        let declared_size =
-            u64::try_from(packed.bytes.len()).map_err(|_| GitObservationError::ObjectSizeOverflow)?;
+        let declared_size = u64::try_from(packed.bytes.len())
+            .map_err(|_| GitObservationError::ObjectSizeOverflow)?;
         Ok(GitObjectObservation {
             object: GitObject {
                 id: object_id,
@@ -446,11 +438,8 @@ fn load_packs(
     observed_at_unix_ms: u64,
 ) -> Result<Vec<LoadedPack>, GitObservationError> {
     let requested_pack_dir = requested(".git/objects/pack")?;
-    let initial = resolver.resolve_read_target(
-        &requested_pack_dir,
-        operation,
-        observed_at_unix_ms,
-    )?;
+    let initial =
+        resolver.resolve_read_target(&requested_pack_dir, operation, observed_at_unix_ms)?;
     match initial.file_kind {
         ObservedFileKind::Missing => return Ok(Vec::new()),
         ObservedFileKind::Directory => {}
@@ -553,11 +542,8 @@ fn load_packs(
         return Err(GitObservationError::PackIndexPairMismatch);
     }
 
-    let verified = resolver.resolve_read_target(
-        &requested_pack_dir,
-        operation,
-        observed_at_unix_ms,
-    )?;
+    let verified =
+        resolver.resolve_read_target(&requested_pack_dir, operation, observed_at_unix_ms)?;
     if initial.resolved_target_identity != verified.resolved_target_identity
         || initial.observed_metadata_digest != verified.observed_metadata_digest
     {
@@ -585,7 +571,7 @@ fn parse_pack_name_checksum(stem: &str) -> Result<[u8; 20], GitObservationError>
         return Err(GitObservationError::InvalidPackFileName);
     }
     let mut bytes = [0_u8; 20];
-    for (index, pair) in hex.as_bytes().chunks_exact(2).enumerate() {
+    for (index, pair) in hex.as_bytes().as_chunks::<2>().0.iter().enumerate() {
         bytes[index] = (hex_nibble(pair[0])? << 4) | hex_nibble(pair[1])?;
     }
     Ok(bytes)
@@ -686,16 +672,14 @@ fn parse_commit(
                 }
                 parents.push(parse_object_id_bytes(value)?);
             }
-            b"author" => {
-                if author.replace(value.to_vec()).is_some() {
-                    return Err(GitObservationError::InvalidCommit);
-                }
+            b"author" if author.is_some() => {
+                return Err(GitObservationError::InvalidCommit);
             }
-            b"committer" => {
-                if committer.replace(value.to_vec()).is_some() {
-                    return Err(GitObservationError::InvalidCommit);
-                }
+            b"author" => author = Some(value.to_vec()),
+            b"committer" if committer.is_some() => {
+                return Err(GitObservationError::InvalidCommit);
             }
+            b"committer" => committer = Some(value.to_vec()),
             _ => {}
         }
     }
@@ -771,11 +755,7 @@ fn parse_tree_mode(bytes: &[u8]) -> Result<GitTreeMode, GitObservationError> {
 }
 
 fn validate_tree_name(name: &[u8]) -> Result<(), GitObservationError> {
-    if name.is_empty()
-        || name == b"."
-        || name == b".."
-        || name.contains(&b'/')
-        || name.contains(&0)
+    if name.is_empty() || name == b"." || name == b".." || name.contains(&b'/') || name.contains(&0)
     {
         return Err(GitObservationError::InvalidTreeName);
     }
@@ -788,7 +768,9 @@ fn parse_object_id_bytes(bytes: &[u8]) -> Result<GitObjectId, GitObservationErro
 }
 
 fn object_id_from_raw(raw: &[u8]) -> Result<GitObjectId, GitObservationError> {
-    let array: [u8; 20] = raw.try_into().map_err(|_| GitObservationError::InvalidTree)?;
+    let array: [u8; 20] = raw
+        .try_into()
+        .map_err(|_| GitObservationError::InvalidTree)?;
     let mut hex = String::with_capacity(40);
     const DIGITS: &[u8; 16] = b"0123456789abcdef";
     for byte in array {
@@ -842,38 +824,83 @@ pub enum GitObservationError {
 impl fmt::Display for GitObservationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidBounds => f.write_str("Git observation bounds exceed the first-profile limits"),
-            Self::InvalidInternalPath => f.write_str("Git observation constructed an invalid internal path"),
+            Self::InvalidBounds => {
+                f.write_str("Git observation bounds exceed the first-profile limits")
+            }
+            Self::InvalidInternalPath => {
+                f.write_str("Git observation constructed an invalid internal path")
+            }
             Self::Git(error) => write!(f, "bounded Git repository read failed: {error}"),
             Self::Pack(error) => write!(f, "bounded Git pack read failed: {error}"),
             Self::Resolution(error) => write!(f, "Git observation path resolution failed: {error}"),
-            Self::LocalRead(error) => write!(f, "Git observation bounded file read failed: {error}"),
+            Self::LocalRead(error) => {
+                write!(f, "Git observation bounded file read failed: {error}")
+            }
             Self::Io(error) => write!(f, "Git observation filesystem I/O failed: {error}"),
-            Self::UnexpectedObjectStoreKind(kind) => write!(f, "Git object-store path has unsupported kind: {kind:?}"),
-            Self::AlternateObjectStoreUnsupported => f.write_str("Git alternate object stores are unsupported by the first observation profile"),
-            Self::MultiPackIndexUnsupported => f.write_str("Git multi-pack-index is unsupported by the first observation profile"),
-            Self::NonUnicodePackName => f.write_str("Git pack directory contains a non-Unicode file name"),
-            Self::InvalidPackFileName => f.write_str("Git pack/index file name is not canonical pack-<sha1> form"),
+            Self::UnexpectedObjectStoreKind(kind) => {
+                write!(f, "Git object-store path has unsupported kind: {kind:?}")
+            }
+            Self::AlternateObjectStoreUnsupported => f.write_str(
+                "Git alternate object stores are unsupported by the first observation profile",
+            ),
+            Self::MultiPackIndexUnsupported => {
+                f.write_str("Git multi-pack-index is unsupported by the first observation profile")
+            }
+            Self::NonUnicodePackName => {
+                f.write_str("Git pack directory contains a non-Unicode file name")
+            }
+            Self::InvalidPackFileName => {
+                f.write_str("Git pack/index file name is not canonical pack-<sha1> form")
+            }
             Self::PackFileLimitExceeded => f.write_str("Git pack file-count limit exceeded"),
-            Self::PackIndexPairMismatch => f.write_str("Git pack directory has unmatched .idx/.pack files"),
-            Self::PackNameChecksumMismatch => f.write_str("Git pack file name does not match the bound pack checksum"),
-            Self::PackIndexByteLimitExceeded => f.write_str("aggregate Git pack-index byte limit exceeded"),
+            Self::PackIndexPairMismatch => {
+                f.write_str("Git pack directory has unmatched .idx/.pack files")
+            }
+            Self::PackNameChecksumMismatch => {
+                f.write_str("Git pack file name does not match the bound pack checksum")
+            }
+            Self::PackIndexByteLimitExceeded => {
+                f.write_str("aggregate Git pack-index byte limit exceeded")
+            }
             Self::PackByteLimitExceeded => f.write_str("aggregate Git pack byte limit exceeded"),
-            Self::PackDirectoryChangedDuringObservation => f.write_str("Git pack directory identity changed during observation"),
-            Self::MissingInternalFile(path) => write!(f, "required Git internal file is missing: {path}"),
-            Self::DuplicatePackedObject(id) => write!(f, "Git object appears in multiple admitted pack indexes: {}", id.to_hex()),
-            Self::MissingObject(id) => write!(f, "Git object is unavailable in admitted loose/pack storage: {}", id.to_hex()),
-            Self::ObjectSizeOverflow => f.write_str("Git object or storage size cannot be represented by the bounded profile"),
-            Self::UnexpectedObjectKind { expected, observed } => write!(f, "Git object kind mismatch: expected {expected:?}, observed {observed:?}"),
-            Self::InvalidCommit => f.write_str("Git commit object is malformed for the bounded parser"),
+            Self::PackDirectoryChangedDuringObservation => {
+                f.write_str("Git pack directory identity changed during observation")
+            }
+            Self::MissingInternalFile(path) => {
+                write!(f, "required Git internal file is missing: {path}")
+            }
+            Self::DuplicatePackedObject(id) => write!(
+                f,
+                "Git object appears in multiple admitted pack indexes: {}",
+                id.to_hex()
+            ),
+            Self::MissingObject(id) => write!(
+                f,
+                "Git object is unavailable in admitted loose/pack storage: {}",
+                id.to_hex()
+            ),
+            Self::ObjectSizeOverflow => f.write_str(
+                "Git object or storage size cannot be represented by the bounded profile",
+            ),
+            Self::UnexpectedObjectKind { expected, observed } => write!(
+                f,
+                "Git object kind mismatch: expected {expected:?}, observed {observed:?}"
+            ),
+            Self::InvalidCommit => {
+                f.write_str("Git commit object is malformed for the bounded parser")
+            }
             Self::CommitHeaderLimitExceeded => f.write_str("Git commit header byte limit exceeded"),
-            Self::CommitParentLimitExceeded => f.write_str("Git commit parent-count limit exceeded"),
+            Self::CommitParentLimitExceeded => {
+                f.write_str("Git commit parent-count limit exceeded")
+            }
             Self::InvalidTree => f.write_str("Git tree object is malformed for the bounded parser"),
             Self::TreeEntryLimitExceeded => f.write_str("Git tree entry limit exceeded"),
             Self::TreeDepthExceeded => f.write_str("Git tree recursion depth limit exceeded"),
             Self::TreeNameLimitExceeded => f.write_str("Git tree entry name byte limit exceeded"),
             Self::InvalidTreeName => f.write_str("Git tree entry name is invalid"),
-            Self::NonUnicodeTreeName => f.write_str("Git tree path is non-Unicode and outside the first request profile"),
+            Self::NonUnicodeTreeName => {
+                f.write_str("Git tree path is non-Unicode and outside the first request profile")
+            }
             Self::UnsupportedTreeMode(mode) => write!(f, "unsupported Git tree mode: {mode}"),
             Self::DuplicateTreePath => f.write_str("Git tree walk produced a duplicate path"),
         }
@@ -930,7 +957,6 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     use golam_core::tool_request::ResourceClassId;
-    use miniz_oxide::deflate::compress_to_vec_zlib;
 
     use crate::git_sha1::GitObjectSha1;
 
@@ -962,18 +988,18 @@ mod tests {
         let hex = id.to_hex();
         let directory = root.join(".git/objects").join(&hex[..2]);
         fs::create_dir_all(&directory).unwrap();
-        fs::write(
-            directory.join(&hex[2..]),
-            compress_to_vec_zlib(&canonical, 6),
-        )
-        .unwrap();
+        fs::write(directory.join(&hex[2..]), zlib_store(&canonical)).unwrap();
         id
     }
 
     fn fixture_repo() -> (std::path::PathBuf, GitObjectId, GitObjectId, GitObjectId) {
         let root = unique_root();
         fs::create_dir_all(root.join(".git/objects")).unwrap();
-        fs::write(root.join(".git/config"), b"[extensions]\n\tobjectFormat = sha1\n").unwrap();
+        fs::write(
+            root.join(".git/config"),
+            b"[extensions]\n\tobjectFormat = sha1\n",
+        )
+        .unwrap();
 
         let blob = write_loose(&root, "blob", b"hello\n");
         let mut tree = b"100644 hello.txt\0".to_vec();
@@ -986,6 +1012,28 @@ mod tests {
         let commit = write_loose(&root, "commit", commit_body.as_bytes());
         fs::write(root.join(".git/HEAD"), format!("{}\n", commit.to_hex())).unwrap();
         (root, commit, tree_id, blob)
+    }
+
+    fn zlib_store(data: &[u8]) -> Vec<u8> {
+        assert!(data.len() <= u16::MAX as usize);
+        let len = data.len() as u16;
+        let mut output = vec![0x78, 0x01, 0x01];
+        output.extend_from_slice(&len.to_le_bytes());
+        output.extend_from_slice(&(!len).to_le_bytes());
+        output.extend_from_slice(data);
+        output.extend_from_slice(&adler32(data).to_be_bytes());
+        output
+    }
+
+    fn adler32(data: &[u8]) -> u32 {
+        const MOD: u32 = 65_521;
+        let mut a = 1_u32;
+        let mut b = 0_u32;
+        for byte in data {
+            a = (a + u32::from(*byte)) % MOD;
+            b = (b + a) % MOD;
+        }
+        b << 16 | a
     }
 
     fn resolver(root: &Path) -> LocalFsResolver {
