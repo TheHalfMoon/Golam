@@ -562,7 +562,10 @@ mod tests {
         assert_eq!(result.matches.len(), 1);
         assert_eq!(basename(&result.matches[0].requested_path), "small.txt");
         assert_eq!(result.skipped_files.len(), 1);
-        assert_eq!(basename(&result.skipped_files[0].requested_path), "large.bin");
+        assert_eq!(
+            basename(&result.skipped_files[0].requested_path),
+            "large.bin"
+        );
         assert_eq!(result.skipped_files[0].content_digest, None);
         assert_eq!(
             result.skipped_files[0].reason,
