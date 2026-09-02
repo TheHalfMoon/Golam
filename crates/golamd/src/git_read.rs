@@ -76,7 +76,11 @@ pub struct GitObjectId([u8; 20]);
 
 impl GitObjectId {
     pub fn parse(value: &str) -> Result<Self, GitReadError> {
-        if value.len() != 40 || !value.bytes().all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f')) {
+        if value.len() != 40
+            || !value
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+        {
             return Err(GitReadError::InvalidObjectId);
         }
         let mut bytes = [0_u8; 20];
@@ -341,7 +345,8 @@ impl<'a> GitRepositoryReader<'a> {
             self.bounds.max_packed_refs_bytes,
             self.bounds.max_duration,
             observed_at_unix_ms,
-        )? else {
+        )?
+        else {
             return Ok(None);
         };
         parse_packed_ref(&bytes, reference, self.bounds.max_packed_refs)
@@ -384,34 +389,74 @@ pub enum GitReadError {
 impl fmt::Display for GitReadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidBounds => f.write_str("Git read bounds exceed the frozen first-profile limits"),
-            Self::InvalidInternalPath => f.write_str("Git reader constructed an invalid bounded internal path"),
+            Self::InvalidBounds => {
+                f.write_str("Git read bounds exceed the frozen first-profile limits")
+            }
+            Self::InvalidInternalPath => {
+                f.write_str("Git reader constructed an invalid bounded internal path")
+            }
             Self::Resolution(error) => write!(f, "Git repository path resolution failed: {error}"),
             Self::LocalRead(error) => write!(f, "Git bounded file read failed: {error}"),
-            Self::UnsupportedFileKind(kind) => write!(f, "Git reader requires a directory but observed {kind:?}"),
-            Self::GitFileWorktreeUnsupported => f.write_str("gitfile/worktree indirection is unsupported by the first Git read profile"),
-            Self::UnsupportedObjectFormat(format) => write!(f, "unsupported Git object format: {format}"),
-            Self::InvalidConfig => f.write_str("Git repository config is malformed for the bounded format parser"),
+            Self::UnsupportedFileKind(kind) => {
+                write!(f, "Git reader requires a directory but observed {kind:?}")
+            }
+            Self::GitFileWorktreeUnsupported => f.write_str(
+                "gitfile/worktree indirection is unsupported by the first Git read profile",
+            ),
+            Self::UnsupportedObjectFormat(format) => {
+                write!(f, "unsupported Git object format: {format}")
+            }
+            Self::InvalidConfig => {
+                f.write_str("Git repository config is malformed for the bounded format parser")
+            }
             Self::InvalidHead => f.write_str("Git HEAD is malformed or non-canonical"),
-            Self::InvalidRefName => f.write_str("Git ref name is outside the bounded canonical first-profile grammar"),
-            Self::InvalidRefValue => f.write_str("Git ref file must contain exactly one bounded canonical value"),
-            Self::InvalidObjectId => f.write_str("Git SHA-1 object id must be exactly 40 lowercase hexadecimal characters"),
+            Self::InvalidRefName => {
+                f.write_str("Git ref name is outside the bounded canonical first-profile grammar")
+            }
+            Self::InvalidRefValue => {
+                f.write_str("Git ref file must contain exactly one bounded canonical value")
+            }
+            Self::InvalidObjectId => f.write_str(
+                "Git SHA-1 object id must be exactly 40 lowercase hexadecimal characters",
+            ),
             Self::MissingRef(reference) => write!(f, "Git ref is unavailable locally: {reference}"),
-            Self::DuplicatePackedRef(reference) => write!(f, "Git packed-refs contains duplicate ref: {reference}"),
+            Self::DuplicatePackedRef(reference) => {
+                write!(f, "Git packed-refs contains duplicate ref: {reference}")
+            }
             Self::PackedRefsLimitExceeded => f.write_str("Git packed-refs entry limit exceeded"),
             Self::SymbolicRefCycle => f.write_str("Git symbolic ref cycle detected"),
             Self::SymbolicRefDepthExceeded => f.write_str("Git symbolic ref depth limit exceeded"),
-            Self::MissingObject(id) => write!(f, "Git object is unavailable in the local loose-object store: {}", id.to_hex()),
-            Self::Decompression(error) => write!(f, "bounded Git zlib decompression failed: {error}"),
+            Self::MissingObject(id) => write!(
+                f,
+                "Git object is unavailable in the local loose-object store: {}",
+                id.to_hex()
+            ),
+            Self::Decompression(error) => {
+                write!(f, "bounded Git zlib decompression failed: {error}")
+            }
             Self::DecompressionData => f.write_str("Git loose object contains invalid zlib data"),
-            Self::DecompressionTruncated => f.write_str("Git loose object zlib stream is truncated"),
-            Self::DecompressionStalled => f.write_str("Git loose object decompression made no progress"),
-            Self::DecompressionTrailingData => f.write_str("Git loose object contains trailing bytes after the zlib stream"),
-            Self::DecompressedSizeLimitExceeded => f.write_str("Git loose object decompressed-size limit exceeded"),
-            Self::InvalidObjectHeader => f.write_str("Git loose object header is malformed or exceeds its bound"),
+            Self::DecompressionTruncated => {
+                f.write_str("Git loose object zlib stream is truncated")
+            }
+            Self::DecompressionStalled => {
+                f.write_str("Git loose object decompression made no progress")
+            }
+            Self::DecompressionTrailingData => {
+                f.write_str("Git loose object contains trailing bytes after the zlib stream")
+            }
+            Self::DecompressedSizeLimitExceeded => {
+                f.write_str("Git loose object decompressed-size limit exceeded")
+            }
+            Self::InvalidObjectHeader => {
+                f.write_str("Git loose object header is malformed or exceeds its bound")
+            }
             Self::UnsupportedObjectType(kind) => write!(f, "unsupported Git object type: {kind}"),
-            Self::ObjectSizeMismatch => f.write_str("Git loose object declared size does not equal decoded body size"),
-            Self::ObjectHashMismatch => f.write_str("Git loose object SHA-1 does not match its requested object id"),
+            Self::ObjectSizeMismatch => {
+                f.write_str("Git loose object declared size does not equal decoded body size")
+            }
+            Self::ObjectHashMismatch => {
+                f.write_str("Git loose object SHA-1 does not match its requested object id")
+            }
             Self::Sha1(error) => write!(f, "Git object SHA-1 failed: {error}"),
         }
     }
@@ -500,9 +545,9 @@ fn read_optional_file(
         return Ok(None);
     }
     if identity.file_kind != ObservedFileKind::RegularFile {
-        return Err(GitReadError::LocalRead(LocalFileReadError::UnsupportedFileKind(
-            identity.file_kind,
-        )));
+        return Err(GitReadError::LocalRead(
+            LocalFileReadError::UnsupportedFileKind(identity.file_kind),
+        ));
     }
     let read = read_regular_file(
         resolver,
@@ -582,9 +627,11 @@ fn validate_ref_name(reference: &str) -> Result<(), GitReadError> {
         || reference.contains("..")
         || reference.contains("//")
         || reference.contains("@{")
-        || reference
-            .bytes()
-            .any(|byte| byte <= b' ' || byte == 0x7f || matches!(byte, b'~' | b'^' | b':' | b'?' | b'*' | b'[' | b'\\'))
+        || reference.bytes().any(|byte| {
+            byte <= b' '
+                || byte == 0x7f
+                || matches!(byte, b'~' | b'^' | b':' | b'?' | b'*' | b'[' | b'\\')
+        })
     {
         return Err(GitReadError::InvalidRefName);
     }
@@ -616,7 +663,9 @@ fn parse_packed_ref(
         if line.is_empty() || line.starts_with('#') || line.starts_with('^') {
             continue;
         }
-        count = count.checked_add(1).ok_or(GitReadError::PackedRefsLimitExceeded)?;
+        count = count
+            .checked_add(1)
+            .ok_or(GitReadError::PackedRefsLimitExceeded)?;
         if count > max_refs {
             return Err(GitReadError::PackedRefsLimitExceeded);
         }
@@ -754,8 +803,7 @@ mod tests {
     static NEXT_TEMP: AtomicU64 = AtomicU64::new(1);
     const EMPTY_BLOB_ZLIB: &[u8] = &[120, 156, 75, 202, 201, 79, 82, 48, 96, 0, 0, 9, 176, 1, 240];
     const HELLO_BLOB_ZLIB: &[u8] = &[
-        120, 156, 75, 202, 201, 79, 82, 48, 99, 200, 72, 205, 201, 201, 231, 2, 0, 29, 197,
-        4, 20,
+        120, 156, 75, 202, 201, 79, 82, 48, 99, 200, 72, 205, 201, 201, 231, 2, 0, 29, 197, 4, 20,
     ];
 
     #[test]
@@ -780,7 +828,10 @@ mod tests {
 
     #[test]
     fn sha256_repository_config_is_explicitly_unsupported() {
-        assert_eq!(parse_object_format(b"[core]\nrepositoryformatversion = 0\n").unwrap(), GitObjectFormat::Sha1);
+        assert_eq!(
+            parse_object_format(b"[core]\nrepositoryformatversion = 0\n").unwrap(),
+            GitObjectFormat::Sha1
+        );
         assert!(matches!(
             parse_object_format(b"[extensions]\nobjectFormat = sha256\n"),
             Err(GitReadError::UnsupportedObjectFormat(format)) if format == "sha256"
@@ -822,7 +873,9 @@ mod tests {
         assert_eq!(object.kind, GitObjectKind::Blob);
         assert!(object.bytes.is_empty());
 
-        assert!(decompress_zlib_bounded(&EMPTY_BLOB_ZLIB[..8], 1024, Duration::from_secs(1)).is_err());
+        assert!(
+            decompress_zlib_bounded(&EMPTY_BLOB_ZLIB[..8], 1024, Duration::from_secs(1)).is_err()
+        );
         assert!(matches!(
             decompress_zlib_bounded(HELLO_BLOB_ZLIB, 4, Duration::from_secs(1)),
             Err(GitReadError::DecompressedSizeLimitExceeded)
@@ -841,7 +894,11 @@ mod tests {
         let root = fixture_root();
         fs::create_dir_all(root.join(".git/objects/ce")).unwrap();
         fs::create_dir_all(root.join(".git/refs/heads")).unwrap();
-        fs::write(root.join(".git/config"), b"[core]\nrepositoryformatversion = 0\n").unwrap();
+        fs::write(
+            root.join(".git/config"),
+            b"[core]\nrepositoryformatversion = 0\n",
+        )
+        .unwrap();
         fs::write(root.join(".git/HEAD"), b"ref: refs/heads/main\n").unwrap();
         fs::write(
             root.join(".git/refs/heads/main"),
@@ -862,7 +919,8 @@ mod tests {
             Vec::<PathBuf>::new(),
         )
         .unwrap();
-        let reader = GitRepositoryReader::open(&resolver, &operation, GitReadBounds::default(), 1).unwrap();
+        let reader =
+            GitRepositoryReader::open(&resolver, &operation, GitReadBounds::default(), 1).unwrap();
         assert_eq!(
             reader.evidence().head.object_id.to_hex(),
             "ce013625030ba8dba906f756967f9e9ca394464a"
@@ -900,17 +958,19 @@ mod tests {
             Vec::<PathBuf>::new(),
         )
         .unwrap();
-        let reader = GitRepositoryReader::open(&resolver, &operation, GitReadBounds::default(), 1).unwrap();
-        assert_eq!(reader.evidence().head.resolved_ref.as_ref().unwrap().source, GitRefSource::Packed);
+        let reader =
+            GitRepositoryReader::open(&resolver, &operation, GitReadBounds::default(), 1).unwrap();
+        assert_eq!(
+            reader.evidence().head.resolved_ref.as_ref().unwrap().source,
+            GitRefSource::Packed
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
     fn fixture_root() -> PathBuf {
         let serial = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
-        let root = std::env::temp_dir().join(format!(
-            "golam-git-read-{}-{serial}",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("golam-git-read-{}-{serial}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(&root).unwrap();
         root
