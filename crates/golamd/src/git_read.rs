@@ -3,7 +3,6 @@
 use std::collections::HashSet;
 use std::error::Error;
 use std::fmt;
-use std::path::Path;
 use std::time::Duration;
 
 use golam_core::target_identity::{ObservedFileKind, ResolvedTargetIdentity};
@@ -84,7 +83,7 @@ impl GitObjectId {
             return Err(GitReadError::InvalidObjectId);
         }
         let mut bytes = [0_u8; 20];
-        for (index, pair) in value.as_bytes().chunks_exact(2).enumerate() {
+        for (index, pair) in value.as_bytes().as_chunks::<2>().0.iter().enumerate() {
             bytes[index] = (hex_nibble(pair[0])? << 4) | hex_nibble(pair[1])?;
         }
         Ok(Self(bytes))
