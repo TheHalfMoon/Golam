@@ -403,7 +403,10 @@ mod tests {
             11,
         );
 
-        assert!(matches!(result, Err(LocalFileReadError::UnsupportedPlatform)));
+        assert!(matches!(
+            result,
+            Err(LocalFileReadError::UnsupportedPlatform)
+        ));
         fs::remove_dir_all(root).unwrap();
     }
 
