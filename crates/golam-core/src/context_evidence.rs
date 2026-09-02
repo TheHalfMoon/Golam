@@ -133,7 +133,11 @@ impl EvidenceRequirement {
     ) -> Result<bool, ContextValidationError> {
         self.validate()?;
         evidence.validate(now_unix_ms)?;
-        if self.allowed_source_kinds.binary_search(&evidence.source_kind).is_err() {
+        if self
+            .allowed_source_kinds
+            .binary_search(&evidence.source_kind)
+            .is_err()
+        {
             return Ok(false);
         }
         if self
