@@ -83,6 +83,9 @@ pub struct ContextEvidence {
 
 impl ContextEvidence {
     pub fn validate(&self, now_unix_ms: u64) -> Result<(), ContextValidationError> {
+        if !source_authority_pair_is_supported(self.source_kind, self.authority_class) {
+            return Err(ContextValidationError::IncompatibleSourceAuthority);
+        }
         self.freshness_policy.validate()?;
         validate_ordered_unique(
             &self.supersedes_or_conflicts_with,
@@ -96,6 +99,31 @@ impl ContextEvidence {
             return Err(ContextValidationError::StaleEvidence(self.evidence_id));
         }
         Ok(())
+    }
+}
+
+const fn source_authority_pair_is_supported(
+    source_kind: EvidenceSourceKind,
+    authority_class: EvidenceAuthorityClass,
+) -> bool {
+    match source_kind {
+        EvidenceSourceKind::UserSelectedArtifact => matches!(
+            authority_class,
+            EvidenceAuthorityClass::UntrustedContent | EvidenceAuthorityClass::UserAttributed
+        ),
+        EvidenceSourceKind::File | EvidenceSourceKind::GitObject => matches!(
+            authority_class,
+            EvidenceAuthorityClass::UntrustedContent | EvidenceAuthorityClass::LocalObserved
+        ),
+        EvidenceSourceKind::CanonicalLedger | EvidenceSourceKind::ManagedMemory => matches!(
+            authority_class,
+            EvidenceAuthorityClass::UntrustedContent | EvidenceAuthorityClass::CanonicalGolam
+        ),
+        EvidenceSourceKind::ProtocolResource | EvidenceSourceKind::ExternalDocument => matches!(
+            authority_class,
+            EvidenceAuthorityClass::UntrustedContent
+                | EvidenceAuthorityClass::ExternalAuthoritative
+        ),
     }
 }
 
@@ -275,6 +303,7 @@ pub fn missing_requirements(
 pub enum ContextValidationError {
     InvalidFreshnessPolicy,
     StaleEvidence(BindingDigest),
+    IncompatibleSourceAuthority,
     EmptyRequirementPolicy,
     TooManyItems(&'static str),
     UnsortedOrDuplicate(&'static str),
@@ -288,6 +317,9 @@ impl fmt::Display for ContextValidationError {
         match self {
             Self::InvalidFreshnessPolicy => f.write_str("freshness policy must be finite"),
             Self::StaleEvidence(_) => f.write_str("context evidence is stale or from the future"),
+            Self::IncompatibleSourceAuthority => {
+                f.write_str("context evidence source kind cannot claim the selected authority class")
+            }
             Self::EmptyRequirementPolicy => {
                 f.write_str("evidence requirement must allow source and authority classes")
             }
@@ -374,6 +406,17 @@ mod tests {
             requirement.accepts(&evidence(), 1_051),
             Err(ContextValidationError::StaleEvidence(_))
         ));
+    }
+
+    #[test]
+    fn external_document_cannot_claim_canonical_golam_authority() {
+        let mut invalid = evidence();
+        invalid.source_kind = EvidenceSourceKind::ExternalDocument;
+        invalid.authority_class = EvidenceAuthorityClass::CanonicalGolam;
+        assert_eq!(
+            invalid.validate(1_000),
+            Err(ContextValidationError::IncompatibleSourceAuthority)
+        );
     }
 
     #[test]
