@@ -959,6 +959,7 @@ mod tests {
     fn packed_ref_is_used_only_when_loose_ref_is_absent() {
         let root = fixture_root();
         fs::create_dir_all(root.join(".git/objects")).unwrap();
+        fs::create_dir_all(root.join(".git/refs/heads")).unwrap();
         fs::write(root.join(".git/HEAD"), b"ref: refs/heads/main\n").unwrap();
         fs::write(
             root.join(".git/packed-refs"),
