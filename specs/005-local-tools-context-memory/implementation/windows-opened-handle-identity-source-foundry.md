@@ -1,6 +1,6 @@
 # Windows Opened-Handle Identity Source Foundry — Spec 005
 
-Status: `CANDIDATE_READY_FOR_INDEPENDENT_REVIEW_NOT_ADMITTED`
+Status: `CANDIDATE_REPAIRED_PENDING_EXACT_HEAD_QUALIFICATION_NOT_ADMITTED`
 
 Scope: bounded repair evidence for the Windows branch of T005-035/T005-036 after the fresh exact-head independent review of PR #21 identified that pathname `FILE_FLAG_OPEN_REPARSE_POINT` plus timestamp/size metadata does not bind the opened Windows handle to the exact file resolved before open.
 
@@ -17,6 +17,8 @@ WINDOWS_OPENED_FILE_HANDLE_IDENTITY == PREOPEN_AUTHORIZED_TARGET_IDENTITY
 ```
 
 The comparison MUST occur before the first content `Read::read`. Parent replacement, reparse replacement, identity mismatch, unsupported identity observation, or any inability to prove equality MUST fail closed without consuming or returning content bytes.
+
+The already-completed independent review of the Unix branch established the relevant security standard for this finding: opening an unintended handle is not itself sufficient to violate the bounded read contract if stable opened-handle identity is checked before the first content read and mismatch prevents any outside bytes from being consumed or returned. Whether the Windows candidate below provides an equivalent stable identity gate remains subject to fresh independent review; this document does not pre-decide that admission question.
 
 ## Standard-library disposition
 
@@ -94,13 +96,30 @@ The candidate's public filesystem surface provides:
 
 - `FileIdentity { volume_serial: u64, file_id: [u8; 16] }`, populated from Windows `FileIdInfo`;
 - `NodeMetadata`, read from an open handle and carrying that 128-bit identity;
-- `RootHandle::open`, which pins the selected root and verifies the followed final directory against a no-follow reopen;
-- `DirectoryHandle::entries`, which enumerates names and 128-bit child file IDs from the pinned directory handle;
-- `DirectoryHandle::open_child` / `open_named_child`, which reopen without following a reparse point and reject `IdentityChanged` when the opened child's volume/file ID differs from the enumerated child;
-- `NodeHandle::try_clone_file`, which clones the already-pinned regular-file handle for streaming reads while retaining the original identity handle for post-read verification;
+- `RootHandle::open`, which opens the selected root, obtains its final path, reopens that final path with no-follow semantics, and rejects an identity mismatch;
+- `DirectoryHandle::entries`, which enumerates names and 128-bit child file IDs from the retained directory handle;
+- `DirectoryHandle::open_child` / `open_named_child`, which enumerate from the retained directory handle, construct a pathname using the directory's stored path plus the selected child name, open that pathname with `FILE_FLAG_OPEN_REPARSE_POINT`, then reject `IdentityChanged` unless the opened child's volume/file identity matches the entry enumerated from the retained directory;
+- `NodeHandle::try_clone_file`, which clones the already-identity-attested regular-file handle for streaming reads while retaining the original node handle for post-read verification;
 - `NodeHandle::refresh_metadata` and `verify_path_identity` for post-observation reconciliation.
 
-This directly supports a component-by-component Windows traversal where every directory component remains pinned by a handle and every child open is checked against a 128-bit identity before content is read.
+### Important upstream opening semantics
+
+`fence-windows 0.1.0-alpha.2` does **not** implement a native Win32 directory-handle-relative child open. `DirectoryHandle::open_child` does not use the retained directory handle as the namespace root of `CreateFileW`; it constructs `self.path.join_name(...)` and performs a pathname open. `FILE_FLAG_OPEN_REPARSE_POINT` protects the final opened component, not replaced ancestors.
+
+The security value of this candidate is therefore narrower and must not be overstated:
+
+```text
+PINNED_DIRECTORY_ENUMERATION
+  -> EXPECTED_CHILD_FILE_ID_128
+  -> PATHNAME_OPEN_NOFOLLOW_FINAL
+  -> OPENED_HANDLE_FILE_ID_128
+  -> REQUIRE_EQUALITY_BEFORE_ACCEPTING_NODE
+  -> ONLY_THEN_CLONE/READ
+```
+
+A parent race may cause a pathname open to reach an unintended node. The candidate can be admissible for this finding only if the subsequent 128-bit identity comparison reliably rejects that node before any content read, so no outside-root bytes can be consumed or returned. An accepted intermediate directory becomes the next retained `DirectoryHandle` only after its opened identity matches the identity enumerated from the previously retained directory. This is **identity-attested component traversal**, not a native handle-relative namespace guarantee.
+
+The fresh independent Source Foundry review must decide whether this identity-attested pathname-open model is sufficient for the existing Windows finding. This record does not claim that it is equivalent to `openat`/`openat2`-style directory-relative opening.
 
 ## Exact dependency closure
 
@@ -128,9 +147,9 @@ The crate has no package build script in its published manifest. Its Windows `te
 
 - safe Rust API for Golam callers;
 - high-resolution 128-bit `FileIdInfo` identity instead of the rejected 64-bit legacy index;
-- handle-pinned root/directory/child model directly addresses parent-directory replacement;
-- child opens are no-follow and identity-checked;
-- read handle is cloned from the already-pinned `NodeHandle` rather than reopened by pathname;
+- retained-directory enumeration supplies an expected 128-bit child identity before a child is accepted;
+- child pathname opens use final-component no-follow and are identity-checked before the returned `NodeHandle` is accepted;
+- read handle is cloned from the already-identity-attested `NodeHandle` rather than reopened by pathname after attestation;
 - exact signed upstream release and crates.io checksum are available;
 - MSRV is below Golam's pinned Rust 1.98;
 - no network activity is part of the filesystem primitive.
@@ -139,10 +158,23 @@ The crate has no package build script in its published manifest. Its Windows `te
 
 - release is prerelease (`0.1.0-alpha.2`);
 - package is recent and has a smaller maturity window than long-lived filesystem crates;
+- child opens remain pathname based, so an unintended handle may be opened during an ancestor race before 128-bit identity attestation rejects it;
 - crate contains additional public Windows mutation, ACL, reparse, job-object and system primitives outside Golam's required read-only surface;
 - unsafe Win32 implementation exists inside the dependency even though Golam itself remains `unsafe_code=forbid`;
 - the dependency requests a broader `windows-sys` feature set than the exact read-only filesystem calls Golam intends to use;
 - dependency presence MUST NOT make any Fence mutation/process/system API admissible in Golam.
+
+## Proposed Golam identity-contract integration
+
+No new authority-bearing core field is proposed merely to expose a platform-specific file identifier. `ResolvedTargetIdentity.resolved_target_identity` is already an opaque `BindingDigest` intended to bind the exact resolved target identity.
+
+If the candidate is independently admitted, the Windows implementation SHOULD preserve the public platform-neutral shape and change the Windows identity derivation so that the domain-separated `BindingDigest` includes the exact `FileIdentity { volume_serial, file_id[16] }` obtained from the accepted `NodeHandle`, plus only the deterministic identity material required by the existing contract. The same derivation must be used for pre-read resolution and opened-handle comparison.
+
+The current Windows digest based only on pathname plus attributes/size/timestamps is explicitly insufficient and MUST NOT be reused as the security equality check for the repaired read boundary.
+
+`observed_metadata_digest` remains distinct observation evidence. It may bind deterministic `NodeMetadata` fields from the same accepted handle, but it MUST NOT substitute for the stable 128-bit target-identity binding.
+
+If independent review determines that an explicit core representation is required instead of an opaque digest, that is a Source Foundry/contract repair prerequisite and no dependency admission may occur until it is resolved.
 
 ## Proposed bounded admission
 
@@ -168,35 +200,36 @@ FileIdentity
 WindowsError
 ```
 
-Only read-only root pinning, child enumeration/open, identity observation, handle cloning for reads, and identity refresh/reconciliation are permitted. Mutation, restore, ACL modification, process/job execution, shell/system lookup, stream mutation, or any other Fence API is outside authority and MUST NOT be called.
+Only read-only root opening/identity attestation, retained-directory enumeration, child open + identity attestation, identity observation, handle cloning for reads, and identity refresh/reconciliation are permitted. Mutation, restore, ACL modification, process/job execution, shell/system lookup, stream mutation, or any other Fence API is outside authority and MUST NOT be called.
 
 ## Required implementation shape after admission
 
 On Windows only:
 
-1. Pin the authorized root with `RootHandle` at resolver construction and bind its 128-bit identity into the resolver's root contract.
+1. Open and identity-attest the authorized root with `RootHandle`; bind its 128-bit identity into the resolver's existing domain-separated root identity contract.
 2. Normalize the requested target lexically as today; reject parent/root/prefix components.
-3. Traverse every path component from the pinned root using `DirectoryHandle::open_named_child`.
-4. Require each intermediate `NodeHandle` to be an ordinary directory and convert it into the next pinned `DirectoryHandle`.
-5. Require the final `NodeHandle` to be an ordinary file for content reads.
-6. Compare the final node's 128-bit identity against the resolver's exact pre-open `ResolvedTargetIdentity` binding.
-7. Clone the file from the pinned node using `try_clone_file`; do not reopen the content file by pathname.
-8. Perform all identity and type checks before the first `Read::read`.
-9. After bounded read completion, refresh metadata on the retained node handle and re-resolve/reconcile current path state. Any mismatch or unreadable state fails closed.
+3. For each child component, enumerate the selected name from the current retained `DirectoryHandle`, obtaining the expected 128-bit child file ID; call the candidate's `open_child`/`open_named_child`, understanding that upstream performs a pathname open and then requires the opened 128-bit identity to equal the enumerated identity.
+4. Accept an intermediate node as the next retained directory only after the identity check succeeds and the node is an ordinary directory; convert that accepted node into the next `DirectoryHandle`.
+5. Require the final accepted `NodeHandle` to be an ordinary file for content reads.
+6. Derive the same domain-separated Windows `resolved_target_identity` binding from the final accepted node's `FileIdentity` that was produced during pre-read resolution, and require exact equality before any content read.
+7. Clone the file from the accepted node using `try_clone_file`; do not perform another content-file pathname reopen after identity attestation.
+8. Perform all stable identity and type checks before the first `Read::read`.
+9. After bounded read completion, refresh metadata on the retained node handle and re-resolve/reconcile current path state. Any identity mismatch, unreadable state, or inability to re-establish the required contract fails closed.
 
 Unix behavior remains unchanged because the fresh independent review accepted the current Unix dev+ino opened-handle binding and deterministic parent-race test.
 
 ## Mandatory qualification before the finding can close
 
-- official exact-head Windows/macOS/Ubuntu CI;
+- official exact-head Windows/macOS/Ubuntu CI after every branch mutation;
 - `cargo fmt --check` and `clippy -D warnings`;
 - full tests and existing qualification suites;
 - deterministic Windows parent-directory replacement adversarial test proving no outside-root byte can be consumed or returned;
 - Windows final-component replacement/reparse test;
-- Windows 128-bit identity mismatch test;
-- explicit evidence that read bytes originate from the cloned pinned `NodeHandle`, never from a pathname reopen;
+- Windows 128-bit identity mismatch test using two distinct opened file identities even when ordinary size/timestamp metadata is made equal where the filesystem permits;
+- explicit evidence that read bytes originate from the clone of the identity-attested `NodeHandle`, never from a pathname reopen after attestation;
+- exact lockfile and selected-feature closure inspection after any Cargo mutation;
 - fresh substantive independent semantic/security review on the exact implementation head;
-- all review threads resolved.
+- all material review threads resolved.
 
 ## Current decision
 
@@ -204,9 +237,11 @@ Unix behavior remains unchanged because the fresh independent review accepted th
 WINDOWS_OPENED_HANDLE_IDENTITY_CANDIDATE=fence-windows 0.1.0-alpha.2
 CANDIDATE_CHECKSUM=cc1ddbe5ac1425cc6672799c6c1d9e85a9dd2c8e3647a5309218959c4a808be8
 SOURCE_PROVENANCE=VERIFIED
-SOURCE_FOUNDRY_STATUS=PENDING_INDEPENDENT_REVIEW
+UPSTREAM_CHILD_OPEN=NATIVE_DIRECTORY_HANDLE_RELATIVE_NO
+UPSTREAM_CHILD_OPEN=PATHNAME_OPEN_THEN_FILE_ID_128_ATTESTATION
+SOURCE_FOUNDRY_STATUS=REPAIRED_PENDING_EXACT_HEAD_CI_AND_INDEPENDENT_REVIEW
 DEPENDENCY_ADMITTED=NO
 CARGO_MUTATED=NO
-WINDOWS_PARENT_RACE_FINDING=OPEN
+WINDOWS_PARENT_RACE_FINDING=OPEN_UNTIL_IMPLEMENTATION_QUALIFIES
 T005_040=NOT_ADMITTED
 ```
