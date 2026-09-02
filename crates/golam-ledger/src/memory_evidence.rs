@@ -14,6 +14,10 @@ use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, 
 
 pub const MEMORY_EVIDENCE_SCHEMA_VERSION: i64 = 1;
 const MEMORY_SECURITY_CHAIN_DOMAIN: &[u8] = b"golam:memory-security-chain:v1";
+const MEMORY_VERSION_EVIDENCE_DOMAIN: &[u8] = b"golam:memory-version-evidence:v1";
+const MEMORY_PROMOTION_EVIDENCE_DOMAIN: &[u8] = b"golam:memory-promotion-evidence:v1";
+const MEMORY_RECONCILIATION_EVIDENCE_DOMAIN: &[u8] = b"golam:memory-reconciliation-evidence:v1";
+const MEMORY_TERMINAL_OUTCOME_DOMAIN: &[u8] = b"golam:memory-terminal-outcome:v1";
 
 pub const REQUIRED_MEMORY_EVIDENCE_TABLES: &[&str] = &[
     "memory_evidence_schema_meta",
@@ -191,7 +195,7 @@ impl MemoryEvidenceStore {
             return Err(MemoryEvidenceError::InvalidRecord("memory version bytes"));
         }
         self.require_prepared_effect(version.mutation_effect_ref, None)?;
-        let integrity_hash = crate::payload_hash(record_bytes);
+        let integrity_hash = version_integrity_hash(version, record_bytes)?;
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -238,7 +242,7 @@ impl MemoryEvidenceStore {
                 "promotion must bind exactly one attributable authority mode",
             ));
         }
-        let integrity_hash = crate::payload_hash(evidence.record_bytes);
+        let integrity_hash = promotion_integrity_hash(evidence)?;
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -286,7 +290,7 @@ impl MemoryEvidenceStore {
             ));
         }
         self.require_prepared_effect(evidence.effect_id, None)?;
-        let integrity_hash = crate::payload_hash(evidence.record_bytes);
+        let integrity_hash = reconciliation_integrity_hash(evidence)?;
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -351,7 +355,7 @@ impl MemoryEvidenceStore {
             ));
         }
         self.require_prepared_effect(outcome.effect_id, Some(outcome.mutation_intent_digest))?;
-        let integrity_hash = crate::payload_hash(record_bytes);
+        let integrity_hash = terminal_outcome_integrity_hash(terminal_evidence_id, outcome, record_bytes)?;
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -442,6 +446,131 @@ impl MemoryEvidenceStore {
         }
         Ok(())
     }
+}
+
+fn version_integrity_hash(
+    version: &MemoryVersion,
+    record_bytes: &[u8],
+) -> Result<[u8; 32], MemoryEvidenceError> {
+    let mut encoder = CanonicalEncoder::new();
+    encoder
+        .push_bytes(MEMORY_VERSION_EVIDENCE_DOMAIN)
+        .map_err(|_| MemoryEvidenceError::InvalidRecord("memory version evidence domain"))?;
+    push_digest(&mut encoder, version.version_id.0)?;
+    push_digest(&mut encoder, version.item_id.0)?;
+    encoder
+        .push_bytes(version.created_by_principal.as_str().as_bytes())
+        .map_err(|_| MemoryEvidenceError::InvalidRecord("memory version creator"))?;
+    push_digest(&mut encoder, version.committed_by_writer_identity.0)?;
+    encoder.push_u128(version.mutation_effect_ref.0);
+    encoder
+        .push_bytes(record_bytes)
+        .map_err(|_| MemoryEvidenceError::InvalidRecord("memory version record bytes"))?;
+    Ok(crate::payload_hash(&encoder.finish()))
+}
+
+fn promotion_integrity_hash(
+    evidence: PromotionEvidence<'_>,
+) -> Result<[u8; 32], MemoryEvidenceError> {
+    let mut encoder = CanonicalEncoder::new();
+    encoder
+        .push_bytes(MEMORY_PROMOTION_EVIDENCE_DOMAIN)
+        .map_err(|_| MemoryEvidenceError::InvalidRecord("memory promotion evidence domain"))?;
+    push_digest(&mut encoder, evidence.evidence_id)?;
+    push_digest(&mut encoder, evidence.candidate_id.0)?;
+    push_digest(&mut encoder, evidence.promotion_authority_ref)?;
+    match (evidence.approving_principal, evidence.verifier_policy_ref) {
+        (Some(principal), None) => {
+            encoder.push_u8(1);
+            encoder
+                .push_bytes(principal.as_str().as_bytes())
+                .map_err(|_| MemoryEvidenceError::InvalidRecord("promotion principal"))?;
+        }
+        (None, Some(verifier)) => {
+            encoder.push_u8(2);
+            push_digest(&mut encoder, verifier)?;
+        }
+        _ => {
+            return Err(MemoryEvidenceError::InvalidRecord(
+                "promotion authority mode",
+            ));
+        }
+    }
+    encoder
+        .push_bytes(evidence.record_bytes)
+        .map_err(|_| MemoryEvidenceError::InvalidRecord("promotion record bytes"))?;
+    Ok(crate::payload_hash(&encoder.finish()))
+}
+
+fn reconciliation_integrity_hash(
+    evidence: ReconciliationEvidence<'_>,
+) -> Result<[u8; 32], MemoryEvidenceError> {
+    let mut encoder = CanonicalEncoder::new();
+    encoder
+        .push_bytes(MEMORY_RECONCILIATION_EVIDENCE_DOMAIN)
+        .map_err(|_| MemoryEvidenceError::InvalidRecord("memory reconciliation evidence domain"))?;
+    push_digest(&mut encoder, evidence.evidence_id)?;
+    encoder.push_u128(evidence.effect_id.0);
+    encoder.push_u64(
+        u64::try_from(reconciliation_state_code(evidence.state))
+            .map_err(|_| MemoryEvidenceError::IntegerOverflow)?,
+    );
+    push_optional_digest(&mut encoder, evidence.authority_journal_readback_ref)?;
+    push_optional_digest(&mut encoder, evidence.markdown_readback_ref)?;
+    push_optional_digest(&mut encoder, evidence.memory_sqlite_readback_ref)?;
+    encoder
+        .push_bytes(evidence.record_bytes)
+        .map_err(|_| MemoryEvidenceError::InvalidRecord("reconciliation record bytes"))?;
+    Ok(crate::payload_hash(&encoder.finish()))
+}
+
+fn terminal_outcome_integrity_hash(
+    terminal_evidence_id: BindingDigest,
+    outcome: &MemoryMutationOutcome,
+    record_bytes: &[u8],
+) -> Result<[u8; 32], MemoryEvidenceError> {
+    let mut encoder = CanonicalEncoder::new();
+    encoder
+        .push_bytes(MEMORY_TERMINAL_OUTCOME_DOMAIN)
+        .map_err(|_| MemoryEvidenceError::InvalidRecord("memory terminal outcome domain"))?;
+    push_digest(&mut encoder, terminal_evidence_id)?;
+    encoder.push_u128(outcome.effect_id.0);
+    push_digest(&mut encoder, outcome.mutation_intent_digest)?;
+    encoder.push_u64(
+        u64::try_from(mutation_status_code(outcome.status))
+            .map_err(|_| MemoryEvidenceError::IntegerOverflow)?,
+    );
+    push_optional_digest(&mut encoder, outcome.authority_journal_readback_ref)?;
+    push_optional_digest(&mut encoder, outcome.markdown_readback_ref)?;
+    push_optional_digest(&mut encoder, outcome.memory_sqlite_readback_ref)?;
+    push_optional_digest(&mut encoder, outcome.reconciliation_ref)?;
+    encoder
+        .push_bytes(record_bytes)
+        .map_err(|_| MemoryEvidenceError::InvalidRecord("terminal outcome record bytes"))?;
+    Ok(crate::payload_hash(&encoder.finish()))
+}
+
+fn push_digest(
+    encoder: &mut CanonicalEncoder,
+    digest: BindingDigest,
+) -> Result<(), MemoryEvidenceError> {
+    encoder
+        .push_bytes(&digest.bytes())
+        .map_err(|_| MemoryEvidenceError::InvalidRecord("memory evidence digest"))
+}
+
+fn push_optional_digest(
+    encoder: &mut CanonicalEncoder,
+    digest: Option<BindingDigest>,
+) -> Result<(), MemoryEvidenceError> {
+    match digest {
+        Some(value) => {
+            encoder.push_u8(1);
+            push_digest(encoder, value)?;
+        }
+        None => encoder.push_u8(0),
+    }
+    Ok(())
 }
 
 fn migrate(connection: &Connection) -> Result<(), MemoryEvidenceError> {
@@ -714,6 +843,26 @@ mod tests {
         .unwrap()
     }
 
+    fn version(effect_id: u128) -> MemoryVersion {
+        MemoryVersion {
+            item_id: MemoryItemId(digest(1)),
+            version_id: MemoryVersionId(digest(20)),
+            scope: golam_core::memory::MemoryScope::Project,
+            canonical_markdown_ref: digest(21),
+            content_digest: digest(22),
+            provenance_refs: vec![digest(23)],
+            taint_set: TaintSet::from_labels([TaintLabel::UserTrusted]),
+            status: golam_core::memory::MemoryVersionStatus::Active,
+            predecessor_versions: vec![MemoryVersionId(digest(2))],
+            conflict_refs: vec![],
+            promotion_evidence_ref: digest(24),
+            created_by_principal: PrincipalId::new("principal.creator").unwrap(),
+            committed_by_writer_identity: MemoryWriterId(digest(25)),
+            mutation_effect_ref: EffectId(effect_id),
+            created_at_unix_ms: 13,
+        }
+    }
+
     #[test]
     fn prepared_intent_is_immutable_and_security_chained() {
         let mut store = MemoryEvidenceStore::open_in_memory().unwrap();
@@ -737,25 +886,74 @@ mod tests {
     fn version_keeps_creator_writer_and_effect_attribution() {
         let mut store = MemoryEvidenceStore::open_in_memory().unwrap();
         store.persist_prepared_intent(&prepared(12)).unwrap();
-        let version = MemoryVersion {
-            item_id: MemoryItemId(digest(1)),
-            version_id: MemoryVersionId(digest(20)),
-            scope: golam_core::memory::MemoryScope::Project,
-            canonical_markdown_ref: digest(21),
-            content_digest: digest(22),
-            provenance_refs: vec![digest(23)],
-            taint_set: TaintSet::from_labels([TaintLabel::UserTrusted]),
-            status: golam_core::memory::MemoryVersionStatus::Active,
-            predecessor_versions: vec![MemoryVersionId(digest(2))],
-            conflict_refs: vec![],
-            promotion_evidence_ref: digest(24),
-            created_by_principal: PrincipalId::new("principal.creator").unwrap(),
-            committed_by_writer_identity: MemoryWriterId(digest(25)),
-            mutation_effect_ref: EffectId(12),
-            created_at_unix_ms: 13,
-        };
-        store.persist_version(&version, b"version-record").unwrap();
+        store.persist_version(&version(12), b"version-record").unwrap();
         assert_eq!(store.security_chain_len().unwrap(), 2);
+    }
+
+    #[test]
+    fn version_chain_hash_binds_structured_writer_fields() {
+        let mut store = MemoryEvidenceStore::open_in_memory().unwrap();
+        store.persist_prepared_intent(&prepared(12)).unwrap();
+        let first = version(12);
+        store.persist_version(&first, b"same-record").unwrap();
+
+        let mut changed = first;
+        changed.committed_by_writer_identity = MemoryWriterId(digest(99));
+        assert!(matches!(
+            store.persist_version(&changed, b"same-record"),
+            Err(MemoryEvidenceError::ImmutableEvidenceMismatch("memory version"))
+        ));
+    }
+
+    #[test]
+    fn promotion_chain_hash_binds_candidate_and_authority_mode() {
+        let mut store = MemoryEvidenceStore::open_in_memory().unwrap();
+        let principal = PrincipalId::new("principal.approver").unwrap();
+        let first = PromotionEvidence {
+            evidence_id: digest(40),
+            candidate_id: MemoryCandidateId(digest(41)),
+            promotion_authority_ref: digest(42),
+            approving_principal: Some(&principal),
+            verifier_policy_ref: None,
+            record_bytes: b"same-promotion",
+        };
+        store.persist_promotion(first).unwrap();
+
+        let changed = PromotionEvidence {
+            candidate_id: MemoryCandidateId(digest(99)),
+            ..first
+        };
+        assert!(matches!(
+            store.persist_promotion(changed),
+            Err(MemoryEvidenceError::ImmutableEvidenceMismatch("memory promotion"))
+        ));
+    }
+
+    #[test]
+    fn reconciliation_chain_hash_binds_effect_state_and_readbacks() {
+        let mut store = MemoryEvidenceStore::open_in_memory().unwrap();
+        store.persist_prepared_intent(&prepared(12)).unwrap();
+        let first = ReconciliationEvidence {
+            evidence_id: digest(50),
+            effect_id: EffectId(12),
+            state: MemoryReconciliationState::InSync,
+            authority_journal_readback_ref: Some(digest(51)),
+            markdown_readback_ref: Some(digest(52)),
+            memory_sqlite_readback_ref: Some(digest(53)),
+            record_bytes: b"same-reconciliation",
+        };
+        store.persist_reconciliation(first).unwrap();
+
+        let changed = ReconciliationEvidence {
+            state: MemoryReconciliationState::Conflict,
+            ..first
+        };
+        assert!(matches!(
+            store.persist_reconciliation(changed),
+            Err(MemoryEvidenceError::ImmutableEvidenceMismatch(
+                "memory reconciliation"
+            ))
+        ));
     }
 
     #[test]
@@ -786,5 +984,38 @@ mod tests {
             .persist_terminal_outcome(digest(30), &outcome, b"unknown")
             .unwrap();
         assert_eq!(store.security_chain_len().unwrap(), 2);
+    }
+
+    #[test]
+    fn terminal_chain_hash_binds_status_and_readback_fields() {
+        let mut store = MemoryEvidenceStore::open_in_memory().unwrap();
+        let prepared = prepared(12);
+        let intent_digest = BindingDigest::new(prepared.binding_digest());
+        store.persist_prepared_intent(&prepared).unwrap();
+        let first = MemoryMutationOutcome {
+            effect_id: EffectId(12),
+            mutation_intent_digest: intent_digest,
+            status: MemoryMutationStatus::UnknownOutcome,
+            canonical_version_refs: vec![],
+            authority_journal_readback_ref: Some(digest(60)),
+            markdown_readback_ref: Some(digest(61)),
+            memory_sqlite_readback_ref: Some(digest(62)),
+            reconciliation_ref: Some(digest(63)),
+            verification_refs: vec![],
+            integrity_evidence_refs: vec![],
+            terminal_at_unix_ms: 20,
+        };
+        store
+            .persist_terminal_outcome(digest(64), &first, b"same-terminal")
+            .unwrap();
+
+        let mut changed = first;
+        changed.status = MemoryMutationStatus::Failed;
+        assert!(matches!(
+            store.persist_terminal_outcome(digest(64), &changed, b"same-terminal"),
+            Err(MemoryEvidenceError::ImmutableEvidenceMismatch(
+                "memory terminal outcome"
+            ))
+        ));
     }
 }
