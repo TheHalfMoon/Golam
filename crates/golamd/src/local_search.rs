@@ -578,7 +578,12 @@ mod tests {
                 limit: 8
             }
         );
-        assert!(result.skipped_files[0].identity.resolved_target_identity.is_some());
+        assert!(
+            result.skipped_files[0]
+                .identity
+                .resolved_target_identity
+                .is_some()
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
