@@ -53,6 +53,7 @@ pub enum LocalFileReadError {
     Resolution(LocalFsResolutionError),
     Io(io::Error),
     InvalidBounds,
+    UnsupportedPlatform,
     UnsupportedFileKind(ObservedFileKind),
     SizeLimitExceeded {
         identity: Box<ResolvedTargetIdentity>,
@@ -70,6 +71,9 @@ impl fmt::Display for LocalFileReadError {
             Self::Io(error) => write!(f, "bounded local file read I/O error: {error}"),
             Self::InvalidBounds => f.write_str(
                 "bounded local file read requires positive finite byte and duration limits",
+            ),
+            Self::UnsupportedPlatform => f.write_str(
+                "bounded local file content reads are unqualified on this platform and fail closed",
             ),
             Self::UnsupportedFileKind(kind) => {
                 write!(f, "bounded local file read denies file kind: {kind:?}")
@@ -174,6 +178,7 @@ fn read_regular_file_with_pre_open<F>(
 where
     F: FnOnce(),
 {
+    require_content_read_platform()?;
     let initial = stat_regular_file(
         resolver,
         requested,
@@ -240,6 +245,28 @@ where
     })
 }
 
+#[cfg(any(
+    target_os = "linux",
+    target_os = "android",
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "freebsd"
+))]
+fn require_content_read_platform() -> Result<(), LocalFileReadError> {
+    Ok(())
+}
+
+#[cfg(not(any(
+    target_os = "linux",
+    target_os = "android",
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "freebsd"
+)))]
+fn require_content_read_platform() -> Result<(), LocalFileReadError> {
+    Err(LocalFileReadError::UnsupportedPlatform)
+}
+
 fn require_regular_file(identity: &ResolvedTargetIdentity) -> Result<(), LocalFileReadError> {
     if identity.file_kind != ObservedFileKind::RegularFile {
         return Err(LocalFileReadError::UnsupportedFileKind(identity.file_kind));
@@ -279,39 +306,17 @@ fn open_read_only_no_follow(path: &Path) -> io::Result<fs::File> {
         .open(path)
 }
 
-#[cfg(all(
-    unix,
-    not(any(
-        target_os = "linux",
-        target_os = "android",
-        target_os = "macos",
-        target_os = "ios",
-        target_os = "freebsd"
-    ))
-))]
+#[cfg(not(any(
+    target_os = "linux",
+    target_os = "android",
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "freebsd"
+)))]
 fn open_read_only_no_follow(_path: &Path) -> io::Result<fs::File> {
     Err(io::Error::new(
         io::ErrorKind::Unsupported,
-        "bounded no-follow local file reads are unqualified on this Unix target",
-    ))
-}
-
-#[cfg(windows)]
-fn open_read_only_no_follow(path: &Path) -> io::Result<fs::File> {
-    use std::os::windows::fs::OpenOptionsExt;
-
-    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
-    fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
-        .open(path)
-}
-
-#[cfg(not(any(unix, windows)))]
-fn open_read_only_no_follow(_path: &Path) -> io::Result<fs::File> {
-    Err(io::Error::new(
-        io::ErrorKind::Unsupported,
-        "bounded local file reads are unsupported on this platform",
+        "bounded no-follow local file content reads are unqualified on this platform",
     ))
 }
 
@@ -353,6 +358,13 @@ mod tests {
         }
     }
 
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd"
+    ))]
     #[test]
     fn reads_regular_file_with_bounded_attributable_result() {
         let root = unique_root();
@@ -375,19 +387,38 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn windows_content_read_fails_closed_as_unqualified() {
+        let root = unique_root();
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("note.txt"), b"hello").unwrap();
+        let resolver = resolver(&root);
+        let result = read_regular_file(
+            &resolver,
+            &RequestedTarget::new("note.txt").unwrap(),
+            &RequestedOperationId::new("read").unwrap(),
+            bounds(16),
+            10,
+            11,
+        );
+
+        assert!(matches!(result, Err(LocalFileReadError::UnsupportedPlatform)));
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn oversized_file_fails_without_returning_partial_content() {
         let root = unique_root();
         fs::create_dir(&root).unwrap();
         fs::write(root.join("large.txt"), b"0123456789").unwrap();
         let resolver = resolver(&root);
-        let error = read_regular_file(
+        let error = stat_regular_file(
             &resolver,
             &RequestedTarget::new("large.txt").unwrap(),
             &RequestedOperationId::new("read").unwrap(),
             bounds(4),
             10,
-            11,
         )
         .unwrap_err();
 
@@ -402,7 +433,13 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
-    #[cfg(unix)]
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd"
+    ))]
     #[test]
     fn parent_directory_replacement_cannot_return_outside_bytes() {
         use std::os::unix::fs::symlink;
