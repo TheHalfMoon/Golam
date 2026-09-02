@@ -578,7 +578,10 @@ mod tests {
                 10,
             )
             .unwrap_err();
-        assert!(matches!(error, LocalFsResolutionError::ParentNotDirectory(_)));
+        assert!(matches!(
+            error,
+            LocalFsResolutionError::ParentNotDirectory(_)
+        ));
         fs::remove_dir_all(root).unwrap();
     }
 
