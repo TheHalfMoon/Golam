@@ -125,8 +125,7 @@ pub fn stat_regular_file(
 
     let path = Path::new(identity.normalized_path.as_str());
     let metadata = fs::symlink_metadata(path)?;
-    if !metadata.file_type().is_file()
-        || !metadata_matches_resolved_identity(&identity, &metadata)?
+    if !metadata.file_type().is_file() || !metadata_matches_resolved_identity(&identity, &metadata)?
     {
         return Err(LocalFileReadError::TargetChangedDuringRead);
     }
@@ -429,7 +428,10 @@ mod tests {
             },
         );
 
-        assert!(matches!(result, Err(LocalFileReadError::TargetChangedDuringRead)));
+        assert!(matches!(
+            result,
+            Err(LocalFileReadError::TargetChangedDuringRead)
+        ));
         fs::remove_file(root.join("nested")).unwrap();
         fs::remove_dir_all(root).unwrap();
         fs::remove_dir_all(outside).unwrap();
