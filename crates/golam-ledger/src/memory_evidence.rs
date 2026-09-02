@@ -355,7 +355,8 @@ impl MemoryEvidenceStore {
             ));
         }
         self.require_prepared_effect(outcome.effect_id, Some(outcome.mutation_intent_digest))?;
-        let integrity_hash = terminal_outcome_integrity_hash(terminal_evidence_id, outcome, record_bytes)?;
+        let integrity_hash =
+            terminal_outcome_integrity_hash(terminal_evidence_id, outcome, record_bytes)?;
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -886,7 +887,9 @@ mod tests {
     fn version_keeps_creator_writer_and_effect_attribution() {
         let mut store = MemoryEvidenceStore::open_in_memory().unwrap();
         store.persist_prepared_intent(&prepared(12)).unwrap();
-        store.persist_version(&version(12), b"version-record").unwrap();
+        store
+            .persist_version(&version(12), b"version-record")
+            .unwrap();
         assert_eq!(store.security_chain_len().unwrap(), 2);
     }
 
@@ -901,7 +904,9 @@ mod tests {
         changed.committed_by_writer_identity = MemoryWriterId(digest(99));
         assert!(matches!(
             store.persist_version(&changed, b"same-record"),
-            Err(MemoryEvidenceError::ImmutableEvidenceMismatch("memory version"))
+            Err(MemoryEvidenceError::ImmutableEvidenceMismatch(
+                "memory version"
+            ))
         ));
     }
 
@@ -925,7 +930,9 @@ mod tests {
         };
         assert!(matches!(
             store.persist_promotion(changed),
-            Err(MemoryEvidenceError::ImmutableEvidenceMismatch("memory promotion"))
+            Err(MemoryEvidenceError::ImmutableEvidenceMismatch(
+                "memory promotion"
+            ))
         ));
     }
 
