@@ -11,7 +11,9 @@ use golam_core::digest::sha256;
 use golam_core::target_identity::{ObservedFileKind, ResolvedTargetIdentity};
 use golam_core::tool_request::{BindingDigest, RequestedOperationId, RequestedTarget};
 
-use crate::local_fs::{LocalFsResolutionError, LocalFsResolver};
+use crate::local_fs::{
+    LocalFsResolutionError, LocalFsResolver, metadata_matches_resolved_identity,
+};
 
 const READ_CHUNK_BYTES: usize = 64 * 1024;
 
@@ -52,7 +54,11 @@ pub enum LocalFileReadError {
     Io(io::Error),
     InvalidBounds,
     UnsupportedFileKind(ObservedFileKind),
-    SizeLimitExceeded { observed: u64, limit: u64 },
+    SizeLimitExceeded {
+        identity: ResolvedTargetIdentity,
+        observed: u64,
+        limit: u64,
+    },
     DurationLimitExceeded,
     TargetChangedDuringRead,
 }
@@ -68,7 +74,9 @@ impl fmt::Display for LocalFileReadError {
             Self::UnsupportedFileKind(kind) => {
                 write!(f, "bounded local file read denies file kind: {kind:?}")
             }
-            Self::SizeLimitExceeded { observed, limit } => write!(
+            Self::SizeLimitExceeded {
+                observed, limit, ..
+            } => write!(
                 f,
                 "bounded local file read size limit exceeded: observed={observed} limit={limit}"
             ),
@@ -117,11 +125,14 @@ pub fn stat_regular_file(
 
     let path = Path::new(identity.normalized_path.as_str());
     let metadata = fs::symlink_metadata(path)?;
-    if !metadata.file_type().is_file() {
+    if !metadata.file_type().is_file()
+        || !metadata_matches_resolved_identity(&identity, &metadata)?
+    {
         return Err(LocalFileReadError::TargetChangedDuringRead);
     }
     if metadata.len() > bounds.max_bytes {
         return Err(LocalFileReadError::SizeLimitExceeded {
+            identity,
             observed: metadata.len(),
             limit: bounds.max_bytes,
         });
@@ -141,6 +152,29 @@ pub fn read_regular_file(
     observed_at_start_unix_ms: u64,
     observed_at_end_unix_ms: u64,
 ) -> Result<BoundedFileRead, LocalFileReadError> {
+    read_regular_file_with_pre_open(
+        resolver,
+        requested,
+        operation,
+        bounds,
+        observed_at_start_unix_ms,
+        observed_at_end_unix_ms,
+        || {},
+    )
+}
+
+fn read_regular_file_with_pre_open<F>(
+    resolver: &LocalFsResolver,
+    requested: &RequestedTarget,
+    operation: &RequestedOperationId,
+    bounds: LocalFileReadBounds,
+    observed_at_start_unix_ms: u64,
+    observed_at_end_unix_ms: u64,
+    pre_open: F,
+) -> Result<BoundedFileRead, LocalFileReadError>
+where
+    F: FnOnce(),
+{
     let initial = stat_regular_file(
         resolver,
         requested,
@@ -150,13 +184,19 @@ pub fn read_regular_file(
     )?;
     let started = Instant::now();
     let path = Path::new(initial.identity.normalized_path.as_str());
+
+    pre_open();
+
     let mut file = open_read_only_no_follow(path)?;
     let opened_metadata = file.metadata()?;
-    if !opened_metadata.file_type().is_file() {
+    if !opened_metadata.file_type().is_file()
+        || !metadata_matches_resolved_identity(&initial.identity, &opened_metadata)?
+    {
         return Err(LocalFileReadError::TargetChangedDuringRead);
     }
     if opened_metadata.len() > bounds.max_bytes {
         return Err(LocalFileReadError::SizeLimitExceeded {
+            identity: initial.identity.clone(),
             observed: opened_metadata.len(),
             limit: bounds.max_bytes,
         });
@@ -181,10 +221,7 @@ pub fn read_regular_file(
         require_within_duration(started, bounds.max_duration)?;
         let mut probe = [0_u8; 1];
         if file.read(&mut probe)? != 0 {
-            return Err(LocalFileReadError::SizeLimitExceeded {
-                observed: bounds.max_bytes.saturating_add(1),
-                limit: bounds.max_bytes,
-            });
+            return Err(LocalFileReadError::TargetChangedDuringRead);
         }
     }
     require_within_duration(started, bounds.max_duration)?;
@@ -358,11 +395,44 @@ mod tests {
         assert!(matches!(
             error,
             LocalFileReadError::SizeLimitExceeded {
+                identity: _,
                 observed: 10,
                 limit: 4
             }
         ));
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn parent_directory_replacement_cannot_return_outside_bytes() {
+        use std::os::unix::fs::symlink;
+
+        let root = unique_root();
+        let outside = unique_root();
+        fs::create_dir_all(root.join("nested")).unwrap();
+        fs::create_dir(&outside).unwrap();
+        fs::write(root.join("nested/note.txt"), b"inside").unwrap();
+        fs::write(outside.join("note.txt"), b"outside-secret").unwrap();
+        let resolver = resolver(&root);
+
+        let result = read_regular_file_with_pre_open(
+            &resolver,
+            &RequestedTarget::new("nested/note.txt").unwrap(),
+            &RequestedOperationId::new("read").unwrap(),
+            bounds(64),
+            10,
+            11,
+            || {
+                fs::rename(root.join("nested"), root.join("original-nested")).unwrap();
+                symlink(&outside, root.join("nested")).unwrap();
+            },
+        );
+
+        assert!(matches!(result, Err(LocalFileReadError::TargetChangedDuringRead)));
+        fs::remove_file(root.join("nested")).unwrap();
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(outside).unwrap();
     }
 
     #[test]
