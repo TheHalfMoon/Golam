@@ -5,21 +5,23 @@ use core::fmt;
 use crate::taint::TaintSet;
 use crate::tool_request::BindingDigest;
 
+const MAX_CONTEXT_REFS: usize = 128;
 const MAX_REQUIREMENT_ITEMS: usize = 128;
-const MAX_CONTEXT_REFS: usize = 512;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct EvidenceSourceId(pub BindingDigest);
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub struct PermissionScopeId(pub BindingDigest);
+
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum EvidenceSourceKind {
-    UserSelectedArtifact,
     File,
-    GitObject,
+    Git,
+    Memory,
+    ToolResult,
+    Protocol,
     CanonicalLedger,
-    ManagedMemory,
-    ProtocolResource,
-    ExternalDocument,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -32,31 +34,32 @@ pub enum EvidenceAuthorityClass {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub struct PermissionScopeId(pub BindingDigest);
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FreshnessPolicy {
-    Snapshot,
+    Immutable,
     MaxAgeMs(u64),
-    LiveObservation,
 }
 
 impl FreshnessPolicy {
-    pub fn validate(self) -> Result<(), ContextValidationError> {
+    pub const fn validate(self) -> Result<(), ContextValidationError> {
         match self {
+            Self::Immutable => Ok(()),
             Self::MaxAgeMs(0) => Err(ContextValidationError::InvalidFreshnessPolicy),
-            _ => Ok(()),
+            Self::MaxAgeMs(_) => Ok(()),
         }
     }
 
-    pub fn is_fresh(self, observed_at_unix_ms: u64, now_unix_ms: u64) -> bool {
+    pub fn is_fresh(
+        self,
+        observed_at_unix_ms: u64,
+        now_unix_ms: u64,
+    ) -> Result<bool, ContextValidationError> {
+        self.validate()?;
         if observed_at_unix_ms > now_unix_ms {
-            return false;
+            return Ok(false);
         }
         match self {
-            Self::Snapshot => true,
-            Self::MaxAgeMs(max_age_ms) => now_unix_ms - observed_at_unix_ms <= max_age_ms,
-            Self::LiveObservation => observed_at_unix_ms == now_unix_ms,
+            Self::Immutable => Ok(true),
+            Self::MaxAgeMs(max_age) => Ok(now_unix_ms - observed_at_unix_ms <= max_age),
         }
     }
 }
@@ -87,7 +90,7 @@ impl ContextEvidence {
         )?;
         if !self
             .freshness_policy
-            .is_fresh(self.observed_at_unix_ms, now_unix_ms)
+            .is_fresh(self.observed_at_unix_ms, now_unix_ms)?
         {
             return Err(ContextValidationError::StaleEvidence(self.evidence_id));
         }
@@ -107,9 +110,6 @@ pub struct EvidenceRequirement {
 
 impl EvidenceRequirement {
     pub fn validate(&self) -> Result<(), ContextValidationError> {
-        if self.allowed_source_kinds.is_empty() || self.allowed_authority_classes.is_empty() {
-            return Err(ContextValidationError::EmptyRequirementPolicy);
-        }
         validate_ordered_unique(
             &self.allowed_source_kinds,
             "allowed_source_kinds",
@@ -120,6 +120,9 @@ impl EvidenceRequirement {
             "allowed_authority_classes",
             MAX_REQUIREMENT_ITEMS,
         )?;
+        if self.allowed_source_kinds.is_empty() || self.allowed_authority_classes.is_empty() {
+            return Err(ContextValidationError::EmptyRequirementPolicy);
+        }
         Ok(())
     }
 
@@ -130,22 +133,17 @@ impl EvidenceRequirement {
     ) -> Result<bool, ContextValidationError> {
         self.validate()?;
         evidence.validate(now_unix_ms)?;
-        if self
-            .allowed_source_kinds
-            .binary_search(&evidence.source_kind)
-            .is_err()
-            || self
-                .allowed_authority_classes
-                .binary_search(&evidence.authority_class)
-                .is_err()
-        {
+        if self.allowed_source_kinds.binary_search(&evidence.source_kind).is_err() {
             return Ok(false);
         }
         if self
-            .forbidden_taint
-            .labels()
-            .any(|label| evidence.taint_set.contains(label))
+            .allowed_authority_classes
+            .binary_search(&evidence.authority_class)
+            .is_err()
         {
+            return Ok(false);
+        }
+        if evidence.taint_set.intersects(self.forbidden_taint) {
             return Ok(false);
         }
         if self
@@ -201,6 +199,16 @@ impl ContextCapsule {
             "missing_requirements",
             MAX_CONTEXT_REFS,
         )?;
+
+        if self
+            .ranking_evidence
+            .windows(2)
+            .any(|pair| pair[0].evidence_ref == pair[1].evidence_ref)
+        {
+            return Err(ContextValidationError::UnsortedOrDuplicate(
+                "ranking_evidence",
+            ));
+        }
 
         if self.ranking_evidence.iter().any(|ranking| {
             self.evidence_refs
@@ -394,11 +402,29 @@ mod tests {
         };
         assert_eq!(capsule.validate(), Ok(()));
 
-        let mut invalid = capsule;
+        let mut invalid = capsule.clone();
         invalid.ranking_evidence[0].evidence_ref = digest(99);
         assert_eq!(
             invalid.validate(),
             Err(ContextValidationError::RankingReferencesUnknownEvidence)
+        );
+
+        let mut duplicate_target = capsule;
+        duplicate_target.ranking_evidence = vec![
+            RankingEvidence {
+                evidence_ref: digest(1),
+                bounded_score: 10,
+            },
+            RankingEvidence {
+                evidence_ref: digest(1),
+                bounded_score: 20,
+            },
+        ];
+        assert_eq!(
+            duplicate_target.validate(),
+            Err(ContextValidationError::UnsortedOrDuplicate(
+                "ranking_evidence"
+            ))
         );
     }
 }
