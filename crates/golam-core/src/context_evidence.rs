@@ -317,9 +317,9 @@ impl fmt::Display for ContextValidationError {
         match self {
             Self::InvalidFreshnessPolicy => f.write_str("freshness policy must be finite"),
             Self::StaleEvidence(_) => f.write_str("context evidence is stale or from the future"),
-            Self::IncompatibleSourceAuthority => {
-                f.write_str("context evidence source kind cannot claim the selected authority class")
-            }
+            Self::IncompatibleSourceAuthority => f.write_str(
+                "context evidence source kind cannot claim the selected authority class",
+            ),
             Self::EmptyRequirementPolicy => {
                 f.write_str("evidence requirement must allow source and authority classes")
             }
