@@ -55,7 +55,7 @@ pub enum LocalFileReadError {
     InvalidBounds,
     UnsupportedFileKind(ObservedFileKind),
     SizeLimitExceeded {
-        identity: ResolvedTargetIdentity,
+        identity: Box<ResolvedTargetIdentity>,
         observed: u64,
         limit: u64,
     },
@@ -131,7 +131,7 @@ pub fn stat_regular_file(
     }
     if metadata.len() > bounds.max_bytes {
         return Err(LocalFileReadError::SizeLimitExceeded {
-            identity,
+            identity: Box::new(identity),
             observed: metadata.len(),
             limit: bounds.max_bytes,
         });
@@ -195,7 +195,7 @@ where
     }
     if opened_metadata.len() > bounds.max_bytes {
         return Err(LocalFileReadError::SizeLimitExceeded {
-            identity: initial.identity.clone(),
+            identity: Box::new(initial.identity.clone()),
             observed: opened_metadata.len(),
             limit: bounds.max_bytes,
         });
