@@ -23,28 +23,7 @@ jobs:
       - name: Normalize, qualify, and push exact status slice
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('crates/golamd/src/git_status.rs')
-          text = path.read_text()
-          old = '''                ObservedFileKind::Directory => {
-                    if !tracked.iter().any(|tracked_path| {
-                        *tracked_path == path || tracked_path.starts_with(&(path.clone() + "/"))
-                    }) {
-                        pending.push_back((path, identity, depth + 1));
-                    } else {
-                        pending.push_back((path, identity, depth + 1));
-                    }
-                }
-'''
-          new = '''                ObservedFileKind::Directory => {
-                    pending.push_back((path, identity, depth + 1));
-                }
-'''
-          if text.count(old) != 1:
-              raise SystemExit(f'expected exactly one redundant directory branch, found {text.count(old)}')
-          path.write_text(text.replace(old, new, 1))
-          PY
+          python -c 'from pathlib import Path; p=Path("crates/golamd/src/git_status.rs"); s=p.read_text(); old="                ObservedFileKind::Directory => {\n                    if !tracked.iter().any(|tracked_path| {\n                        *tracked_path == path || tracked_path.starts_with(&(path.clone() + \"/\"))\n                    }) {\n                        pending.push_back((path, identity, depth + 1));\n                    } else {\n                        pending.push_back((path, identity, depth + 1));\n                    }\n                }\n"; new="                ObservedFileKind::Directory => {\n                    pending.push_back((path, identity, depth + 1));\n                }\n"; assert s.count(old)==1, s.count(old); p.write_text(s.replace(old,new,1))'
           cargo +1.98.0 fmt --all
           cargo +1.98.0 fmt --all -- --check
           cargo +1.98.0 clippy --locked -p golamd --all-targets -- -D warnings
