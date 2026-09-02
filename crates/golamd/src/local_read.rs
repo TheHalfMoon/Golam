@@ -224,10 +224,16 @@ fn require_within_duration(
 #[cfg(any(target_os = "linux", target_os = "android"))]
 const O_NOFOLLOW_FLAG: i32 = 0x0002_0000;
 
-#[cfg(all(unix, not(any(target_os = "linux", target_os = "android"))))]
+#[cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd"))]
 const O_NOFOLLOW_FLAG: i32 = 0x0000_0100;
 
-#[cfg(unix)]
+#[cfg(any(
+    target_os = "linux",
+    target_os = "android",
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "freebsd"
+))]
 fn open_read_only_no_follow(path: &Path) -> io::Result<fs::File> {
     use std::os::unix::fs::OpenOptionsExt;
 
@@ -235,6 +241,23 @@ fn open_read_only_no_follow(path: &Path) -> io::Result<fs::File> {
         .read(true)
         .custom_flags(O_NOFOLLOW_FLAG)
         .open(path)
+}
+
+#[cfg(all(
+    unix,
+    not(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd"
+    ))
+))]
+fn open_read_only_no_follow(_path: &Path) -> io::Result<fs::File> {
+    Err(io::Error::new(
+        io::ErrorKind::Unsupported,
+        "bounded no-follow local file reads are unqualified on this Unix target",
+    ))
 }
 
 #[cfg(windows)]
