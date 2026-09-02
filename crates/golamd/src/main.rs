@@ -9,6 +9,7 @@ pub mod git_pack;
 pub mod git_read;
 pub mod git_read_budget;
 pub mod git_sha1;
+pub mod git_status;
 pub mod harness;
 pub mod local_fs;
 pub mod local_read;
