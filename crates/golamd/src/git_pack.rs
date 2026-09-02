@@ -170,7 +170,8 @@ pub fn parse_pack_index_v2(
         *slot = value;
         previous = value;
     }
-    let object_count = usize::try_from(fanout[255]).map_err(|_| GitPackError::ObjectLimitExceeded)?;
+    let object_count =
+        usize::try_from(fanout[255]).map_err(|_| GitPackError::ObjectLimitExceeded)?;
     if object_count > bounds.max_objects {
         return Err(GitPackError::ObjectLimitExceeded);
     }
@@ -394,7 +395,8 @@ fn resolve_entry(
 
     let result = (|| {
         let entry_end = lookup.end_for(index_entry.offset)?;
-        let start = usize::try_from(index_entry.offset).map_err(|_| GitPackError::PackOffsetInvalid)?;
+        let start =
+            usize::try_from(index_entry.offset).map_err(|_| GitPackError::PackOffsetInvalid)?;
         let end = usize::try_from(entry_end).map_err(|_| GitPackError::PackOffsetInvalid)?;
         let entry_bytes = pack
             .get(start..end)
@@ -403,7 +405,8 @@ fn resolve_entry(
             return Err(GitPackError::PackedEntryCrcMismatch);
         }
 
-        let header = parse_pack_entry_header(entry_bytes, index_entry.offset, bounds.max_object_bytes)?;
+        let header =
+            parse_pack_entry_header(entry_bytes, index_entry.offset, bounds.max_object_bytes)?;
         let (kind, body) = match header.representation {
             PackRepresentation::Base(kind) => {
                 let (body, consumed) = inflate_one_zlib(
@@ -529,7 +532,8 @@ fn parse_pack_entry_header(
             .ok_or(GitPackError::InvalidPackObjectHeader)?;
         shift += 7;
     }
-    let representation_size = usize::try_from(size).map_err(|_| GitPackError::ObjectSizeLimitExceeded)?;
+    let representation_size =
+        usize::try_from(size).map_err(|_| GitPackError::ObjectSizeLimitExceeded)?;
     if representation_size > max_object_bytes {
         return Err(GitPackError::ObjectSizeLimitExceeded);
     }
@@ -582,7 +586,9 @@ fn parse_ofs_delta_distance(bytes: &[u8]) -> Result<(u64, usize), GitPackError> 
         if consumed >= 10 {
             return Err(GitPackError::InvalidOfsDelta);
         }
-        current = *bytes.get(consumed).ok_or(GitPackError::TruncatedPackEntry)?;
+        current = *bytes
+            .get(consumed)
+            .ok_or(GitPackError::TruncatedPackEntry)?;
         consumed += 1;
         value = value
             .checked_add(1)
@@ -654,7 +660,8 @@ fn apply_delta(base: &[u8], delta: &[u8], max_output: usize) -> Result<Vec<u8>, 
         return Err(GitPackError::DeltaBaseSizeMismatch);
     }
     let target_size = read_delta_varint(delta, &mut cursor)?;
-    let target_size = usize::try_from(target_size).map_err(|_| GitPackError::ObjectSizeLimitExceeded)?;
+    let target_size =
+        usize::try_from(target_size).map_err(|_| GitPackError::ObjectSizeLimitExceeded)?;
     if target_size > max_output {
         return Err(GitPackError::ObjectSizeLimitExceeded);
     }
@@ -668,14 +675,18 @@ fn apply_delta(base: &[u8], delta: &[u8], max_output: usize) -> Result<Vec<u8>, 
             let mut copy_size = 0_u64;
             for bit in 0..4 {
                 if opcode & (1 << bit) != 0 {
-                    let byte = *delta.get(cursor).ok_or(GitPackError::InvalidDeltaInstruction)?;
+                    let byte = *delta
+                        .get(cursor)
+                        .ok_or(GitPackError::InvalidDeltaInstruction)?;
                     cursor += 1;
                     copy_offset |= u64::from(byte) << (bit * 8);
                 }
             }
             for bit in 0..3 {
                 if opcode & (1 << (4 + bit)) != 0 {
-                    let byte = *delta.get(cursor).ok_or(GitPackError::InvalidDeltaInstruction)?;
+                    let byte = *delta
+                        .get(cursor)
+                        .ok_or(GitPackError::InvalidDeltaInstruction)?;
                     cursor += 1;
                     copy_size |= u64::from(byte) << (bit * 8);
                 }
@@ -683,8 +694,10 @@ fn apply_delta(base: &[u8], delta: &[u8], max_output: usize) -> Result<Vec<u8>, 
             if copy_size == 0 {
                 copy_size = 0x1_0000;
             }
-            let start = usize::try_from(copy_offset).map_err(|_| GitPackError::InvalidDeltaInstruction)?;
-            let count = usize::try_from(copy_size).map_err(|_| GitPackError::InvalidDeltaInstruction)?;
+            let start =
+                usize::try_from(copy_offset).map_err(|_| GitPackError::InvalidDeltaInstruction)?;
+            let count =
+                usize::try_from(copy_size).map_err(|_| GitPackError::InvalidDeltaInstruction)?;
             let end = start
                 .checked_add(count)
                 .ok_or(GitPackError::InvalidDeltaInstruction)?;
@@ -735,10 +748,7 @@ fn read_delta_varint(bytes: &[u8], cursor: &mut usize) -> Result<u64, GitPackErr
     Err(GitPackError::InvalidDeltaHeader)
 }
 
-fn canonical_object_id(
-    kind: PackedObjectKind,
-    body: &[u8],
-) -> Result<PackObjectId, GitPackError> {
+fn canonical_object_id(kind: PackedObjectKind, body: &[u8]) -> Result<PackObjectId, GitPackError> {
     let header = format!("{} {}\0", kind.canonical_name(), body.len());
     let mut sha1 = GitObjectSha1::new();
     sha1.update(header.as_bytes())?;
@@ -826,46 +836,85 @@ pub enum GitPackError {
 impl fmt::Display for GitPackError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidBounds => f.write_str("Git pack bounds exceed the frozen first-profile limits"),
+            Self::InvalidBounds => {
+                f.write_str("Git pack bounds exceed the frozen first-profile limits")
+            }
             Self::IndexByteLimitExceeded => f.write_str("Git pack index byte limit exceeded"),
             Self::PackByteLimitExceeded => f.write_str("Git pack byte limit exceeded"),
             Self::TruncatedIndex => f.write_str("Git pack index is truncated"),
             Self::InvalidIndexMagic => f.write_str("Git pack index v2 magic is invalid"),
-            Self::UnsupportedIndexVersion(version) => write!(f, "unsupported Git pack index version: {version}"),
+            Self::UnsupportedIndexVersion(version) => {
+                write!(f, "unsupported Git pack index version: {version}")
+            }
             Self::IndexChecksumMismatch => f.write_str("Git pack index SHA-1 checksum mismatch"),
             Self::IndexTrailingData => f.write_str("Git pack index contains trailing data"),
             Self::InvalidFanout => f.write_str("Git pack index fanout table is inconsistent"),
             Self::ObjectLimitExceeded => f.write_str("Git pack object limit exceeded"),
-            Self::ObjectIdsNotStrictlySorted => f.write_str("Git pack index object ids are not strictly sorted"),
+            Self::ObjectIdsNotStrictlySorted => {
+                f.write_str("Git pack index object ids are not strictly sorted")
+            }
             Self::OffsetTableInvalid => f.write_str("Git pack index offset table is invalid"),
             Self::TruncatedPack => f.write_str("Git pack file is truncated"),
             Self::InvalidPackMagic => f.write_str("Git pack magic is invalid"),
-            Self::UnsupportedPackVersion(version) => write!(f, "unsupported Git pack version: {version}"),
-            Self::PackObjectCountMismatch => f.write_str("Git pack object count does not match its index"),
+            Self::UnsupportedPackVersion(version) => {
+                write!(f, "unsupported Git pack version: {version}")
+            }
+            Self::PackObjectCountMismatch => {
+                f.write_str("Git pack object count does not match its index")
+            }
             Self::PackChecksumMismatch => f.write_str("Git pack SHA-1 checksum mismatch"),
-            Self::PackIndexChecksumMismatch => f.write_str("Git pack checksum does not match pack index binding"),
-            Self::PackOffsetInvalid => f.write_str("Git pack index contains an invalid or duplicate object offset"),
-            Self::MissingPackedObject(_) => f.write_str("requested object is absent from this Git pack index"),
-            Self::PackedEntryCrcMismatch => f.write_str("Git packed object CRC32 does not match pack index"),
+            Self::PackIndexChecksumMismatch => {
+                f.write_str("Git pack checksum does not match pack index binding")
+            }
+            Self::PackOffsetInvalid => {
+                f.write_str("Git pack index contains an invalid or duplicate object offset")
+            }
+            Self::MissingPackedObject(_) => {
+                f.write_str("requested object is absent from this Git pack index")
+            }
+            Self::PackedEntryCrcMismatch => {
+                f.write_str("Git packed object CRC32 does not match pack index")
+            }
             Self::TruncatedPackEntry => f.write_str("Git packed object entry is truncated"),
             Self::InvalidPackObjectHeader => f.write_str("Git packed object header is invalid"),
-            Self::UnsupportedPackObjectType(kind) => write!(f, "unsupported Git packed object type: {kind}"),
-            Self::PackedRepresentationSizeMismatch => f.write_str("Git packed representation size does not match its header"),
+            Self::UnsupportedPackObjectType(kind) => {
+                write!(f, "unsupported Git packed object type: {kind}")
+            }
+            Self::PackedRepresentationSizeMismatch => {
+                f.write_str("Git packed representation size does not match its header")
+            }
             Self::ObjectSizeLimitExceeded => f.write_str("Git packed object size limit exceeded"),
             Self::InvalidOfsDelta => f.write_str("Git OFS_DELTA base distance is invalid"),
-            Self::MissingDeltaBaseOffset(offset) => write!(f, "Git OFS_DELTA base offset is absent from pack index: {offset}"),
-            Self::ThinPackUnsupported(_) => f.write_str("Git REF_DELTA refers outside the local pack; thin packs are unsupported"),
+            Self::MissingDeltaBaseOffset(offset) => write!(
+                f,
+                "Git OFS_DELTA base offset is absent from pack index: {offset}"
+            ),
+            Self::ThinPackUnsupported(_) => f.write_str(
+                "Git REF_DELTA refers outside the local pack; thin packs are unsupported",
+            ),
             Self::DeltaDepthExceeded => f.write_str("Git delta chain depth limit exceeded"),
             Self::DeltaCycle => f.write_str("Git delta cycle detected"),
-            Self::Decompression(error) => write!(f, "bounded Git pack decompression failed: {error}"),
+            Self::Decompression(error) => {
+                write!(f, "bounded Git pack decompression failed: {error}")
+            }
             Self::DecompressionData => f.write_str("Git packed object contains invalid zlib data"),
-            Self::DecompressionTruncated => f.write_str("Git packed object zlib stream is truncated"),
-            Self::DecompressionStalled => f.write_str("Git packed object decompression made no progress"),
+            Self::DecompressionTruncated => {
+                f.write_str("Git packed object zlib stream is truncated")
+            }
+            Self::DecompressionStalled => {
+                f.write_str("Git packed object decompression made no progress")
+            }
             Self::InvalidDeltaHeader => f.write_str("Git delta header is invalid"),
             Self::InvalidDeltaInstruction => f.write_str("Git delta instruction is invalid"),
-            Self::DeltaBaseSizeMismatch => f.write_str("Git delta source size does not match reconstructed base"),
-            Self::DeltaTargetSizeMismatch => f.write_str("Git delta output size does not match declared target"),
-            Self::PackedObjectHashMismatch => f.write_str("reconstructed Git packed object SHA-1 does not match index object id"),
+            Self::DeltaBaseSizeMismatch => {
+                f.write_str("Git delta source size does not match reconstructed base")
+            }
+            Self::DeltaTargetSizeMismatch => {
+                f.write_str("Git delta output size does not match declared target")
+            }
+            Self::PackedObjectHashMismatch => {
+                f.write_str("reconstructed Git packed object SHA-1 does not match index object id")
+            }
             Self::Sha1(error) => write!(f, "Git pack SHA-1 failed: {error}"),
         }
     }
@@ -1066,7 +1115,10 @@ mod tests {
             max_objects: 0,
             ..GitPackBounds::default()
         };
-        assert!(matches!(bounds.validate(), Err(GitPackError::InvalidBounds)));
+        assert!(matches!(
+            bounds.validate(),
+            Err(GitPackError::InvalidBounds)
+        ));
     }
 
     struct PackFixture {
@@ -1092,10 +1144,7 @@ mod tests {
             let id = canonical_object_id(kind, body).unwrap();
             let pack_checksum = GitObjectSha1::digest(&pack).unwrap();
             pack.extend_from_slice(&pack_checksum);
-            let index = build_index(
-                &[Record { id, offset, crc }],
-                pack_checksum,
-            );
+            let index = build_index(&[Record { id, offset, crc }], pack_checksum);
             Self {
                 pack,
                 index,
@@ -1115,7 +1164,14 @@ mod tests {
             pack.extend_from_slice(&base_entry);
 
             let delta_offset = pack.len() as u32;
-            let mut delta = vec![base.len() as u8, target.len() as u8, 0x90, base.len() as u8, 1, b'!'];
+            let mut delta = vec![
+                base.len() as u8,
+                target.len() as u8,
+                0x90,
+                base.len() as u8,
+                1,
+                b'!',
+            ];
             let mut delta_entry = encode_pack_header(6, delta.len());
             let distance = delta_offset - base_offset;
             assert!(distance < 128);
