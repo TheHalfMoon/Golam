@@ -223,11 +223,7 @@ pub fn parse_pack_index_v2(
 
     let mut referenced_large = HashSet::with_capacity(large_offset_count);
     let mut entries = Vec::with_capacity(object_count);
-    for ((object_id, crc32), raw_offset) in object_ids
-        .into_iter()
-        .zip(crcs.into_iter())
-        .zip(raw_offsets.into_iter())
-    {
+    for ((object_id, crc32), raw_offset) in object_ids.into_iter().zip(crcs).zip(raw_offsets) {
         let offset = if raw_offset & 0x8000_0000 == 0 {
             u64::from(raw_offset)
         } else {
@@ -618,7 +614,7 @@ fn inflate_one_zlib(
             .min(compressed.len());
         let input = &compressed[input_offset..input_end];
         let remaining = max_output_bytes.saturating_sub(output.len());
-        let output_len = remaining.min(DECOMPRESSION_OUTPUT_QUANTUM_BYTES).max(1);
+        let output_len = remaining.clamp(1, DECOMPRESSION_OUTPUT_QUANTUM_BYTES);
         let mut chunk = vec![0_u8; output_len];
         let result = deadline.run_quantum(input, &mut chunk, |input, output| {
             inflate(&mut state, input, output, MZFlush::None)
