@@ -1,6 +1,6 @@
 # T005-040 — Minimal Git Read Primitive Admission Candidate
 
-**Status**: `READY_FOR_EXACT_HEAD_CI_AND_INDEPENDENT_REVIEW_NOT_ADMITTED`
+**Status**: `READY_FOR_CORRECTED_EXACT_HEAD_CI_AND_INDEPENDENT_REVIEW_NOT_ADMITTED`
 
 **Task**: T005-040 bounded Git read evidence
 
@@ -28,7 +28,7 @@ GIT_NETWORK=DENIED
 GIT_MUTATION=DENIED
 ```
 
-This record is an admission candidate only. No dependency is admitted and no Cargo file is changed by this commit. Admission requires fresh exact-head CI followed by substantive independent semantic/security review on the unchanged exact head.
+This record is an admission candidate only. No dependency is admitted and no Cargo file is changed by this record. The first independent review of exact head `c8e4303f8986d1de220ca42f3abca0ace498003d` identified a material decompression-time contract gap, so that head did **not** qualify admission. The candidate now requires fresh exact-head CI and fresh substantive independent semantic/security review after the forward-only repair.
 
 ## `miniz_oxide 0.9.1`
 
@@ -93,7 +93,7 @@ adler2 = { version = "=2.0.1", default-features = false }
 
 The exact source documents zero ordinary dependencies and zero unsafe code, declares `#![forbid(unsafe_code)]`, and becomes `no_std` when the default `std` feature is disabled. Its only manifest dependency is the optional rustc-standard-library integration package, which is not selected. No Cargo build script, process, network, FFI, native-code, telemetry or filesystem-mutation surface is selected.
 
-Although `adler2` is a transitive dependency of the selected `miniz_oxide` posture, Golam will pin it directly to `=2.0.1` so the reviewed closure cannot drift within `miniz_oxide`'s `2.0` semver range.
+Although `adler2` is a transitive dependency of the selected `miniz_oxide` posture, Golam will pin it directly to `=2.0.1` so the reviewed closure cannot drift within `miniz_oxide`'s `2.0` semver range. This pin prevents version drift; selected-feature unification is still verified from the eventual exact lock/feature graph before implementation qualification.
 
 ## Exact selected external closure
 
@@ -145,17 +145,24 @@ SHA1_SIGNATURE_PRIMITIVE=NO
 
 ## Bounded decompression adapter contract
 
-Golam may call only the streaming inflate surface with caller-provided input/output slices. The adapter MUST enforce the frozen Git-read resource limits before and during decompression.
+Golam may call only the synchronous streaming inflate surface with caller-provided input/output slices. A single in-flight `miniz_oxide::inflate::stream::inflate` call is **non-preemptive**; Golam does not claim it can cancel arbitrary work inside that synchronous call. Instead, every call is enclosed by the repository-owned `git_read_budget::DecompressionDeadline` guard with bounded work quanta and monotonic deadline checks.
 
 Required invariants:
 
 ```text
 INPUT=CALLER_BOUNDED
 OUTPUT=CALLER_BOUNDED_CHUNKS
+DECOMPRESSION_INPUT_QUANTUM_BYTES=65536
+DECOMPRESSION_OUTPUT_QUANTUM_BYTES=65536
 MAX_COMPRESSED_BYTES=FROZEN_PROFILE_CAP
 MAX_DECOMPRESSED_BYTES=FROZEN_PROFILE_CAP
 OPERATION_DECOMPRESSED_BYTES=FROZEN_PROFILE_CAP
-TIME_BUDGET=FROZEN_PROFILE_CAP
+DEADLINE_CLOCK=MONOTONIC_INSTANT
+DEADLINE_CHECK=IMMEDIATELY_BEFORE_EVERY_INFLATE_CALL
+DEADLINE_CHECK=IMMEDIATELY_AFTER_EVERY_INFLATE_CALL
+IN_FLIGHT_SYNCHRONOUS_CALL=NON_PREEMPTIVE
+POST_CALL_DEADLINE_OVERRUN=FAIL_CLOSED_DISCARD_STEP_RESULT
+EXPIRED_BETWEEN_CHUNKS=REJECT_NEXT_CALL_BEFORE_INFLATE
 ALLOCATING_DECOMPRESS_TO_VEC_HELPERS=DENIED
 DEFLATE_COMPRESSION_PATH=NOT_COMPILED
 STATE_REUSE_FOR_UNTRUSTED_INPUT=ZEROING_RESET_OR_NEW_STATE
@@ -163,7 +170,17 @@ PARTIAL_OVERSIZE_OBJECT=NOT_TRUSTED
 ZLIB_CHECKSUM=VALIDATED
 ```
 
-If the streaming API cannot enforce any required bound without an unbounded allocation, T005-040 fails closed and this primitive admission is rejected.
+The 64 KiB input and output caps are the maximum synchronous work quantum passed into one external inflate call. The total operation deadline remains the frozen `DEFAULT_GIT_READ_TIME_BUDGET_MS` / `MAX_GIT_READ_TIME_BUDGET_MS`; a call that returns after the deadline has crossed is rejected immediately and its step result is not trusted.
+
+The Golam-owned guard is implemented **before dependency admission** so the caller-side behavior can be qualified without importing the candidate crate. Its focused tests require:
+
+1. an oversized synchronous work quantum is rejected before the callback is invoked;
+2. a deadline that expires between chunks rejects the next chunk before callback invocation;
+3. a non-preemptive in-flight callback that crosses the deadline is rejected immediately after it returns.
+
+After external primitive admission, the actual `miniz_oxide` adapter MUST route every inflate call through this same guard. Any direct call that bypasses the guard invalidates qualification.
+
+If the selected API cannot operate within these byte/work/deadline constraints without unbounded allocation, T005-040 fails closed and this primitive candidate is rejected.
 
 ## Process, network, filesystem and environment posture
 
@@ -194,14 +211,14 @@ This record does not redistribute upstream source inside Golam and does not vend
 
 ## Independent review gate
 
-Before either dependency may be written to `Cargo.toml` or `Cargo.lock`, a substantive independent reviewer must inspect this exact candidate head after exact-head CI and verify at minimum:
+Before either dependency may be written to `Cargo.toml` or `Cargo.lock`, a substantive independent reviewer must inspect the corrected exact candidate head after exact-head CI and verify at minimum:
 
 1. exact package/version/checksum/VCS binding;
 2. selected feature and transitive closure accuracy;
 3. license/notices posture;
 4. no selected unsafe/FFI/native/build-script/process/network/telemetry surface;
-5. streaming decompression bounds and denial of allocating convenience APIs;
-6. direct `adler2` pin prevents transitive drift;
+5. bounded synchronous decompression quanta, before/after monotonic deadline checks, non-preemptive in-flight semantics, and the focused expiry tests;
+6. direct `adler2` pin prevents version drift and eventual selected features remain exact;
 7. Golam-owned SHA-1 is the narrower reviewed choice and remains Git-identity-only;
 8. no Git mutation, helper, hook, filter, credential, remote or process authority is introduced;
 9. no privilege or authority can be minted from primitive output.
@@ -211,12 +228,13 @@ Status-only, summary-only, owner/self-review, stale-head review, CI-only output,
 ## Current disposition
 
 ```text
-T005_040=BLOCKED_PENDING_EXACT_HEAD_CI_AND_INDEPENDENT_PRIMITIVE_REVIEW
-PRIMITIVE_ADMISSION_CANDIDATE=READY_FOR_REVIEW
+T005_040=BLOCKED_PENDING_CORRECTED_EXACT_HEAD_CI_AND_INDEPENDENT_PRIMITIVE_REVIEW
+PRIMITIVE_ADMISSION_CANDIDATE=READY_FOR_REQUALIFICATION_NOT_ADMITTED
 MINIZ_OXIDE_0_9_1_ADMITTED=NO
 ADLER2_2_0_1_ADMITTED=NO
 EXTERNAL_SHA1_DEPENDENCY=NO
 GOLAM_OWNED_SHA1_SELECTED=YES_PENDING_REVIEW
+DECOMPRESSION_TIME_GUARD_IMPLEMENTED_FOR_QUALIFICATION=YES
 NEW_DEPENDENCY_ADDED=NO
 CARGO_LOCK_CHANGED=NO
 PRODUCTION_NATIVE_EXECUTOR_ADMITTED=NO
@@ -224,5 +242,5 @@ GIT_CHILD_PROCESS_PHASE_D=DENIED_NATIVE_UNQUALIFIED
 GIT_NETWORK_PHASE_D=DENIED
 GIT_MUTATION_T005_040=DENIED
 WAIVER_TAKEN=NO
-NEXT_GATE=EXACT_HEAD_CI_THEN_INDEPENDENT_SEMANTIC_SECURITY_REVIEW
+NEXT_GATE=CORRECTED_EXACT_HEAD_CI_THEN_FRESH_INDEPENDENT_SEMANTIC_SECURITY_REVIEW
 ```
