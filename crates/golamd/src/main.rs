@@ -3,6 +3,7 @@
 pub mod benchmark;
 mod connection;
 mod deadline_io;
+pub mod git_read;
 pub mod git_read_budget;
 pub mod git_sha1;
 pub mod harness;
