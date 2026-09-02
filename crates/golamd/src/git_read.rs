@@ -794,11 +794,27 @@ fn hex_nibble(byte: u8) -> Result<u8, GitReadError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use golam_core::tool_request::ResourceClassId;
-    use std::fs;
-    use std::path::PathBuf;
-    use std::sync::atomic::{AtomicU64, Ordering};
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd"
+    ))]
+    use {
+        golam_core::tool_request::ResourceClassId,
+        std::fs,
+        std::path::PathBuf,
+        std::sync::atomic::{AtomicU64, Ordering},
+    };
 
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd"
+    ))]
     static NEXT_TEMP: AtomicU64 = AtomicU64::new(1);
     const EMPTY_BLOB_ZLIB: &[u8] = &[120, 156, 75, 202, 201, 79, 82, 48, 96, 0, 0, 9, 176, 1, 240];
     const HELLO_BLOB_ZLIB: &[u8] = &[
@@ -966,6 +982,13 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd"
+    ))]
     fn fixture_root() -> PathBuf {
         let serial = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
         let root =
