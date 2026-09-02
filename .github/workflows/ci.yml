@@ -38,6 +38,7 @@ jobs:
               text = text.replace(old, new, 1)
           path.write_text(text)
           PY
+          cargo +1.98.0 fmt --all
           cargo +1.98.0 fmt --all -- --check
           cargo +1.98.0 clippy --locked -p golamd --all-targets -- -D warnings
           cargo +1.98.0 test --locked -p golamd --bin golamd git_pack::tests::
