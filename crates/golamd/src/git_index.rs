@@ -152,8 +152,7 @@ pub fn parse_git_index(bytes: &[u8], bounds: GitIndexBounds) -> Result<GitIndex,
             .try_into()
             .map_err(|_| GitIndexError::Truncated)?;
         let size = cursor.read_u32()?;
-        let size_usize =
-            usize::try_from(size).map_err(|_| GitIndexError::ExtensionSizeOverflow)?;
+        let size_usize = usize::try_from(size).map_err(|_| GitIndexError::ExtensionSizeOverflow)?;
         let _data = cursor.take(size_usize)?;
 
         match &signature {
@@ -215,10 +214,7 @@ fn parse_entry(
         if extended_flags & !0x6000 != 0 {
             return Err(GitIndexError::InvalidExtendedFlags);
         }
-        (
-            extended_flags & 0x4000 != 0,
-            extended_flags & 0x2000 != 0,
-        )
+        (extended_flags & 0x4000 != 0, extended_flags & 0x2000 != 0)
     } else {
         (false, false)
     };
@@ -369,7 +365,9 @@ impl fmt::Display for GitIndexError {
                 f.write_str("Git index v3 entry contains reserved extended flag bits")
             }
             Self::PathLimitExceeded => f.write_str("Git index path length limit exceeded"),
-            Self::InvalidPath => f.write_str("Git index entry path is invalid for the first profile"),
+            Self::InvalidPath => {
+                f.write_str("Git index entry path is invalid for the first profile")
+            }
             Self::NonCanonicalPathLength => {
                 f.write_str("Git index entry path length flags are non-canonical")
             }
