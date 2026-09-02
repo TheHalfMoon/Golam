@@ -336,6 +336,15 @@ impl LocalFsResolver {
     }
 }
 
+pub(crate) fn metadata_matches_resolved_identity(
+    identity: &ResolvedTargetIdentity,
+    metadata: &fs::Metadata,
+) -> Result<bool, LocalFsResolutionError> {
+    let path = Path::new(identity.normalized_path.as_str());
+    Ok(identity.resolved_target_identity == Some(identity_digest(path, metadata)?)
+        && identity.observed_metadata_digest == metadata_digest(path, metadata)?)
+}
+
 fn normalize_relative(value: &str) -> Result<PathBuf, LocalFsResolutionError> {
     let path = Path::new(value);
     if path.is_absolute() {
