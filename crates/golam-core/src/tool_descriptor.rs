@@ -134,13 +134,6 @@ impl ToolOperationClass {
             Self::Read | Self::List | Self::Search | Self::ContextCompile | Self::GitRead
         )
     }
-
-    const fn is_mutating(self) -> bool {
-        matches!(
-            self,
-            Self::Mutation | Self::GitMutation | Self::MemoryMutation
-        )
-    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -363,11 +356,11 @@ impl ToolDescriptor {
                 "read-only operation must use ReadOnly effect semantics",
             ));
         }
-        if self.operation_class.is_mutating()
+        if !self.operation_class.is_read_only()
             && self.effect_semantics == ToolEffectSemantics::ReadOnly
         {
             return Err(ToolValidationError::IncompatibleDescriptor(
-                "mutating operation cannot use ReadOnly effect semantics",
+                "non-read-only operation cannot use ReadOnly effect semantics",
             ));
         }
         if self.operation_class == ToolOperationClass::ProcessExecution
@@ -567,6 +560,15 @@ mod tests {
             descriptor.validate(),
             Err(ToolValidationError::MissingRequirement(
                 "target_identity_rules"
+            ))
+        );
+
+        descriptor = read_descriptor();
+        descriptor.operation_class = ToolOperationClass::ProtocolDispatch;
+        assert_eq!(
+            descriptor.validate(),
+            Err(ToolValidationError::IncompatibleDescriptor(
+                "non-read-only operation cannot use ReadOnly effect semantics"
             ))
         );
     }
