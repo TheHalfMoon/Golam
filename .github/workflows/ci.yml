@@ -42,29 +42,7 @@ jobs:
           marker = "    fn resolver(root: &Path) -> LocalFsResolver {\n"
           if text.count(marker) != 1:
               raise SystemExit('resolver marker not unique')
-          helper = '''    fn zlib_store(data: &[u8]) -> Vec<u8> {
-        assert!(data.len() <= u16::MAX as usize);
-        let len = data.len() as u16;
-        let mut output = vec![0x78, 0x01, 0x01];
-        output.extend_from_slice(&len.to_le_bytes());
-        output.extend_from_slice(&(!len).to_le_bytes());
-        output.extend_from_slice(data);
-        output.extend_from_slice(&adler32(data).to_be_bytes());
-        output
-    }
-
-    fn adler32(data: &[u8]) -> u32 {
-        const MOD: u32 = 65_521;
-        let mut a = 1_u32;
-        let mut b = 0_u32;
-        for byte in data {
-            a = (a + u32::from(*byte)) % MOD;
-            b = (b + a) % MOD;
-        }
-        b << 16 | a
-    }
-
-'''
+          helper = "    fn zlib_store(data: &[u8]) -> Vec<u8> {\n        assert!(data.len() <= u16::MAX as usize);\n        let len = data.len() as u16;\n        let mut output = vec![0x78, 0x01, 0x01];\n        output.extend_from_slice(&len.to_le_bytes());\n        output.extend_from_slice(&(!len).to_le_bytes());\n        output.extend_from_slice(data);\n        output.extend_from_slice(&adler32(data).to_be_bytes());\n        output\n    }\n\n    fn adler32(data: &[u8]) -> u32 {\n        const MOD: u32 = 65_521;\n        let mut a = 1_u32;\n        let mut b = 0_u32;\n        for byte in data {\n            a = (a + u32::from(*byte)) % MOD;\n            b = (b + a) % MOD;\n        }\n        b << 16 | a\n    }\n\n"
           text = text.replace(marker, helper + marker, 1)
           path.write_text(text)
           PY
