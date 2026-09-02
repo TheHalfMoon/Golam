@@ -43,7 +43,8 @@ impl GitObjectSha1 {
     }
 
     pub fn update(&mut self, mut input: &[u8]) -> Result<(), GitObjectSha1Error> {
-        let input_len = u64::try_from(input.len()).map_err(|_| GitObjectSha1Error::MessageTooLong)?;
+        let input_len =
+            u64::try_from(input.len()).map_err(|_| GitObjectSha1Error::MessageTooLong)?;
         self.total_len_bytes = self
             .total_len_bytes
             .checked_add(input_len)
@@ -169,8 +170,12 @@ pub enum GitObjectSha1Error {
 impl fmt::Display for GitObjectSha1Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MessageTooLong => f.write_str("Git object SHA-1 input length exceeds the algorithm limit"),
-            Self::InternalBlockLength => f.write_str("Git object SHA-1 internal block length invariant failed"),
+            Self::MessageTooLong => {
+                f.write_str("Git object SHA-1 input length exceeds the algorithm limit")
+            }
+            Self::InternalBlockLength => {
+                f.write_str("Git object SHA-1 internal block length invariant failed")
+            }
         }
     }
 }
@@ -183,14 +188,18 @@ mod tests {
 
     #[test]
     fn matches_published_sha1_known_answer_vectors() {
-        assert_eq!(hex(GitObjectSha1::digest(b"").unwrap()), "da39a3ee5e6b4b0d3255bfef95601890afd80709");
-        assert_eq!(hex(GitObjectSha1::digest(b"abc").unwrap()), "a9993e364706816aba3e25717850c26c9cd0d89d");
+        assert_eq!(
+            hex(GitObjectSha1::digest(b"").unwrap()),
+            "da39a3ee5e6b4b0d3255bfef95601890afd80709"
+        );
+        assert_eq!(
+            hex(GitObjectSha1::digest(b"abc").unwrap()),
+            "a9993e364706816aba3e25717850c26c9cd0d89d"
+        );
         assert_eq!(
             hex(
-                GitObjectSha1::digest(
-                    b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",
-                )
-                .unwrap()
+                GitObjectSha1::digest(b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",)
+                    .unwrap()
             ),
             "84983e441c3bd26ebaae4aa1f95129e5e54670f1"
         );
