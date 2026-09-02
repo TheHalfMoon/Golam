@@ -60,10 +60,10 @@ RUSTC_DEP_OF_STD=DISABLED
 BLOCK_BOUNDARY=DISABLED
 ```
 
-The exact manifest still has one required normal dependency under this posture:
+The exact manifest still has one required normal dependency under this posture. The candidate records the exact reviewed release rather than the broader upstream semver range:
 
 ```text
-adler2 = { version = "2.0", default-features = false }
+adler2 = { version = "=2.0.1", default-features = false }
 ```
 
 The published `miniz_oxide 0.9.1` lock resolves that requirement to:
