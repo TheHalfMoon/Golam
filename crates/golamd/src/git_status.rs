@@ -11,7 +11,9 @@ use std::time::{Duration, Instant};
 use golam_core::target_identity::ObservedFileKind;
 use golam_core::tool_request::{RequestedOperationId, RequestedTarget};
 
-use crate::git_index::{GitIndexBounds, GitIndexEntry, GitIndexError, GitIndexMode, parse_git_index};
+use crate::git_index::{
+    GitIndexBounds, GitIndexEntry, GitIndexError, GitIndexMode, parse_git_index,
+};
 use crate::git_observe::{
     GitObservationBounds, GitObservationError, GitObservationReader, GitTreeMode,
 };
@@ -111,12 +113,8 @@ pub fn observe_status(
 ) -> Result<GitStatusObservation, GitStatusError> {
     bounds.validate()?;
     let started = Instant::now();
-    let observation = GitObservationReader::open(
-        resolver,
-        operation,
-        bounds.observation,
-        observed_at_unix_ms,
-    )?;
+    let observation =
+        GitObservationReader::open(resolver, operation, bounds.observation, observed_at_unix_ms)?;
     require_time(started, bounds.max_duration)?;
 
     let index_bytes = read_file(
@@ -311,7 +309,8 @@ fn worktree_diff(
                 )?;
                 total_bytes = total_bytes
                     .checked_add(
-                        u64::try_from(read.bytes.len()).map_err(|_| GitStatusError::SizeOverflow)?,
+                        u64::try_from(read.bytes.len())
+                            .map_err(|_| GitStatusError::SizeOverflow)?,
                     )
                     .ok_or(GitStatusError::WorktreeByteLimitExceeded)?;
                 if total_bytes > bounds.max_total_worktree_bytes {
@@ -382,7 +381,8 @@ fn discover_untracked(
             RequestedTarget::new(&prefix)
                 .map_err(|_| GitStatusError::InvalidWorktreePath(prefix.clone()))?
         };
-        let current = resolver.resolve_read_target(&requested_dir, operation, observed_at_unix_ms)?;
+        let current =
+            resolver.resolve_read_target(&requested_dir, operation, observed_at_unix_ms)?;
         if current.file_kind != ObservedFileKind::Directory
             || current.resolved_target_identity != expected.resolved_target_identity
             || current.observed_metadata_digest != expected.observed_metadata_digest
@@ -419,16 +419,11 @@ fn discover_untracked(
             };
             let requested = RequestedTarget::new(&path)
                 .map_err(|_| GitStatusError::InvalidWorktreePath(path.clone()))?;
-            let identity = resolver.resolve_read_target(&requested, operation, observed_at_unix_ms)?;
+            let identity =
+                resolver.resolve_read_target(&requested, operation, observed_at_unix_ms)?;
             match identity.file_kind {
                 ObservedFileKind::Directory => {
-                    if !tracked.iter().any(|tracked_path| {
-                        *tracked_path == path || tracked_path.starts_with(&(path.clone() + "/"))
-                    }) {
-                        pending.push_back((path, identity, depth + 1));
-                    } else {
-                        pending.push_back((path, identity, depth + 1));
-                    }
+                    pending.push_back((path, identity, depth + 1));
                 }
                 ObservedFileKind::RegularFile => {
                     if !tracked.contains(path.as_str()) {
@@ -547,7 +542,9 @@ impl fmt::Display for GitStatusError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidBounds => f.write_str("Git status bounds exceed the first-profile limits"),
-            Self::InvalidInternalPath => f.write_str("Git status constructed an invalid internal path"),
+            Self::InvalidInternalPath => {
+                f.write_str("Git status constructed an invalid internal path")
+            }
             Self::InvalidWorktreePath(path) => write!(f, "Git worktree path is invalid: {path}"),
             Self::Git(error) => write!(f, "Git status repository read failed: {error}"),
             Self::Observation(error) => write!(f, "Git status object observation failed: {error}"),
@@ -557,18 +554,35 @@ impl fmt::Display for GitStatusError {
             Self::Sha1(error) => write!(f, "Git status SHA-1 failed: {error}"),
             Self::Io(error) => write!(f, "Git status filesystem I/O failed: {error}"),
             Self::MissingIndex => f.write_str("Git index is missing or not a regular file"),
-            Self::IncompleteHeadTree => f.write_str("Git HEAD tree observation was truncated; status refuses incomplete evidence"),
+            Self::IncompleteHeadTree => f.write_str(
+                "Git HEAD tree observation was truncated; status refuses incomplete evidence",
+            ),
             Self::DuplicatePath => f.write_str("Git status input contains a duplicate path"),
-            Self::NonUnicodeIndexPath => f.write_str("Git index path is non-Unicode and outside the first request profile"),
-            Self::NonUnicodeWorktreePath => f.write_str("Git worktree contains a non-Unicode path outside the first request profile"),
-            Self::UnsupportedWorktreeMode(path) => write!(f, "Git worktree verification for symlink/gitlink is not admitted: {path}"),
-            Self::UnsupportedWorktreeKind(path) => write!(f, "Git worktree contains unsupported file kind: {path}"),
+            Self::NonUnicodeIndexPath => {
+                f.write_str("Git index path is non-Unicode and outside the first request profile")
+            }
+            Self::NonUnicodeWorktreePath => f.write_str(
+                "Git worktree contains a non-Unicode path outside the first request profile",
+            ),
+            Self::UnsupportedWorktreeMode(path) => write!(
+                f,
+                "Git worktree verification for symlink/gitlink is not admitted: {path}"
+            ),
+            Self::UnsupportedWorktreeKind(path) => {
+                write!(f, "Git worktree contains unsupported file kind: {path}")
+            }
             Self::EntryLimitExceeded => f.write_str("Git status entry limit exceeded"),
-            Self::WorktreeByteLimitExceeded => f.write_str("Git status aggregate worktree byte limit exceeded"),
+            Self::WorktreeByteLimitExceeded => {
+                f.write_str("Git status aggregate worktree byte limit exceeded")
+            }
             Self::WorktreeDepthExceeded => f.write_str("Git status worktree depth limit exceeded"),
             Self::DurationLimitExceeded => f.write_str("Git status duration limit exceeded"),
-            Self::RepositoryRootChanged => f.write_str("Git worktree directory identity changed during status observation"),
-            Self::SizeOverflow => f.write_str("Git status size cannot be represented by the bounded profile"),
+            Self::RepositoryRootChanged => {
+                f.write_str("Git worktree directory identity changed during status observation")
+            }
+            Self::SizeOverflow => {
+                f.write_str("Git status size cannot be represented by the bounded profile")
+            }
         }
     }
 }
@@ -691,7 +705,10 @@ mod tests {
             intent_to_add: false,
             path: b"conflict.txt".to_vec(),
         };
-        let ours = GitIndexEntry { stage: 2, ..base.clone() };
+        let ours = GitIndexEntry {
+            stage: 2,
+            ..base.clone()
+        };
         let mut index = BTreeMap::new();
         index.insert("conflict.txt".to_owned(), vec![&base, &ours]);
         let diff = staged_diff(&BTreeMap::new(), &index, 10).unwrap();
