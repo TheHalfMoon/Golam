@@ -9,33 +9,54 @@ permissions:
   contents: read
 
 jobs:
-  repair-git-status:
-    name: repair-git-status-ubuntu
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+  rust:
+    name: rust-${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: impl/005-local-tools-context-memory
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
-      - name: Normalize, qualify, and push exact status slice
+      - name: Format
+        run: cargo +1.98.0 fmt --all -- --check
+      - name: Clippy
+        run: cargo +1.98.0 clippy --locked --workspace --all-targets -- -D warnings
+      - name: Test
+        run: cargo +1.98.0 test --locked --workspace --all-targets
+      - name: Property qualification
         run: |
-          set -euo pipefail
-          python -c 'from pathlib import Path; p=Path("crates/golamd/src/git_status.rs"); s=p.read_text(); old="                ObservedFileKind::Directory => {\n                    if !tracked.iter().any(|tracked_path| {\n                        *tracked_path == path || tracked_path.starts_with(&(path.clone() + \"/\"))\n                    }) {\n                        pending.push_back((path, identity, depth + 1));\n                    } else {\n                        pending.push_back((path, identity, depth + 1));\n                    }\n                }\n"; new="                ObservedFileKind::Directory => {\n                    pending.push_back((path, identity, depth + 1));\n                }\n"; assert s.count(old)==1, s.count(old); p.write_text(s.replace(old,new,1))'
-          cargo +1.98.0 fmt --all
-          cargo +1.98.0 fmt --all -- --check
-          cargo +1.98.0 clippy --locked -p golamd --all-targets -- -D warnings
-          cargo +1.98.0 test --locked -p golamd --bin golamd git_status::tests::
-          mapfile -t changed < <(git diff --name-only)
-          if [ "${#changed[@]}" -ne 1 ] || [ "${changed[0]}" != "crates/golamd/src/git_status.rs" ]; then
-            printf 'unexpected repair mutation set:\n'
-            printf '%s\n' "${changed[@]}"
-            exit 1
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add crates/golamd/src/git_status.rs
-          git commit -m "fix(005): qualify bounded Git status observation"
-          git push origin HEAD:impl/005-local-tools-context-memory
+          cargo +1.98.0 test --locked -p golam-effects --test qualification_properties
+          cargo +1.98.0 test --locked -p golam-ledger --test qualification_properties
+      - name: Bounded fuzz smoke
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc --test fuzz_smoke
+          cargo +1.98.0 test --locked -p golam-ledger --test fuzz_smoke
+          cargo +1.98.0 test --locked -p golam-kernel --test spec003_fuzz_smoke
+      - name: IPC transport qualification (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc unix_transport::
+      - name: IPC transport qualification (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc windows_transport::
+      - name: Authenticated daemon IPC qualification
+        run: |
+          cargo +1.98.0 test --locked -p golamd --bin golamd connection::tests::
+      - name: Adversarial authority qualification
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc --test adversarial
+          cargo +1.98.0 test --locked -p golam-kernel --test hostile_adapter
+          cargo +1.98.0 test --locked -p golam-kernel client_auth::tests::
+      - name: Build daemon for external locality observation
+        run: cargo +1.98.0 build --locked -p golamd --bin golamd
+      - name: Strict-local external network observation (Unix)
+        if: runner.os != 'Windows'
+        run: bash scripts/qualification/strict-local-no-network.sh target/debug/golamd
+      - name: Strict-local external network observation (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/qualification/strict-local-no-network.ps1 target/debug/golamd.exe
