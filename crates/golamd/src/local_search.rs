@@ -184,6 +184,7 @@ pub fn search_literal_text(
 ) -> Result<BoundedTextSearch, LocalTextSearchError> {
     bounds.validate()?;
     validate_query(query)?;
+    require_search_platform()?;
     let started = Instant::now();
 
     let walk = walk_directory(
@@ -346,6 +347,30 @@ pub fn search_literal_text(
     Ok(result)
 }
 
+#[cfg(any(
+    target_os = "linux",
+    target_os = "android",
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "freebsd"
+))]
+fn require_search_platform() -> Result<(), LocalTextSearchError> {
+    Ok(())
+}
+
+#[cfg(not(any(
+    target_os = "linux",
+    target_os = "android",
+    target_os = "macos",
+    target_os = "ios",
+    target_os = "freebsd"
+)))]
+fn require_search_platform() -> Result<(), LocalTextSearchError> {
+    Err(LocalTextSearchError::Read(
+        LocalFileReadError::UnsupportedPlatform,
+    ))
+}
+
 fn validate_query(query: &str) -> Result<(), LocalTextSearchError> {
     if query.is_empty()
         || query.len() > MAX_QUERY_BYTES
@@ -417,6 +442,13 @@ mod tests {
         }
     }
 
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd"
+    ))]
     fn basename(path: &RequestedTarget) -> String {
         Path::new(path.as_str())
             .file_name()
@@ -425,6 +457,13 @@ mod tests {
             .into_owned()
     }
 
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd"
+    ))]
     #[test]
     fn emits_deterministic_exact_match_provenance() {
         let root = unique_root();
@@ -462,6 +501,13 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd"
+    ))]
     #[test]
     fn match_limit_fails_closed() {
         let root = unique_root();
@@ -487,6 +533,13 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd"
+    ))]
     #[test]
     fn total_byte_limit_fails_before_unbounded_accumulation() {
         let root = unique_root();
@@ -517,6 +570,13 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd"
+    ))]
     #[test]
     fn non_utf8_file_is_explicitly_attested_as_skipped() {
         let root = unique_root();
@@ -543,6 +603,13 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd"
+    ))]
     #[test]
     fn oversized_file_is_attested_as_skipped_without_losing_other_results() {
         let root = unique_root();
@@ -584,6 +651,33 @@ mod tests {
                 .resolved_target_identity
                 .is_some()
         );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_search_fails_closed_before_walk_or_read() {
+        let root = unique_root();
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("note.txt"), b"needle\n").unwrap();
+        let resolver = resolver(&root);
+
+        let result = search_literal_text(
+            &resolver,
+            &RequestedTarget::new(".").unwrap(),
+            &RequestedOperationId::new("list").unwrap(),
+            &RequestedOperationId::new("read").unwrap(),
+            "needle",
+            bounds(),
+            10,
+        );
+
+        assert!(matches!(
+            result,
+            Err(LocalTextSearchError::Read(
+                LocalFileReadError::UnsupportedPlatform
+            ))
+        ));
         fs::remove_dir_all(root).unwrap();
     }
 
