@@ -35,7 +35,7 @@ jobs:
           if after.count(object_line) < 1:
               raise SystemExit('packed-ref fixture object directory line not found')
           prefix, suffix = after.split(object_line, 1)
-          refs_line = '        fs::create_dir_all(root.join(".git/refs")).unwrap();\n'
+          refs_line = '        fs::create_dir_all(root.join(".git/refs/heads")).unwrap();\n'
           if prefix.find('fn ') != -1:
               raise SystemExit('unexpected function boundary before object directory line')
           if suffix.startswith(refs_line):
