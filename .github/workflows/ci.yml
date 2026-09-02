@@ -9,6 +9,21 @@ permissions:
   contents: read
 
 jobs:
+  lockfile-evidence:
+    name: lockfile-evidence-ubuntu
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal
+      - name: Generate exact dependency lock evidence
+        run: |
+          cargo +1.98.0 generate-lockfile
+          echo 'GOLAM_LOCKFILE_BASE64_BEGIN'
+          base64 --wrap=0 Cargo.lock
+          echo
+          echo 'GOLAM_LOCKFILE_BASE64_END'
+
   rust:
     name: rust-${{ matrix.os }}
     strategy:
