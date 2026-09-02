@@ -57,11 +57,13 @@ impl GitObjectSha1 {
             self.buffer_len += take;
             input = &input[take..];
 
-            if self.buffer_len == SHA1_BLOCK_BYTES {
-                let block = self.buffer;
-                self.compress_block(&block);
-                self.buffer_len = 0;
+            if self.buffer_len < SHA1_BLOCK_BYTES {
+                return Ok(());
             }
+
+            let block = self.buffer;
+            self.compress_block(&block);
+            self.buffer_len = 0;
         }
 
         let (blocks, remainder) = input.as_chunks::<SHA1_BLOCK_BYTES>();
