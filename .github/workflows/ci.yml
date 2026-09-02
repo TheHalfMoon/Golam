@@ -27,20 +27,21 @@ jobs:
           from pathlib import Path
           path = Path('crates/golamd/src/git_read.rs')
           text = path.read_text()
-          old = '''    fn packed_ref_is_used_only_when_loose_ref_is_absent() {
-              let root = fixture_root();
-              fs::create_dir_all(root.join(".git/objects")).unwrap();
-              fs::write(root.join(".git/HEAD"), b"ref: refs/heads/main\\n").unwrap();
-          '''
-          new = '''    fn packed_ref_is_used_only_when_loose_ref_is_absent() {
-              let root = fixture_root();
-              fs::create_dir_all(root.join(".git/objects")).unwrap();
-              fs::create_dir_all(root.join(".git/refs")).unwrap();
-              fs::write(root.join(".git/HEAD"), b"ref: refs/heads/main\\n").unwrap();
-          '''
-          if text.count(old) != 1:
-              raise SystemExit(f'expected exactly one packed-ref fixture block, found {text.count(old)}')
-          path.write_text(text.replace(old, new, 1))
+          marker = 'fn packed_ref_is_used_only_when_loose_ref_is_absent() {'
+          if text.count(marker) != 1:
+              raise SystemExit(f'expected one packed-ref fixture function, found {text.count(marker)}')
+          before, after = text.split(marker, 1)
+          object_line = '        fs::create_dir_all(root.join(".git/objects")).unwrap();\n'
+          if after.count(object_line) < 1:
+              raise SystemExit('packed-ref fixture object directory line not found')
+          prefix, suffix = after.split(object_line, 1)
+          refs_line = '        fs::create_dir_all(root.join(".git/refs")).unwrap();\n'
+          if prefix.find('fn ') != -1:
+              raise SystemExit('unexpected function boundary before object directory line')
+          if suffix.startswith(refs_line):
+              raise SystemExit('packed-ref fixture already repaired')
+          text = before + marker + prefix + object_line + refs_line + suffix
+          path.write_text(text)
           PY
           cargo +1.98.0 fmt --all
           cargo +1.98.0 test --locked -p golamd --bin golamd git_read::tests::packed_ref_is_used_only_when_loose_ref_is_absent
