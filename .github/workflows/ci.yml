@@ -9,55 +9,54 @@ permissions:
   contents: read
 
 jobs:
-  repair-git-observation:
-    name: repair-git-observation-ubuntu
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+  rust:
+    name: rust-${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: impl/005-local-tools-context-memory
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
-      - name: Apply exact repairs, qualify, and push observation slice
+      - name: Format
+        run: cargo +1.98.0 fmt --all -- --check
+      - name: Clippy
+        run: cargo +1.98.0 clippy --locked --workspace --all-targets -- -D warnings
+      - name: Test
+        run: cargo +1.98.0 test --locked --workspace --all-targets
+      - name: Property qualification
         run: |
-          set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('crates/golamd/src/git_observe.rs')
-          text = path.read_text()
-          replacements = [
-              ("    resolver: &'a LocalFsResolver,\n    operation: RequestedOperationId,\n", ""),
-              ("            resolver,\n            operation: operation.clone(),\n", ""),
-              ("hex.as_bytes().chunks_exact(2).enumerate()", "hex.as_bytes().as_chunks::<2>().0.iter().enumerate()"),
-              ("    use miniz_oxide::deflate::compress_to_vec_zlib;\n", ""),
-              ("            compress_to_vec_zlib(&canonical, 6),\n", "            zlib_store(&canonical),\n"),
-              ("            b\"author\" => {\n                if author.replace(value.to_vec()).is_some() {\n                    return Err(GitObservationError::InvalidCommit);\n                }\n            }\n            b\"committer\" => {\n                if committer.replace(value.to_vec()).is_some() {\n                    return Err(GitObservationError::InvalidCommit);\n                }\n            }", "            b\"author\" if author.is_some() => {\n                return Err(GitObservationError::InvalidCommit);\n            }\n            b\"author\" => author = Some(value.to_vec()),\n            b\"committer\" if committer.is_some() => {\n                return Err(GitObservationError::InvalidCommit);\n            }\n            b\"committer\" => committer = Some(value.to_vec()),"),
-          ]
-          for old, new in replacements:
-              if text.count(old) != 1:
-                  raise SystemExit(f'expected exactly one occurrence of {old!r}, found {text.count(old)}')
-              text = text.replace(old, new, 1)
-          marker = "    fn resolver(root: &Path) -> LocalFsResolver {\n"
-          if text.count(marker) != 1:
-              raise SystemExit('resolver marker not unique')
-          helper = "    fn zlib_store(data: &[u8]) -> Vec<u8> {\n        assert!(data.len() <= u16::MAX as usize);\n        let len = data.len() as u16;\n        let mut output = vec![0x78, 0x01, 0x01];\n        output.extend_from_slice(&len.to_le_bytes());\n        output.extend_from_slice(&(!len).to_le_bytes());\n        output.extend_from_slice(data);\n        output.extend_from_slice(&adler32(data).to_be_bytes());\n        output\n    }\n\n    fn adler32(data: &[u8]) -> u32 {\n        const MOD: u32 = 65_521;\n        let mut a = 1_u32;\n        let mut b = 0_u32;\n        for byte in data {\n            a = (a + u32::from(*byte)) % MOD;\n            b = (b + a) % MOD;\n        }\n        b << 16 | a\n    }\n\n"
-          text = text.replace(marker, helper + marker, 1)
-          path.write_text(text)
-          PY
-          cargo +1.98.0 fmt --all
-          cargo +1.98.0 fmt --all -- --check
-          cargo +1.98.0 clippy --locked -p golamd --all-targets -- -D warnings
-          cargo +1.98.0 test --locked -p golamd --bin golamd git_observe::tests::
-          mapfile -t changed < <(git diff --name-only)
-          if [ "${#changed[@]}" -ne 1 ] || [ "${changed[0]}" != "crates/golamd/src/git_observe.rs" ]; then
-            printf 'unexpected repair mutation set:\n'
-            printf '%s\n' "${changed[@]}"
-            exit 1
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add crates/golamd/src/git_observe.rs
-          git commit -m "fix(005): qualify bounded Git object observation"
-          git push origin HEAD:impl/005-local-tools-context-memory
+          cargo +1.98.0 test --locked -p golam-effects --test qualification_properties
+          cargo +1.98.0 test --locked -p golam-ledger --test qualification_properties
+      - name: Bounded fuzz smoke
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc --test fuzz_smoke
+          cargo +1.98.0 test --locked -p golam-ledger --test fuzz_smoke
+          cargo +1.98.0 test --locked -p golam-kernel --test spec003_fuzz_smoke
+      - name: IPC transport qualification (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc unix_transport::
+      - name: IPC transport qualification (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc windows_transport::
+      - name: Authenticated daemon IPC qualification
+        run: |
+          cargo +1.98.0 test --locked -p golamd --bin golamd connection::tests::
+      - name: Adversarial authority qualification
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc --test adversarial
+          cargo +1.98.0 test --locked -p golam-kernel --test hostile_adapter
+          cargo +1.98.0 test --locked -p golam-kernel client_auth::tests::
+      - name: Build daemon for external locality observation
+        run: cargo +1.98.0 build --locked -p golamd --bin golamd
+      - name: Strict-local external network observation (Unix)
+        if: runner.os != 'Windows'
+        run: bash scripts/qualification/strict-local-no-network.sh target/debug/golamd
+      - name: Strict-local external network observation (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/qualification/strict-local-no-network.ps1 target/debug/golamd.exe
