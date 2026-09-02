@@ -11,18 +11,26 @@ permissions:
 jobs:
   lockfile-evidence:
     name: lockfile-evidence-ubuntu
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal
-      - name: Generate exact dependency lock evidence
+      - name: Generate and commit exact dependency lock evidence
         run: |
           cargo +1.98.0 generate-lockfile
-          echo 'GOLAM_LOCKFILE_BASE64_BEGIN'
-          base64 --wrap=0 Cargo.lock
-          echo
-          echo 'GOLAM_LOCKFILE_BASE64_END'
+          git diff --exit-code -- Cargo.lock && exit 0
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Cargo.lock
+          git commit -m 'chore(005): regenerate admitted dependency lockfile'
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
 
   rust:
     name: rust-${{ matrix.os }}
