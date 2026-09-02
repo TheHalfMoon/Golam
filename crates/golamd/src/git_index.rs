@@ -652,16 +652,20 @@ mod tests {
             }],
             &[],
         );
-        let mut bounds = GitIndexBounds::default();
-        bounds.max_path_bytes = 2;
+        let bounds = GitIndexBounds {
+            max_path_bytes: 2,
+            ..GitIndexBounds::default()
+        };
         assert!(matches!(
             parse_git_index(&bytes, bounds),
             Err(GitIndexError::PathLimitExceeded)
         ));
 
         let many_extensions = build_index(2, &[], &[(b"TREE", b""), (b"REUC", b"")]);
-        let mut bounds = GitIndexBounds::default();
-        bounds.max_extensions = 1;
+        let bounds = GitIndexBounds {
+            max_extensions: 1,
+            ..GitIndexBounds::default()
+        };
         assert!(matches!(
             parse_git_index(&many_extensions, bounds),
             Err(GitIndexError::ExtensionLimitExceeded)
