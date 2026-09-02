@@ -20,7 +20,7 @@ jobs:
           ref: impl/005-local-tools-context-memory
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
-      - name: Normalize, qualify, and push exact observation slice
+      - name: Apply exact repairs, qualify, and push observation slice
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -30,11 +30,42 @@ jobs:
           replacements = [
               ("    resolver: &'a LocalFsResolver,\n    operation: RequestedOperationId,\n", ""),
               ("            resolver,\n            operation: operation.clone(),\n", ""),
+              ("hex.as_bytes().chunks_exact(2).enumerate()", "hex.as_bytes().as_chunks::<2>().0.iter().enumerate()"),
+              ("    use miniz_oxide::deflate::compress_to_vec_zlib;\n", ""),
+              ("            compress_to_vec_zlib(&canonical, 6),\n", "            zlib_store(&canonical),\n"),
+              ("            b\"author\" => {\n                if author.replace(value.to_vec()).is_some() {\n                    return Err(GitObservationError::InvalidCommit);\n                }\n            }\n            b\"committer\" => {\n                if committer.replace(value.to_vec()).is_some() {\n                    return Err(GitObservationError::InvalidCommit);\n                }\n            }", "            b\"author\" if author.is_some() => {\n                return Err(GitObservationError::InvalidCommit);\n            }\n            b\"author\" => author = Some(value.to_vec()),\n            b\"committer\" if committer.is_some() => {\n                return Err(GitObservationError::InvalidCommit);\n            }\n            b\"committer\" => committer = Some(value.to_vec()),"),
           ]
           for old, new in replacements:
               if text.count(old) != 1:
                   raise SystemExit(f'expected exactly one occurrence of {old!r}, found {text.count(old)}')
               text = text.replace(old, new, 1)
+          marker = "    fn resolver(root: &Path) -> LocalFsResolver {\n"
+          if text.count(marker) != 1:
+              raise SystemExit('resolver marker not unique')
+          helper = '''    fn zlib_store(data: &[u8]) -> Vec<u8> {
+        assert!(data.len() <= u16::MAX as usize);
+        let len = data.len() as u16;
+        let mut output = vec![0x78, 0x01, 0x01];
+        output.extend_from_slice(&len.to_le_bytes());
+        output.extend_from_slice(&(!len).to_le_bytes());
+        output.extend_from_slice(data);
+        output.extend_from_slice(&adler32(data).to_be_bytes());
+        output
+    }
+
+    fn adler32(data: &[u8]) -> u32 {
+        const MOD: u32 = 65_521;
+        let mut a = 1_u32;
+        let mut b = 0_u32;
+        for byte in data {
+            a = (a + u32::from(*byte)) % MOD;
+            b = (b + a) % MOD;
+        }
+        b << 16 | a
+    }
+
+'''
+          text = text.replace(marker, helper + marker, 1)
           path.write_text(text)
           PY
           cargo +1.98.0 fmt --all
