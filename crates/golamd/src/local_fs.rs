@@ -25,6 +25,7 @@ pub enum LocalFsResolutionError {
     Core(CoreError),
     Contract(TargetIdentityError),
     RootNotDirectory(PathBuf),
+    ParentNotDirectory(PathBuf),
     RootAlias(PathBuf),
     InvalidRequestedPath,
     OperationNotAuthorized,
@@ -51,6 +52,9 @@ impl fmt::Display for LocalFsResolutionError {
             Self::Contract(error) => write!(f, "local filesystem identity contract error: {error}"),
             Self::RootNotDirectory(path) => {
                 write!(f, "authorized root is not a directory: {}", path.display())
+            }
+            Self::ParentNotDirectory(path) => {
+                write!(f, "requested target parent is not a directory: {}", path.display())
             }
             Self::RootAlias(path) => {
                 write!(f, "authorized root is an alias/reparse path: {}", path.display())
@@ -294,7 +298,7 @@ impl LocalFsResolver {
         self.require_authorized_path(&parent)?;
         let parent_metadata = fs::metadata(&parent)?;
         if !parent_metadata.is_dir() {
-            return Err(LocalFsResolutionError::RootNotDirectory(parent));
+            return Err(LocalFsResolutionError::ParentNotDirectory(parent));
         }
         let normalized_path = requested_from_path(&candidate)?;
         let parent_identity = identity_digest(&parent, &parent_metadata)?;
@@ -456,6 +460,8 @@ fn push_platform_metadata(
     encoder.push_u64(u64::from(metadata.uid()));
     encoder.push_u64(u64::from(metadata.gid()));
     encoder.push_u64(metadata.len());
+    encoder.push_u64(u64::from_be_bytes(metadata.mtime().to_be_bytes()));
+    encoder.push_u64(u64::from_be_bytes(metadata.mtime_nsec().to_be_bytes()));
     Ok(())
 }
 
@@ -560,6 +566,23 @@ mod tests {
     }
 
     #[test]
+    fn missing_target_under_file_reports_parent_not_directory() {
+        let root = unique_root();
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("parent"), b"not-a-directory").unwrap();
+        let resolver = resolver(&root);
+        let error = resolver
+            .resolve_missing(
+                &RequestedTarget::new("parent/child").unwrap(),
+                root.join("parent/child"),
+                10,
+            )
+            .unwrap_err();
+        assert!(matches!(error, LocalFsResolutionError::ParentNotDirectory(_)));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn root_cannot_overlap_protected_golam_state() {
         let root = unique_root();
         let protected = root.join(".golam-protected");
@@ -573,6 +596,24 @@ mod tests {
             ),
             Err(LocalFsResolutionError::ProtectedRootOverlap(_))
         ));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_metadata_digest_changes_on_same_length_rewrite() {
+        use std::thread;
+        use std::time::Duration;
+
+        let root = unique_root();
+        fs::create_dir(&root).unwrap();
+        let path = root.join("note.txt");
+        fs::write(&path, b"first").unwrap();
+        let before = metadata_digest(&path, &fs::metadata(&path).unwrap()).unwrap();
+        thread::sleep(Duration::from_millis(20));
+        fs::write(&path, b"other").unwrap();
+        let after = metadata_digest(&path, &fs::metadata(&path).unwrap()).unwrap();
+        assert_ne!(before, after);
         fs::remove_dir_all(root).unwrap();
     }
 
