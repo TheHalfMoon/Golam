@@ -9,50 +9,54 @@ permissions:
   contents: read
 
 jobs:
-  repair-packed-ref-fixture:
-    name: repair-packed-ref-fixture-ubuntu
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
+  rust:
+    name: rust-${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: impl/005-local-tools-context-memory
       - name: Install pinned Rust toolchain
-        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt
-      - name: Apply exact fixture repair and qualify before push
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+      - name: Format
+        run: cargo +1.98.0 fmt --all -- --check
+      - name: Clippy
+        run: cargo +1.98.0 clippy --locked --workspace --all-targets -- -D warnings
+      - name: Test
+        run: cargo +1.98.0 test --locked --workspace --all-targets
+      - name: Property qualification
         run: |
-          set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('crates/golamd/src/git_read.rs')
-          text = path.read_text()
-          marker = 'fn packed_ref_is_used_only_when_loose_ref_is_absent() {'
-          if text.count(marker) != 1:
-              raise SystemExit(f'expected one packed-ref fixture function, found {text.count(marker)}')
-          before, after = text.split(marker, 1)
-          object_line = '        fs::create_dir_all(root.join(".git/objects")).unwrap();\n'
-          if after.count(object_line) < 1:
-              raise SystemExit('packed-ref fixture object directory line not found')
-          prefix, suffix = after.split(object_line, 1)
-          refs_line = '        fs::create_dir_all(root.join(".git/refs/heads")).unwrap();\n'
-          if prefix.find('fn ') != -1:
-              raise SystemExit('unexpected function boundary before object directory line')
-          if suffix.startswith(refs_line):
-              raise SystemExit('packed-ref fixture already repaired')
-          text = before + marker + prefix + object_line + refs_line + suffix
-          path.write_text(text)
-          PY
-          cargo +1.98.0 fmt --all
-          cargo +1.98.0 test --locked -p golamd --bin golamd git_read::tests::packed_ref_is_used_only_when_loose_ref_is_absent
-          mapfile -t changed < <(git diff --name-only)
-          if [ "${#changed[@]}" -ne 1 ] || [ "${changed[0]}" != "crates/golamd/src/git_read.rs" ]; then
-            printf 'unexpected repair mutation set:\n'
-            printf '%s\n' "${changed[@]}"
-            exit 1
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add crates/golamd/src/git_read.rs
-          git commit -m "test(005): make packed-ref fallback fixture structurally valid"
-          git push origin HEAD:impl/005-local-tools-context-memory
+          cargo +1.98.0 test --locked -p golam-effects --test qualification_properties
+          cargo +1.98.0 test --locked -p golam-ledger --test qualification_properties
+      - name: Bounded fuzz smoke
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc --test fuzz_smoke
+          cargo +1.98.0 test --locked -p golam-ledger --test fuzz_smoke
+          cargo +1.98.0 test --locked -p golam-kernel --test spec003_fuzz_smoke
+      - name: IPC transport qualification (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc unix_transport::
+      - name: IPC transport qualification (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc windows_transport::
+      - name: Authenticated daemon IPC qualification
+        run: |
+          cargo +1.98.0 test --locked -p golamd --bin golamd connection::tests::
+      - name: Adversarial authority qualification
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc --test adversarial
+          cargo +1.98.0 test --locked -p golam-kernel --test hostile_adapter
+          cargo +1.98.0 test --locked -p golam-kernel client_auth::tests::
+      - name: Build daemon for external locality observation
+        run: cargo +1.98.0 build --locked -p golamd --bin golamd
+      - name: Strict-local external network observation (Unix)
+        if: runner.os != 'Windows'
+        run: bash scripts/qualification/strict-local-no-network.sh target/debug/golamd
+      - name: Strict-local external network observation (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/qualification/strict-local-no-network.ps1 target/debug/golamd.exe
