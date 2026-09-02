@@ -51,13 +51,14 @@ impl LocalTextSearchBounds {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SkippedTextFileReason {
     NonUtf8,
+    SizeLimitExceeded { observed: u64, limit: u64 },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SkippedTextFile {
     pub requested_path: RequestedTarget,
     pub identity: ResolvedTargetIdentity,
-    pub content_digest: BindingDigest,
+    pub content_digest: Option<BindingDigest>,
     pub reason: SkippedTextFileReason,
 }
 
@@ -222,7 +223,7 @@ pub fn search_literal_text(
 
     for entry in files {
         let remaining = remaining_duration(started, bounds.max_duration)?;
-        let stat = stat_regular_file(
+        let stat = match stat_regular_file(
             resolver,
             &entry.requested_path,
             read_operation,
@@ -231,7 +232,23 @@ pub fn search_literal_text(
                 max_duration: remaining,
             },
             observed_at_unix_ms,
-        )?;
+        ) {
+            Ok(stat) => stat,
+            Err(LocalFileReadError::SizeLimitExceeded { observed, limit }) => {
+                result.files_observed = result
+                    .files_observed
+                    .checked_add(1)
+                    .ok_or(LocalTextSearchError::CounterOverflow)?;
+                result.skipped_files.push(SkippedTextFile {
+                    requested_path: entry.requested_path.clone(),
+                    identity: entry.identity.clone(),
+                    content_digest: None,
+                    reason: SkippedTextFileReason::SizeLimitExceeded { observed, limit },
+                });
+                continue;
+            }
+            Err(error) => return Err(error.into()),
+        };
         let projected_total = result
             .bytes_observed
             .checked_add(stat.size_bytes)
@@ -278,7 +295,7 @@ pub fn search_literal_text(
                 result.skipped_files.push(SkippedTextFile {
                     requested_path: entry.requested_path.clone(),
                     identity: read.identity,
-                    content_digest: read.content_digest,
+                    content_digest: Some(read.content_digest),
                     reason: SkippedTextFileReason::NonUtf8,
                 });
                 continue;
@@ -517,6 +534,42 @@ mod tests {
         assert_eq!(
             result.skipped_files[0].reason,
             SkippedTextFileReason::NonUtf8
+        );
+        assert!(result.skipped_files[0].content_digest.is_some());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn oversized_file_is_attested_as_skipped_without_losing_other_results() {
+        let root = unique_root();
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("large.bin"), b"0123456789").unwrap();
+        fs::write(root.join("small.txt"), b"needle\n").unwrap();
+        let resolver = resolver(&root);
+        let mut limited = bounds();
+        limited.max_file_bytes = 8;
+        let result = search_literal_text(
+            &resolver,
+            &RequestedTarget::new(".").unwrap(),
+            &RequestedOperationId::new("list").unwrap(),
+            &RequestedOperationId::new("read").unwrap(),
+            "needle",
+            limited,
+            10,
+        )
+        .unwrap();
+
+        assert_eq!(result.matches.len(), 1);
+        assert_eq!(basename(&result.matches[0].requested_path), "small.txt");
+        assert_eq!(result.skipped_files.len(), 1);
+        assert_eq!(basename(&result.skipped_files[0].requested_path), "large.bin");
+        assert_eq!(result.skipped_files[0].content_digest, None);
+        assert_eq!(
+            result.skipped_files[0].reason,
+            SkippedTextFileReason::SizeLimitExceeded {
+                observed: 10,
+                limit: 8
+            }
         );
         fs::remove_dir_all(root).unwrap();
     }
