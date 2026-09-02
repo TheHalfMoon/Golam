@@ -16,12 +16,13 @@ pub struct PermissionScopeId(pub BindingDigest);
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum EvidenceSourceKind {
+    UserSelectedArtifact,
     File,
-    Git,
-    Memory,
-    ToolResult,
-    Protocol,
+    GitObject,
     CanonicalLedger,
+    ManagedMemory,
+    ProtocolResource,
+    ExternalDocument,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
