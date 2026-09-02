@@ -1,6 +1,6 @@
 # T005-040 — Primitive Source Foundry Provenance Binding
 
-**Status**: `CANDIDATE_PROVENANCE_CORRECTED_NOT_ADMITTED`
+**Status**: `CANDIDATE_PROVENANCE_BOUND_NOT_ADMITTED`
 
 **Task**: T005-040 bounded Git read evidence
 
@@ -29,13 +29,6 @@ PUBLISHED_VCS_COMMIT_SIGNATURE=UNSIGNED
 ```
 
 The exact VCS commit is the 2026-03-13 version-bump commit for `0.9.1`. Its `miniz_oxide/Cargo.toml` changes the package version to `0.9.1`; therefore all source qualification for the published package MUST bind to `4e582392...`, not a later master head.
-
-Published package evidence inspected:
-
-- docs.rs package source for `miniz_oxide 0.9.1`;
-- `.cargo_vcs_info.json` binding the package to `4e582392...`;
-- published `Cargo.lock`;
-- exact upstream GitHub commit `4e582392...`.
 
 The unsigned upstream VCS commit is not itself a rejection because the registry package provides independent immutable package/version/checksum provenance, but admission MUST bind both the registry artifact and its recorded VCS source and MUST not represent the later master commit as equivalent.
 
@@ -80,22 +73,26 @@ ADLER2_REGISTRY_CHECKSUM=320119579fcad9c21884f5c4861d16174d0e06250625266f50fe689
 
 The published lock also lists optional/package-development dependencies because it describes the package workspace resolution. Those dependencies are **not** admitted merely because they appear in that lock. The eventual Golam Cargo closure must be generated from the exact selected feature set and independently inspected before admission.
 
-## `adler2 2.0.1` candidate closure
+## `adler2 2.0.1` exact published provenance
 
-Published `adler2 2.0.1` metadata records:
+The published `adler2 2.0.1` package records:
 
 ```text
-VERSION=2.0.1
+PUBLISHED_PACKAGE=adler2 2.0.1
+PUBLISHED_VCS_SHA=89a031a0f42eeff31c70dc598b398cbf31f1680f
+PUBLISHED_VCS_PATH=
+REGISTRY_CHECKSUM=320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa
 LICENSE=0BSD OR MIT OR Apache-2.0
 REPOSITORY=https://github.com/oyvindln/adler2
-DEFAULT_FEATURES=std
 ```
 
-For the proposed `miniz_oxide` candidate, `adler2` default features are disabled. Upstream package documentation describes the crate as zero-runtime-dependency and zero-`unsafe` under its ordinary library surface, with only internal rustc-std workspace support optional.
+The normalized published manifest has no required external runtime dependency in the ordinary library posture. Its `rustc-std-workspace-core` dependency is optional and exists only for internal Rust standard-library integration. Published documentation states that the crate has zero dependencies and zero `unsafe` in the normal library surface.
 
-This is promising but still does not complete admission. Exact package/VCS provenance, license files/notices, source-level unsafe/build-script confirmation, and selected-feature Cargo closure remain required.
+The intended T005-040 posture remains `default-features=false`; the internal rustc-std feature path is denied. This substantially narrows the selected closure, but admission still requires exact source-level verification, license/notices capture and independent Source Foundry verification.
 
 ```text
+ADLER2_2_0_1_EXACT_VCS_SOURCE=89a031a0f42eeff31c70dc598b398cbf31f1680f
+ADLER2_2_0_1_SELECTED_EXTERNAL_RUNTIME_DEPENDENCIES=NONE_EXPECTED_PENDING_VERIFICATION
 ADLER2_2_0_1_ADMITTED=NO
 ```
 
@@ -121,13 +118,33 @@ NETWORK=NONE
 REPOSITORY_MUTATION=NONE
 ```
 
-## SHA-1 primitive remains unselected
+## `sha1 0.11.0` exact published provenance
 
-`sha1 0.11.0` remains a candidate only. Its current package surface depends on `digest 0.11`, `cfg-if 1`, and architecture-specific `cpufeatures 0.3`; default features include `alloc` and `oid`.
-
-T005-040 needs only deterministic legacy Git object identity verification. The candidate must therefore be evaluated with default features disabled and without assembly/FFI/process/network surfaces. SHA-1 is used strictly for Git compatibility and MUST NOT be represented as a modern collision-resistant authorization primitive.
+The published `sha1 0.11.0` package records:
 
 ```text
+PUBLISHED_PACKAGE=sha1 0.11.0
+PUBLISHED_VCS_SHA=2f00175af936de46b3ddefe65c4de93cb4e876e4
+PUBLISHED_VCS_PATH=sha1
+LICENSE=MIT OR Apache-2.0
+REPOSITORY=https://github.com/RustCrypto/hashes
+RUST_VERSION=1.85
+BUILD_SCRIPT=NONE
+```
+
+The normalized manifest shows default features `alloc` + `oid`. T005-040 does not need either, so any candidate admission MUST evaluate:
+
+```text
+sha1 = { version = "=0.11.0", default-features = false }
+```
+
+Even with default features disabled, direct selected dependencies remain `cfg-if ^1.0`, `digest ^0.11`, and architecture-specific `cpufeatures ^0.3` on aarch64/x86/x86_64. Therefore exact selected transitive closure, including whether `cpufeatures` reaches platform `libc`, must be closed before admission.
+
+Upstream explicitly warns that SHA-1 is cryptographically broken and provides this implementation only for legacy interoperability. Golam may use SHA-1 only to reproduce and validate legacy Git object identities under the frozen SHA-1-only profile. SHA-1 MUST NOT become authorization, capability, integrity-chain or security-collision-resistance evidence.
+
+```text
+SHA1_0_11_0_EXACT_VCS_SOURCE=2f00175af936de46b3ddefe65c4de93cb4e876e4
+SHA1_0_11_0_SELECTED_POSTURE=DEFAULT_FEATURES_FALSE_CANDIDATE
 SHA1_0_11_0_ADMITTED=NO
 SHA1_PRIMITIVE_SELECTED=NO
 SHA1_USE_IF_ADMITTED=LEGACY_GIT_OBJECT_IDENTITY_ONLY
@@ -144,8 +161,8 @@ Before any primitive may reach `ADMITTED` or appear in Golam `Cargo.toml`/`Cargo
 3. produce the selected-feature transitive Cargo dependency closure, not the package's all/optional development closure;
 4. inspect every selected crate for `unsafe`, FFI, build scripts, native code, process launch, network, telemetry, filesystem mutation and environment-controlled behavior;
 5. prove the decompression adapter enforces frozen compressed/decompressed/time caps and cannot allocate attacker-selected unbounded output;
-6. close `adler2 2.0.1` exact package/VCS/source posture;
-7. select and close the exact SHA-1 implementation and dependency closure;
+6. complete exact source-level and notice verification for `adler2 2.0.1` at `89a031a0...`;
+7. close `sha1 0.11.0` at `2f00175...` plus `digest`/`cfg-if`/target `cpufeatures` selected transitive closure, or reject it in favor of a narrower Golam-owned implementation;
 8. obtain independent semantic/security verification of the exact Source Foundry admission record;
 9. only then add exact pinned dependencies and implement the parser;
 10. any Cargo or parser mutation requires fresh exact-head CI and later T005-040 independent implementation review.
@@ -158,7 +175,10 @@ FORMAT_PROFILE_FROZEN=YES
 FIRST_PROFILE_OBJECT_FORMAT=SHA1_ONLY
 MINIZ_OXIDE_0_9_1_EXACT_PROVENANCE_BOUND=YES
 MINIZ_OXIDE_0_9_1_ADMITTED=NO
+ADLER2_2_0_1_EXACT_PROVENANCE_BOUND=YES
 ADLER2_2_0_1_ADMITTED=NO
+SHA1_0_11_0_EXACT_PROVENANCE_BOUND=YES
+SHA1_0_11_0_ADMITTED=NO
 SHA1_PRIMITIVE_SELECTED=NO
 NEW_DEPENDENCY_ADDED=NO
 PRODUCTION_NATIVE_EXECUTOR_ADMITTED=NO
