@@ -340,9 +340,8 @@ impl MemoryControlAuthorityGate {
         if approver != request.initiating_principal.as_str() {
             return Err(MemoryControlAuthorityError::ApprovalPrincipalMismatch);
         }
-        let approving_principal = PrincipalId::new(approver).map_err(|_| {
-            MemoryControlAuthorityError::InvalidStoredRecord("approval principal")
-        })?;
+        let approving_principal = PrincipalId::new(approver)
+            .map_err(|_| MemoryControlAuthorityError::InvalidStoredRecord("approval principal"))?;
         let mutation_authority_ref = human_control_ref(
             request.target,
             request.approval_id,
@@ -690,7 +689,9 @@ fn kernel_authorization_ref(
     encoder.push_bytes(resource.as_bytes())?;
     encoder.push_bytes(&context_hash)?;
     encoder.push_u64(global_seq);
-    Ok(BindingDigest::new(*blake3::hash(&encoder.finish()).as_bytes()))
+    Ok(BindingDigest::new(
+        *blake3::hash(&encoder.finish()).as_bytes(),
+    ))
 }
 
 fn human_control_ref(
@@ -711,7 +712,9 @@ fn human_control_ref(
     encoder.push_bytes(&parent_decision_id)?;
     encoder.push_u64(current_uses);
     encoder.push_u64(max_uses);
-    Ok(BindingDigest::new(*blake3::hash(&encoder.finish()).as_bytes()))
+    Ok(BindingDigest::new(
+        *blake3::hash(&encoder.finish()).as_bytes(),
+    ))
 }
 
 fn verifier_control_ref(
@@ -730,7 +733,9 @@ fn verifier_control_ref(
     encoder.push_bytes(authority_source_binding)?;
     encoder.push_bytes(registered_by.as_bytes())?;
     encoder.push_u64(created_global_seq);
-    Ok(BindingDigest::new(*blake3::hash(&encoder.finish()).as_bytes()))
+    Ok(BindingDigest::new(
+        *blake3::hash(&encoder.finish()).as_bytes(),
+    ))
 }
 
 fn authority_evidence_ref(
@@ -745,7 +750,9 @@ fn authority_evidence_ref(
     encoder.push_u128(effect_id.0);
     encoder.push_bytes(&mutation_authority_ref.bytes())?;
     encoder.push_bytes(evidence)?;
-    Ok(BindingDigest::new(*blake3::hash(&encoder.finish()).as_bytes()))
+    Ok(BindingDigest::new(
+        *blake3::hash(&encoder.finish()).as_bytes(),
+    ))
 }
 
 fn control_evidence_id(
@@ -762,7 +769,9 @@ fn control_evidence_id(
     encoder.push_bytes(&kernel_authorization_ref.bytes())?;
     encoder.push_bytes(&mutation_authority_ref.bytes())?;
     encoder.push_bytes(&authority_evidence_ref.bytes())?;
-    Ok(BindingDigest::new(*blake3::hash(&encoder.finish()).as_bytes()))
+    Ok(BindingDigest::new(
+        *blake3::hash(&encoder.finish()).as_bytes(),
+    ))
 }
 
 fn qualify(
