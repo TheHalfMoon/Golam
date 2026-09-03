@@ -25,33 +25,31 @@ jobs:
 
           operational = Path('crates/golam-ledger/src/memory_operational_store.rs')
           text = operational.read_text()
-          old = '''        assert_ne!(
-              layout.operational_db_path(),
-              runtime.data_dir.join("authority/golam.db")
-          );
-          fs::remove_dir_all(runtime.root).unwrap();
-          '''
-          new = '''        assert_ne!(
-              layout.operational_db_path(),
-              runtime.data_dir.join("authority/golam.db")
-          );
-          drop(store);
-          fs::remove_dir_all(runtime.root).unwrap();
-          '''
-          if text.count(old) != 1:
-              raise SystemExit(f'operational cleanup match count={text.count(old)}')
-          operational.write_text(text.replace(old, new, 1))
+          function = '    fn store_binds_exact_layout_identity_and_never_authority_db() {'
+          start = text.find(function)
+          if start < 0:
+              raise SystemExit('operational test anchor missing')
+          end = text.find('\n    #[test]\n', start + len(function))
+          if end < 0:
+              raise SystemExit('operational test end anchor missing')
+          block = text[start:end]
+          cleanup = '        fs::remove_dir_all(runtime.root).unwrap();\n'
+          if block.count(cleanup) != 1 or '        drop(store);\n' in block:
+              raise SystemExit('operational cleanup anchor mismatch')
+          block = block.replace(cleanup, '        drop(store);\n' + cleanup, 1)
+          operational.write_text(text[:start] + block + text[end:])
 
           promotion = Path('crates/golam-ledger/src/memory_promotion_operational.rs')
           text = promotion.read_text()
-          needle = '        fs::remove_dir_all(runtime.root).unwrap();\n'
-          if text.count(needle) != 3:
-              raise SystemExit(f'promotion cleanup match count={text.count(needle)}')
-          text = text.replace(
-              needle,
-              '        drop(store);\n        drop(_operational);\n        fs::remove_dir_all(runtime.root).unwrap();\n',
-          )
-          promotion.write_text(text)
+          cleanup = '        fs::remove_dir_all(runtime.root).unwrap();\n'
+          if text.count(cleanup) != 3:
+              raise SystemExit(f'promotion cleanup match count={text.count(cleanup)}')
+          if '        drop(_operational);\n' in text:
+              raise SystemExit('promotion cleanup already repaired unexpectedly')
+          promotion.write_text(text.replace(
+              cleanup,
+              '        drop(store);\n        drop(_operational);\n' + cleanup,
+          ))
           PY
       - name: Format
         run: cargo +1.98.0 fmt --all
