@@ -20,9 +20,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use crate::effects::{
     CompareAndSwapEffect, EffectStore, EffectStoreError, FinishEffectAttempt, StartEffectAttempt,
 };
-use crate::memory_evidence::{
-    MemoryEvidenceError, MemoryEvidenceStore, ReconciliationEvidence,
-};
+use crate::memory_evidence::{MemoryEvidenceError, MemoryEvidenceStore, ReconciliationEvidence};
 use crate::memory_operational::{MemoryOperationalError, MemoryOperationalStore};
 use crate::memory_writer_readback::{MemoryWriterReadbackError, invalidate_memory_derivatives};
 
@@ -324,7 +322,8 @@ impl MemoryRestartStore {
         }
 
         self.ensure_operational_prepared(case)?;
-        let authority_readback_ref = self.authority_readback_ref(case.effect_id, case.intent_digest)?;
+        let authority_readback_ref =
+            self.authority_readback_ref(case.effect_id, case.intent_digest)?;
 
         if let MemoryRestartObservation::Regular {
             target_identity_ref,
@@ -344,12 +343,7 @@ impl MemoryRestartStore {
         }
 
         if let Some(committed) = self.prove_committed(case, observation, authority_readback_ref)? {
-            return self.resolve_committed(
-                case,
-                committed,
-                finished_at,
-                terminal_at_unix_ms,
-            );
+            return self.resolve_committed(case, committed, finished_at, terminal_at_unix_ms);
         }
 
         self.resolve_unknown(
@@ -595,23 +589,13 @@ impl MemoryRestartStore {
         }
         let promotion_evidence_ref = digest32(row.4, "promotion evidence ref")?;
         let writer_id = digest32(row.6, "writer id")?;
-        if !self.verify_version_authority_evidence(
-            case,
-            *content_digest,
-            &row.5,
-            writer_id,
-        )? {
+        if !self.verify_version_authority_evidence(case, *content_digest, &row.5, writer_id)? {
             return Ok(None);
         }
         if !self.promotion_evidence_exists(promotion_evidence_ref)? {
             return Ok(None);
         }
-        let sqlite_readback_ref = sqlite_readback_ref(
-            &self.memory,
-            case,
-            *content_digest,
-            &row.2,
-        )?;
+        let sqlite_readback_ref = sqlite_readback_ref(&self.memory, case, *content_digest, &row.2)?;
         let prior_reconciliation_ref = match self.find_matching_reconciliation(
             case,
             authority_readback_ref,
@@ -729,9 +713,8 @@ impl MemoryRestartStore {
                       record_bytes, integrity_hash
                FROM memory_reconciliation_evidence WHERE effect_id = ?1"#,
         )?;
-        let rows = statement.query_map(
-            params![case.effect_id.0.to_be_bytes().to_vec()],
-            |row| {
+        let rows =
+            statement.query_map(params![case.effect_id.0.to_be_bytes().to_vec()], |row| {
                 Ok((
                     row.get::<_, Vec<u8>>(0)?,
                     row.get::<_, i64>(1)?,
@@ -741,8 +724,7 @@ impl MemoryRestartStore {
                     row.get::<_, Vec<u8>>(5)?,
                     row.get::<_, Vec<u8>>(6)?,
                 ))
-            },
-        )?;
+            })?;
         for row in rows {
             let row = row?;
             if !matches!(row.1, 1 | 4) {
@@ -761,9 +743,10 @@ impl MemoryRestartStore {
             encoder.push_bytes(RECONCILIATION_EVIDENCE_DOMAIN)?;
             encoder.push_bytes(&evidence_id.bytes())?;
             encoder.push_u128(case.effect_id.0);
-            encoder.push_u64(u64::try_from(row.1).map_err(|_| {
-                MemoryRestartError::InvalidRecord("reconciliation state")
-            })?);
+            encoder.push_u64(
+                u64::try_from(row.1)
+                    .map_err(|_| MemoryRestartError::InvalidRecord("reconciliation state"))?,
+            );
             push_optional_digest(&mut encoder, Some(authority_ref))?;
             push_optional_digest(&mut encoder, Some(markdown_ref))?;
             push_optional_digest(&mut encoder, Some(sqlite_ref))?;
@@ -827,7 +810,12 @@ impl MemoryRestartStore {
         record_bytes: &[u8],
     ) -> Result<(), MemoryRestartError> {
         let mut operational = MemoryOperationalStore::open(&self.memory)?;
-        operational.record_reconciliation(case.effect_id, case.intent_digest, state, evidence_id)?;
+        operational.record_reconciliation(
+            case.effect_id,
+            case.intent_digest,
+            state,
+            evidence_id,
+        )?;
         let mut evidence = MemoryEvidenceStore::open(self.authority.authority_db_path())?;
         evidence.persist_reconciliation(ReconciliationEvidence {
             evidence_id,
@@ -993,7 +981,10 @@ impl MemoryRestartStore {
 
             if desired == DesiredEffectOutcome::Unknown {
                 effects.compare_and_swap(CompareAndSwapEffect {
-                    transition_id: EffectTransitionId(restart_u128(effect_id, b"executing-unknown")),
+                    transition_id: EffectTransitionId(restart_u128(
+                        effect_id,
+                        b"executing-unknown",
+                    )),
                     effect_id,
                     expected_state: "executing",
                     next_state: "unknown_outcome",
@@ -1012,7 +1003,10 @@ impl MemoryRestartStore {
                 == Some("unknown")
             {
                 effects.compare_and_swap(CompareAndSwapEffect {
-                    transition_id: EffectTransitionId(restart_u128(effect_id, b"executing-unknown")),
+                    transition_id: EffectTransitionId(restart_u128(
+                        effect_id,
+                        b"executing-unknown",
+                    )),
                     effect_id,
                     expected_state: "executing",
                     next_state: "unknown_outcome",
@@ -1024,7 +1018,10 @@ impl MemoryRestartStore {
                 state = "unknown_outcome".to_owned();
             } else {
                 effects.compare_and_swap(CompareAndSwapEffect {
-                    transition_id: EffectTransitionId(restart_u128(effect_id, desired.direct_phase())),
+                    transition_id: EffectTransitionId(restart_u128(
+                        effect_id,
+                        desired.direct_phase(),
+                    )),
                     effect_id,
                     expected_state: "executing",
                     next_state: desired.terminal_state(),
@@ -1043,7 +1040,9 @@ impl MemoryRestartStore {
                 effect_id,
                 expected_state: "unknown_outcome",
                 next_state: "reconciling",
-                attempt_id: self.latest_attempt(effect_id)?.map(|value| value.attempt_id),
+                attempt_id: self
+                    .latest_attempt(effect_id)?
+                    .map(|value| value.attempt_id),
                 reason_code: Some("managed_memory_restart_reconciling"),
                 evidence_ref: Some(&evidence_ref.bytes()),
                 event_id: EventId(restart_u128(effect_id, b"unknown-reconciling-event")),
@@ -1056,11 +1055,16 @@ impl MemoryRestartStore {
                 return Ok(());
             }
             effects.compare_and_swap(CompareAndSwapEffect {
-                transition_id: EffectTransitionId(restart_u128(effect_id, desired.reconcile_phase())),
+                transition_id: EffectTransitionId(restart_u128(
+                    effect_id,
+                    desired.reconcile_phase(),
+                )),
                 effect_id,
                 expected_state: "reconciling",
                 next_state: desired.terminal_state(),
-                attempt_id: self.latest_attempt(effect_id)?.map(|value| value.attempt_id),
+                attempt_id: self
+                    .latest_attempt(effect_id)?
+                    .map(|value| value.attempt_id),
                 reason_code: Some(desired.reason_code()),
                 evidence_ref: Some(&evidence_ref.bytes()),
                 event_id: EventId(restart_u128(effect_id, desired.reconcile_event_phase())),
@@ -1127,7 +1131,9 @@ impl MemoryRestartStore {
                 },
             )
             .optional()?
-            .ok_or(MemoryRestartError::InvalidRecord("PREPARED authority readback"))?;
+            .ok_or(MemoryRestartError::InvalidRecord(
+                "PREPARED authority readback",
+            ))?;
         if digest32(row.0, "PREPARED intent digest")? != intent_digest {
             return Err(MemoryRestartError::InvalidRecord(
                 "PREPARED intent readback mismatch",
@@ -1200,7 +1206,10 @@ impl DesiredEffectOutcome {
     }
 
     const fn matches_terminal(self, state: &str) -> bool {
-        matches!((self, state), (Self::Succeeded, "succeeded") | (Self::Failed, "failed"))
+        matches!(
+            (self, state),
+            (Self::Succeeded, "succeeded") | (Self::Failed, "failed")
+        )
     }
 
     const fn reason_code(self) -> &'static str {
@@ -1246,7 +1255,9 @@ impl DesiredEffectOutcome {
 
 fn decode_operation(canonical_bytes: &[u8]) -> Result<MemoryOperation, MemoryRestartError> {
     if canonical_bytes.len() < 5 {
-        return Err(MemoryRestartError::InvalidRecord("prepared intent canonical bytes"));
+        return Err(MemoryRestartError::InvalidRecord(
+            "prepared intent canonical bytes",
+        ));
     }
     let length = u32::from_be_bytes(
         canonical_bytes[0..4]
@@ -1492,8 +1503,14 @@ mod tests {
     #[test]
     fn restart_ids_are_stable_and_phase_separated() {
         let effect = EffectId(42);
-        assert_eq!(restart_u128(effect, b"attempt"), restart_u128(effect, b"attempt"));
-        assert_ne!(restart_u128(effect, b"attempt"), restart_u128(effect, b"transition"));
+        assert_eq!(
+            restart_u128(effect, b"attempt"),
+            restart_u128(effect, b"attempt")
+        );
+        assert_ne!(
+            restart_u128(effect, b"attempt"),
+            restart_u128(effect, b"transition")
+        );
     }
 
     #[test]
