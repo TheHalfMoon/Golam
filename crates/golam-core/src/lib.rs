@@ -10,6 +10,7 @@ pub mod execution_profile;
 pub mod harness;
 pub mod harness_state;
 pub mod memory;
+pub mod memory_storage;
 pub mod model_backend;
 pub mod paths;
 pub mod routing;
