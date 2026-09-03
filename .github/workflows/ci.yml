@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  repair-memory-unknown-outcome-order:
+  repair-memory-promotion-freshness:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,29 +17,329 @@ jobs:
           ref: impl/005-local-tools-context-memory
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
-      - name: Move UNKNOWN_OUTCOME blocker before persistent dependent state
+      - name: Bind qualified promotion to revalidation material
+        shell: bash
+        run: |
+          cat > crates/golam-ledger/src/memory_promotion_gate.rs <<'RS'
+          #![forbid(unsafe_code)]
+
+          use std::error::Error;
+          use std::fmt;
+
+          use golam_core::authority::AuthorityLayout;
+          use golam_core::memory::{MemoryCandidate, MemoryCandidateId};
+          use golam_core::tool_request::{BindingDigest, PrincipalId};
+          use golam_core::{CanonicalEncoder, CoreError, EffectId};
+
+          use crate::memory_promotion_authority::{
+              DeterministicPromotionRequest, HumanPromotionRequest, MemoryPromotionAuthorityError,
+              MemoryPromotionAuthorityValidator, ValidatedMemoryPromotion,
+          };
+          use crate::memory_promotion_operational::PromotionOperationalEvidence;
+
+          const QUALIFIED_PROMOTION_RECORD_DOMAIN: &[u8] = b"golam:qualified-memory-promotion:v1";
+
+          #[derive(Clone, Debug, Eq, PartialEq)]
+          enum PromotionRevalidation {
+              Human {
+                  candidate: MemoryCandidate,
+                  initiating_principal: PrincipalId,
+                  authorization_decision_id: [u8; 16],
+                  approval_id: [u8; 16],
+                  effect_id: EffectId,
+              },
+              Deterministic {
+                  candidate: MemoryCandidate,
+                  initiating_principal: PrincipalId,
+                  authorization_decision_id: [u8; 16],
+                  rule_id: [u8; 16],
+                  rule_version: u64,
+                  authority_source_binding: Vec<u8>,
+                  evidence_hash: [u8; 32],
+              },
+          }
+
+          #[derive(Clone, Debug, Eq, PartialEq)]
+          pub struct QualifiedMemoryPromotion {
+              validated: ValidatedMemoryPromotion,
+              revalidation: PromotionRevalidation,
+              record_bytes: Vec<u8>,
+          }
+
+          impl QualifiedMemoryPromotion {
+              pub const fn evidence_id(&self) -> BindingDigest {
+                  self.validated.evidence_id
+              }
+
+              pub const fn candidate_id(&self) -> MemoryCandidateId {
+                  self.validated.candidate_id
+              }
+
+              pub const fn kernel_authorization_ref(&self) -> BindingDigest {
+                  self.validated.kernel_authorization_ref
+              }
+
+              pub const fn promotion_authority_ref(&self) -> BindingDigest {
+                  self.validated.promotion_authority_ref
+              }
+
+              pub const fn authority_evidence_ref(&self) -> BindingDigest {
+                  self.validated.authority_evidence_ref
+              }
+
+              pub fn approving_principal(&self) -> Option<&PrincipalId> {
+                  self.validated.approving_principal.as_ref()
+              }
+
+              pub const fn verifier_policy_ref(&self) -> Option<BindingDigest> {
+                  self.validated.verifier_policy_ref
+              }
+
+              pub fn record_bytes(&self) -> &[u8] {
+                  &self.record_bytes
+              }
+
+              pub fn operational_evidence(
+                  &self,
+                  recorded_at_unix_ms: u64,
+              ) -> PromotionOperationalEvidence<'_> {
+                  PromotionOperationalEvidence {
+                      evidence_id: self.validated.evidence_id,
+                      candidate_id: self.validated.candidate_id,
+                      promotion_authority_ref: self.validated.promotion_authority_ref,
+                      approving_principal: self.validated.approving_principal.as_ref(),
+                      verifier_policy_ref: self.validated.verifier_policy_ref,
+                      authority_evidence_ref: self.validated.authority_evidence_ref,
+                      recorded_at_unix_ms,
+                  }
+              }
+          }
+
+          #[derive(Debug)]
+          pub enum MemoryPromotionGateError {
+              Authority(MemoryPromotionAuthorityError),
+              Core(CoreError),
+              RevalidationMismatch,
+          }
+
+          impl fmt::Display for MemoryPromotionGateError {
+              fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                  match self {
+                      Self::Authority(error) => {
+                          write!(f, "memory promotion authority validation failed: {error}")
+                      }
+                      Self::Core(error) => write!(
+                          f,
+                          "memory promotion gate canonical encoding failed: {error}"
+                      ),
+                      Self::RevalidationMismatch => f.write_str(
+                          "memory promotion authority changed between qualification and PREPARED",
+                      ),
+                  }
+              }
+          }
+
+          impl Error for MemoryPromotionGateError {
+              fn source(&self) -> Option<&(dyn Error + 'static)> {
+                  match self {
+                      Self::Authority(error) => Some(error),
+                      Self::Core(error) => Some(error),
+                      Self::RevalidationMismatch => None,
+                  }
+              }
+          }
+
+          impl From<MemoryPromotionAuthorityError> for MemoryPromotionGateError {
+              fn from(value: MemoryPromotionAuthorityError) -> Self {
+                  Self::Authority(value)
+              }
+          }
+
+          impl From<CoreError> for MemoryPromotionGateError {
+              fn from(value: CoreError) -> Self {
+                  Self::Core(value)
+              }
+          }
+
+          pub struct MemoryPromotionGate {
+              validator: MemoryPromotionAuthorityValidator,
+          }
+
+          impl MemoryPromotionGate {
+              pub fn open(layout: &AuthorityLayout) -> Result<Self, MemoryPromotionGateError> {
+                  Ok(Self {
+                      validator: MemoryPromotionAuthorityValidator::open(layout)?,
+                  })
+              }
+
+              pub fn validate_human(
+                  &mut self,
+                  request: HumanPromotionRequest<'_>,
+              ) -> Result<QualifiedMemoryPromotion, MemoryPromotionGateError> {
+                  let revalidation = PromotionRevalidation::Human {
+                      candidate: request.candidate.clone(),
+                      initiating_principal: request.initiating_principal.clone(),
+                      authorization_decision_id: request.authorization_decision_id,
+                      approval_id: request.approval_id,
+                      effect_id: request.effect_id,
+                  };
+                  qualify(self.validator.validate_human(request)?, revalidation)
+              }
+
+              pub fn validate_deterministic(
+                  &mut self,
+                  request: DeterministicPromotionRequest<'_>,
+              ) -> Result<QualifiedMemoryPromotion, MemoryPromotionGateError> {
+                  let revalidation = PromotionRevalidation::Deterministic {
+                      candidate: request.candidate.clone(),
+                      initiating_principal: request.initiating_principal.clone(),
+                      authorization_decision_id: request.authorization_decision_id,
+                      rule_id: request.rule_id,
+                      rule_version: request.rule_version,
+                      authority_source_binding: request.authority_source_binding.to_vec(),
+                      evidence_hash: request.evidence_hash,
+                  };
+                  qualify(
+                      self.validator.validate_deterministic(request)?,
+                      revalidation,
+                  )
+              }
+
+              pub fn revalidate(
+                  &mut self,
+                  promotion: &QualifiedMemoryPromotion,
+                  observed_at: &str,
+              ) -> Result<(), MemoryPromotionGateError> {
+                  let validated = match &promotion.revalidation {
+                      PromotionRevalidation::Human {
+                          candidate,
+                          initiating_principal,
+                          authorization_decision_id,
+                          approval_id,
+                          effect_id,
+                      } => self.validator.validate_human(HumanPromotionRequest {
+                          candidate,
+                          initiating_principal,
+                          authorization_decision_id: *authorization_decision_id,
+                          approval_id: *approval_id,
+                          effect_id: *effect_id,
+                          observed_at,
+                      })?,
+                      PromotionRevalidation::Deterministic {
+                          candidate,
+                          initiating_principal,
+                          authorization_decision_id,
+                          rule_id,
+                          rule_version,
+                          authority_source_binding,
+                          evidence_hash,
+                      } => self
+                          .validator
+                          .validate_deterministic(DeterministicPromotionRequest {
+                              candidate,
+                              initiating_principal,
+                              authorization_decision_id: *authorization_decision_id,
+                              rule_id: *rule_id,
+                              rule_version: *rule_version,
+                              authority_source_binding,
+                              evidence_hash: *evidence_hash,
+                          })?,
+                  };
+                  if validated != promotion.validated {
+                      return Err(MemoryPromotionGateError::RevalidationMismatch);
+                  }
+                  Ok(())
+              }
+          }
+
+          fn qualify(
+              validated: ValidatedMemoryPromotion,
+              revalidation: PromotionRevalidation,
+          ) -> Result<QualifiedMemoryPromotion, MemoryPromotionGateError> {
+              let mut encoder = CanonicalEncoder::new();
+              encoder.push_bytes(QUALIFIED_PROMOTION_RECORD_DOMAIN)?;
+              encoder.push_bytes(&validated.evidence_id.bytes())?;
+              encoder.push_bytes(&validated.candidate_id.0.bytes())?;
+              encoder.push_bytes(&validated.kernel_authorization_ref.bytes())?;
+              encoder.push_bytes(&validated.promotion_authority_ref.bytes())?;
+              encoder.push_bytes(&validated.authority_evidence_ref.bytes())?;
+              match (
+                  validated.approving_principal.as_ref(),
+                  validated.verifier_policy_ref,
+              ) {
+                  (Some(principal), None) => {
+                      encoder.push_u8(1);
+                      encoder.push_bytes(principal.as_str().as_bytes())?;
+                  }
+                  (None, Some(verifier)) => {
+                      encoder.push_u8(2);
+                      encoder.push_bytes(&verifier.bytes())?;
+                  }
+                  _ => unreachable!("the validated promotion authority contract admits exactly one mode"),
+              }
+              Ok(QualifiedMemoryPromotion {
+                  validated,
+                  revalidation,
+                  record_bytes: encoder.finish(),
+              })
+          }
+
+          #[cfg(test)]
+          mod tests {
+              use super::*;
+
+              #[test]
+              fn qualified_token_fields_are_read_only_accessors() {
+                  assert!(!QUALIFIED_PROMOTION_RECORD_DOMAIN.is_empty());
+              }
+          }
+          RS
+      - name: Revalidate promotion immediately before PREPARED
         run: |
           python - <<'PY'
           from pathlib import Path
           path = Path('crates/golam-kernel/src/managed_memory_writer.rs')
           text = path.read_text()
-          old = '''        validate_bindings(&self.memory, promotion, prepared, version, markdown_path)?;\n\n        let mut evidence = MemoryEvidenceStore::open(self.authority.authority_db_path())?;\n'''
-          new = '''        validate_bindings(&self.memory, promotion, prepared, version, markdown_path)?;\n\n        // An unresolved prior UNKNOWN_OUTCOME blocks dependent managed-memory work\n        // before this effect can persist promotion or PREPARED state.\n        let operational = MemoryOperationalStore::open(&self.memory)?;\n        if operational.has_blocking_unknown_outcome()? {\n            return Err(ManagedMemoryWriterError::BlockingUnknownOutcome);\n        }\n\n        let mut evidence = MemoryEvidenceStore::open(self.authority.authority_db_path())?;\n'''
+          old = 'use golam_ledger::memory_promotion_gate::QualifiedMemoryPromotion;\n'
+          new = '''use golam_ledger::memory_promotion_gate::{\n    MemoryPromotionGate, MemoryPromotionGateError, QualifiedMemoryPromotion,\n};\n'''
           if text.count(old) != 1:
-              raise SystemExit(f'expected one pre-persistence insertion point, found {text.count(old)}')
+              raise SystemExit(f'expected one promotion gate import, found {text.count(old)}')
           text = text.replace(old, new, 1)
-          old = '''        let mut operational = MemoryOperationalStore::open(&self.memory)?;\n        if operational.has_blocking_unknown_outcome()? {\n            return Err(ManagedMemoryWriterError::BlockingUnknownOutcome);\n        }\n        operational.record_prepared(prepared)?;\n'''
-          new = '''        let mut operational = operational;\n        operational.record_prepared(prepared)?;\n'''
+          old = '''    PromotionOperational(MemoryPromotionOperationalError),\n    Evidence(MemoryEvidenceError),\n'''
+          new = '''    PromotionOperational(MemoryPromotionOperationalError),\n    PromotionGate(MemoryPromotionGateError),\n    Evidence(MemoryEvidenceError),\n'''
           if text.count(old) != 1:
-              raise SystemExit(f'expected one stale blocker block, found {text.count(old)}')
+              raise SystemExit(f'expected one error insertion point, found {text.count(old)}')
+          text = text.replace(old, new, 1)
+          old = '''            Self::PromotionOperational(error) => {\n                write!(\n                    f,\n                    "managed-memory promotion operational state failed: {error}"\n                )\n            }\n            Self::Evidence(error) => write!(f, "managed-memory authority evidence failed: {error}"),\n'''
+          new = '''            Self::PromotionOperational(error) => {\n                write!(\n                    f,\n                    "managed-memory promotion operational state failed: {error}"\n                )\n            }\n            Self::PromotionGate(error) => {\n                write!(f, "managed-memory promotion revalidation failed: {error}")\n            }\n            Self::Evidence(error) => write!(f, "managed-memory authority evidence failed: {error}"),\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one display insertion point, found {text.count(old)}')
+          text = text.replace(old, new, 1)
+          old = '''            Self::PromotionOperational(error) => Some(error),\n            Self::Evidence(error) => Some(error),\n'''
+          new = '''            Self::PromotionOperational(error) => Some(error),\n            Self::PromotionGate(error) => Some(error),\n            Self::Evidence(error) => Some(error),\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one source insertion point, found {text.count(old)}')
+          text = text.replace(old, new, 1)
+          old = '''impl From<MemoryEvidenceError> for ManagedMemoryWriterError {\n'''
+          new = '''impl From<MemoryPromotionGateError> for ManagedMemoryWriterError {\n    fn from(value: MemoryPromotionGateError) -> Self {\n        Self::PromotionGate(value)\n    }\n}\n\nimpl From<MemoryEvidenceError> for ManagedMemoryWriterError {\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one conversion insertion point, found {text.count(old)}')
+          text = text.replace(old, new, 1)
+          old = '''        if operational.has_blocking_unknown_outcome()? {\n            return Err(ManagedMemoryWriterError::BlockingUnknownOutcome);\n        }\n\n        let mut evidence = MemoryEvidenceStore::open(self.authority.authority_db_path())?;\n'''
+          new = '''        if operational.has_blocking_unknown_outcome()? {\n            return Err(ManagedMemoryWriterError::BlockingUnknownOutcome);\n        }\n\n        let mut promotion_gate = MemoryPromotionGate::open(&self.authority)?;\n        promotion_gate.revalidate(promotion, execution.started_at)?;\n\n        let mut evidence = MemoryEvidenceStore::open(self.authority.authority_db_path())?;\n'''
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one pre-persistence freshness point, found {text.count(old)}')
           text = text.replace(old, new, 1)
           path.write_text(text)
           PY
-      - name: Format and qualify focused writer boundary
+      - name: Format and qualify promotion/writer boundary
         run: |
           cargo +1.98.0 fmt --all
           cargo +1.98.0 fmt --all -- --check
-          cargo +1.98.0 clippy --locked -p golam-kernel --all-targets -- -D warnings
+          cargo +1.98.0 clippy --locked -p golam-ledger -p golam-kernel --all-targets -- -D warnings
+          cargo +1.98.0 test --locked -p golam-ledger memory_promotion_authority::tests::
+          cargo +1.98.0 test --locked -p golam-ledger memory_promotion_authority_adversarial::
+          cargo +1.98.0 test --locked -p golam-ledger memory_promotion_gate::tests::
           cargo +1.98.0 test --locked -p golam-kernel managed_memory_writer::tests::
       - name: Guard exact source mutation and push
         shell: bash
@@ -47,11 +347,17 @@ jobs:
           set -euo pipefail
           mapfile -t changed < <(git diff --name-only | sort)
           printf '%s\n' "${changed[@]}"
-          test "${#changed[@]}" -eq 1
-          test "${changed[0]}" = "crates/golam-kernel/src/managed_memory_writer.rs"
+          expected=(
+            crates/golam-kernel/src/managed_memory_writer.rs
+            crates/golam-ledger/src/memory_promotion_gate.rs
+          )
+          test "${#changed[@]}" -eq "${#expected[@]}"
+          for i in "${!changed[@]}"; do
+            test "${changed[$i]}" = "${expected[$i]}"
+          done
           git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add crates/golam-kernel/src/managed_memory_writer.rs
-          git commit -m "fix(005): block dependent memory writes before PREPARED"
+          git add "${expected[@]}"
+          git commit -m "fix(005): revalidate promotion authority before PREPARED"
           git push origin HEAD:impl/005-local-tools-context-memory
