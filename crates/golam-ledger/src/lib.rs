@@ -34,6 +34,7 @@ pub mod harness_evidence;
 mod harness_sink;
 pub mod integrity;
 pub mod manual_review;
+pub mod memory_control_authority;
 pub mod memory_evidence;
 #[path = "memory_operational_store.rs"]
 pub mod memory_operational;
