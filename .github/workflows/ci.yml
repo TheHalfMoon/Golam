@@ -24,14 +24,15 @@ jobs:
           path = Path('crates/golam-kernel/src/managed_memory_writer.rs')
           text = path.read_text()
           old = '''        validate_bindings(&self.memory, promotion, prepared, version, markdown_path)?;\n\n        let mut evidence = MemoryEvidenceStore::open(self.authority.authority_db_path())?;\n'''
-          new = '''        validate_bindings(&self.memory, promotion, prepared, version, markdown_path)?;\n\n        // An unresolved prior UNKNOWN_OUTCOME blocks dependent managed-memory work\n        // before this effect can persist promotion or PREPARED state.\n        let mut operational = MemoryOperationalStore::open(&self.memory)?;\n        if operational.has_blocking_unknown_outcome()? {\n            return Err(ManagedMemoryWriterError::BlockingUnknownOutcome);\n        }\n\n        let mut evidence = MemoryEvidenceStore::open(self.authority.authority_db_path())?;\n'''
+          new = '''        validate_bindings(&self.memory, promotion, prepared, version, markdown_path)?;\n\n        // An unresolved prior UNKNOWN_OUTCOME blocks dependent managed-memory work\n        // before this effect can persist promotion or PREPARED state.\n        let operational = MemoryOperationalStore::open(&self.memory)?;\n        if operational.has_blocking_unknown_outcome()? {\n            return Err(ManagedMemoryWriterError::BlockingUnknownOutcome);\n        }\n\n        let mut evidence = MemoryEvidenceStore::open(self.authority.authority_db_path())?;\n'''
           if text.count(old) != 1:
               raise SystemExit(f'expected one pre-persistence insertion point, found {text.count(old)}')
           text = text.replace(old, new, 1)
           old = '''        let mut operational = MemoryOperationalStore::open(&self.memory)?;\n        if operational.has_blocking_unknown_outcome()? {\n            return Err(ManagedMemoryWriterError::BlockingUnknownOutcome);\n        }\n        operational.record_prepared(prepared)?;\n'''
-          new = '''        operational.record_prepared(prepared)?;\n'''
+          new = '''        let mut operational = operational;\n        operational.record_prepared(prepared)?;\n'''
           if text.count(old) != 1:
               raise SystemExit(f'expected one stale blocker block, found {text.count(old)}')
+          text = text.replace(old, new, 1)
           path.write_text(text)
           PY
       - name: Format and qualify focused writer boundary
