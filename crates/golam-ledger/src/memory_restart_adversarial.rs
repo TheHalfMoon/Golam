@@ -6,9 +6,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use golam_core::authority::AuthorityLayout;
 use golam_core::memory::{
-    ExpectedMemoryVersion, MemoryCandidateId, MemoryItemId, MemoryMutationIntent,
-    MemoryOperation, MemoryScope, MemoryStoreId, MemoryVersion, MemoryVersionId,
-    MemoryVersionStatus, MemoryWriterId, PreparedMemoryMutationIntent,
+    ExpectedMemoryVersion, MemoryCandidateId, MemoryItemId, MemoryMutationIntent, MemoryOperation,
+    MemoryScope, MemoryStoreId, MemoryVersion, MemoryVersionId, MemoryVersionStatus,
+    MemoryWriterId, PreparedMemoryMutationIntent,
 };
 use golam_core::memory_storage::MemoryLayout;
 use golam_core::paths::RuntimeLayout;
@@ -168,7 +168,9 @@ fn fixture(store_override: Option<MemoryStoreId>) -> Fixture {
     }
 }
 
-fn pending_case(fixture: &Fixture) -> (MemoryRestartStore, crate::memory_restart::MemoryRestartCase) {
+fn pending_case(
+    fixture: &Fixture,
+) -> (MemoryRestartStore, crate::memory_restart::MemoryRestartCase) {
     let restart = MemoryRestartStore::open(&fixture.authority, &fixture.memory)
         .expect("restart store must open");
     let cases = restart.pending_cases().expect("restart scan must succeed");
@@ -180,7 +182,9 @@ fn operational_effect_rows(fixture: &Fixture) -> i64 {
     let connection = Connection::open(fixture.memory.operational_db_path())
         .expect("operational sqlite must open");
     connection
-        .query_row("SELECT COUNT(*) FROM memory_effect_state", [], |row| row.get(0))
+        .query_row("SELECT COUNT(*) FROM memory_effect_state", [], |row| {
+            row.get(0)
+        })
         .expect("operational effect count must read")
 }
 
@@ -321,8 +325,8 @@ fn wrong_prepared_store_binding_fails_closed_without_projecting_into_current_sto
 #[test]
 fn split_operational_intent_digest_is_detected_before_terminal_resolution() {
     let fixture = fixture(None);
-    let mut operational = MemoryOperationalStore::open(&fixture.memory)
-        .expect("operational store must open");
+    let mut operational =
+        MemoryOperationalStore::open(&fixture.memory).expect("operational store must open");
     operational
         .record_prepared(&fixture.prepared)
         .expect("PREPARED operational row must persist");
@@ -357,8 +361,11 @@ fn split_operational_intent_digest_is_detected_before_terminal_resolution() {
 fn unreadable_operational_store_never_becomes_success_by_absence_of_terminal_evidence() {
     let fixture = fixture(None);
     let (restart, case) = pending_case(&fixture);
-    fs::write(fixture.memory.operational_db_path(), b"not-a-sqlite-database")
-        .expect("test must corrupt operational store bytes");
+    fs::write(
+        fixture.memory.operational_db_path(),
+        b"not-a-sqlite-database",
+    )
+    .expect("test must corrupt operational store bytes");
 
     assert!(matches!(
         restart.reconcile(
