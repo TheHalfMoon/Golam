@@ -19,7 +19,9 @@ use golam_ledger::memory_evidence::{
     MemoryEvidenceError, MemoryEvidenceStore, PromotionEvidence, ReconciliationEvidence,
 };
 use golam_ledger::memory_operational::{MemoryOperationalError, MemoryOperationalStore};
-use golam_ledger::memory_promotion_gate::QualifiedMemoryPromotion;
+use golam_ledger::memory_promotion_gate::{
+    MemoryPromotionGate, MemoryPromotionGateError, QualifiedMemoryPromotion,
+};
 use golam_ledger::memory_promotion_operational::{
     MemoryPromotionOperationalError, MemoryPromotionOperationalStore,
 };
@@ -121,6 +123,7 @@ pub enum ManagedMemoryWriterError {
     Authority(MemoryWriterAuthorityError),
     Operational(MemoryOperationalError),
     PromotionOperational(MemoryPromotionOperationalError),
+    PromotionGate(MemoryPromotionGateError),
     Evidence(MemoryEvidenceError),
     Effect(EffectStoreError),
     Readback(MemoryWriterReadbackError),
@@ -146,6 +149,9 @@ impl fmt::Display for ManagedMemoryWriterError {
                     f,
                     "managed-memory promotion operational state failed: {error}"
                 )
+            }
+            Self::PromotionGate(error) => {
+                write!(f, "managed-memory promotion revalidation failed: {error}")
             }
             Self::Evidence(error) => write!(f, "managed-memory authority evidence failed: {error}"),
             Self::Effect(error) => {
@@ -181,6 +187,7 @@ impl Error for ManagedMemoryWriterError {
             Self::Authority(error) => Some(error),
             Self::Operational(error) => Some(error),
             Self::PromotionOperational(error) => Some(error),
+            Self::PromotionGate(error) => Some(error),
             Self::Evidence(error) => Some(error),
             Self::Effect(error) => Some(error),
             Self::Readback(error) => Some(error),
@@ -210,6 +217,12 @@ impl From<MemoryOperationalError> for ManagedMemoryWriterError {
 impl From<MemoryPromotionOperationalError> for ManagedMemoryWriterError {
     fn from(value: MemoryPromotionOperationalError) -> Self {
         Self::PromotionOperational(value)
+    }
+}
+
+impl From<MemoryPromotionGateError> for ManagedMemoryWriterError {
+    fn from(value: MemoryPromotionGateError) -> Self {
+        Self::PromotionGate(value)
     }
 }
 
@@ -271,6 +284,9 @@ impl ManagedMemoryWriter {
         if operational.has_blocking_unknown_outcome()? {
             return Err(ManagedMemoryWriterError::BlockingUnknownOutcome);
         }
+
+        let mut promotion_gate = MemoryPromotionGate::open(&self.authority)?;
+        promotion_gate.revalidate(promotion, execution.started_at)?;
 
         let mut evidence = MemoryEvidenceStore::open(self.authority.authority_db_path())?;
         evidence.persist_promotion(PromotionEvidence {
