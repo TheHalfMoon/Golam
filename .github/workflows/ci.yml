@@ -46,17 +46,17 @@ jobs:
               raise SystemExit(f'{path}: expected two ordered status deadline replacements, found {text.count(generic)}')
           first = '\n'.join([
               '_text = status.read_text()',
-              '_needle = "        require_time(started, bounds.max_duration)?;\\\\n"',
+              '_needle = "        require_time(started, bounds.max_duration)?;\n"',
               'if _text.count(_needle) != 3:',
               '    raise SystemExit(f"{status}: expected 3 ordered deadline sites, found {_text.count(_needle)}")',
-              'status.write_text(_text.replace(_needle, "        deadline.require_active()?;\\\\n", 1))',
+              'status.write_text(_text.replace(_needle, "        deadline.require_active()?;\n", 1))',
           ])
           second = '\n'.join([
               '_text = status.read_text()',
-              '_needle = "        require_time(started, bounds.max_duration)?;\\\\n"',
+              '_needle = "        require_time(started, bounds.max_duration)?;\n"',
               'if _text.count(_needle) != 2:',
               '    raise SystemExit(f"{status}: expected 2 remaining deadline sites, found {_text.count(_needle)}")',
-              'status.write_text(_text.replace(_needle, "        deadline.require_active()?;\\\\n", 1))',
+              'status.write_text(_text.replace(_needle, "        deadline.require_active()?;\n", 1))',
           ])
           text = text.replace(generic, first, 1)
           text = text.replace(generic, second, 1)
