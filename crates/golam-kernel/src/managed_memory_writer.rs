@@ -11,9 +11,7 @@ use golam_core::memory::{
 };
 use golam_core::memory_storage::{MemoryLayout, MemoryLayoutError};
 use golam_core::tool_request::BindingDigest;
-use golam_core::{
-    CanonicalEncoder, EffectAttemptId, EffectId, EffectTransitionId, EventId,
-};
+use golam_core::{CanonicalEncoder, EffectAttemptId, EffectId, EffectTransitionId, EventId};
 use golam_ledger::effects::{
     CompareAndSwapEffect, EffectStore, EffectStoreError, FinishEffectAttempt, StartEffectAttempt,
 };
@@ -88,15 +86,15 @@ impl PreparedManagedMemoryWrite {
         self.attempt_id
     }
 
-    pub const fn effect_id(&self) -> EffectId {
+    pub fn effect_id(&self) -> EffectId {
         self.prepared.intent().effect_id
     }
 
-    pub const fn expected_target_identity_ref(&self) -> BindingDigest {
+    pub fn expected_target_identity_ref(&self) -> BindingDigest {
         self.prepared.intent().expected_markdown_target_identity_ref
     }
 
-    pub const fn expected_content_digest(&self) -> BindingDigest {
+    pub fn expected_content_digest(&self) -> BindingDigest {
         self.prepared.intent().expected_markdown_content_digest
     }
 }
@@ -137,20 +135,31 @@ impl fmt::Display for ManagedMemoryWriterError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Layout(error) => write!(f, "managed-memory layout failed: {error}"),
-            Self::Authority(error) => write!(f, "managed-memory PREPARED authority failed: {error}"),
-            Self::Operational(error) => write!(f, "managed-memory operational state failed: {error}"),
+            Self::Authority(error) => {
+                write!(f, "managed-memory PREPARED authority failed: {error}")
+            }
+            Self::Operational(error) => {
+                write!(f, "managed-memory operational state failed: {error}")
+            }
             Self::PromotionOperational(error) => {
-                write!(f, "managed-memory promotion operational state failed: {error}")
+                write!(
+                    f,
+                    "managed-memory promotion operational state failed: {error}"
+                )
             }
             Self::Evidence(error) => write!(f, "managed-memory authority evidence failed: {error}"),
-            Self::Effect(error) => write!(f, "managed-memory Effect Gate transition failed: {error}"),
-            Self::Readback(error) => write!(f, "managed-memory cross-store readback failed: {error}"),
+            Self::Effect(error) => {
+                write!(f, "managed-memory Effect Gate transition failed: {error}")
+            }
+            Self::Readback(error) => {
+                write!(f, "managed-memory cross-store readback failed: {error}")
+            }
             Self::BindingMismatch(field) => {
                 write!(f, "managed-memory writer binding mismatch: {field}")
             }
-            Self::BlockingUnknownOutcome => f.write_str(
-                "managed-memory mutation is blocked by an unresolved UNKNOWN_OUTCOME",
-            ),
+            Self::BlockingUnknownOutcome => {
+                f.write_str("managed-memory mutation is blocked by an unresolved UNKNOWN_OUTCOME")
+            }
             Self::MarkdownPathOutsideVault => {
                 f.write_str("managed-memory Markdown target is outside the canonical memory vault")
             }
@@ -277,9 +286,8 @@ impl ManagedMemoryWriter {
         operational.record_prepared(prepared)?;
 
         let mut promotion_operational = MemoryPromotionOperationalStore::open(&self.memory)?;
-        promotion_operational.record(
-            promotion.operational_evidence(execution.promotion_recorded_at_unix_ms),
-        )?;
+        promotion_operational
+            .record(promotion.operational_evidence(execution.promotion_recorded_at_unix_ms))?;
         promotion_operational.require_exact(promotion.evidence_id(), promotion.candidate_id())?;
 
         let intent = prepared.intent();
@@ -659,7 +667,13 @@ mod tests {
 
     #[test]
     fn managed_writer_identity_is_stable_and_distinct() {
-        assert_eq!(ManagedMemoryWriter::writer_id(), ManagedMemoryWriter::writer_id());
-        assert_ne!(ManagedMemoryWriter::writer_id().0, BindingDigest::new([0; 32]));
+        assert_eq!(
+            ManagedMemoryWriter::writer_id(),
+            ManagedMemoryWriter::writer_id()
+        );
+        assert_ne!(
+            ManagedMemoryWriter::writer_id().0,
+            BindingDigest::new([0; 32])
+        );
     }
 }

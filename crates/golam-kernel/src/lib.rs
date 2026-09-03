@@ -6,6 +6,7 @@ mod capability_lease;
 mod client_auth;
 mod client_enrollment;
 mod effect_execution;
+mod managed_memory_writer;
 mod operations;
 pub mod policy_candidate;
 pub mod policy_lifecycle;
@@ -52,6 +53,11 @@ pub use golam_ledger::recovery::{
     RecoveryError, RecoveryIssue, RecoveryIssueKind, RecoveryMode, RecoveryReport, RecoveryScanner,
 };
 pub use golam_ledger::session_read::SessionSummary;
+pub use managed_memory_writer::{
+    CommittedManagedMemoryWrite, ManagedMarkdownCommitObservation, ManagedMemoryExecutionFinish,
+    ManagedMemoryExecutionStart, ManagedMemoryWriter, ManagedMemoryWriterError,
+    PreparedManagedMemoryWrite,
+};
 pub use operations::{
     KernelAppendGoal, KernelCreateCheckpoint, KernelCreateFork, KernelCreateSession,
     KernelOperationError,
