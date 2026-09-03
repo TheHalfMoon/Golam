@@ -12,6 +12,7 @@ pub mod harness_state;
 pub mod memory;
 pub mod memory_markdown;
 pub mod memory_storage;
+pub mod memory_transition;
 pub mod model_backend;
 pub mod paths;
 pub mod routing;
