@@ -230,7 +230,6 @@ impl MemoryRestartStore {
                 row.get::<_, Option<String>>(14)?,
             ))
         })?;
-
         let mut cases = Vec::new();
         for row in rows {
             let row = row?;
@@ -246,7 +245,6 @@ impl MemoryRestartStore {
             let effect_state = row
                 .14
                 .ok_or(MemoryRestartError::InvalidRecord("effect current state"))?;
-
             if row.13.as_slice() != crate::payload_hash(&row.12) {
                 return Err(MemoryRestartError::InvalidRecord(
                     "prepared intent integrity hash",
@@ -275,7 +273,6 @@ impl MemoryRestartStore {
                     "prepared target integrity binding",
                 ));
             }
-
             if !matches!(effect_state.as_str(), "succeeded" | "failed" | "denied") {
                 cases.push(MemoryRestartCase {
                     effect_id,
@@ -316,11 +313,9 @@ impl MemoryRestartStore {
         if case.memory_store_ref != self.memory.store_id() {
             return Err(MemoryRestartError::StoreBindingMismatch);
         }
-
         self.ensure_operational_prepared(case)?;
         let authority_readback_ref =
             self.authority_readback_ref(case.effect_id, case.intent_digest)?;
-
         if let MemoryRestartObservation::Regular {
             target_identity_ref,
             content_digest,
@@ -337,11 +332,9 @@ impl MemoryRestartStore {
                 terminal_at_unix_ms,
             );
         }
-
         if let Some(committed) = self.prove_committed(case, observation, authority_readback_ref)? {
             return self.resolve_committed(case, committed, finished_at, terminal_at_unix_ms);
         }
-
         self.resolve_unknown(
             case,
             authority_readback_ref,
@@ -750,7 +743,10 @@ impl MemoryRestartStore {
         Ok(None)
     }
 
-    fn ensure_operational_prepared(&self, case: &MemoryRestartCase) -> Result<(), MemoryRestartError> {
+    fn ensure_operational_prepared(
+        &self,
+        case: &MemoryRestartCase,
+    ) -> Result<(), MemoryRestartError> {
         drop(MemoryOperationalStore::open(&self.memory)?);
         let connection = self.operational_connection()?;
         let existing = connection
