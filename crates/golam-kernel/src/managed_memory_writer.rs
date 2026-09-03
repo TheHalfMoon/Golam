@@ -10,10 +10,17 @@ use golam_core::memory::{
     MemoryWriterId, PreparedMemoryMutationIntent,
 };
 use golam_core::memory_storage::{MemoryLayout, MemoryLayoutError};
+use golam_core::memory_transition::validate_memory_transition;
 use golam_core::tool_request::BindingDigest;
 use golam_core::{CanonicalEncoder, EffectAttemptId, EffectId, EffectTransitionId, EventId};
 use golam_ledger::effects::{
     CompareAndSwapEffect, EffectStore, EffectStoreError, FinishEffectAttempt, StartEffectAttempt,
+};
+use golam_ledger::memory_control_authority::{
+    MemoryControlAuthorityError, MemoryControlAuthorityGate, QualifiedMemoryControlAuthority,
+};
+use golam_ledger::memory_control_evidence::{
+    MemoryControlEvidenceError, MemoryControlEvidenceStore,
 };
 use golam_ledger::memory_evidence::{
     MemoryEvidenceError, MemoryEvidenceStore, PromotionEvidence, ReconciliationEvidence,
@@ -124,6 +131,8 @@ pub enum ManagedMemoryWriterError {
     Operational(MemoryOperationalError),
     PromotionOperational(MemoryPromotionOperationalError),
     PromotionGate(MemoryPromotionGateError),
+    ControlAuthority(MemoryControlAuthorityError),
+    ControlEvidence(MemoryControlEvidenceError),
     Evidence(MemoryEvidenceError),
     Effect(EffectStoreError),
     Readback(MemoryWriterReadbackError),
@@ -152,6 +161,12 @@ impl fmt::Display for ManagedMemoryWriterError {
             }
             Self::PromotionGate(error) => {
                 write!(f, "managed-memory promotion revalidation failed: {error}")
+            }
+            Self::ControlAuthority(error) => {
+                write!(f, "managed-memory control revalidation failed: {error}")
+            }
+            Self::ControlEvidence(error) => {
+                write!(f, "managed-memory control evidence failed: {error}")
             }
             Self::Evidence(error) => write!(f, "managed-memory authority evidence failed: {error}"),
             Self::Effect(error) => {
@@ -188,6 +203,8 @@ impl Error for ManagedMemoryWriterError {
             Self::Operational(error) => Some(error),
             Self::PromotionOperational(error) => Some(error),
             Self::PromotionGate(error) => Some(error),
+            Self::ControlAuthority(error) => Some(error),
+            Self::ControlEvidence(error) => Some(error),
             Self::Evidence(error) => Some(error),
             Self::Effect(error) => Some(error),
             Self::Readback(error) => Some(error),
@@ -223,6 +240,18 @@ impl From<MemoryPromotionOperationalError> for ManagedMemoryWriterError {
 impl From<MemoryPromotionGateError> for ManagedMemoryWriterError {
     fn from(value: MemoryPromotionGateError) -> Self {
         Self::PromotionGate(value)
+    }
+}
+
+impl From<MemoryControlAuthorityError> for ManagedMemoryWriterError {
+    fn from(value: MemoryControlAuthorityError) -> Self {
+        Self::ControlAuthority(value)
+    }
+}
+
+impl From<MemoryControlEvidenceError> for ManagedMemoryWriterError {
+    fn from(value: MemoryControlEvidenceError) -> Self {
+        Self::ControlEvidence(value)
     }
 }
 
@@ -276,10 +305,8 @@ impl ManagedMemoryWriter {
         markdown_path: &Path,
         execution: ManagedMemoryExecutionStart<'_>,
     ) -> Result<PreparedManagedMemoryWrite, ManagedMemoryWriterError> {
-        validate_bindings(&self.memory, promotion, prepared, version, markdown_path)?;
+        validate_promotion_bindings(&self.memory, promotion, prepared, version, markdown_path)?;
 
-        // An unresolved prior UNKNOWN_OUTCOME blocks dependent managed-memory work
-        // before this effect can persist promotion or PREPARED state.
         let operational = MemoryOperationalStore::open(&self.memory)?;
         if operational.has_blocking_unknown_outcome()? {
             return Err(ManagedMemoryWriterError::BlockingUnknownOutcome);
@@ -310,6 +337,65 @@ impl ManagedMemoryWriter {
             .record(promotion.operational_evidence(execution.promotion_recorded_at_unix_ms))?;
         promotion_operational.require_exact(promotion.evidence_id(), promotion.candidate_id())?;
 
+        self.begin_prepared_execution(
+            prepared,
+            version,
+            markdown_path,
+            authority_readback_ref,
+            execution,
+        )
+    }
+
+    pub fn prepare_controlled_write(
+        &self,
+        control: &QualifiedMemoryControlAuthority,
+        prepared: &PreparedMemoryMutationIntent,
+        version: &MemoryVersion,
+        markdown_path: &Path,
+        execution: ManagedMemoryExecutionStart<'_>,
+    ) -> Result<PreparedManagedMemoryWrite, ManagedMemoryWriterError> {
+        validate_control_bindings(&self.memory, control, prepared, version, markdown_path)?;
+
+        let operational = MemoryOperationalStore::open(&self.memory)?;
+        if operational.has_blocking_unknown_outcome()? {
+            return Err(ManagedMemoryWriterError::BlockingUnknownOutcome);
+        }
+
+        let mut control_gate = MemoryControlAuthorityGate::open(&self.authority)?;
+        control_gate.revalidate(&self.authority, control, execution.started_at)?;
+
+        let mut authority = MemoryWriterAuthorityStore::open(&self.authority)?;
+        let prepared_authority = authority.prepare(prepared, version, markdown_path)?;
+        let authority_readback_ref = authority.readback_ref(prepared_authority)?;
+
+        let mut control_evidence = MemoryControlEvidenceStore::open(&self.authority)?;
+        let persisted = control_evidence.persist(prepared, control)?;
+        if persisted != control.evidence_id() {
+            return Err(ManagedMemoryWriterError::BindingMismatch(
+                "control evidence identity",
+            ));
+        }
+
+        let mut operational = operational;
+        operational.record_prepared(prepared)?;
+
+        self.begin_prepared_execution(
+            prepared,
+            version,
+            markdown_path,
+            authority_readback_ref,
+            execution,
+        )
+    }
+
+    fn begin_prepared_execution(
+        &self,
+        prepared: &PreparedMemoryMutationIntent,
+        version: &MemoryVersion,
+        markdown_path: &Path,
+        authority_readback_ref: BindingDigest,
+        execution: ManagedMemoryExecutionStart<'_>,
+    ) -> Result<PreparedManagedMemoryWrite, ManagedMemoryWriterError> {
         let intent = prepared.intent();
         let mut effects = EffectStore::open(&self.authority)?;
         effects.compare_and_swap(CompareAndSwapEffect {
@@ -540,22 +626,50 @@ impl ManagedMemoryWriter {
     }
 }
 
-fn validate_bindings(
+fn validate_common_bindings(
     memory: &MemoryLayout,
-    promotion: &QualifiedMemoryPromotion,
     prepared: &PreparedMemoryMutationIntent,
     version: &MemoryVersion,
     markdown_path: &Path,
 ) -> Result<(), ManagedMemoryWriterError> {
-    version
-        .validate()
-        .map_err(|_| ManagedMemoryWriterError::BindingMismatch("memory version contract"))?;
+    validate_memory_transition(prepared, version)
+        .map_err(|_| ManagedMemoryWriterError::BindingMismatch("memory transition contract"))?;
     let intent = prepared.intent();
     if intent.memory_operational_store_ref != memory.store_id() {
         return Err(ManagedMemoryWriterError::BindingMismatch(
             "memory operational store",
         ));
     }
+    if version.mutation_effect_ref != intent.effect_id {
+        return Err(ManagedMemoryWriterError::BindingMismatch(
+            "mutation effect identity",
+        ));
+    }
+    if version.committed_by_writer_identity != ManagedMemoryWriter::writer_id() {
+        return Err(ManagedMemoryWriterError::BindingMismatch(
+            "managed writer identity",
+        ));
+    }
+    if !intent.item_ids.contains(&version.item_id) {
+        return Err(ManagedMemoryWriterError::BindingMismatch(
+            "memory version item",
+        ));
+    }
+    if !markdown_path.starts_with(memory.vault_dir()) || memory.is_operational_path(markdown_path) {
+        return Err(ManagedMemoryWriterError::MarkdownPathOutsideVault);
+    }
+    Ok(())
+}
+
+fn validate_promotion_bindings(
+    memory: &MemoryLayout,
+    promotion: &QualifiedMemoryPromotion,
+    prepared: &PreparedMemoryMutationIntent,
+    version: &MemoryVersion,
+    markdown_path: &Path,
+) -> Result<(), ManagedMemoryWriterError> {
+    validate_common_bindings(memory, prepared, version, markdown_path)?;
+    let intent = prepared.intent();
     if intent.candidate_ref != Some(promotion.candidate_id()) {
         return Err(ManagedMemoryWriterError::BindingMismatch(
             "promotion candidate",
@@ -576,23 +690,64 @@ fn validate_bindings(
             "promotion evidence",
         ));
     }
-    if version.mutation_effect_ref != intent.effect_id {
+    Ok(())
+}
+
+fn validate_control_bindings(
+    memory: &MemoryLayout,
+    control: &QualifiedMemoryControlAuthority,
+    prepared: &PreparedMemoryMutationIntent,
+    version: &MemoryVersion,
+    markdown_path: &Path,
+) -> Result<(), ManagedMemoryWriterError> {
+    validate_common_bindings(memory, prepared, version, markdown_path)?;
+    let intent = prepared.intent();
+    let target = control.target();
+    if intent.candidate_ref.is_some() {
         return Err(ManagedMemoryWriterError::BindingMismatch(
-            "mutation effect identity",
+            "candidate-less control operation",
         ));
     }
-    if version.committed_by_writer_identity != ManagedMemoryWriter::writer_id() {
+    if control.effect_id() != intent.effect_id {
         return Err(ManagedMemoryWriterError::BindingMismatch(
-            "managed writer identity",
+            "control effect identity",
         ));
     }
-    if !intent.item_ids.contains(&version.item_id) {
+    if intent.operation != target.operation
+        || intent.item_ids.len() != 1
+        || intent.item_ids[0] != target.item_id
+    {
         return Err(ManagedMemoryWriterError::BindingMismatch(
-            "memory version item",
+            "control operation target",
         ));
     }
-    if !markdown_path.starts_with(memory.vault_dir()) || memory.is_operational_path(markdown_path) {
-        return Err(ManagedMemoryWriterError::MarkdownPathOutsideVault);
+    if intent.expected_current_versions.len() != 1
+        || intent.expected_current_versions[0].item_id != target.item_id
+        || intent.expected_current_versions[0].expected_version != Some(target.expected_version)
+    {
+        return Err(ManagedMemoryWriterError::BindingMismatch(
+            "control expected version",
+        ));
+    }
+    if version.scope != target.scope || version.taint_set != target.taint_set {
+        return Err(ManagedMemoryWriterError::BindingMismatch(
+            "control scope or taint",
+        ));
+    }
+    if intent.kernel_authorization_ref != control.kernel_authorization_ref() {
+        return Err(ManagedMemoryWriterError::BindingMismatch(
+            "Kernel authorization",
+        ));
+    }
+    if intent.promotion_authority_ref != control.mutation_authority_ref() {
+        return Err(ManagedMemoryWriterError::BindingMismatch(
+            "control authority",
+        ));
+    }
+    if version.promotion_evidence_ref != control.evidence_id() {
+        return Err(ManagedMemoryWriterError::BindingMismatch(
+            "control authority evidence",
+        ));
     }
     Ok(())
 }
