@@ -17,107 +17,100 @@ jobs:
           ref: impl/005-local-tools-context-memory
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
-      - name: Apply bounded repair
+      - name: Apply bounded T005-040 closure repair
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('scripts/qualification/repair-t005-040-git-observation.py')
-          text = path.read_text()
-          old = '''replace_once(
-              pack,
-              ''' + "'''" + '''                let body = apply_delta(&base.bytes, &delta, bounds.max_object_bytes)?;\n                (base.kind, body)\n''' + "'''" + ''',
-              ''' + "'''" + '''                let body = deadline\n                    .run_step(|| apply_delta(&base.bytes, &delta, bounds.max_object_bytes))??;\n                (base.kind, body)\n''' + "'''" + ''',
-          )
-          # The REF_DELTA branch has the same body after the first replacement; patch the remaining copy.
-          replace_once(
-              pack,
-              ''' + "'''" + '''                let body = apply_delta(&base.bytes, &delta, bounds.max_object_bytes)?;\n                (base.kind, body)\n''' + "'''" + ''',
-              ''' + "'''" + '''                let body = deadline\n                    .run_step(|| apply_delta(&base.bytes, &delta, bounds.max_object_bytes))??;\n                (base.kind, body)\n''' + "'''" + ''',
-          )'''
-          new = '''text = pack.read_text()
-          old = ''' + "'''" + '''                let body = apply_delta(&base.bytes, &delta, bounds.max_object_bytes)?;\n                (base.kind, body)\n''' + "'''" + '''
-          if text.count(old) != 2:
-              raise SystemExit(f"{pack}: expected two delta apply bodies, found {text.count(old)}")
-          text = text.replace(old, ''' + "'''" + '''                let body = deadline\n                    .run_step(|| apply_delta(&base.bytes, &delta, bounds.max_object_bytes))??;\n                (base.kind, body)\n''' + "'''" + ''')
-          pack.write_text(text)'''
-          if text.count(old) != 1:
-              raise SystemExit(f'expected one script repair block, found {text.count(old)}')
-          path.write_text(text.replace(old, new, 1))
-          PY
-          python scripts/qualification/repair-t005-040-git-observation.py
-          python - <<'PY'
-          from pathlib import Path
-          import re
-
-          observe = Path('crates/golamd/src/git_observe.rs')
-          text = observe.read_text()
-          test_only_imports = (
-              ('use std::fs;\n', '#[cfg(test)]\nuse std::fs;\n'),
-              ('use std::path::Path;\n', '#[cfg(test)]\nuse std::path::Path;\n'),
-          )
-          for original, replacement in test_only_imports:
-              if text.count(original) != 1:
-                  raise SystemExit(
-                      f'{observe}: expected one test-only import {original!r}, found {text.count(original)}'
-                  )
-              text = text.replace(original, replacement, 1)
-          duration = 'use std::time::Duration;\n'
-          if text.count(duration) != 1:
-              raise SystemExit(
-                  f'{observe}: expected one unused Duration import, found {text.count(duration)}'
-              )
-          text = text.replace(duration, '', 1)
-          observe.write_text(text)
-
-          read = Path('crates/golamd/src/git_read.rs')
-          text = read.read_text()
-          pattern = re.compile(
-              r'\n\s*pub\(crate\) const fn operation_deadline\(&self\) -> GitOperationDeadline \{\s*self\.deadline\s*\}\s*',
-              re.MULTILINE,
-          )
-          text, count = pattern.subn('\n', text, count=1)
-          if count != 1:
-              raise SystemExit(f'{read}: expected one unused deadline accessor, found {count}')
-          read.write_text(text)
-
-          pack = Path('crates/golamd/src/git_pack.rs')
-          text = pack.read_text()
-          marker = 'fn resolve_entry(\n'
-          if text.count(marker) != 1:
-              raise SystemExit(f'{pack}: expected one resolve_entry marker, found {text.count(marker)}')
-          annotation = '''#[expect(
-              clippy::too_many_arguments,
-              reason = "recursive pack resolution keeps the shared operation deadline and immutable parser context explicit",
-          )]
-          '''
-          pack.write_text(text.replace(marker, annotation + marker, 1))
-          PY
+          python scripts/qualification/repair-t005-040-closure.py
       - name: Format
         run: cargo +1.98.0 fmt --all
       - name: Clippy
         run: cargo +1.98.0 clippy --locked -p golamd --all-targets -- -D warnings
-      - name: Focused tests
+      - name: Focused T005-040 tests
         run: |
           cargo +1.98.0 test --locked -p golamd --bin golamd local_dir::tests::
           cargo +1.98.0 test --locked -p golamd --bin golamd git_read_budget::tests::
           cargo +1.98.0 test --locked -p golamd --bin golamd git_pack::tests::
           cargo +1.98.0 test --locked -p golamd --bin golamd git_observe::tests::
-      - name: Guard mutation set and push
+          cargo +1.98.0 test --locked -p golamd --bin golamd git_status::tests::
+      - name: Guard mutation set, restore read-only CI, and push
         shell: bash
         run: |
           set -euo pipefail
-          git rm -f scripts/qualification/repair-t005-040-git-observation.py
+          git rm -f scripts/qualification/repair-t005-040-closure.py
+          cat > .github/workflows/ci.yml <<'YAML'
+          name: ci
+
+          on:
+            pull_request:
+            push:
+              branches: [main]
+
+          permissions:
+            contents: read
+
+          jobs:
+            rust:
+              name: rust-${{ matrix.os }}
+              strategy:
+                fail-fast: false
+                matrix:
+                  os: [ubuntu-latest, macos-latest, windows-latest]
+              runs-on: ${{ matrix.os }}
+              steps:
+                - uses: actions/checkout@v4
+                - name: Install pinned Rust toolchain
+                  run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+                - name: Format
+                  run: cargo +1.98.0 fmt --all -- --check
+                - name: Clippy
+                  run: cargo +1.98.0 clippy --locked --workspace --all-targets -- -D warnings
+                - name: Test
+                  run: cargo +1.98.0 test --locked --workspace --all-targets
+                - name: Property qualification
+                  run: |
+                    cargo +1.98.0 test --locked -p golam-effects --test qualification_properties
+                    cargo +1.98.0 test --locked -p golam-ledger --test qualification_properties
+                - name: Bounded fuzz smoke
+                  run: |
+                    cargo +1.98.0 test --locked -p golam-ipc --test fuzz_smoke
+                    cargo +1.98.0 test --locked -p golam-ledger --test fuzz_smoke
+                    cargo +1.98.0 test --locked -p golam-kernel --test spec003_fuzz_smoke
+                - name: IPC transport qualification (Unix)
+                  if: runner.os != 'Windows'
+                  run: |
+                    cargo +1.98.0 test --locked -p golam-ipc unix_transport::
+                - name: IPC transport qualification (Windows)
+                  if: runner.os == 'Windows'
+                  run: |
+                    cargo +1.98.0 test --locked -p golam-ipc windows_transport::
+                - name: Authenticated daemon IPC qualification
+                  run: |
+                    cargo +1.98.0 test --locked -p golamd --bin golamd connection::tests::
+                - name: Adversarial authority qualification
+                  run: |
+                    cargo +1.98.0 test --locked -p golam-ipc --test adversarial
+                    cargo +1.98.0 test --locked -p golam-kernel --test hostile_adapter
+                    cargo +1.98.0 test --locked -p golam-kernel client_auth::tests::
+                - name: Build daemon for external locality observation
+                  run: cargo +1.98.0 build --locked -p golamd --bin golamd
+                - name: Strict-local external network observation (Unix)
+                  if: runner.os != 'Windows'
+                  run: bash scripts/qualification/strict-local-no-network.sh target/debug/golamd
+                - name: Strict-local external network observation (Windows)
+                  if: runner.os == 'Windows'
+                  shell: pwsh
+                  run: ./scripts/qualification/strict-local-no-network.ps1 target/debug/golamd.exe
+          YAML
           mapfile -t changed < <(git diff HEAD --name-only | sort)
           printf '%s\n' "${changed[@]}"
           expected=(
+            .github/workflows/ci.yml
             crates/golamd/src/git_observe.rs
             crates/golamd/src/git_pack.rs
-            crates/golamd/src/git_read.rs
+            crates/golamd/src/git_status.rs
             crates/golamd/src/local_dir.rs
-            crates/golamd/src/main.rs
-            scripts/qualification/repair-t005-040-git-observation.py
+            scripts/qualification/repair-t005-040-closure.py
           )
           mapfile -t expected_sorted < <(printf '%s\n' "${expected[@]}" | sort)
           test "${#changed[@]}" -eq "${#expected_sorted[@]}"
@@ -126,6 +119,6 @@ jobs:
           done
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add crates/golamd/src/main.rs crates/golamd/src/local_dir.rs crates/golamd/src/git_read.rs crates/golamd/src/git_pack.rs crates/golamd/src/git_observe.rs
-          git commit -m "fix(005): close Git observation deadline and directory races"
+          git add .github/workflows/ci.yml crates/golamd/src/git_observe.rs crates/golamd/src/git_pack.rs crates/golamd/src/git_status.rs crates/golamd/src/local_dir.rs
+          git commit -m "fix(005): close Git observation evidence and deadline boundaries"
           git push origin HEAD:impl/005-local-tools-context-memory
