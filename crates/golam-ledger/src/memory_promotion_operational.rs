@@ -162,7 +162,9 @@ impl MemoryPromotionOperationalStore {
                 evidence.candidate_id.0.bytes().to_vec(),
                 evidence.promotion_authority_ref.bytes().to_vec(),
                 evidence.approving_principal.map(PrincipalId::as_str),
-                evidence.verifier_policy_ref.map(|value| value.bytes().to_vec()),
+                evidence
+                    .verifier_policy_ref
+                    .map(|value| value.bytes().to_vec()),
                 evidence.authority_evidence_ref.bytes().to_vec(),
                 to_i64(evidence.recorded_at_unix_ms)?,
                 integrity_hash.to_vec(),
