@@ -6,6 +6,8 @@ mod deadline_io;
 pub mod git_index;
 pub mod git_observe;
 pub mod git_pack;
+#[cfg(test)]
+mod git_pack_ref_delta_qualification_tests;
 pub mod git_read;
 pub mod git_read_budget;
 pub mod git_sha1;
