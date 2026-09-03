@@ -1,64 +1,62 @@
 name: ci
 
 on:
+  pull_request:
   push:
-    branches:
-      - 'impl/005-local-tools-context-memory'
+    branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  repair-memory-commit-clippy:
-    runs-on: ubuntu-latest
+  rust:
+    name: rust-${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: impl/005-local-tools-context-memory
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
-      - name: Apply exact Clippy repair
-        shell: bash
+      - name: Format
+        run: cargo +1.98.0 fmt --all -- --check
+      - name: Clippy
+        run: cargo +1.98.0 clippy --locked --workspace --all-targets -- -D warnings
+      - name: Test
+        run: cargo +1.98.0 test --locked --workspace --all-targets
+      - name: Property qualification
         run: |
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('crates/golamd/src/memory_commit.rs')
-          text = path.read_text()
-          public = 'pub fn commit_existing_markdown(\n'
-          if text.count(public) != 1:
-              raise SystemExit(f'expected one public commit function, found {text.count(public)}')
-          text = text.replace(
-              public,
-              '#[expect(clippy::too_many_arguments, reason = "commit primitive binds exact prepared target state")]\n' + public,
-              1,
-          )
-          old = '#[allow(clippy::too_many_arguments)]\nfn commit_existing_with_hook<F>(\n'
-          if text.count(old) != 1:
-              raise SystemExit(f'expected one hook lint attribute, found {text.count(old)}')
-          text = text.replace(
-              old,
-              '#[expect(clippy::too_many_arguments, reason = "test hook preserves the exact public commit binding")]\nfn commit_existing_with_hook<F>(\n',
-              1,
-          )
-          path.write_text(text)
-          PY
-      - name: Format and qualify focused primitive
+          cargo +1.98.0 test --locked -p golam-effects --test qualification_properties
+          cargo +1.98.0 test --locked -p golam-ledger --test qualification_properties
+      - name: Bounded fuzz smoke
         run: |
-          cargo +1.98.0 fmt --all
-          cargo +1.98.0 fmt --all -- --check
-          cargo +1.98.0 clippy --locked -p golamd --all-targets -- -D warnings
-          cargo +1.98.0 test --locked -p golamd --bin golamd memory_commit::tests::
-      - name: Guard exact mutation and push
-        shell: bash
+          cargo +1.98.0 test --locked -p golam-ipc --test fuzz_smoke
+          cargo +1.98.0 test --locked -p golam-ledger --test fuzz_smoke
+          cargo +1.98.0 test --locked -p golam-kernel --test spec003_fuzz_smoke
+      - name: IPC transport qualification (Unix)
+        if: runner.os != 'Windows'
         run: |
-          set -euo pipefail
-          mapfile -t changed < <(git diff --name-only | sort)
-          printf '%s\n' "${changed[@]}"
-          test "${#changed[@]}" -eq 1
-          test "${changed[0]}" = "crates/golamd/src/memory_commit.rs"
-          git diff --check
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add crates/golamd/src/memory_commit.rs
-          git commit -m "fix(005): document bounded memory commit call surface"
-          git push origin HEAD:impl/005-local-tools-context-memory
+          cargo +1.98.0 test --locked -p golam-ipc unix_transport::
+      - name: IPC transport qualification (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc windows_transport::
+      - name: Authenticated daemon IPC qualification
+        run: |
+          cargo +1.98.0 test --locked -p golamd --bin golamd connection::tests::
+      - name: Adversarial authority qualification
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc --test adversarial
+          cargo +1.98.0 test --locked -p golam-kernel --test hostile_adapter
+          cargo +1.98.0 test --locked -p golam-kernel client_auth::tests::
+      - name: Build daemon for external locality observation
+        run: cargo +1.98.0 build --locked -p golamd --bin golamd
+      - name: Strict-local external network observation (Unix)
+        if: runner.os != 'Windows'
+        run: bash scripts/qualification/strict-local-no-network.sh target/debug/golamd
+      - name: Strict-local external network observation (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/qualification/strict-local-no-network.ps1 target/debug/golamd.exe
