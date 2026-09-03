@@ -59,10 +59,18 @@ impl fmt::Display for MemoryLayoutError {
             Self::Io(error) => write!(f, "memory layout I/O error: {error}"),
             Self::Core(error) => write!(f, "memory layout canonical encoding error: {error}"),
             Self::Symlink(path) => {
-                write!(f, "memory layout directory is a symlink: {}", path.display())
+                write!(
+                    f,
+                    "memory layout directory is a symlink: {}",
+                    path.display()
+                )
             }
             Self::NotDirectory(path) => {
-                write!(f, "memory layout path is not a directory: {}", path.display())
+                write!(
+                    f,
+                    "memory layout path is not a directory: {}",
+                    path.display()
+                )
             }
             Self::NonUnicodePath(path) => write!(
                 f,
@@ -285,10 +293,7 @@ mod tests {
         let item = MemoryItemId(BindingDigest::new([7; 32]));
         let user = layout.item_path(MemoryVaultScope::User, item).unwrap();
         let project = layout
-            .item_path(
-                MemoryVaultScope::Project(BindingDigest::new([8; 32])),
-                item,
-            )
+            .item_path(MemoryVaultScope::Project(BindingDigest::new([8; 32])), item)
             .unwrap();
         assert!(user.starts_with(runtime.data_dir.join("memory/vault/user")));
         assert!(project.starts_with(runtime.data_dir.join("memory/vault/projects")));
