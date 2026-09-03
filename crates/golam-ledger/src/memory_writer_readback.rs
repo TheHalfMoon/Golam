@@ -10,12 +10,15 @@ use golam_core::tool_request::BindingDigest;
 use golam_core::{CanonicalEncoder, CoreError};
 use rusqlite::{Connection, OptionalExtension, params};
 
+use crate::memory_derivative::MemoryDerivativeError;
+
 const MEMORY_SQLITE_READBACK_DOMAIN: &[u8] = b"golam:memory-sqlite-readback:v1";
 
 #[derive(Debug)]
 pub enum MemoryWriterReadbackError {
     Sqlite(rusqlite::Error),
     Core(CoreError),
+    Derivative(MemoryDerivativeError),
     MissingEffectState,
     MissingVersion,
     BindingMismatch(&'static str),
@@ -28,6 +31,9 @@ impl fmt::Display for MemoryWriterReadbackError {
             Self::Sqlite(error) => write!(f, "managed-memory SQLite readback failed: {error}"),
             Self::Core(error) => {
                 write!(f, "managed-memory SQLite readback encoding failed: {error}")
+            }
+            Self::Derivative(error) => {
+                write!(f, "managed-memory derivative invalidation failed: {error}")
             }
             Self::MissingEffectState => {
                 f.write_str("managed-memory SQLite effect state is missing")
@@ -49,6 +55,7 @@ impl Error for MemoryWriterReadbackError {
         match self {
             Self::Sqlite(error) => Some(error),
             Self::Core(error) => Some(error),
+            Self::Derivative(error) => Some(error),
             _ => None,
         }
     }
@@ -66,18 +73,16 @@ impl From<CoreError> for MemoryWriterReadbackError {
     }
 }
 
+impl From<MemoryDerivativeError> for MemoryWriterReadbackError {
+    fn from(value: MemoryDerivativeError) -> Self {
+        Self::Derivative(value)
+    }
+}
+
 pub fn invalidate_memory_derivatives(
     layout: &MemoryLayout,
 ) -> Result<usize, MemoryWriterReadbackError> {
-    let connection = Connection::open(layout.operational_db_path())?;
-    connection.execute_batch(
-        "PRAGMA foreign_keys = ON; PRAGMA synchronous = FULL; PRAGMA busy_timeout = 5000;",
-    )?;
-    Ok(connection.execute(
-        "UPDATE memory_derivative_generations SET status = 2 \
-         WHERE store_ref = ?1 AND status != 2",
-        params![layout.store_id().0.bytes().to_vec()],
-    )?)
+    Ok(crate::memory_derivative::invalidate_memory_derivatives(layout)?)
 }
 
 pub fn verify_memory_sqlite_readback(

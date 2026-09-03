@@ -36,6 +36,7 @@ pub mod integrity;
 pub mod manual_review;
 pub mod memory_control_authority;
 pub mod memory_control_evidence;
+pub mod memory_derivative;
 pub mod memory_evidence;
 #[path = "memory_operational_store.rs"]
 pub mod memory_operational;
