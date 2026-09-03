@@ -720,6 +720,7 @@ fn parse_packed_ref(
     Ok(found)
 }
 
+#[cfg(test)]
 fn decompress_zlib_bounded(
     compressed: &[u8],
     max_output_bytes: usize,
