@@ -173,8 +173,12 @@ impl fmt::Display for ManagedMarkdownError {
                 f.write_str("managed Markdown front matter line is not canonical key/value data")
             }
             Self::InvalidKey(key) => write!(f, "managed Markdown metadata key is invalid: {key}"),
-            Self::InvalidValue(key) => write!(f, "managed Markdown metadata value is invalid: {key}"),
-            Self::DuplicateKey(key) => write!(f, "managed Markdown metadata key is duplicated: {key}"),
+            Self::InvalidValue(key) => {
+                write!(f, "managed Markdown metadata value is invalid: {key}")
+            }
+            Self::DuplicateKey(key) => {
+                write!(f, "managed Markdown metadata key is duplicated: {key}")
+            }
             Self::AuthorityBearingFrontMatter(key) => write!(
                 f,
                 "managed Markdown content attempts to set protected authority metadata: {key}"
@@ -188,7 +192,9 @@ impl fmt::Display for ManagedMarkdownError {
 
 impl std::error::Error for ManagedMarkdownError {}
 
-pub fn parse_managed_markdown(input: &[u8]) -> Result<ManagedMarkdownDocument, ManagedMarkdownError> {
+pub fn parse_managed_markdown(
+    input: &[u8],
+) -> Result<ManagedMarkdownDocument, ManagedMarkdownError> {
     if input.len() > MAX_MARKDOWN_BYTES {
         return Err(ManagedMarkdownError::TooLarge);
     }
@@ -229,9 +235,9 @@ fn validate_key(key: &str) -> Result<(), ManagedMarkdownError> {
     if key.is_empty()
         || key.len() > MAX_KEY_BYTES
         || key.trim() != key
-        || !key
-            .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_' || byte == b'-')
+        || !key.bytes().all(|byte| {
+            byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_' || byte == b'-'
+        })
     {
         return Err(ManagedMarkdownError::InvalidKey(key.to_owned()));
     }
@@ -244,9 +250,7 @@ fn validate_key(key: &str) -> Result<(), ManagedMarkdownError> {
 }
 
 fn validate_value(value: &str) -> Result<(), ManagedMarkdownError> {
-    if value.len() > MAX_VALUE_BYTES
-        || value.contains(['\n', '\r', '\0'])
-        || value.trim() != value
+    if value.len() > MAX_VALUE_BYTES || value.contains(['\n', '\r', '\0']) || value.trim() != value
     {
         return Err(ManagedMarkdownError::InvalidValue("value".to_owned()));
     }
