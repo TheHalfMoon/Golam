@@ -123,6 +123,10 @@ impl From<LocalFsResolutionError> for MemoryCommitError {
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "commit primitive binds exact prepared target state"
+)]
 pub fn commit_existing_markdown(
     resolver: &LocalFsResolver,
     requested: &RequestedTarget,
@@ -146,7 +150,10 @@ pub fn commit_existing_markdown(
     )
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "test hook preserves the exact public commit binding"
+)]
 fn commit_existing_with_hook<F>(
     resolver: &LocalFsResolver,
     requested: &RequestedTarget,
