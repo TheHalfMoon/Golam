@@ -17,7 +17,122 @@ jobs:
           ref: impl/005-local-tools-context-memory
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
-      - name: Format with pinned toolchain
+      - name: Add exact adversarial coverage
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('crates/golam-ledger/src/memory_promotion_authority.rs')
+          text = path.read_text()
+          import_anchor = '''    use crate::approvals::ApprovalScope;\n'''
+          import_insert = '''    use crate::approval_revocation::{\n        APPROVAL_REVOKE_ACTION, ApprovalRevocationStore, prepare_approval_revocation,\n    };\n'''
+          if text.count(import_anchor) != 1 or import_insert in text:
+              raise SystemExit('approval revocation import anchor mismatch')
+          text = text.replace(import_anchor, import_anchor + import_insert, 1)
+
+          end = text.rfind('\n}')
+          if end < 0:
+              raise SystemExit('test module end missing')
+          tests = r'''
+
+    #[test]
+    fn revoked_human_approval_is_rejected_even_with_fresh_kernel_authorization() {
+        let (runtime, authority) = authority();
+        let policy_ref = digest(80);
+        let candidate = candidate(PromotionRequirement::AttributableHumanApproval {
+            approval_policy_ref: policy_ref,
+        });
+        let principal = PrincipalId::new("owner:owner").unwrap();
+        let resource = promotion_resource(candidate.scope, "human", policy_ref);
+        let effect_id = EffectId(next_id());
+        let approval_id = issue_once_approval(
+            &authority,
+            effect_id,
+            &resource,
+            candidate_taint_digest(&candidate).unwrap(),
+        );
+
+        let revoked_at = "2026-09-03T00:30:00Z";
+        let revocation = prepare_approval_revocation(approval_id, "owner:owner", revoked_at).unwrap();
+        let revocation_effect = EffectId(next_id());
+        create_authorized_effect(
+            &authority,
+            revocation_effect,
+            APPROVAL_REVOKE_ACTION,
+            revocation.resource(),
+            APPROVAL_MUTATION_RISK_CLASS,
+            revocation.intent_digest(),
+            "owner:owner",
+        );
+        let revocation_decision = append_allow(
+            &authority,
+            APPROVAL_REVOKE_ACTION,
+            revocation.resource(),
+        );
+        ApprovalRevocationStore::open(&authority)
+            .unwrap()
+            .revoke(revocation, revocation_decision, revocation_effect)
+            .unwrap();
+
+        let fresh_decision = append_allow(&authority, MEMORY_PROMOTION_ACTION, &resource);
+        assert!(matches!(
+            MemoryPromotionAuthorityValidator::open(&authority)
+                .unwrap()
+                .validate_human(HumanPromotionRequest {
+                    candidate: &candidate,
+                    initiating_principal: &principal,
+                    authorization_decision_id: fresh_decision,
+                    approval_id,
+                    effect_id,
+                    observed_at: "2026-09-03T01:00:00Z",
+                }),
+            Err(MemoryPromotionAuthorityError::Approval(_))
+        ));
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn current_kernel_deny_cannot_be_used_as_promotion_authority() {
+        let (runtime, authority) = authority();
+        let policy_ref = digest(90);
+        let candidate = candidate(PromotionRequirement::AttributableHumanApproval {
+            approval_policy_ref: policy_ref,
+        });
+        let principal = PrincipalId::new("owner:owner").unwrap();
+        let resource = promotion_resource(candidate.scope, "human", policy_ref);
+        let denied = AuthorizationAuditLog::open(&authority)
+            .unwrap()
+            .append(AppendAuthorizationDecision {
+                principal: "owner:owner",
+                action: MEMORY_PROMOTION_ACTION,
+                resource: &resource,
+                context: "scope=memory-promotion",
+                evidence: AuthorizationDecisionEvidence::hard_guard_only("pass"),
+                decision: AuthorizationDecisionKind::Deny,
+                reason_code: "memory_promotion_denied_test",
+            })
+            .unwrap()
+            .decision_id;
+        assert!(matches!(
+            MemoryPromotionAuthorityValidator::open(&authority)
+                .unwrap()
+                .validate_human(HumanPromotionRequest {
+                    candidate: &candidate,
+                    initiating_principal: &principal,
+                    authorization_decision_id: denied,
+                    approval_id: [0; 16],
+                    effect_id: EffectId(1),
+                    observed_at: "2026-09-03T01:00:00Z",
+                }),
+            Err(MemoryPromotionAuthorityError::AuthorityDecisionMismatch)
+        ));
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+'''
+          path.write_text(text[:end] + tests + text[end:])
+          PY
+      - name: Format
         run: cargo +1.98.0 fmt --all
       - name: Clippy validator
         run: cargo +1.98.0 clippy --locked -p golam-ledger --all-targets -- -D warnings
@@ -36,5 +151,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add crates/golam-ledger/src/memory_promotion_authority.rs
-          git commit -m "style(005): format memory promotion authority validator"
+          git commit -m "test(005): cover revoked and denied promotion authority"
           git push origin HEAD:impl/005-local-tools-context-memory
