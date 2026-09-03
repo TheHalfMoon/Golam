@@ -96,10 +96,7 @@ impl From<rusqlite::Error> for MemoryWriterAuthorityError {
 }
 
 pub fn memory_mutation_resource(prepared: &PreparedMemoryMutationIntent) -> String {
-    format!(
-        "memory:managed:{}",
-        encode_hex(&prepared.binding_digest())
-    )
+    format!("memory:managed:{}", encode_hex(&prepared.binding_digest()))
 }
 
 pub struct MemoryWriterAuthorityStore {
@@ -125,9 +122,9 @@ impl MemoryWriterAuthorityStore {
         let intent = prepared.intent();
         let intent_digest = BindingDigest::new(prepared.binding_digest());
         let expected_resource = memory_mutation_resource(prepared);
-        let canonical_bytes = intent
-            .canonical_bytes()
-            .map_err(|_| MemoryWriterAuthorityError::InvalidStoredRecord("intent canonical bytes"))?;
+        let canonical_bytes = intent.canonical_bytes().map_err(|_| {
+            MemoryWriterAuthorityError::InvalidStoredRecord("intent canonical bytes")
+        })?;
         let integrity_hash = crate::payload_hash(&canonical_bytes);
         let effect_blob = intent.effect_id.0.to_be_bytes().to_vec();
 
@@ -168,10 +165,14 @@ impl MemoryWriterAuthorityStore {
             return Err(MemoryWriterAuthorityError::EffectBindingMismatch("action"));
         }
         if effect.2 != expected_resource {
-            return Err(MemoryWriterAuthorityError::EffectBindingMismatch("resource"));
+            return Err(MemoryWriterAuthorityError::EffectBindingMismatch(
+                "resource",
+            ));
         }
         if effect.3 != MEMORY_MUTATION_RISK_CLASS {
-            return Err(MemoryWriterAuthorityError::EffectBindingMismatch("risk class"));
+            return Err(MemoryWriterAuthorityError::EffectBindingMismatch(
+                "risk class",
+            ));
         }
         if effect.4.as_slice() != prepared.binding_digest() {
             return Err(MemoryWriterAuthorityError::EffectBindingMismatch(
@@ -218,7 +219,10 @@ impl MemoryWriterAuthorityStore {
                 prepared.binding_digest().to_vec(),
                 intent.memory_operational_store_ref.0.bytes().to_vec(),
                 intent.initiating_principal.as_str(),
-                intent.expected_markdown_target_identity_ref.bytes().to_vec(),
+                intent
+                    .expected_markdown_target_identity_ref
+                    .bytes()
+                    .to_vec(),
                 intent.expected_markdown_content_digest.bytes().to_vec(),
                 intent.expected_markdown_version.0.bytes().to_vec(),
                 canonical_bytes,
@@ -246,11 +250,16 @@ impl MemoryWriterAuthorityStore {
                 |row| Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, Vec<u8>>(1)?)),
             )
             .optional()?
-            .ok_or(MemoryWriterAuthorityError::EffectMissing(prepared.effect_id))?;
+            .ok_or(MemoryWriterAuthorityError::EffectMissing(
+                prepared.effect_id,
+            ))?;
         if row.0.as_slice() != prepared.intent_digest.bytes() {
             return Err(MemoryWriterAuthorityError::PreparedIntentCollision);
         }
-        Ok(BindingDigest::new(hash32(row.1, "prepared integrity hash")?))
+        Ok(BindingDigest::new(hash32(
+            row.1,
+            "prepared integrity hash",
+        )?))
     }
 }
 
@@ -307,10 +316,7 @@ fn append_security_chain(
     Ok(())
 }
 
-fn hash32(
-    value: Vec<u8>,
-    field: &'static str,
-) -> Result<[u8; 32], MemoryWriterAuthorityError> {
+fn hash32(value: Vec<u8>, field: &'static str) -> Result<[u8; 32], MemoryWriterAuthorityError> {
     value
         .try_into()
         .map_err(|_| MemoryWriterAuthorityError::InvalidStoredRecord(field))

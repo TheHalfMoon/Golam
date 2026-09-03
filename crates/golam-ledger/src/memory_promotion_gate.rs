@@ -80,8 +80,13 @@ pub enum MemoryPromotionGateError {
 impl fmt::Display for MemoryPromotionGateError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Authority(error) => write!(f, "memory promotion authority validation failed: {error}"),
-            Self::Core(error) => write!(f, "memory promotion gate canonical encoding failed: {error}"),
+            Self::Authority(error) => {
+                write!(f, "memory promotion authority validation failed: {error}")
+            }
+            Self::Core(error) => write!(
+                f,
+                "memory promotion gate canonical encoding failed: {error}"
+            ),
         }
     }
 }
