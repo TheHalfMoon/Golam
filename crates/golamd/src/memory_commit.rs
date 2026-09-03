@@ -245,15 +245,22 @@ where
         cleanup_best_effort(&staged);
         return Err(MemoryCommitError::InvalidTargetKind(initial.file_kind));
     }
-    if initial.resolved_target_identity != Some(expected_target_identity_ref) {
-        cleanup_best_effort(&staged);
-        return Err(MemoryCommitError::TargetIdentityMismatch);
-    }
     let target = Path::new(initial.normalized_path.as_str());
+    if initial.resolved_target_identity != Some(expected_target_identity_ref) {
+        let observed_content_digest = fs::read(target).ok().map(|bytes| digest(&bytes));
+        cleanup_best_effort(&staged);
+        return Err(MemoryCommitError::UserEditDetected(PreservedConflict {
+            preserved_path: target.to_path_buf(),
+            observed_content_digest,
+        }));
+    }
     let initial_bytes = fs::read(target)?;
     if digest(&initial_bytes) != expected_content_digest {
         cleanup_best_effort(&staged);
-        return Err(MemoryCommitError::ContentDigestMismatch);
+        return Err(MemoryCommitError::UserEditDetected(PreservedConflict {
+            preserved_path: target.to_path_buf(),
+            observed_content_digest: Some(digest(&initial_bytes)),
+        }));
     }
     if parse_managed_markdown(&initial_bytes).is_err() {
         cleanup_best_effort(&staged);
