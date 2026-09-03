@@ -371,6 +371,9 @@ impl MemoryRestartStore {
             None,
             &bytes,
         )?;
+        let mut integrity_evidence_refs = vec![authority_readback_ref, reconciliation_ref];
+        integrity_evidence_refs.sort_unstable();
+        integrity_evidence_refs.dedup();
         let outcome = MemoryMutationOutcome {
             effect_id: case.effect_id,
             mutation_intent_digest: case.intent_digest,
@@ -381,7 +384,7 @@ impl MemoryRestartStore {
             memory_sqlite_readback_ref: None,
             reconciliation_ref: Some(reconciliation_ref),
             verification_refs: vec![markdown_readback_ref],
-            integrity_evidence_refs: vec![authority_readback_ref, reconciliation_ref],
+            integrity_evidence_refs,
             terminal_at_unix_ms,
         };
         self.persist_terminal_if_absent(&outcome)?;
@@ -496,6 +499,9 @@ impl MemoryRestartStore {
             None,
             &bytes,
         )?;
+        let mut integrity_evidence_refs = vec![authority_readback_ref, reconciliation_ref];
+        integrity_evidence_refs.sort_unstable();
+        integrity_evidence_refs.dedup();
         let outcome = MemoryMutationOutcome {
             effect_id: case.effect_id,
             mutation_intent_digest: case.intent_digest,
@@ -506,7 +512,7 @@ impl MemoryRestartStore {
             memory_sqlite_readback_ref: None,
             reconciliation_ref: Some(reconciliation_ref),
             verification_refs: Vec::new(),
-            integrity_evidence_refs: vec![authority_readback_ref, reconciliation_ref],
+            integrity_evidence_refs,
             terminal_at_unix_ms,
         };
         self.persist_terminal_if_absent(&outcome)?;
