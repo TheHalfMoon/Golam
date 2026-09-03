@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  repair-memory-promotion-freshness:
+  repair-memory-prepared-target:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,329 +17,702 @@ jobs:
           ref: impl/005-local-tools-context-memory
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
-      - name: Bind qualified promotion to revalidation material
+      - name: Bind exact restart target in protected PREPARED transaction
         shell: bash
         run: |
-          cat > crates/golam-ledger/src/memory_promotion_gate.rs <<'RS'
+          cat > crates/golam-ledger/src/memory_writer_authority.rs <<'RS'
           #![forbid(unsafe_code)]
 
           use std::error::Error;
           use std::fmt;
+          use std::path::{Path, PathBuf};
 
           use golam_core::authority::AuthorityLayout;
-          use golam_core::memory::{MemoryCandidate, MemoryCandidateId};
-          use golam_core::tool_request::{BindingDigest, PrincipalId};
-          use golam_core::{CanonicalEncoder, CoreError, EffectId};
-
-          use crate::memory_promotion_authority::{
-              DeterministicPromotionRequest, HumanPromotionRequest, MemoryPromotionAuthorityError,
-              MemoryPromotionAuthorityValidator, ValidatedMemoryPromotion,
+          use golam_core::memory::{
+              MemoryItemId, MemoryScope, MemoryStoreId, MemoryVersion, MemoryVersionId,
+              PreparedMemoryMutationIntent,
           };
-          use crate::memory_promotion_operational::PromotionOperationalEvidence;
+          use golam_core::tool_request::BindingDigest;
+          use golam_core::{CanonicalEncoder, EffectId};
+          use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
-          const QUALIFIED_PROMOTION_RECORD_DOMAIN: &[u8] = b"golam:qualified-memory-promotion:v1";
+          use crate::memory_evidence::{MemoryEvidenceError, MemoryEvidenceStore};
 
-          #[derive(Clone, Debug, Eq, PartialEq)]
-          enum PromotionRevalidation {
-              Human {
-                  candidate: MemoryCandidate,
-                  initiating_principal: PrincipalId,
-                  authorization_decision_id: [u8; 16],
-                  approval_id: [u8; 16],
-                  effect_id: EffectId,
-              },
-              Deterministic {
-                  candidate: MemoryCandidate,
-                  initiating_principal: PrincipalId,
-                  authorization_decision_id: [u8; 16],
-                  rule_id: [u8; 16],
-                  rule_version: u64,
-                  authority_source_binding: Vec<u8>,
-                  evidence_hash: [u8; 32],
-              },
+          pub const MEMORY_MUTATION_ACTION: &str = "memory.mutate";
+          pub const MEMORY_MUTATION_RISK_CLASS: &str = "memory_mutation";
+          pub const MANAGED_MEMORY_HANDLER_ID: &str = "golam-managed-memory-writer";
+          pub const MANAGED_MEMORY_HANDLER_VERSION: &str = "1";
+
+          const MEMORY_SECURITY_CHAIN_DOMAIN: &[u8] = b"golam:memory-security-chain:v1";
+          const PREPARED_TARGET_DOMAIN: &[u8] = b"golam:managed-memory-prepared-target:v1";
+          const PREPARED_READBACK_DOMAIN: &[u8] = b"golam:managed-memory-prepared-readback:v1";
+          const PREPARED_RECORD_KIND: i64 = 1;
+          const PREPARED_TARGET_RECORD_KIND: i64 = 6;
+
+          #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+          pub struct PreparedManagedMemoryAuthority {
+              effect_id: EffectId,
+              intent_digest: BindingDigest,
+          }
+
+          impl PreparedManagedMemoryAuthority {
+              pub const fn effect_id(self) -> EffectId {
+                  self.effect_id
+              }
+
+              pub const fn intent_digest(self) -> BindingDigest {
+                  self.intent_digest
+              }
           }
 
           #[derive(Clone, Debug, Eq, PartialEq)]
-          pub struct QualifiedMemoryPromotion {
-              validated: ValidatedMemoryPromotion,
-              revalidation: PromotionRevalidation,
-              record_bytes: Vec<u8>,
-          }
-
-          impl QualifiedMemoryPromotion {
-              pub const fn evidence_id(&self) -> BindingDigest {
-                  self.validated.evidence_id
-              }
-
-              pub const fn candidate_id(&self) -> MemoryCandidateId {
-                  self.validated.candidate_id
-              }
-
-              pub const fn kernel_authorization_ref(&self) -> BindingDigest {
-                  self.validated.kernel_authorization_ref
-              }
-
-              pub const fn promotion_authority_ref(&self) -> BindingDigest {
-                  self.validated.promotion_authority_ref
-              }
-
-              pub const fn authority_evidence_ref(&self) -> BindingDigest {
-                  self.validated.authority_evidence_ref
-              }
-
-              pub fn approving_principal(&self) -> Option<&PrincipalId> {
-                  self.validated.approving_principal.as_ref()
-              }
-
-              pub const fn verifier_policy_ref(&self) -> Option<BindingDigest> {
-                  self.validated.verifier_policy_ref
-              }
-
-              pub fn record_bytes(&self) -> &[u8] {
-                  &self.record_bytes
-              }
-
-              pub fn operational_evidence(
-                  &self,
-                  recorded_at_unix_ms: u64,
-              ) -> PromotionOperationalEvidence<'_> {
-                  PromotionOperationalEvidence {
-                      evidence_id: self.validated.evidence_id,
-                      candidate_id: self.validated.candidate_id,
-                      promotion_authority_ref: self.validated.promotion_authority_ref,
-                      approving_principal: self.validated.approving_principal.as_ref(),
-                      verifier_policy_ref: self.validated.verifier_policy_ref,
-                      authority_evidence_ref: self.validated.authority_evidence_ref,
-                      recorded_at_unix_ms,
-                  }
-              }
+          pub struct PreparedManagedMemoryTarget {
+              pub effect_id: EffectId,
+              pub intent_digest: BindingDigest,
+              pub memory_store_ref: MemoryStoreId,
+              pub item_id: MemoryItemId,
+              pub scope: MemoryScope,
+              pub version_id: MemoryVersionId,
+              pub markdown_path: PathBuf,
+              pub target_identity_ref: BindingDigest,
+              pub expected_content_digest: BindingDigest,
+              pub expected_markdown_version: MemoryVersionId,
           }
 
           #[derive(Debug)]
-          pub enum MemoryPromotionGateError {
-              Authority(MemoryPromotionAuthorityError),
-              Core(CoreError),
-              RevalidationMismatch,
+          pub enum MemoryWriterAuthorityError {
+              Evidence(MemoryEvidenceError),
+              Sqlite(rusqlite::Error),
+              EffectMissing(EffectId),
+              EffectNotAuthorized(String),
+              EffectBindingMismatch(&'static str),
+              PreparedIntentCollision,
+              PreparedTargetCollision,
+              NonUnicodePath,
+              InvalidStoredRecord(&'static str),
+              IntegerOverflow,
           }
 
-          impl fmt::Display for MemoryPromotionGateError {
+          impl fmt::Display for MemoryWriterAuthorityError {
               fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                   match self {
-                      Self::Authority(error) => {
-                          write!(f, "memory promotion authority validation failed: {error}")
+                      Self::Evidence(error) => write!(f, "managed-memory authority evidence error: {error}"),
+                      Self::Sqlite(error) => write!(f, "managed-memory authority sqlite error: {error}"),
+                      Self::EffectMissing(effect_id) => {
+                          write!(f, "managed-memory effect is missing: {}", effect_id.0)
                       }
-                      Self::Core(error) => write!(
+                      Self::EffectNotAuthorized(state) => write!(
                           f,
-                          "memory promotion gate canonical encoding failed: {error}"
+                          "managed-memory effect is not in the authorized state: {state}"
                       ),
-                      Self::RevalidationMismatch => f.write_str(
-                          "memory promotion authority changed between qualification and PREPARED",
-                      ),
+                      Self::EffectBindingMismatch(field) => {
+                          write!(f, "managed-memory effect does not bind the exact {field}")
+                      }
+                      Self::PreparedIntentCollision => {
+                          f.write_str("managed-memory PREPARED effect identity collision")
+                      }
+                      Self::PreparedTargetCollision => {
+                          f.write_str("managed-memory PREPARED target identity collision")
+                      }
+                      Self::NonUnicodePath => {
+                          f.write_str("managed-memory canonical Markdown path is not UTF-8")
+                      }
+                      Self::InvalidStoredRecord(field) => {
+                          write!(f, "managed-memory authority record is invalid: {field}")
+                      }
+                      Self::IntegerOverflow => f.write_str("managed-memory authority sequence overflow"),
                   }
               }
           }
 
-          impl Error for MemoryPromotionGateError {
+          impl Error for MemoryWriterAuthorityError {
               fn source(&self) -> Option<&(dyn Error + 'static)> {
                   match self {
-                      Self::Authority(error) => Some(error),
-                      Self::Core(error) => Some(error),
-                      Self::RevalidationMismatch => None,
+                      Self::Evidence(error) => Some(error),
+                      Self::Sqlite(error) => Some(error),
+                      _ => None,
                   }
               }
           }
 
-          impl From<MemoryPromotionAuthorityError> for MemoryPromotionGateError {
-              fn from(value: MemoryPromotionAuthorityError) -> Self {
-                  Self::Authority(value)
+          impl From<MemoryEvidenceError> for MemoryWriterAuthorityError {
+              fn from(value: MemoryEvidenceError) -> Self {
+                  Self::Evidence(value)
               }
           }
 
-          impl From<CoreError> for MemoryPromotionGateError {
-              fn from(value: CoreError) -> Self {
-                  Self::Core(value)
+          impl From<rusqlite::Error> for MemoryWriterAuthorityError {
+              fn from(value: rusqlite::Error) -> Self {
+                  Self::Sqlite(value)
               }
           }
 
-          pub struct MemoryPromotionGate {
-              validator: MemoryPromotionAuthorityValidator,
+          pub fn memory_mutation_resource(prepared: &PreparedMemoryMutationIntent) -> String {
+              format!("memory:managed:{}", encode_hex(&prepared.binding_digest()))
           }
 
-          impl MemoryPromotionGate {
-              pub fn open(layout: &AuthorityLayout) -> Result<Self, MemoryPromotionGateError> {
-                  Ok(Self {
-                      validator: MemoryPromotionAuthorityValidator::open(layout)?,
+          pub struct MemoryWriterAuthorityStore {
+              connection: Connection,
+          }
+
+          impl MemoryWriterAuthorityStore {
+              pub fn open(layout: &AuthorityLayout) -> Result<Self, MemoryWriterAuthorityError> {
+                  drop(MemoryEvidenceStore::open(layout.authority_db_path())?);
+                  let connection = Connection::open(layout.authority_db_path())?;
+                  connection.execute_batch(
+                      "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL; \
+                       PRAGMA synchronous = FULL; PRAGMA busy_timeout = 5000;",
+                  )?;
+                  connection.execute_batch(
+                      r#"
+                      CREATE TABLE IF NOT EXISTS memory_prepared_targets (
+                          effect_id BLOB PRIMARY KEY NOT NULL CHECK (length(effect_id) = 16),
+                          intent_digest BLOB NOT NULL CHECK (length(intent_digest) = 32),
+                          memory_store_ref BLOB NOT NULL CHECK (length(memory_store_ref) = 32),
+                          item_id BLOB NOT NULL CHECK (length(item_id) = 32),
+                          scope INTEGER NOT NULL,
+                          version_id BLOB NOT NULL CHECK (length(version_id) = 32),
+                          markdown_path TEXT NOT NULL,
+                          target_identity_ref BLOB NOT NULL CHECK (length(target_identity_ref) = 32),
+                          expected_content_digest BLOB NOT NULL CHECK (length(expected_content_digest) = 32),
+                          expected_markdown_version_ref BLOB NOT NULL CHECK (length(expected_markdown_version_ref) = 32),
+                          record_bytes BLOB NOT NULL,
+                          integrity_hash BLOB NOT NULL CHECK (length(integrity_hash) = 32),
+                          FOREIGN KEY(effect_id) REFERENCES memory_prepared_intents(effect_id)
+                      );
+                      "#,
+                  )?;
+                  Ok(Self { connection })
+              }
+
+              pub fn prepare(
+                  &mut self,
+                  prepared: &PreparedMemoryMutationIntent,
+                  version: &MemoryVersion,
+                  markdown_path: &Path,
+              ) -> Result<PreparedManagedMemoryAuthority, MemoryWriterAuthorityError> {
+                  version.validate().map_err(|_| {
+                      MemoryWriterAuthorityError::InvalidStoredRecord("memory version contract")
+                  })?;
+                  let intent = prepared.intent();
+                  if version.mutation_effect_ref != intent.effect_id
+                      || !intent.item_ids.contains(&version.item_id)
+                  {
+                      return Err(MemoryWriterAuthorityError::EffectBindingMismatch(
+                          "prepared target version",
+                      ));
+                  }
+                  let markdown_path = markdown_path
+                      .to_str()
+                      .ok_or(MemoryWriterAuthorityError::NonUnicodePath)?;
+                  let intent_digest = BindingDigest::new(prepared.binding_digest());
+                  let expected_resource = memory_mutation_resource(prepared);
+                  let canonical_bytes = intent.canonical_bytes().map_err(|_| {
+                      MemoryWriterAuthorityError::InvalidStoredRecord("intent canonical bytes")
+                  })?;
+                  let integrity_hash = crate::payload_hash(&canonical_bytes);
+                  let effect_blob = intent.effect_id.0.to_be_bytes().to_vec();
+                  let target_bytes = prepared_target_record_bytes(
+                      intent.effect_id,
+                      intent_digest,
+                      intent.memory_operational_store_ref,
+                      version.item_id,
+                      version.scope,
+                      version.version_id,
+                      markdown_path,
+                      intent.expected_markdown_target_identity_ref,
+                      intent.expected_markdown_content_digest,
+                      intent.expected_markdown_version,
+                  )?;
+                  let target_hash = crate::payload_hash(&target_bytes);
+
+                  let tx = self
+                      .connection
+                      .transaction_with_behavior(TransactionBehavior::Immediate)?;
+                  let effect = tx
+                      .query_row(
+                          "SELECT i.requested_by, i.action, i.resource, i.risk_class, i.payload_hash, \
+                                  t.to_state \
+                           FROM effect_intents i \
+                           JOIN effect_transitions t ON t.effect_id = i.effect_id \
+                           WHERE i.effect_id = ?1 ORDER BY t.global_seq DESC LIMIT 1",
+                          params![&effect_blob],
+                          |row| {
+                              Ok((
+                                  row.get::<_, String>(0)?,
+                                  row.get::<_, String>(1)?,
+                                  row.get::<_, String>(2)?,
+                                  row.get::<_, String>(3)?,
+                                  row.get::<_, Vec<u8>>(4)?,
+                                  row.get::<_, String>(5)?,
+                              ))
+                          },
+                      )
+                      .optional()?
+                      .ok_or(MemoryWriterAuthorityError::EffectMissing(intent.effect_id))?;
+
+                  if effect.5 != "authorized" {
+                      return Err(MemoryWriterAuthorityError::EffectNotAuthorized(effect.5));
+                  }
+                  if effect.0 != intent.initiating_principal.as_str() {
+                      return Err(MemoryWriterAuthorityError::EffectBindingMismatch(
+                          "initiating principal",
+                      ));
+                  }
+                  if effect.1 != MEMORY_MUTATION_ACTION {
+                      return Err(MemoryWriterAuthorityError::EffectBindingMismatch("action"));
+                  }
+                  if effect.2 != expected_resource {
+                      return Err(MemoryWriterAuthorityError::EffectBindingMismatch("resource"));
+                  }
+                  if effect.3 != MEMORY_MUTATION_RISK_CLASS {
+                      return Err(MemoryWriterAuthorityError::EffectBindingMismatch("risk class"));
+                  }
+                  if effect.4.as_slice() != prepared.binding_digest() {
+                      return Err(MemoryWriterAuthorityError::EffectBindingMismatch(
+                          "mutation-intent digest",
+                      ));
+                  }
+
+                  let existing_intent = tx
+                      .query_row(
+                          "SELECT intent_digest, canonical_bytes, integrity_hash \
+                           FROM memory_prepared_intents WHERE effect_id = ?1",
+                          params![&effect_blob],
+                          |row| {
+                              Ok((
+                                  row.get::<_, Vec<u8>>(0)?,
+                                  row.get::<_, Vec<u8>>(1)?,
+                                  row.get::<_, Vec<u8>>(2)?,
+                              ))
+                          },
+                      )
+                      .optional()?;
+                  let intent_exists = match existing_intent {
+                      Some(existing)
+                          if existing.0.as_slice() == prepared.binding_digest()
+                              && existing.1 == canonical_bytes
+                              && existing.2.as_slice() == integrity_hash =>
+                      {
+                          true
+                      }
+                      Some(_) => return Err(MemoryWriterAuthorityError::PreparedIntentCollision),
+                      None => false,
+                  };
+
+                  let existing_target = tx
+                      .query_row(
+                          "SELECT record_bytes, integrity_hash FROM memory_prepared_targets \
+                           WHERE effect_id = ?1",
+                          params![&effect_blob],
+                          |row| Ok((row.get::<_, Vec<u8>>(0)?, row.get::<_, Vec<u8>>(1)?)),
+                      )
+                      .optional()?;
+                  let target_exists = match existing_target {
+                      Some(existing)
+                          if existing.0 == target_bytes && existing.1.as_slice() == target_hash =>
+                      {
+                          true
+                      }
+                      Some(_) => return Err(MemoryWriterAuthorityError::PreparedTargetCollision),
+                      None => false,
+                  };
+
+                  if !intent_exists {
+                      tx.execute(
+                          r#"INSERT INTO memory_prepared_intents
+                             (effect_id, intent_digest, memory_store_ref, initiating_principal,
+                              markdown_target_identity_ref, markdown_content_digest, markdown_version_ref,
+                              canonical_bytes, integrity_hash)
+                             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)"#,
+                          params![
+                              &effect_blob,
+                              prepared.binding_digest().to_vec(),
+                              intent.memory_operational_store_ref.0.bytes().to_vec(),
+                              intent.initiating_principal.as_str(),
+                              intent.expected_markdown_target_identity_ref.bytes().to_vec(),
+                              intent.expected_markdown_content_digest.bytes().to_vec(),
+                              intent.expected_markdown_version.0.bytes().to_vec(),
+                              canonical_bytes,
+                              integrity_hash.to_vec(),
+                          ],
+                      )?;
+                      append_security_chain(
+                          &tx,
+                          PREPARED_RECORD_KIND,
+                          &effect_blob,
+                          integrity_hash,
+                      )?;
+                  }
+                  if !target_exists {
+                      tx.execute(
+                          r#"INSERT INTO memory_prepared_targets
+                             (effect_id, intent_digest, memory_store_ref, item_id, scope, version_id,
+                              markdown_path, target_identity_ref, expected_content_digest,
+                              expected_markdown_version_ref, record_bytes, integrity_hash)
+                             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)"#,
+                          params![
+                              &effect_blob,
+                              intent_digest.bytes().to_vec(),
+                              intent.memory_operational_store_ref.0.bytes().to_vec(),
+                              version.item_id.0.bytes().to_vec(),
+                              scope_code(version.scope),
+                              version.version_id.0.bytes().to_vec(),
+                              markdown_path,
+                              intent.expected_markdown_target_identity_ref.bytes().to_vec(),
+                              intent.expected_markdown_content_digest.bytes().to_vec(),
+                              intent.expected_markdown_version.0.bytes().to_vec(),
+                              target_bytes,
+                              target_hash.to_vec(),
+                          ],
+                      )?;
+                      append_security_chain(
+                          &tx,
+                          PREPARED_TARGET_RECORD_KIND,
+                          &effect_blob,
+                          target_hash,
+                      )?;
+                  }
+                  tx.commit()?;
+                  Ok(PreparedManagedMemoryAuthority {
+                      effect_id: intent.effect_id,
+                      intent_digest,
                   })
               }
 
-              pub fn validate_human(
-                  &mut self,
-                  request: HumanPromotionRequest<'_>,
-              ) -> Result<QualifiedMemoryPromotion, MemoryPromotionGateError> {
-                  let revalidation = PromotionRevalidation::Human {
-                      candidate: request.candidate.clone(),
-                      initiating_principal: request.initiating_principal.clone(),
-                      authorization_decision_id: request.authorization_decision_id,
-                      approval_id: request.approval_id,
-                      effect_id: request.effect_id,
-                  };
-                  qualify(self.validator.validate_human(request)?, revalidation)
-              }
-
-              pub fn validate_deterministic(
-                  &mut self,
-                  request: DeterministicPromotionRequest<'_>,
-              ) -> Result<QualifiedMemoryPromotion, MemoryPromotionGateError> {
-                  let revalidation = PromotionRevalidation::Deterministic {
-                      candidate: request.candidate.clone(),
-                      initiating_principal: request.initiating_principal.clone(),
-                      authorization_decision_id: request.authorization_decision_id,
-                      rule_id: request.rule_id,
-                      rule_version: request.rule_version,
-                      authority_source_binding: request.authority_source_binding.to_vec(),
-                      evidence_hash: request.evidence_hash,
-                  };
-                  qualify(
-                      self.validator.validate_deterministic(request)?,
-                      revalidation,
-                  )
-              }
-
-              pub fn revalidate(
-                  &mut self,
-                  promotion: &QualifiedMemoryPromotion,
-                  observed_at: &str,
-              ) -> Result<(), MemoryPromotionGateError> {
-                  let validated = match &promotion.revalidation {
-                      PromotionRevalidation::Human {
-                          candidate,
-                          initiating_principal,
-                          authorization_decision_id,
-                          approval_id,
-                          effect_id,
-                      } => self.validator.validate_human(HumanPromotionRequest {
-                          candidate,
-                          initiating_principal,
-                          authorization_decision_id: *authorization_decision_id,
-                          approval_id: *approval_id,
-                          effect_id: *effect_id,
-                          observed_at,
-                      })?,
-                      PromotionRevalidation::Deterministic {
-                          candidate,
-                          initiating_principal,
-                          authorization_decision_id,
-                          rule_id,
-                          rule_version,
-                          authority_source_binding,
-                          evidence_hash,
-                      } => self
-                          .validator
-                          .validate_deterministic(DeterministicPromotionRequest {
-                              candidate,
-                              initiating_principal,
-                              authorization_decision_id: *authorization_decision_id,
-                              rule_id: *rule_id,
-                              rule_version: *rule_version,
-                              authority_source_binding,
-                              evidence_hash: *evidence_hash,
-                          })?,
-                  };
-                  if validated != promotion.validated {
-                      return Err(MemoryPromotionGateError::RevalidationMismatch);
+              pub fn readback_ref(
+                  &self,
+                  prepared: PreparedManagedMemoryAuthority,
+              ) -> Result<BindingDigest, MemoryWriterAuthorityError> {
+                  let row = self
+                      .connection
+                      .query_row(
+                          "SELECT i.intent_digest, i.integrity_hash, t.integrity_hash \
+                           FROM memory_prepared_intents i \
+                           JOIN memory_prepared_targets t ON t.effect_id = i.effect_id \
+                           WHERE i.effect_id = ?1",
+                          params![prepared.effect_id.0.to_be_bytes().to_vec()],
+                          |row| {
+                              Ok((
+                                  row.get::<_, Vec<u8>>(0)?,
+                                  row.get::<_, Vec<u8>>(1)?,
+                                  row.get::<_, Vec<u8>>(2)?,
+                              ))
+                          },
+                      )
+                      .optional()?
+                      .ok_or(MemoryWriterAuthorityError::EffectMissing(prepared.effect_id))?;
+                  if row.0.as_slice() != prepared.intent_digest.bytes() {
+                      return Err(MemoryWriterAuthorityError::PreparedIntentCollision);
                   }
-                  Ok(())
+                  let intent_hash = hash32(row.1, "prepared integrity hash")?;
+                  let target_hash = hash32(row.2, "prepared target integrity hash")?;
+                  let mut encoder = CanonicalEncoder::new();
+                  encoder.push_bytes(PREPARED_READBACK_DOMAIN).map_err(|_| {
+                      MemoryWriterAuthorityError::InvalidStoredRecord("prepared readback domain")
+                  })?;
+                  encoder.push_u128(prepared.effect_id.0);
+                  encoder
+                      .push_bytes(&prepared.intent_digest.bytes())
+                      .map_err(|_| MemoryWriterAuthorityError::InvalidStoredRecord("intent digest"))?;
+                  encoder.push_bytes(&intent_hash).map_err(|_| {
+                      MemoryWriterAuthorityError::InvalidStoredRecord("prepared integrity hash")
+                  })?;
+                  encoder.push_bytes(&target_hash).map_err(|_| {
+                      MemoryWriterAuthorityError::InvalidStoredRecord("target integrity hash")
+                  })?;
+                  Ok(BindingDigest::new(crate::payload_hash(&encoder.finish())))
+              }
+
+              pub fn prepared_target(
+                  &self,
+                  effect_id: EffectId,
+              ) -> Result<Option<PreparedManagedMemoryTarget>, MemoryWriterAuthorityError> {
+                  let row = self
+                      .connection
+                      .query_row(
+                          "SELECT intent_digest, memory_store_ref, item_id, scope, version_id,
+                                  markdown_path, target_identity_ref, expected_content_digest,
+                                  expected_markdown_version_ref, record_bytes, integrity_hash
+                           FROM memory_prepared_targets WHERE effect_id = ?1",
+                          params![effect_id.0.to_be_bytes().to_vec()],
+                          |row| {
+                              Ok((
+                                  row.get::<_, Vec<u8>>(0)?,
+                                  row.get::<_, Vec<u8>>(1)?,
+                                  row.get::<_, Vec<u8>>(2)?,
+                                  row.get::<_, i64>(3)?,
+                                  row.get::<_, Vec<u8>>(4)?,
+                                  row.get::<_, String>(5)?,
+                                  row.get::<_, Vec<u8>>(6)?,
+                                  row.get::<_, Vec<u8>>(7)?,
+                                  row.get::<_, Vec<u8>>(8)?,
+                                  row.get::<_, Vec<u8>>(9)?,
+                                  row.get::<_, Vec<u8>>(10)?,
+                              ))
+                          },
+                      )
+                      .optional()?;
+                  let Some(row) = row else {
+                      return Ok(None);
+                  };
+                  let target = PreparedManagedMemoryTarget {
+                      effect_id,
+                      intent_digest: BindingDigest::new(hash32(row.0, "target intent digest")?),
+                      memory_store_ref: MemoryStoreId(BindingDigest::new(hash32(
+                          row.1,
+                          "target memory store",
+                      )?)),
+                      item_id: MemoryItemId(BindingDigest::new(hash32(row.2, "target item id")?)),
+                      scope: scope_from_code(row.3)?,
+                      version_id: MemoryVersionId(BindingDigest::new(hash32(
+                          row.4,
+                          "target version id",
+                      )?)),
+                      markdown_path: PathBuf::from(row.5),
+                      target_identity_ref: BindingDigest::new(hash32(
+                          row.6,
+                          "target identity ref",
+                      )?),
+                      expected_content_digest: BindingDigest::new(hash32(
+                          row.7,
+                          "target expected content digest",
+                      )?),
+                      expected_markdown_version: MemoryVersionId(BindingDigest::new(hash32(
+                          row.8,
+                          "target expected Markdown version",
+                      )?)),
+                  };
+                  let path = target
+                      .markdown_path
+                      .to_str()
+                      .ok_or(MemoryWriterAuthorityError::NonUnicodePath)?;
+                  let expected_bytes = prepared_target_record_bytes(
+                      target.effect_id,
+                      target.intent_digest,
+                      target.memory_store_ref,
+                      target.item_id,
+                      target.scope,
+                      target.version_id,
+                      path,
+                      target.target_identity_ref,
+                      target.expected_content_digest,
+                      target.expected_markdown_version,
+                  )?;
+                  let expected_hash = crate::payload_hash(&expected_bytes);
+                  if row.9 != expected_bytes || row.10.as_slice() != expected_hash {
+                      return Err(MemoryWriterAuthorityError::PreparedTargetCollision);
+                  }
+                  Ok(Some(target))
               }
           }
 
-          fn qualify(
-              validated: ValidatedMemoryPromotion,
-              revalidation: PromotionRevalidation,
-          ) -> Result<QualifiedMemoryPromotion, MemoryPromotionGateError> {
+          #[allow(clippy::too_many_arguments)]
+          fn prepared_target_record_bytes(
+              effect_id: EffectId,
+              intent_digest: BindingDigest,
+              memory_store_ref: MemoryStoreId,
+              item_id: MemoryItemId,
+              scope: MemoryScope,
+              version_id: MemoryVersionId,
+              markdown_path: &str,
+              target_identity_ref: BindingDigest,
+              expected_content_digest: BindingDigest,
+              expected_markdown_version: MemoryVersionId,
+          ) -> Result<Vec<u8>, MemoryWriterAuthorityError> {
               let mut encoder = CanonicalEncoder::new();
-              encoder.push_bytes(QUALIFIED_PROMOTION_RECORD_DOMAIN)?;
-              encoder.push_bytes(&validated.evidence_id.bytes())?;
-              encoder.push_bytes(&validated.candidate_id.0.bytes())?;
-              encoder.push_bytes(&validated.kernel_authorization_ref.bytes())?;
-              encoder.push_bytes(&validated.promotion_authority_ref.bytes())?;
-              encoder.push_bytes(&validated.authority_evidence_ref.bytes())?;
-              match (
-                  validated.approving_principal.as_ref(),
-                  validated.verifier_policy_ref,
-              ) {
-                  (Some(principal), None) => {
-                      encoder.push_u8(1);
-                      encoder.push_bytes(principal.as_str().as_bytes())?;
-                  }
-                  (None, Some(verifier)) => {
-                      encoder.push_u8(2);
-                      encoder.push_bytes(&verifier.bytes())?;
-                  }
-                  _ => unreachable!("the validated promotion authority contract admits exactly one mode"),
+              encoder.push_bytes(PREPARED_TARGET_DOMAIN).map_err(|_| {
+                  MemoryWriterAuthorityError::InvalidStoredRecord("prepared target domain")
+              })?;
+              encoder.push_u128(effect_id.0);
+              for digest in [
+                  intent_digest,
+                  memory_store_ref.0,
+                  item_id.0,
+                  version_id.0,
+                  target_identity_ref,
+                  expected_content_digest,
+                  expected_markdown_version.0,
+              ] {
+                  encoder.push_bytes(&digest.bytes()).map_err(|_| {
+                      MemoryWriterAuthorityError::InvalidStoredRecord("prepared target digest")
+                  })?;
               }
-              Ok(QualifiedMemoryPromotion {
-                  validated,
-                  revalidation,
-                  record_bytes: encoder.finish(),
-              })
+              encoder.push_u8(match scope {
+                  MemoryScope::User => 1,
+                  MemoryScope::Project => 2,
+              });
+              encoder.push_bytes(markdown_path.as_bytes()).map_err(|_| {
+                  MemoryWriterAuthorityError::InvalidStoredRecord("prepared target path")
+              })?;
+              Ok(encoder.finish())
+          }
+
+          fn append_security_chain(
+              tx: &Transaction<'_>,
+              record_kind: i64,
+              record_identity: &[u8],
+              payload_hash: [u8; 32],
+          ) -> Result<(), MemoryWriterAuthorityError> {
+              let previous = tx
+                  .query_row(
+                      "SELECT integrity_hash FROM memory_security_chain ORDER BY sequence DESC LIMIT 1",
+                      [],
+                      |row| row.get::<_, Vec<u8>>(0),
+                  )
+                  .optional()?
+                  .map(|value| hash32(value, "previous security-chain hash"))
+                  .transpose()?;
+              let mut encoder = CanonicalEncoder::new();
+              encoder.push_bytes(MEMORY_SECURITY_CHAIN_DOMAIN).map_err(|_| {
+                  MemoryWriterAuthorityError::InvalidStoredRecord("security-chain domain")
+              })?;
+              encoder.push_u64(
+                  u64::try_from(record_kind)
+                      .map_err(|_| MemoryWriterAuthorityError::IntegerOverflow)?,
+              );
+              encoder.push_bytes(record_identity).map_err(|_| {
+                  MemoryWriterAuthorityError::InvalidStoredRecord("security-chain identity")
+              })?;
+              encoder.push_bytes(&payload_hash).map_err(|_| {
+                  MemoryWriterAuthorityError::InvalidStoredRecord("security-chain payload")
+              })?;
+              match previous {
+                  Some(hash) => {
+                      encoder.push_u8(1);
+                      encoder.push_bytes(&hash).map_err(|_| {
+                          MemoryWriterAuthorityError::InvalidStoredRecord("security-chain previous")
+                      })?;
+                  }
+                  None => encoder.push_u8(0),
+              }
+              let integrity_hash = crate::payload_hash(&encoder.finish());
+              tx.execute(
+                  r#"INSERT INTO memory_security_chain
+                     (record_kind, record_identity, payload_hash, previous_integrity_hash, integrity_hash)
+                     VALUES (?1, ?2, ?3, ?4, ?5)"#,
+                  params![
+                      record_kind,
+                      record_identity,
+                      payload_hash.to_vec(),
+                      previous.map(|hash| hash.to_vec()),
+                      integrity_hash.to_vec(),
+                  ],
+              )?;
+              Ok(())
+          }
+
+          fn scope_code(scope: MemoryScope) -> i64 {
+              match scope {
+                  MemoryScope::User => 1,
+                  MemoryScope::Project => 2,
+              }
+          }
+
+          fn scope_from_code(value: i64) -> Result<MemoryScope, MemoryWriterAuthorityError> {
+              match value {
+                  1 => Ok(MemoryScope::User),
+                  2 => Ok(MemoryScope::Project),
+                  _ => Err(MemoryWriterAuthorityError::InvalidStoredRecord(
+                      "prepared target scope",
+                  )),
+              }
+          }
+
+          fn hash32(
+              value: Vec<u8>,
+              field: &'static str,
+          ) -> Result<[u8; 32], MemoryWriterAuthorityError> {
+              value
+                  .try_into()
+                  .map_err(|_| MemoryWriterAuthorityError::InvalidStoredRecord(field))
+          }
+
+          fn encode_hex(bytes: &[u8]) -> String {
+              const HEX: &[u8; 16] = b"0123456789abcdef";
+              let mut output = String::with_capacity(bytes.len() * 2);
+              for byte in bytes {
+                  output.push(char::from(HEX[usize::from(byte >> 4)]));
+                  output.push(char::from(HEX[usize::from(byte & 0x0f)]));
+              }
+              output
           }
 
           #[cfg(test)]
           mod tests {
               use super::*;
 
+              fn digest(value: u8) -> BindingDigest {
+                  BindingDigest::new([value; 32])
+              }
+
               #[test]
-              fn qualified_token_fields_are_read_only_accessors() {
-                  assert!(!QUALIFIED_PROMOTION_RECORD_DOMAIN.is_empty());
+              fn resource_binds_entire_prepared_intent_digest() {
+                  assert_eq!(MEMORY_MUTATION_ACTION, "memory.mutate");
+                  assert_eq!(MANAGED_MEMORY_HANDLER_VERSION, "1");
+              }
+
+              #[test]
+              fn prepared_target_record_binds_canonical_path() {
+                  let common = (
+                      EffectId(1),
+                      digest(2),
+                      MemoryStoreId(digest(3)),
+                      MemoryItemId(digest(4)),
+                      MemoryScope::Project,
+                      MemoryVersionId(digest(5)),
+                      digest(6),
+                      digest(7),
+                      MemoryVersionId(digest(8)),
+                  );
+                  let first = prepared_target_record_bytes(
+                      common.0,
+                      common.1,
+                      common.2,
+                      common.3,
+                      common.4,
+                      common.5,
+                      "memory/a.md",
+                      common.6,
+                      common.7,
+                      common.8,
+                  )
+                  .unwrap();
+                  let second = prepared_target_record_bytes(
+                      common.0,
+                      common.1,
+                      common.2,
+                      common.3,
+                      common.4,
+                      common.5,
+                      "memory/b.md",
+                      common.6,
+                      common.7,
+                      common.8,
+                  )
+                  .unwrap();
+                  assert_ne!(first, second);
               }
           }
           RS
-      - name: Revalidate promotion immediately before PREPARED
+      - name: Pass target metadata into PREPARED authority commit
         run: |
           python - <<'PY'
           from pathlib import Path
           path = Path('crates/golam-kernel/src/managed_memory_writer.rs')
           text = path.read_text()
-          old = 'use golam_ledger::memory_promotion_gate::QualifiedMemoryPromotion;\n'
-          new = '''use golam_ledger::memory_promotion_gate::{\n    MemoryPromotionGate, MemoryPromotionGateError, QualifiedMemoryPromotion,\n};\n'''
+          old = '        let prepared_authority = authority.prepare(prepared)?;\n'
+          new = '        let prepared_authority = authority.prepare(prepared, version, markdown_path)?;\n'
           if text.count(old) != 1:
-              raise SystemExit(f'expected one promotion gate import, found {text.count(old)}')
-          text = text.replace(old, new, 1)
-          old = '''    PromotionOperational(MemoryPromotionOperationalError),\n    Evidence(MemoryEvidenceError),\n'''
-          new = '''    PromotionOperational(MemoryPromotionOperationalError),\n    PromotionGate(MemoryPromotionGateError),\n    Evidence(MemoryEvidenceError),\n'''
-          if text.count(old) != 1:
-              raise SystemExit(f'expected one error insertion point, found {text.count(old)}')
-          text = text.replace(old, new, 1)
-          old = '''            Self::PromotionOperational(error) => {\n                write!(\n                    f,\n                    "managed-memory promotion operational state failed: {error}"\n                )\n            }\n            Self::Evidence(error) => write!(f, "managed-memory authority evidence failed: {error}"),\n'''
-          new = '''            Self::PromotionOperational(error) => {\n                write!(\n                    f,\n                    "managed-memory promotion operational state failed: {error}"\n                )\n            }\n            Self::PromotionGate(error) => {\n                write!(f, "managed-memory promotion revalidation failed: {error}")\n            }\n            Self::Evidence(error) => write!(f, "managed-memory authority evidence failed: {error}"),\n'''
-          if text.count(old) != 1:
-              raise SystemExit(f'expected one display insertion point, found {text.count(old)}')
-          text = text.replace(old, new, 1)
-          old = '''            Self::PromotionOperational(error) => Some(error),\n            Self::Evidence(error) => Some(error),\n'''
-          new = '''            Self::PromotionOperational(error) => Some(error),\n            Self::PromotionGate(error) => Some(error),\n            Self::Evidence(error) => Some(error),\n'''
-          if text.count(old) != 1:
-              raise SystemExit(f'expected one source insertion point, found {text.count(old)}')
-          text = text.replace(old, new, 1)
-          old = '''impl From<MemoryEvidenceError> for ManagedMemoryWriterError {\n'''
-          new = '''impl From<MemoryPromotionGateError> for ManagedMemoryWriterError {\n    fn from(value: MemoryPromotionGateError) -> Self {\n        Self::PromotionGate(value)\n    }\n}\n\nimpl From<MemoryEvidenceError> for ManagedMemoryWriterError {\n'''
-          if text.count(old) != 1:
-              raise SystemExit(f'expected one conversion insertion point, found {text.count(old)}')
-          text = text.replace(old, new, 1)
-          old = '''        if operational.has_blocking_unknown_outcome()? {\n            return Err(ManagedMemoryWriterError::BlockingUnknownOutcome);\n        }\n\n        let mut evidence = MemoryEvidenceStore::open(self.authority.authority_db_path())?;\n'''
-          new = '''        if operational.has_blocking_unknown_outcome()? {\n            return Err(ManagedMemoryWriterError::BlockingUnknownOutcome);\n        }\n\n        let mut promotion_gate = MemoryPromotionGate::open(&self.authority)?;\n        promotion_gate.revalidate(promotion, execution.started_at)?;\n\n        let mut evidence = MemoryEvidenceStore::open(self.authority.authority_db_path())?;\n'''
-          if text.count(old) != 1:
-              raise SystemExit(f'expected one pre-persistence freshness point, found {text.count(old)}')
-          text = text.replace(old, new, 1)
-          path.write_text(text)
+              raise SystemExit(f'expected one authority prepare call, found {text.count(old)}')
+          path.write_text(text.replace(old, new, 1))
           PY
-      - name: Format and qualify promotion/writer boundary
+      - name: Format and qualify protected PREPARED target
         run: |
           cargo +1.98.0 fmt --all
           cargo +1.98.0 fmt --all -- --check
           cargo +1.98.0 clippy --locked -p golam-ledger -p golam-kernel --all-targets -- -D warnings
-          cargo +1.98.0 test --locked -p golam-ledger memory_promotion_authority::tests::
-          cargo +1.98.0 test --locked -p golam-ledger memory_promotion_authority_adversarial::
-          cargo +1.98.0 test --locked -p golam-ledger memory_promotion_gate::tests::
+          cargo +1.98.0 test --locked -p golam-ledger memory_writer_authority::tests::
           cargo +1.98.0 test --locked -p golam-kernel managed_memory_writer::tests::
       - name: Guard exact source mutation and push
         shell: bash
@@ -349,7 +722,7 @@ jobs:
           printf '%s\n' "${changed[@]}"
           expected=(
             crates/golam-kernel/src/managed_memory_writer.rs
-            crates/golam-ledger/src/memory_promotion_gate.rs
+            crates/golam-ledger/src/memory_writer_authority.rs
           )
           test "${#changed[@]}" -eq "${#expected[@]}"
           for i in "${!changed[@]}"; do
@@ -359,5 +732,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "${expected[@]}"
-          git commit -m "fix(005): revalidate promotion authority before PREPARED"
+          git commit -m "fix(005): bind restart target in authority PREPARED"
           git push origin HEAD:impl/005-local-tools-context-memory
