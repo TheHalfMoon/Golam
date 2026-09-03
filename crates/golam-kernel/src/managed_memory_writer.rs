@@ -299,7 +299,7 @@ impl ManagedMemoryWriter {
         })?;
 
         let mut authority = MemoryWriterAuthorityStore::open(&self.authority)?;
-        let prepared_authority = authority.prepare(prepared)?;
+        let prepared_authority = authority.prepare(prepared, version, markdown_path)?;
         let authority_readback_ref = authority.readback_ref(prepared_authority)?;
 
         let mut operational = operational;
