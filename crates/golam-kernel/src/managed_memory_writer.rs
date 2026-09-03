@@ -265,6 +265,13 @@ impl ManagedMemoryWriter {
     ) -> Result<PreparedManagedMemoryWrite, ManagedMemoryWriterError> {
         validate_bindings(&self.memory, promotion, prepared, version, markdown_path)?;
 
+        // An unresolved prior UNKNOWN_OUTCOME blocks dependent managed-memory work
+        // before this effect can persist promotion or PREPARED state.
+        let operational = MemoryOperationalStore::open(&self.memory)?;
+        if operational.has_blocking_unknown_outcome()? {
+            return Err(ManagedMemoryWriterError::BlockingUnknownOutcome);
+        }
+
         let mut evidence = MemoryEvidenceStore::open(self.authority.authority_db_path())?;
         evidence.persist_promotion(PromotionEvidence {
             evidence_id: promotion.evidence_id(),
@@ -279,10 +286,7 @@ impl ManagedMemoryWriter {
         let prepared_authority = authority.prepare(prepared)?;
         let authority_readback_ref = authority.readback_ref(prepared_authority)?;
 
-        let mut operational = MemoryOperationalStore::open(&self.memory)?;
-        if operational.has_blocking_unknown_outcome()? {
-            return Err(ManagedMemoryWriterError::BlockingUnknownOutcome);
-        }
+        let mut operational = operational;
         operational.record_prepared(prepared)?;
 
         let mut promotion_operational = MemoryPromotionOperationalStore::open(&self.memory)?;
