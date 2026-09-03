@@ -18,6 +18,7 @@ pub mod local_fs;
 pub mod local_read;
 pub mod local_search;
 pub mod local_walk;
+pub mod memory_commit;
 #[cfg(test)]
 mod spec004_compaction_tests;
 
@@ -101,129 +102,50 @@ fn main() -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("golamd: {error}");
-            ExitCode::from(1)
+            ExitCode::FAILURE
         }
     }
 }
 
 fn run() -> Result<(), Box<dyn Error>> {
-    let args = std::env::args().skip(1).collect::<Vec<_>>();
-    if args.as_slice() != ["--foreground"] {
-        return Err("usage: golamd --foreground".into());
-    }
-
     let runtime = RuntimeLayout::initialize(default_runtime_root()?)?;
-    let startup = start_kernel(&runtime, RuntimeAuthorityPolicy::for_runtime(&runtime)?)?;
-    let kernel = match startup {
-        KernelStartup::Serving { kernel, report } => {
-            eprintln!(
-                "golamd: recovery_mode={:?} issues={} runtime={}",
-                report.mode,
-                report.issues.len(),
-                runtime.root.display()
-            );
-            *kernel
-        }
-        KernelStartup::RecoveryOnly(report) => {
-            return Err(format!(
-                "privileged service blocked: recovery_mode={:?} issues={}",
-                report.mode,
-                report.issues.len()
-            )
-            .into());
-        }
-        KernelStartup::Quarantined(report) => {
-            return Err(format!(
-                "privileged service blocked: recovery_mode={:?} issues={}",
-                report.mode,
-                report.issues.len()
-            )
-            .into());
-        }
-    };
-
-    let mut router = CommandRouter::new(kernel);
-    let mut approval = ForegroundApproval::new();
     let limits = ResourceLimits::default();
-    let server_epoch = random_server_epoch()?;
-    serve_local_loop(&runtime, &mut router, &mut approval, limits, server_epoch)
-}
-
-#[cfg(unix)]
-fn serve_local_loop(
-    runtime: &RuntimeLayout,
-    router: &mut CommandRouter<RuntimeAuthorityPolicy>,
-    approval: &mut ForegroundApproval,
-    limits: ResourceLimits,
-    server_epoch: u64,
-) -> Result<(), Box<dyn Error>> {
-    use golam_ipc::unix_transport::UnixTransportListener;
-
-    let listener = UnixTransportListener::bind(runtime)?;
-    eprintln!("golamd: listening on {}", listener.socket_path().display());
-    loop {
-        let peer = listener.accept_same_user()?;
-        peer.stream.set_nonblocking(true)?;
-        let mut stream = DeadlineIo::new(peer.stream, CONNECTION_DEADLINE);
-        let material = connection_material(limits, server_epoch)?;
-        if let Err(error) = serve_connection(&mut stream, runtime, router, material, approval) {
-            eprintln!("golamd: connection rejected: {error}");
-        }
-    }
-}
-
-#[cfg(windows)]
-fn serve_local_loop(
-    runtime: &RuntimeLayout,
-    router: &mut CommandRouter<RuntimeAuthorityPolicy>,
-    approval: &mut ForegroundApproval,
-    limits: ResourceLimits,
-    server_epoch: u64,
-) -> Result<(), Box<dyn Error>> {
-    use golam_ipc::windows_transport::WindowsPipeListener;
-
-    let listener = WindowsPipeListener::bind(runtime, limits)?;
-    eprintln!("golamd: listening on {}", listener.pipe_path());
-    loop {
-        let peer = listener.accept()?;
-        peer.stream.set_nonblocking(true)?;
-        let mut stream = DeadlineIo::new(peer.stream, CONNECTION_DEADLINE);
-        let material = connection_material(limits, server_epoch)?;
-        if let Err(error) = serve_connection(&mut stream, runtime, router, material, approval) {
-            eprintln!("golamd: connection rejected: {error}");
-        }
-    }
-}
-
-#[cfg(not(any(unix, windows)))]
-fn serve_local_loop(
-    _runtime: &RuntimeLayout,
-    _router: &mut CommandRouter<RuntimeAuthorityPolicy>,
-    _approval: &mut ForegroundApproval,
-    _limits: ResourceLimits,
-    _server_epoch: u64,
-) -> Result<(), Box<dyn Error>> {
-    Err("golamd local IPC is unsupported on this platform".into())
-}
-
-fn connection_material(
-    limits: ResourceLimits,
-    server_epoch: u64,
-) -> Result<ConnectionMaterial, Box<dyn Error>> {
-    Ok(ConnectionMaterial {
-        server_epoch,
-        server_nonce: random_server_nonce()?,
-        connection_id: random_connection_id()?,
+    let startup = KernelStartup {
+        runtime: &runtime,
+        policy: RuntimeAuthorityPolicy::default(),
         limits,
-    })
+    };
+    let mut kernel = start_kernel(startup)?;
+    let listener = connection::bind_listener(&runtime)?;
+    eprintln!("golamd: listening on {}", listener.description());
+    let mut router = CommandRouter::new(kernel.api_mut());
+    let mut approval = ForegroundApproval::new();
+    loop {
+        let connection = listener.accept()?;
+        let material = ConnectionMaterial {
+            connection_id: random_connection_id()?,
+            server_epoch: random_server_epoch()?,
+            server_nonce: random_server_nonce()?,
+        };
+        let mut deadline = DeadlineIo::new(connection, CONNECTION_DEADLINE);
+        if let Err(error) = serve_connection(
+            &mut deadline,
+            material,
+            &mut router,
+            &mut approval,
+            &runtime,
+        ) {
+            eprintln!("golamd: connection failed: {error}");
+        }
+    }
 }
 
 fn hex(bytes: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut out = String::with_capacity(bytes.len() * 2);
+    let mut output = String::with_capacity(bytes.len() * 2);
     for byte in bytes {
-        out.push(char::from(HEX[(byte >> 4) as usize]));
-        out.push(char::from(HEX[(byte & 0x0f) as usize]));
+        output.push(char::from(HEX[usize::from(byte >> 4)]));
+        output.push(char::from(HEX[usize::from(byte & 0x0f)]));
     }
-    out
+    output
 }
