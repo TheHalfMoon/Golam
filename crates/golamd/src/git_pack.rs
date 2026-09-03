@@ -10,7 +10,7 @@ use miniz_oxide::{DataFormat, MZError, MZFlush, MZStatus};
 
 use crate::git_read_budget::{
     DECOMPRESSION_INPUT_QUANTUM_BYTES, DECOMPRESSION_OUTPUT_QUANTUM_BYTES,
-    DecompressionBudgetError, DecompressionDeadline,
+    DecompressionBudgetError, DecompressionDeadline, GitOperationBudgetError, GitOperationDeadline,
 };
 use crate::git_sha1::{GitObjectSha1, GitObjectSha1Error};
 
@@ -263,13 +263,29 @@ pub fn read_packed_object(
     bounds: GitPackBounds,
 ) -> Result<PackedGitObject, GitPackError> {
     bounds.validate()?;
-    validate_pack(pack, index, bounds)?;
+    let deadline = GitOperationDeadline::start(bounds.max_duration)?;
+    read_packed_object_with_deadline(pack, index, wanted, bounds, deadline)
+}
 
-    let wanted_index = index
-        .entries
-        .binary_search_by_key(&wanted, |entry| entry.object_id)
+pub(crate) fn read_packed_object_with_deadline(
+    pack: &[u8],
+    index: &GitPackIndex,
+    wanted: PackObjectId,
+    bounds: GitPackBounds,
+    deadline: GitOperationDeadline,
+) -> Result<PackedGitObject, GitPackError> {
+    bounds.validate()?;
+    deadline.require_active()?;
+    deadline.run_step(|| validate_pack(pack, index, bounds))??;
+
+    let wanted_index = deadline
+        .run_step(|| {
+            index
+                .entries
+                .binary_search_by_key(&wanted, |entry| entry.object_id)
+        })?
         .map_err(|_| GitPackError::MissingPackedObject(wanted))?;
-    let lookup = PackLookup::new(pack, index)?;
+    let lookup = deadline.run_step(|| PackLookup::new(pack, index))??;
     let mut active_offsets = HashSet::new();
     resolve_entry(
         pack,
@@ -277,6 +293,7 @@ pub fn read_packed_object(
         &lookup,
         wanted_index,
         bounds,
+        deadline,
         0,
         &mut active_offsets,
     )
@@ -369,15 +386,21 @@ impl PackLookup {
     }
 }
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "recursive pack resolution keeps the shared operation deadline and immutable parser context explicit"
+)]
 fn resolve_entry(
     pack: &[u8],
     index: &GitPackIndex,
     lookup: &PackLookup,
     entry_index: usize,
     bounds: GitPackBounds,
+    deadline: GitOperationDeadline,
     depth: usize,
     active_offsets: &mut HashSet<u64>,
 ) -> Result<PackedGitObject, GitPackError> {
+    deadline.require_active()?;
     if depth >= bounds.max_delta_depth {
         return Err(GitPackError::DeltaDepthExceeded);
     }
@@ -408,7 +431,7 @@ fn resolve_entry(
                 let (body, consumed) = inflate_one_zlib(
                     &entry_bytes[header.payload_offset..],
                     bounds.max_object_bytes,
-                    bounds.max_duration,
+                    deadline,
                 )?;
                 if consumed != entry_bytes.len() - header.payload_offset
                     || body.len() != header.representation_size
@@ -428,20 +451,22 @@ fn resolve_entry(
                     lookup,
                     base_index,
                     bounds,
+                    deadline,
                     depth + 1,
                     active_offsets,
                 )?;
                 let (delta, consumed) = inflate_one_zlib(
                     &entry_bytes[header.payload_offset..],
                     bounds.max_object_bytes,
-                    bounds.max_duration,
+                    deadline,
                 )?;
                 if consumed != entry_bytes.len() - header.payload_offset
                     || delta.len() != header.representation_size
                 {
                     return Err(GitPackError::PackedRepresentationSizeMismatch);
                 }
-                let body = apply_delta(&base.bytes, &delta, bounds.max_object_bytes)?;
+                let body = deadline
+                    .run_step(|| apply_delta(&base.bytes, &delta, bounds.max_object_bytes))??;
                 (base.kind, body)
             }
             PackRepresentation::RefDelta(base_id) => {
@@ -455,20 +480,22 @@ fn resolve_entry(
                     lookup,
                     base_index,
                     bounds,
+                    deadline,
                     depth + 1,
                     active_offsets,
                 )?;
                 let (delta, consumed) = inflate_one_zlib(
                     &entry_bytes[header.payload_offset..],
                     bounds.max_object_bytes,
-                    bounds.max_duration,
+                    deadline,
                 )?;
                 if consumed != entry_bytes.len() - header.payload_offset
                     || delta.len() != header.representation_size
                 {
                     return Err(GitPackError::PackedRepresentationSizeMismatch);
                 }
-                let body = apply_delta(&base.bytes, &delta, bounds.max_object_bytes)?;
+                let body = deadline
+                    .run_step(|| apply_delta(&base.bytes, &delta, bounds.max_object_bytes))??;
                 (base.kind, body)
             }
         };
@@ -476,7 +503,7 @@ fn resolve_entry(
         if body.len() > bounds.max_object_bytes {
             return Err(GitPackError::ObjectSizeLimitExceeded);
         }
-        let actual_id = canonical_object_id(kind, &body)?;
+        let actual_id = deadline.run_step(|| canonical_object_id(kind, &body))??;
         if actual_id != index_entry.object_id {
             return Err(GitPackError::PackedObjectHashMismatch);
         }
@@ -601,9 +628,9 @@ fn parse_ofs_delta_distance(bytes: &[u8]) -> Result<(u64, usize), GitPackError> 
 fn inflate_one_zlib(
     compressed: &[u8],
     max_output_bytes: usize,
-    max_duration: Duration,
+    operation_deadline: GitOperationDeadline,
 ) -> Result<(Vec<u8>, usize), GitPackError> {
-    let deadline = DecompressionDeadline::start(max_duration)?;
+    let deadline = DecompressionDeadline::from_operation(operation_deadline);
     let mut state = InflateState::new(DataFormat::Zlib);
     let mut input_offset = 0_usize;
     let mut output = Vec::with_capacity(max_output_bytes.min(DECOMPRESSION_OUTPUT_QUANTUM_BYTES));
@@ -817,6 +844,7 @@ pub enum GitPackError {
     ThinPackUnsupported(PackObjectId),
     DeltaDepthExceeded,
     DeltaCycle,
+    OperationBudget(GitOperationBudgetError),
     Decompression(DecompressionBudgetError),
     DecompressionData,
     DecompressionTruncated,
@@ -890,6 +918,9 @@ impl fmt::Display for GitPackError {
             ),
             Self::DeltaDepthExceeded => f.write_str("Git delta chain depth limit exceeded"),
             Self::DeltaCycle => f.write_str("Git delta cycle detected"),
+            Self::OperationBudget(error) => {
+                write!(f, "bounded Git pack operation budget failed: {error}")
+            }
             Self::Decompression(error) => {
                 write!(f, "bounded Git pack decompression failed: {error}")
             }
@@ -919,10 +950,17 @@ impl fmt::Display for GitPackError {
 impl Error for GitPackError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::OperationBudget(error) => Some(error),
             Self::Decompression(error) => Some(error),
             Self::Sha1(error) => Some(error),
             _ => None,
         }
+    }
+}
+
+impl From<GitOperationBudgetError> for GitPackError {
+    fn from(value: GitOperationBudgetError) -> Self {
+        Self::OperationBudget(value)
     }
 }
 

@@ -3,26 +3,32 @@
 use std::collections::{BTreeMap, HashSet, VecDeque};
 use std::error::Error;
 use std::fmt;
+#[cfg(test)]
 use std::fs;
 use std::io;
+#[cfg(test)]
 use std::path::Path;
-use std::time::Duration;
 
 use golam_core::target_identity::ObservedFileKind;
 use golam_core::tool_request::{RequestedOperationId, RequestedTarget};
 
 use crate::git_pack::{
     GitPackBounds, GitPackError, GitPackIndex, PackObjectId, PackedObjectKind, parse_pack_index_v2,
-    read_packed_object,
+    read_packed_object_with_deadline,
 };
 use crate::git_read::{
     GitObject, GitObjectId, GitObjectKind, GitReadBounds, GitReadError, GitRepositoryEvidence,
     GitRepositoryReader,
 };
+use crate::git_read_budget::{GitOperationBudgetError, GitOperationDeadline};
+use crate::local_dir::{
+    LocalDirectorySnapshotBounds, LocalDirectorySnapshotError, snapshot_directory,
+};
 use crate::local_fs::{LocalFsResolutionError, LocalFsResolver};
 use crate::local_read::{LocalFileReadBounds, LocalFileReadError, read_regular_file};
 
 pub const MAX_PACK_FILES: usize = 16;
+const MAX_PACK_DIRECTORY_ENTRIES: usize = MAX_PACK_FILES * 4 + 16;
 pub const MAX_TOTAL_PACK_INDEX_BYTES: u64 = 64 * 1024 * 1024;
 pub const MAX_TOTAL_PACK_BYTES: u64 = 256 * 1024 * 1024;
 pub const MAX_LOG_COMMITS: usize = 512;
@@ -178,6 +184,7 @@ pub struct GitObservationReader<'a> {
     repository: GitRepositoryReader<'a>,
     packs: Vec<LoadedPack>,
     bounds: GitObservationBounds,
+    deadline: GitOperationDeadline,
     observed_at_unix_ms: u64,
 }
 
@@ -189,14 +196,34 @@ impl<'a> GitObservationReader<'a> {
         observed_at_unix_ms: u64,
     ) -> Result<Self, GitObservationError> {
         bounds.validate()?;
-        let repository =
-            GitRepositoryReader::open(resolver, operation, bounds.git, observed_at_unix_ms)?;
-        reject_alternate_object_store(resolver, operation, observed_at_unix_ms)?;
-        let packs = load_packs(resolver, operation, bounds, observed_at_unix_ms)?;
+        let deadline = GitOperationDeadline::start(bounds.git.max_duration)?;
+        Self::open_with_deadline(resolver, operation, bounds, deadline, observed_at_unix_ms)
+    }
+
+    pub(crate) fn open_with_deadline(
+        resolver: &'a LocalFsResolver,
+        operation: &RequestedOperationId,
+        bounds: GitObservationBounds,
+        deadline: GitOperationDeadline,
+        observed_at_unix_ms: u64,
+    ) -> Result<Self, GitObservationError> {
+        bounds.validate()?;
+        deadline.require_active()?;
+        let repository = GitRepositoryReader::open_with_deadline(
+            resolver,
+            operation,
+            bounds.git,
+            deadline,
+            observed_at_unix_ms,
+        )?;
+        reject_alternate_object_store(resolver, operation, deadline, observed_at_unix_ms)?;
+        let packs = load_packs(resolver, operation, bounds, deadline, observed_at_unix_ms)?;
+        deadline.require_active()?;
         Ok(Self {
             repository,
             packs,
             bounds,
+            deadline,
             observed_at_unix_ms,
         })
     }
@@ -242,7 +269,13 @@ impl<'a> GitObservationReader<'a> {
         let pack = match_index
             .and_then(|index| self.packs.get(index))
             .ok_or(GitObservationError::MissingObject(object_id))?;
-        let packed = read_packed_object(&pack.bytes, &pack.index, wanted, self.bounds.pack)?;
+        let packed = read_packed_object_with_deadline(
+            &pack.bytes,
+            &pack.index,
+            wanted,
+            self.bounds.pack,
+            self.deadline,
+        )?;
         let kind = match packed.kind {
             PackedObjectKind::Commit => GitObjectKind::Commit,
             PackedObjectKind::Tree => GitObjectKind::Tree,
@@ -293,12 +326,14 @@ impl<'a> GitObservationReader<'a> {
                 observed: observation.object.kind,
             });
         }
-        parse_commit(
-            object_id,
-            observation.source,
-            &observation.object.bytes,
-            self.bounds,
-        )
+        self.deadline.run_step(|| {
+            parse_commit(
+                object_id,
+                observation.source,
+                &observation.object.bytes,
+                self.bounds,
+            )
+        })?
     }
 
     pub fn read_tree(
@@ -312,7 +347,9 @@ impl<'a> GitObservationReader<'a> {
                 observed: observation.object.kind,
             });
         }
-        let entries = parse_tree(&observation.object.bytes, self.bounds)?;
+        let entries = self
+            .deadline
+            .run_step(|| parse_tree(&observation.object.bytes, self.bounds))??;
         Ok(GitTreeObjectObservation {
             object_id,
             source: observation.source,
@@ -327,6 +364,7 @@ impl<'a> GitObservationReader<'a> {
         pending.push_back(self.repository.evidence().head.object_id);
 
         while let Some(object_id) = pending.pop_front() {
+            self.deadline.require_active()?;
             if !seen.insert(object_id) {
                 continue;
             }
@@ -365,6 +403,7 @@ impl<'a> GitObservationReader<'a> {
         pending.push_back((String::new(), root_tree, 0_usize));
 
         while let Some((prefix, tree_id, depth)) = pending.pop_front() {
+            self.deadline.require_active()?;
             if depth > self.bounds.max_tree_depth {
                 return Err(GitObservationError::TreeDepthExceeded);
             }
@@ -413,8 +452,10 @@ impl<'a> GitObservationReader<'a> {
 fn reject_alternate_object_store(
     resolver: &LocalFsResolver,
     operation: &RequestedOperationId,
+    deadline: GitOperationDeadline,
     observed_at_unix_ms: u64,
 ) -> Result<(), GitObservationError> {
+    deadline.require_active()?;
     let info = requested(".git/objects/info")?;
     let info_identity = resolver.resolve_read_target(&info, operation, observed_at_unix_ms)?;
     match info_identity.file_kind {
@@ -423,6 +464,7 @@ fn reject_alternate_object_store(
         kind => return Err(GitObservationError::UnexpectedObjectStoreKind(kind)),
     }
 
+    deadline.require_active()?;
     let alternates = requested(".git/objects/info/alternates")?;
     let identity = resolver.resolve_read_target(&alternates, operation, observed_at_unix_ms)?;
     if identity.file_kind != ObservedFileKind::Missing {
@@ -435,8 +477,10 @@ fn load_packs(
     resolver: &LocalFsResolver,
     operation: &RequestedOperationId,
     bounds: GitObservationBounds,
+    deadline: GitOperationDeadline,
     observed_at_unix_ms: u64,
 ) -> Result<Vec<LoadedPack>, GitObservationError> {
+    deadline.require_active()?;
     let requested_pack_dir = requested(".git/objects/pack")?;
     let initial =
         resolver.resolve_read_target(&requested_pack_dir, operation, observed_at_unix_ms)?;
@@ -452,15 +496,20 @@ fn load_packs(
         return Err(GitObservationError::MultiPackIndexUnsupported);
     }
 
-    let absolute = Path::new(initial.normalized_path.as_str());
+    let snapshot = snapshot_directory(
+        resolver,
+        &requested_pack_dir,
+        operation,
+        LocalDirectorySnapshotBounds {
+            max_entries: MAX_PACK_DIRECTORY_ENTRIES,
+            max_duration: deadline.remaining()?,
+        },
+        observed_at_unix_ms,
+    )?;
     let mut index_names = Vec::new();
     let mut pack_names = HashSet::new();
-    for entry in fs::read_dir(absolute)? {
-        let entry = entry?;
-        let name = entry
-            .file_name()
-            .into_string()
-            .map_err(|_| GitObservationError::NonUnicodePackName)?;
+    for name in snapshot.names {
+        deadline.require_active()?;
         if name.ends_with(".idx") {
             validate_pack_file_name(&name, ".idx")?;
             index_names.push(name);
@@ -496,7 +545,7 @@ fn load_packs(
             &index_path,
             u64::try_from(bounds.pack.max_index_bytes)
                 .map_err(|_| GitObservationError::ObjectSizeOverflow)?,
-            bounds.pack.max_duration,
+            deadline,
             observed_at_unix_ms,
         )?;
         total_index_bytes = total_index_bytes
@@ -508,7 +557,7 @@ fn load_packs(
         if total_index_bytes > bounds.max_total_pack_index_bytes {
             return Err(GitObservationError::PackIndexByteLimitExceeded);
         }
-        let index = parse_pack_index_v2(&index_bytes, bounds.pack)?;
+        let index = deadline.run_step(|| parse_pack_index_v2(&index_bytes, bounds.pack))??;
         let expected_checksum = parse_pack_name_checksum(stem)?;
         if index.pack_checksum != expected_checksum {
             return Err(GitObservationError::PackNameChecksumMismatch);
@@ -520,7 +569,7 @@ fn load_packs(
             &pack_path,
             u64::try_from(bounds.pack.max_pack_bytes)
                 .map_err(|_| GitObservationError::ObjectSizeOverflow)?,
-            bounds.pack.max_duration,
+            deadline,
             observed_at_unix_ms,
         )?;
         total_pack_bytes = total_pack_bytes
@@ -590,9 +639,10 @@ fn read_required_file(
     operation: &RequestedOperationId,
     path: &str,
     max_bytes: u64,
-    max_duration: Duration,
+    deadline: GitOperationDeadline,
     observed_at_unix_ms: u64,
 ) -> Result<Vec<u8>, GitObservationError> {
+    deadline.require_active()?;
     let requested = requested(path)?;
     let identity = resolver.resolve_read_target(&requested, operation, observed_at_unix_ms)?;
     if identity.file_kind == ObservedFileKind::Missing {
@@ -609,7 +659,7 @@ fn read_required_file(
         operation,
         LocalFileReadBounds {
             max_bytes,
-            max_duration,
+            max_duration: deadline.remaining()?,
         },
         observed_at_unix_ms,
         observed_at_unix_ms,
@@ -788,6 +838,8 @@ pub enum GitObservationError {
     Pack(GitPackError),
     Resolution(LocalFsResolutionError),
     LocalRead(LocalFileReadError),
+    DirectorySnapshot(LocalDirectorySnapshotError),
+    OperationBudget(GitOperationBudgetError),
     Io(io::Error),
     UnexpectedObjectStoreKind(ObservedFileKind),
     AlternateObjectStoreUnsupported,
@@ -835,6 +887,12 @@ impl fmt::Display for GitObservationError {
             Self::Resolution(error) => write!(f, "Git observation path resolution failed: {error}"),
             Self::LocalRead(error) => {
                 write!(f, "Git observation bounded file read failed: {error}")
+            }
+            Self::DirectorySnapshot(error) => {
+                write!(f, "Git observation directory snapshot failed: {error}")
+            }
+            Self::OperationBudget(error) => {
+                write!(f, "Git observation operation budget failed: {error}")
             }
             Self::Io(error) => write!(f, "Git observation filesystem I/O failed: {error}"),
             Self::UnexpectedObjectStoreKind(kind) => {
@@ -914,6 +972,8 @@ impl Error for GitObservationError {
             Self::Pack(error) => Some(error),
             Self::Resolution(error) => Some(error),
             Self::LocalRead(error) => Some(error),
+            Self::DirectorySnapshot(error) => Some(error),
+            Self::OperationBudget(error) => Some(error),
             Self::Io(error) => Some(error),
             _ => None,
         }
@@ -941,6 +1001,18 @@ impl From<LocalFsResolutionError> for GitObservationError {
 impl From<LocalFileReadError> for GitObservationError {
     fn from(value: LocalFileReadError) -> Self {
         Self::LocalRead(value)
+    }
+}
+
+impl From<LocalDirectorySnapshotError> for GitObservationError {
+    fn from(value: LocalDirectorySnapshotError) -> Self {
+        Self::DirectorySnapshot(value)
+    }
+}
+
+impl From<GitOperationBudgetError> for GitObservationError {
+    fn from(value: GitOperationBudgetError) -> Self {
+        Self::OperationBudget(value)
     }
 }
 

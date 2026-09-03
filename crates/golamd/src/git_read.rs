@@ -181,6 +181,18 @@ impl<'a> GitRepositoryReader<'a> {
     ) -> Result<Self, GitReadError> {
         bounds.validate()?;
         let deadline = GitOperationDeadline::start(bounds.max_duration)?;
+        Self::open_with_deadline(resolver, operation, bounds, deadline, observed_at_unix_ms)
+    }
+
+    pub(crate) fn open_with_deadline(
+        resolver: &'a LocalFsResolver,
+        operation: &RequestedOperationId,
+        bounds: GitReadBounds,
+        deadline: GitOperationDeadline,
+        observed_at_unix_ms: u64,
+    ) -> Result<Self, GitReadError> {
+        bounds.validate()?;
+        deadline.require_active()?;
         let repository_root =
             resolve_directory(resolver, operation, ".", deadline, observed_at_unix_ms)?;
         let git_directory =
@@ -260,7 +272,6 @@ impl<'a> GitRepositoryReader<'a> {
     pub fn evidence(&self) -> &GitRepositoryEvidence {
         &self.evidence
     }
-
     pub fn resolve_ref(
         &self,
         reference: &str,

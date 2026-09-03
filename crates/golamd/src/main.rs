@@ -13,6 +13,7 @@ pub mod git_read_budget;
 pub mod git_sha1;
 pub mod git_status;
 pub mod harness;
+pub mod local_dir;
 pub mod local_fs;
 pub mod local_read;
 pub mod local_search;

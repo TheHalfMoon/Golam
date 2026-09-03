@@ -56,11 +56,14 @@ impl fmt::Display for LocalDirectorySnapshotError {
             Self::InvalidBounds => {
                 f.write_str("retained-handle directory observation requires positive bounds")
             }
-            Self::UnsupportedPlatform => f.write_str(
-                "retained-handle directory observation is unqualified on this platform",
-            ),
+            Self::UnsupportedPlatform => {
+                f.write_str("retained-handle directory observation is unqualified on this platform")
+            }
             Self::NotDirectory(kind) => {
-                write!(f, "retained-handle directory observation requires a directory, observed {kind:?}")
+                write!(
+                    f,
+                    "retained-handle directory observation requires a directory, observed {kind:?}"
+                )
             }
             Self::TargetChangedDuringObservation => {
                 f.write_str("directory identity changed during retained-handle observation")
@@ -140,8 +143,7 @@ where
     let path = Path::new(initial.normalized_path.as_str());
     let directory = File::open(path)?;
     let opened_metadata = directory.metadata()?;
-    if !opened_metadata.is_dir()
-        || !metadata_matches_resolved_identity(&initial, &opened_metadata)?
+    if !opened_metadata.is_dir() || !metadata_matches_resolved_identity(&initial, &opened_metadata)?
     {
         return Err(LocalDirectorySnapshotError::TargetChangedDuringObservation);
     }
@@ -186,11 +188,11 @@ where
     })
 }
 
-fn require_directory(
-    identity: &ResolvedTargetIdentity,
-) -> Result<(), LocalDirectorySnapshotError> {
+fn require_directory(identity: &ResolvedTargetIdentity) -> Result<(), LocalDirectorySnapshotError> {
     if identity.file_kind != ObservedFileKind::Directory {
-        return Err(LocalDirectorySnapshotError::NotDirectory(identity.file_kind));
+        return Err(LocalDirectorySnapshotError::NotDirectory(
+            identity.file_kind,
+        ));
     }
     Ok(())
 }
