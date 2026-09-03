@@ -40,7 +40,9 @@ pub mod memory_operational;
 pub mod memory_promotion_authority;
 #[cfg(test)]
 mod memory_promotion_authority_adversarial;
+pub mod memory_promotion_gate;
 pub mod memory_promotion_operational;
+pub mod memory_writer_authority;
 pub mod policy;
 pub mod protocol_audit;
 pub mod recovery;
