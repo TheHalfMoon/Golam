@@ -1,155 +1,62 @@
 name: ci
 
 on:
+  pull_request:
   push:
-    branches:
-      - 'impl/005-local-tools-context-memory'
+    branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  repair-memory-promotion-authority:
-    runs-on: ubuntu-latest
+  rust:
+    name: rust-${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: impl/005-local-tools-context-memory
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
-      - name: Add exact adversarial coverage
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path('crates/golam-ledger/src/memory_promotion_authority.rs')
-          text = path.read_text()
-          import_anchor = '''    use crate::approvals::ApprovalScope;\n'''
-          import_insert = '''    use crate::approval_revocation::{\n        APPROVAL_REVOKE_ACTION, ApprovalRevocationStore, prepare_approval_revocation,\n    };\n'''
-          if text.count(import_anchor) != 1 or import_insert in text:
-              raise SystemExit('approval revocation import anchor mismatch')
-          text = text.replace(import_anchor, import_anchor + import_insert, 1)
-
-          end = text.rfind('\n}')
-          if end < 0:
-              raise SystemExit('test module end missing')
-          tests = r'''
-
-    #[test]
-    fn revoked_human_approval_is_rejected_even_with_fresh_kernel_authorization() {
-        let (runtime, authority) = authority();
-        let policy_ref = digest(80);
-        let candidate = candidate(PromotionRequirement::AttributableHumanApproval {
-            approval_policy_ref: policy_ref,
-        });
-        let principal = PrincipalId::new("owner:owner").unwrap();
-        let resource = promotion_resource(candidate.scope, "human", policy_ref);
-        let effect_id = EffectId(next_id());
-        let approval_id = issue_once_approval(
-            &authority,
-            effect_id,
-            &resource,
-            candidate_taint_digest(&candidate).unwrap(),
-        );
-
-        let revoked_at = "2026-09-03T00:30:00Z";
-        let revocation = prepare_approval_revocation(approval_id, "owner:owner", revoked_at).unwrap();
-        let revocation_effect = EffectId(next_id());
-        create_authorized_effect(
-            &authority,
-            revocation_effect,
-            APPROVAL_REVOKE_ACTION,
-            revocation.resource(),
-            APPROVAL_MUTATION_RISK_CLASS,
-            revocation.intent_digest(),
-            "owner:owner",
-        );
-        let revocation_decision = append_allow(
-            &authority,
-            APPROVAL_REVOKE_ACTION,
-            revocation.resource(),
-        );
-        ApprovalRevocationStore::open(&authority)
-            .unwrap()
-            .revoke(revocation, revocation_decision, revocation_effect)
-            .unwrap();
-
-        let fresh_decision = append_allow(&authority, MEMORY_PROMOTION_ACTION, &resource);
-        assert!(matches!(
-            MemoryPromotionAuthorityValidator::open(&authority)
-                .unwrap()
-                .validate_human(HumanPromotionRequest {
-                    candidate: &candidate,
-                    initiating_principal: &principal,
-                    authorization_decision_id: fresh_decision,
-                    approval_id,
-                    effect_id,
-                    observed_at: "2026-09-03T01:00:00Z",
-                }),
-            Err(MemoryPromotionAuthorityError::Approval(_))
-        ));
-        fs::remove_dir_all(runtime.root).unwrap();
-    }
-
-    #[test]
-    fn current_kernel_deny_cannot_be_used_as_promotion_authority() {
-        let (runtime, authority) = authority();
-        let policy_ref = digest(90);
-        let candidate = candidate(PromotionRequirement::AttributableHumanApproval {
-            approval_policy_ref: policy_ref,
-        });
-        let principal = PrincipalId::new("owner:owner").unwrap();
-        let resource = promotion_resource(candidate.scope, "human", policy_ref);
-        let denied = AuthorizationAuditLog::open(&authority)
-            .unwrap()
-            .append(AppendAuthorizationDecision {
-                principal: "owner:owner",
-                action: MEMORY_PROMOTION_ACTION,
-                resource: &resource,
-                context: "scope=memory-promotion",
-                evidence: AuthorizationDecisionEvidence::hard_guard_only("pass"),
-                decision: AuthorizationDecisionKind::Deny,
-                reason_code: "memory_promotion_denied_test",
-            })
-            .unwrap()
-            .decision_id;
-        assert!(matches!(
-            MemoryPromotionAuthorityValidator::open(&authority)
-                .unwrap()
-                .validate_human(HumanPromotionRequest {
-                    candidate: &candidate,
-                    initiating_principal: &principal,
-                    authorization_decision_id: denied,
-                    approval_id: [0; 16],
-                    effect_id: EffectId(1),
-                    observed_at: "2026-09-03T01:00:00Z",
-                }),
-            Err(MemoryPromotionAuthorityError::AuthorityDecisionMismatch)
-        ));
-        fs::remove_dir_all(runtime.root).unwrap();
-    }
-'''
-          path.write_text(text[:end] + tests + text[end:])
-          PY
       - name: Format
-        run: cargo +1.98.0 fmt --all
-      - name: Clippy validator
-        run: cargo +1.98.0 clippy --locked -p golam-ledger --all-targets -- -D warnings
-      - name: Focused validator tests
+        run: cargo +1.98.0 fmt --all -- --check
+      - name: Clippy
+        run: cargo +1.98.0 clippy --locked --workspace --all-targets -- -D warnings
+      - name: Test
+        run: cargo +1.98.0 test --locked --workspace --all-targets
+      - name: Property qualification
         run: |
-          cargo +1.98.0 test --locked -p golam-ledger --lib memory_promotion_authority::tests::
-      - name: Guard exact mutation and push
-        shell: bash
+          cargo +1.98.0 test --locked -p golam-effects --test qualification_properties
+          cargo +1.98.0 test --locked -p golam-ledger --test qualification_properties
+      - name: Bounded fuzz smoke
         run: |
-          set -euo pipefail
-          mapfile -t changed < <(git diff --name-only | sort)
-          printf '%s\n' "${changed[@]}"
-          test "${#changed[@]}" -eq 1
-          test "${changed[0]}" = "crates/golam-ledger/src/memory_promotion_authority.rs"
-          git diff --check
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add crates/golam-ledger/src/memory_promotion_authority.rs
-          git commit -m "test(005): cover revoked and denied promotion authority"
-          git push origin HEAD:impl/005-local-tools-context-memory
+          cargo +1.98.0 test --locked -p golam-ipc --test fuzz_smoke
+          cargo +1.98.0 test --locked -p golam-ledger --test fuzz_smoke
+          cargo +1.98.0 test --locked -p golam-kernel --test spec003_fuzz_smoke
+      - name: IPC transport qualification (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc unix_transport::
+      - name: IPC transport qualification (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc windows_transport::
+      - name: Authenticated daemon IPC qualification
+        run: |
+          cargo +1.98.0 test --locked -p golamd --bin golamd connection::tests::
+      - name: Adversarial authority qualification
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc --test adversarial
+          cargo +1.98.0 test --locked -p golam-kernel --test hostile_adapter
+          cargo +1.98.0 test --locked -p golam-kernel client_auth::tests::
+      - name: Build daemon for external locality observation
+        run: cargo +1.98.0 build --locked -p golamd --bin golamd
+      - name: Strict-local external network observation (Unix)
+        if: runner.os != 'Windows'
+        run: bash scripts/qualification/strict-local-no-network.sh target/debug/golamd
+      - name: Strict-local external network observation (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/qualification/strict-local-no-network.ps1 target/debug/golamd.exe
