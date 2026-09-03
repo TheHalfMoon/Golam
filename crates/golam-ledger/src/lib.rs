@@ -42,6 +42,7 @@ pub mod memory_promotion_authority;
 mod memory_promotion_authority_adversarial;
 pub mod memory_promotion_gate;
 pub mod memory_promotion_operational;
+pub mod memory_restart;
 pub mod memory_writer_authority;
 pub mod memory_writer_readback;
 pub mod policy;
