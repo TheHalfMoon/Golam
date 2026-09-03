@@ -12,8 +12,7 @@ use miniz_oxide::{DataFormat, MZError, MZFlush, MZStatus};
 
 use crate::git_read_budget::{
     DECOMPRESSION_INPUT_QUANTUM_BYTES, DECOMPRESSION_OUTPUT_QUANTUM_BYTES,
-    DecompressionBudgetError, DecompressionDeadline, GitOperationBudgetError,
-    GitOperationDeadline,
+    DecompressionBudgetError, DecompressionDeadline, GitOperationBudgetError, GitOperationDeadline,
 };
 use crate::git_sha1::{GitObjectSha1, GitObjectSha1Error};
 use crate::local_fs::{LocalFsResolutionError, LocalFsResolver};
@@ -182,26 +181,17 @@ impl<'a> GitRepositoryReader<'a> {
     ) -> Result<Self, GitReadError> {
         bounds.validate()?;
         let deadline = GitOperationDeadline::start(bounds.max_duration)?;
-        let repository_root = resolve_directory(
-            resolver,
-            operation,
-            ".",
-            deadline,
-            observed_at_unix_ms,
-        )?;
-        let git_directory = resolve_directory(
-            resolver,
-            operation,
-            ".git",
-            deadline,
-            observed_at_unix_ms,
-        )
-        .map_err(|error| match error {
-            GitReadError::UnsupportedFileKind(ObservedFileKind::RegularFile) => {
-                GitReadError::GitFileWorktreeUnsupported
-            }
-            other => other,
-        })?;
+        let repository_root =
+            resolve_directory(resolver, operation, ".", deadline, observed_at_unix_ms)?;
+        let git_directory =
+            resolve_directory(resolver, operation, ".git", deadline, observed_at_unix_ms).map_err(
+                |error| match error {
+                    GitReadError::UnsupportedFileKind(ObservedFileKind::RegularFile) => {
+                        GitReadError::GitFileWorktreeUnsupported
+                    }
+                    other => other,
+                },
+            )?;
         let object_store_directory = resolve_directory(
             resolver,
             operation,
@@ -542,9 +532,8 @@ fn resolve_directory(
     observed_at_unix_ms: u64,
 ) -> Result<ResolvedTargetIdentity, GitReadError> {
     let requested = deadline.run_step(|| requested(path))??;
-    let identity = deadline.run_step(|| {
-        resolver.resolve_read_target(&requested, operation, observed_at_unix_ms)
-    })??;
+    let identity = deadline
+        .run_step(|| resolver.resolve_read_target(&requested, operation, observed_at_unix_ms))??;
     if identity.file_kind != ObservedFileKind::Directory {
         return Err(GitReadError::UnsupportedFileKind(identity.file_kind));
     }
@@ -580,9 +569,8 @@ fn read_optional_file(
     observed_at_unix_ms: u64,
 ) -> Result<Option<Vec<u8>>, GitReadError> {
     let requested = deadline.run_step(|| requested(path))??;
-    let identity = deadline.run_step(|| {
-        resolver.resolve_read_target(&requested, operation, observed_at_unix_ms)
-    })??;
+    let identity = deadline
+        .run_step(|| resolver.resolve_read_target(&requested, operation, observed_at_unix_ms))??;
     if identity.file_kind == ObservedFileKind::Missing {
         deadline.require_active()?;
         return Ok(None);
