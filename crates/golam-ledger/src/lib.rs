@@ -35,6 +35,7 @@ mod harness_sink;
 pub mod integrity;
 pub mod manual_review;
 pub mod memory_control_authority;
+pub mod memory_control_evidence;
 pub mod memory_evidence;
 #[path = "memory_operational_store.rs"]
 pub mod memory_operational;
@@ -156,7 +157,6 @@ pub fn canonical_event_bytes(record: &EventRecord) -> Result<Vec<u8>, CoreError>
     encoder.push_bytes(EVENT_DOMAIN)?;
     encoder.push_u16(record.schema_version);
     encoder.push_u128(record.event_id.0);
-    encoder.push_u128(record.session_id.0);
     encoder.push_u64(record.global_seq);
     encoder.push_u64(record.session_seq);
     encoder.push_u8(record.kind.code());
