@@ -160,9 +160,9 @@ pub fn validate_memory_transition(
     Ok(())
 }
 
-fn expected_version<'a>(
+fn expected_version(
     item_ids: &[MemoryItemId],
-    bindings: &'a [crate::memory::ExpectedMemoryVersion],
+    bindings: &[crate::memory::ExpectedMemoryVersion],
     item_id: MemoryItemId,
 ) -> Option<Option<MemoryVersionId>> {
     item_ids
