@@ -53,10 +53,22 @@ jobs:
 
           observe = Path('crates/golamd/src/git_observe.rs')
           text = observe.read_text()
-          for unused in ('use std::fs;\n', 'use std::path::Path;\n', 'use std::time::Duration;\n'):
-              if text.count(unused) != 1:
-                  raise SystemExit(f'{observe}: expected one unused import {unused!r}, found {text.count(unused)}')
-              text = text.replace(unused, '', 1)
+          test_only_imports = (
+              ('use std::fs;\n', '#[cfg(test)]\nuse std::fs;\n'),
+              ('use std::path::Path;\n', '#[cfg(test)]\nuse std::path::Path;\n'),
+          )
+          for original, replacement in test_only_imports:
+              if text.count(original) != 1:
+                  raise SystemExit(
+                      f'{observe}: expected one test-only import {original!r}, found {text.count(original)}'
+                  )
+              text = text.replace(original, replacement, 1)
+          duration = 'use std::time::Duration;\n'
+          if text.count(duration) != 1:
+              raise SystemExit(
+                  f'{observe}: expected one unused Duration import, found {text.count(duration)}'
+              )
+          text = text.replace(duration, '', 1)
           observe.write_text(text)
 
           read = Path('crates/golamd/src/git_read.rs')
