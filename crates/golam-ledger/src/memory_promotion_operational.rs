@@ -101,23 +101,19 @@ impl MemoryPromotionOperationalStore {
              PRAGMA synchronous = FULL; PRAGMA busy_timeout = 5000;",
         )?;
         verify_operational_meta(&connection, layout.store_id())?;
-        connection.execute_batch(
-            r#"
-            CREATE TABLE IF NOT EXISTS memory_promotion_state (
-                evidence_id BLOB PRIMARY KEY NOT NULL CHECK (length(evidence_id) = 32),
-                store_ref BLOB NOT NULL CHECK (length(store_ref) = 32),
-                schema_ref BLOB NOT NULL CHECK (length(schema_ref) = 32),
-                candidate_id BLOB NOT NULL CHECK (length(candidate_id) = 32),
-                promotion_authority_ref BLOB NOT NULL CHECK (length(promotion_authority_ref) = 32),
-                approving_principal TEXT,
-                verifier_policy_ref BLOB CHECK (verifier_policy_ref IS NULL OR length(verifier_policy_ref) = 32),
-                authority_evidence_ref BLOB NOT NULL CHECK (length(authority_evidence_ref) = 32),
-                recorded_at_unix_ms INTEGER NOT NULL,
-                integrity_hash BLOB NOT NULL CHECK (length(integrity_hash) = 32),
-                CHECK ((approving_principal IS NULL) != (verifier_policy_ref IS NULL))
-            );
-            "#,
-        )?;
+        let table_exists = connection
+            .query_row(
+                "SELECT 1 FROM sqlite_schema WHERE type = 'table' AND name = 'memory_promotion_state' LIMIT 1",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()?
+            .is_some();
+        if !table_exists {
+            return Err(MemoryPromotionOperationalError::InvalidRecord(
+                "memory promotion operational table is missing from the bound schema",
+            ));
+        }
         Ok(Self {
             connection,
             store_id: layout.store_id(),

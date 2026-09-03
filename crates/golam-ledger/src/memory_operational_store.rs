@@ -21,6 +21,7 @@ pub const REQUIRED_MEMORY_OPERATIONAL_TABLES: &[&str] = &[
     "memory_versions",
     "memory_relations",
     "memory_reconciliation_state",
+    "memory_promotion_state",
     "memory_derivative_generations",
 ];
 
@@ -453,6 +454,19 @@ fn migrate(connection: &Connection, store_id: MemoryStoreId) -> Result<(), Memor
             state INTEGER NOT NULL,
             evidence_ref BLOB NOT NULL CHECK (length(evidence_ref) = 32),
             FOREIGN KEY(effect_id) REFERENCES memory_effect_state(effect_id)
+        );
+        CREATE TABLE IF NOT EXISTS memory_promotion_state (
+            evidence_id BLOB PRIMARY KEY NOT NULL CHECK (length(evidence_id) = 32),
+            store_ref BLOB NOT NULL CHECK (length(store_ref) = 32),
+            schema_ref BLOB NOT NULL CHECK (length(schema_ref) = 32),
+            candidate_id BLOB NOT NULL CHECK (length(candidate_id) = 32),
+            promotion_authority_ref BLOB NOT NULL CHECK (length(promotion_authority_ref) = 32),
+            approving_principal TEXT,
+            verifier_policy_ref BLOB CHECK (verifier_policy_ref IS NULL OR length(verifier_policy_ref) = 32),
+            authority_evidence_ref BLOB NOT NULL CHECK (length(authority_evidence_ref) = 32),
+            recorded_at_unix_ms INTEGER NOT NULL,
+            integrity_hash BLOB NOT NULL CHECK (length(integrity_hash) = 32),
+            CHECK ((approving_principal IS NULL) != (verifier_policy_ref IS NULL))
         );
         CREATE TABLE IF NOT EXISTS memory_derivative_generations (
             generation_id BLOB PRIMARY KEY NOT NULL CHECK (length(generation_id) = 32),

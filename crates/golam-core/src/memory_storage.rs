@@ -12,7 +12,7 @@ use crate::paths::RuntimeLayout;
 use crate::tool_request::BindingDigest;
 use crate::{CanonicalEncoder, CoreError};
 
-pub const MEMORY_OPERATIONAL_SCHEMA_VERSION: u16 = 1;
+pub const MEMORY_OPERATIONAL_SCHEMA_VERSION: u16 = 2;
 const MEMORY_SCHEMA_DOMAIN: &[u8] = b"golam:memory-operational-schema:v1";
 const MEMORY_STORE_DOMAIN: &[u8] = b"golam:memory-operational-store:v1";
 
