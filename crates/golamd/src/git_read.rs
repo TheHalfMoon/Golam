@@ -12,7 +12,8 @@ use miniz_oxide::{DataFormat, MZError, MZFlush, MZStatus};
 
 use crate::git_read_budget::{
     DECOMPRESSION_INPUT_QUANTUM_BYTES, DECOMPRESSION_OUTPUT_QUANTUM_BYTES,
-    DecompressionBudgetError, DecompressionDeadline,
+    DecompressionBudgetError, DecompressionDeadline, GitOperationBudgetError,
+    GitOperationDeadline,
 };
 use crate::git_sha1::{GitObjectSha1, GitObjectSha1Error};
 use crate::local_fs::{LocalFsResolutionError, LocalFsResolver};
@@ -169,6 +170,7 @@ pub struct GitRepositoryReader<'a> {
     operation: RequestedOperationId,
     evidence: GitRepositoryEvidence,
     bounds: GitReadBounds,
+    deadline: GitOperationDeadline,
 }
 
 impl<'a> GitRepositoryReader<'a> {
@@ -179,26 +181,44 @@ impl<'a> GitRepositoryReader<'a> {
         observed_at_unix_ms: u64,
     ) -> Result<Self, GitReadError> {
         bounds.validate()?;
-        let repository_root = resolve_directory(resolver, operation, ".", observed_at_unix_ms)?;
-        let git_directory = resolve_directory(resolver, operation, ".git", observed_at_unix_ms)
-            .map_err(|error| match error {
-                GitReadError::UnsupportedFileKind(ObservedFileKind::RegularFile) => {
-                    GitReadError::GitFileWorktreeUnsupported
-                }
-                other => other,
-            })?;
-        let object_store_directory =
-            resolve_directory(resolver, operation, ".git/objects", observed_at_unix_ms)?;
+        let deadline = GitOperationDeadline::start(bounds.max_duration)?;
+        let repository_root = resolve_directory(
+            resolver,
+            operation,
+            ".",
+            deadline,
+            observed_at_unix_ms,
+        )?;
+        let git_directory = resolve_directory(
+            resolver,
+            operation,
+            ".git",
+            deadline,
+            observed_at_unix_ms,
+        )
+        .map_err(|error| match error {
+            GitReadError::UnsupportedFileKind(ObservedFileKind::RegularFile) => {
+                GitReadError::GitFileWorktreeUnsupported
+            }
+            other => other,
+        })?;
+        let object_store_directory = resolve_directory(
+            resolver,
+            operation,
+            ".git/objects",
+            deadline,
+            observed_at_unix_ms,
+        )?;
 
         let object_format = match read_optional_file(
             resolver,
             operation,
             ".git/config",
             MAX_CONFIG_BYTES,
-            bounds.max_duration,
+            deadline,
             observed_at_unix_ms,
         )? {
-            Some(config) => parse_object_format(&config)?,
+            Some(config) => deadline.run_step(|| parse_object_format(&config))??,
             None => GitObjectFormat::Sha1,
         };
 
@@ -207,10 +227,10 @@ impl<'a> GitRepositoryReader<'a> {
             operation,
             ".git/HEAD",
             MAX_HEAD_BYTES,
-            bounds.max_duration,
+            deadline,
             observed_at_unix_ms,
         )?;
-        let representation = parse_head(&raw_head)?;
+        let representation = deadline.run_step(|| parse_head(&raw_head))??;
 
         let mut reader = Self {
             resolver,
@@ -230,6 +250,7 @@ impl<'a> GitRepositoryReader<'a> {
                 bounds,
             },
             bounds,
+            deadline,
         };
 
         let (resolved_ref, object_id) = match representation {
@@ -240,6 +261,7 @@ impl<'a> GitRepositoryReader<'a> {
                 (Some(resolution), id)
             }
         };
+        reader.deadline.require_active()?;
         reader.evidence.head.resolved_ref = resolved_ref;
         reader.evidence.head.object_id = object_id;
         Ok(reader)
@@ -254,13 +276,14 @@ impl<'a> GitRepositoryReader<'a> {
         reference: &str,
         observed_at_unix_ms: u64,
     ) -> Result<GitRefResolution, GitReadError> {
-        validate_ref_name(reference)?;
+        self.deadline.run_step(|| validate_ref_name(reference))??;
         let requested_ref = reference.to_owned();
         let mut current = requested_ref.clone();
         let mut chain = Vec::new();
         let mut seen = HashSet::new();
 
         for _ in 0..MAX_SYMBOLIC_REF_DEPTH {
+            self.deadline.require_active()?;
             if !seen.insert(current.clone()) {
                 return Err(GitReadError::SymbolicRefCycle);
             }
@@ -271,16 +294,16 @@ impl<'a> GitRepositoryReader<'a> {
                 &self.operation,
                 &target,
                 MAX_REF_BYTES,
-                self.bounds.max_duration,
+                self.deadline,
                 observed_at_unix_ms,
             )? {
-                let line = one_trimmed_line(&bytes)?;
+                let line = self.deadline.run_step(|| one_trimmed_line(&bytes))??;
                 if let Some(next) = line.strip_prefix("ref: ") {
-                    validate_ref_name(next)?;
+                    self.deadline.run_step(|| validate_ref_name(next))??;
                     current = next.to_owned();
                     continue;
                 }
-                let object_id = GitObjectId::parse(line)?;
+                let object_id = self.deadline.run_step(|| GitObjectId::parse(line))??;
                 return Ok(GitRefResolution {
                     requested_ref,
                     symbolic_chain: chain,
@@ -308,6 +331,7 @@ impl<'a> GitRepositoryReader<'a> {
         object_id: GitObjectId,
         observed_at_unix_ms: u64,
     ) -> Result<GitObject, GitReadError> {
+        self.deadline.require_active()?;
         let hex = object_id.to_hex();
         let path = format!(".git/objects/{}/{}", &hex[..2], &hex[2..]);
         let compressed = read_optional_file(
@@ -315,21 +339,24 @@ impl<'a> GitRepositoryReader<'a> {
             &self.operation,
             &path,
             self.bounds.max_loose_compressed_bytes,
-            self.bounds.max_duration,
+            self.deadline,
             observed_at_unix_ms,
         )?
         .ok_or(GitReadError::MissingObject(object_id))?;
 
-        let decoded = decompress_zlib_bounded(
+        let decoded = decompress_zlib_bounded_with_deadline(
             &compressed,
             self.bounds.max_single_object_decompressed_bytes,
-            self.bounds.max_duration,
+            self.deadline,
         )?;
-        let actual = GitObjectSha1::digest(&decoded)?;
+        let actual = self
+            .deadline
+            .run_step(|| GitObjectSha1::digest(&decoded))??;
         if actual != object_id.bytes() {
             return Err(GitReadError::ObjectHashMismatch);
         }
-        parse_object_bytes(object_id, decoded)
+        self.deadline
+            .run_step(|| parse_object_bytes(object_id, decoded))?
     }
 
     fn resolve_packed_ref(
@@ -342,13 +369,14 @@ impl<'a> GitRepositoryReader<'a> {
             &self.operation,
             ".git/packed-refs",
             self.bounds.max_packed_refs_bytes,
-            self.bounds.max_duration,
+            self.deadline,
             observed_at_unix_ms,
         )?
         else {
             return Ok(None);
         };
-        parse_packed_ref(&bytes, reference, self.bounds.max_packed_refs)
+        self.deadline
+            .run_step(|| parse_packed_ref(&bytes, reference, self.bounds.max_packed_refs))?
     }
 }
 
@@ -358,6 +386,7 @@ pub enum GitReadError {
     InvalidInternalPath,
     Resolution(LocalFsResolutionError),
     LocalRead(LocalFileReadError),
+    OperationBudget(GitOperationBudgetError),
     UnsupportedFileKind(ObservedFileKind),
     GitFileWorktreeUnsupported,
     UnsupportedObjectFormat(String),
@@ -396,6 +425,7 @@ impl fmt::Display for GitReadError {
             }
             Self::Resolution(error) => write!(f, "Git repository path resolution failed: {error}"),
             Self::LocalRead(error) => write!(f, "Git bounded file read failed: {error}"),
+            Self::OperationBudget(error) => write!(f, "Git operation budget failed: {error}"),
             Self::UnsupportedFileKind(kind) => {
                 write!(f, "Git reader requires a directory but observed {kind:?}")
             }
@@ -466,6 +496,7 @@ impl Error for GitReadError {
         match self {
             Self::Resolution(error) => Some(error),
             Self::LocalRead(error) => Some(error),
+            Self::OperationBudget(error) => Some(error),
             Self::Decompression(error) => Some(error),
             Self::Sha1(error) => Some(error),
             _ => None,
@@ -485,6 +516,12 @@ impl From<LocalFileReadError> for GitReadError {
     }
 }
 
+impl From<GitOperationBudgetError> for GitReadError {
+    fn from(value: GitOperationBudgetError) -> Self {
+        Self::OperationBudget(value)
+    }
+}
+
 impl From<DecompressionBudgetError> for GitReadError {
     fn from(value: DecompressionBudgetError) -> Self {
         Self::Decompression(value)
@@ -501,13 +538,17 @@ fn resolve_directory(
     resolver: &LocalFsResolver,
     operation: &RequestedOperationId,
     path: &str,
+    deadline: GitOperationDeadline,
     observed_at_unix_ms: u64,
 ) -> Result<ResolvedTargetIdentity, GitReadError> {
-    let requested = requested(path)?;
-    let identity = resolver.resolve_read_target(&requested, operation, observed_at_unix_ms)?;
+    let requested = deadline.run_step(|| requested(path))??;
+    let identity = deadline.run_step(|| {
+        resolver.resolve_read_target(&requested, operation, observed_at_unix_ms)
+    })??;
     if identity.file_kind != ObservedFileKind::Directory {
         return Err(GitReadError::UnsupportedFileKind(identity.file_kind));
     }
+    deadline.require_active()?;
     Ok(identity)
 }
 
@@ -516,7 +557,7 @@ fn read_required_file(
     operation: &RequestedOperationId,
     path: &str,
     max_bytes: u64,
-    max_duration: Duration,
+    deadline: GitOperationDeadline,
     observed_at_unix_ms: u64,
 ) -> Result<Vec<u8>, GitReadError> {
     read_optional_file(
@@ -524,7 +565,7 @@ fn read_required_file(
         operation,
         path,
         max_bytes,
-        max_duration,
+        deadline,
         observed_at_unix_ms,
     )?
     .ok_or_else(|| GitReadError::MissingRef(path.to_owned()))
@@ -535,12 +576,15 @@ fn read_optional_file(
     operation: &RequestedOperationId,
     path: &str,
     max_bytes: u64,
-    max_duration: Duration,
+    deadline: GitOperationDeadline,
     observed_at_unix_ms: u64,
 ) -> Result<Option<Vec<u8>>, GitReadError> {
-    let requested = requested(path)?;
-    let identity = resolver.resolve_read_target(&requested, operation, observed_at_unix_ms)?;
+    let requested = deadline.run_step(|| requested(path))??;
+    let identity = deadline.run_step(|| {
+        resolver.resolve_read_target(&requested, operation, observed_at_unix_ms)
+    })??;
     if identity.file_kind == ObservedFileKind::Missing {
+        deadline.require_active()?;
         return Ok(None);
     }
     if identity.file_kind != ObservedFileKind::RegularFile {
@@ -548,17 +592,19 @@ fn read_optional_file(
             LocalFileReadError::UnsupportedFileKind(identity.file_kind),
         ));
     }
+    let remaining = deadline.remaining()?;
     let read = read_regular_file(
         resolver,
         &requested,
         operation,
         LocalFileReadBounds {
             max_bytes,
-            max_duration,
+            max_duration: remaining,
         },
         observed_at_unix_ms,
         observed_at_unix_ms,
     )?;
+    deadline.require_active()?;
     Ok(Some(read.bytes))
 }
 
@@ -691,10 +737,19 @@ fn decompress_zlib_bounded(
     max_output_bytes: usize,
     max_duration: Duration,
 ) -> Result<Vec<u8>, GitReadError> {
+    let operation = GitOperationDeadline::start(max_duration)?;
+    decompress_zlib_bounded_with_deadline(compressed, max_output_bytes, operation)
+}
+
+fn decompress_zlib_bounded_with_deadline(
+    compressed: &[u8],
+    max_output_bytes: usize,
+    operation: GitOperationDeadline,
+) -> Result<Vec<u8>, GitReadError> {
     if max_output_bytes == 0 || max_output_bytes > MAX_SINGLE_OBJECT_DECOMPRESSED_BYTES {
         return Err(GitReadError::InvalidBounds);
     }
-    let deadline = DecompressionDeadline::start(max_duration)?;
+    let deadline = DecompressionDeadline::from_operation(operation);
     let mut state = InflateState::new(DataFormat::Zlib);
     let mut input_offset = 0_usize;
     let mut output = Vec::with_capacity(max_output_bytes.min(DECOMPRESSION_OUTPUT_QUANTUM_BYTES));
