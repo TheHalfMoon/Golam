@@ -47,6 +47,40 @@ jobs:
           path.write_text(text.replace(old, new, 1))
           PY
           python scripts/qualification/repair-t005-040-git-observation.py
+          python - <<'PY'
+          from pathlib import Path
+
+          observe = Path('crates/golamd/src/git_observe.rs')
+          text = observe.read_text()
+          for unused in ('use std::fs;\n', 'use std::path::Path;\n', 'use std::time::Duration;\n'):
+              if text.count(unused) != 1:
+                  raise SystemExit(f'{observe}: expected one unused import {unused!r}, found {text.count(unused)}')
+              text = text.replace(unused, '', 1)
+          observe.write_text(text)
+
+          read = Path('crates/golamd/src/git_read.rs')
+          text = read.read_text()
+          dead = '''    pub(crate) const fn operation_deadline(&self) -> GitOperationDeadline {
+              self.deadline
+          }
+
+          '''
+          if text.count(dead) != 1:
+              raise SystemExit(f'{read}: expected one unused deadline accessor, found {text.count(dead)}')
+          read.write_text(text.replace(dead, '', 1))
+
+          pack = Path('crates/golamd/src/git_pack.rs')
+          text = pack.read_text()
+          marker = 'fn resolve_entry(\n'
+          if text.count(marker) != 1:
+              raise SystemExit(f'{pack}: expected one resolve_entry marker, found {text.count(marker)}')
+          annotation = '''#[expect(
+              clippy::too_many_arguments,
+              reason = "recursive pack resolution keeps the shared operation deadline and immutable parser context explicit",
+          )]
+          '''
+          pack.write_text(text.replace(marker, annotation + marker, 1))
+          PY
       - name: Format
         run: cargo +1.98.0 fmt --all
       - name: Clippy
