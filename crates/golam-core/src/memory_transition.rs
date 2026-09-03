@@ -75,10 +75,7 @@ pub fn validate_memory_transition(
     if !intent.item_ids.contains(&version.item_id) {
         return Err(MemoryTransitionError::OutputItemNotBound);
     }
-    if version
-        .predecessor_versions
-        .contains(&version.version_id)
-    {
+    if version.predecessor_versions.contains(&version.version_id) {
         return Err(MemoryTransitionError::SelfPredecessor);
     }
 
