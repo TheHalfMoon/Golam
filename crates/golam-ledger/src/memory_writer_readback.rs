@@ -59,6 +59,20 @@ impl From<CoreError> for MemoryWriterReadbackError {
     }
 }
 
+pub fn invalidate_memory_derivatives(
+    layout: &MemoryLayout,
+) -> Result<usize, MemoryWriterReadbackError> {
+    let connection = Connection::open(layout.operational_db_path())?;
+    connection.execute_batch(
+        "PRAGMA foreign_keys = ON; PRAGMA synchronous = FULL; PRAGMA busy_timeout = 5000;",
+    )?;
+    Ok(connection.execute(
+        "UPDATE memory_derivative_generations SET status = 2 \
+         WHERE store_ref = ?1 AND status != 2",
+        params![layout.store_id().0.bytes().to_vec()],
+    )?)
+}
+
 pub fn verify_memory_sqlite_readback(
     layout: &MemoryLayout,
     prepared: &PreparedMemoryMutationIntent,
