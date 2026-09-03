@@ -130,6 +130,7 @@ mod tests {
                 .expect("clean restart scan must succeed")
                 .is_empty()
         );
+        drop(kernel);
         fs::remove_dir_all(runtime.root).expect("test runtime cleanup must succeed");
     }
 }
