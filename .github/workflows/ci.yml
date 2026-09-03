@@ -21,6 +21,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/qualification/repair-t005-040-closure.py')
+          text = path.read_text()
+          fixes = (
+              (
+                  r'b"tree 2222222222222222222222222222222222222222\n\nmissing identities"',
+                  r'b"tree 2222222222222222222222222222222222222222\\n\\nmissing identities"',
+                  2,
+              ),
+              (r'b"hello\n"', r'b"hello\\n"', 2),
+          )
+          for old, new, expected in fixes:
+              observed = text.count(old)
+              if observed != expected:
+                  raise SystemExit(
+                      f'{path}: expected {expected} escaped-literal repair matches, found {observed}: {old!r}'
+                  )
+              text = text.replace(old, new)
+          path.write_text(text)
+          PY
           python scripts/qualification/repair-t005-040-closure.py
       - name: Format
         run: cargo +1.98.0 fmt --all
