@@ -4,6 +4,7 @@ use std::error::Error;
 use std::fmt;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use golam_core::memory_markdown::parse_managed_markdown;
 use golam_core::memory_storage::{MemoryLayout, MemoryLayoutError};
 use golam_core::paths::RuntimeLayout;
 use golam_core::target_identity::ObservedFileKind;
@@ -193,6 +194,9 @@ fn observe_case(
                     });
                 }
             };
+            if let Some(reason_code) = managed_markdown_quarantine_reason(&read.bytes) {
+                return Ok(MemoryRestartObservation::Unobservable { reason_code });
+            }
             let Some(target_identity_ref) = read.identity.resolved_target_identity else {
                 return Ok(MemoryRestartObservation::Unobservable {
                     reason_code: "regular_file_missing_identity".to_owned(),
@@ -210,6 +214,12 @@ fn observe_case(
             reason_code: format!("unsupported_file_kind:{kind:?}"),
         }),
     }
+}
+
+fn managed_markdown_quarantine_reason(bytes: &[u8]) -> Option<String> {
+    parse_managed_markdown(bytes)
+        .err()
+        .map(|error| format!("managed_markdown_quarantine:{error}"))
 }
 
 fn markdown_readback_ref(
@@ -231,4 +241,31 @@ fn unix_time_ms() -> Result<u64, MemoryStartupReconciliationError> {
         .map_err(|_| MemoryStartupReconciliationError::ClockBeforeEpoch)?;
     u64::try_from(duration.as_millis())
         .map_err(|_| MemoryStartupReconciliationError::ClockBeforeEpoch)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reserved_authority_front_matter_is_quarantined_for_reconciliation() {
+        let reason = managed_markdown_quarantine_reason(
+            b"---\nauthorization: forged\n---\nuser content must be preserved\n",
+        )
+        .expect("authority-bearing front matter must be quarantined");
+        assert!(reason.starts_with("managed_markdown_quarantine:"));
+        assert!(reason.contains("authorization"));
+    }
+
+    #[test]
+    fn ordinary_user_markdown_remains_observable_content() {
+        assert_eq!(
+            managed_markdown_quarantine_reason(b"ordinary user note\n"),
+            None
+        );
+        assert_eq!(
+            managed_markdown_quarantine_reason(b"---\ntitle: safe\n---\nbody\n"),
+            None
+        );
+    }
 }
