@@ -108,7 +108,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git rm scripts/qualification/repair-t005-040-git-observation.py
+          git rm -f scripts/qualification/repair-t005-040-git-observation.py
           mapfile -t changed < <(git diff --name-only | sort)
           printf '%s\n' "${changed[@]}"
           expected=(
