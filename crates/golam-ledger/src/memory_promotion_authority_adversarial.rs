@@ -53,8 +53,8 @@ fn authority() -> (RuntimeLayout, AuthorityLayout) {
         std::process::id()
     )))
     .expect("test runtime layout must initialize");
-    let authority = AuthorityLayout::initialize(&runtime)
-        .expect("test authority layout must initialize");
+    let authority =
+        AuthorityLayout::initialize(&runtime).expect("test authority layout must initialize");
     (runtime, authority)
 }
 
@@ -85,8 +85,8 @@ fn create_authorized_effect(
     payload_hash: [u8; 32],
     requested_by: &str,
 ) {
-    let dependencies = encode_effect_dependencies(&[])
-        .expect("empty effect dependencies must encode");
+    let dependencies =
+        encode_effect_dependencies(&[]).expect("empty effect dependencies must encode");
     let mut store = EffectStore::open(authority).expect("effect store must open");
     store
         .propose(ProposeEffect {
@@ -203,12 +203,9 @@ fn revoked_human_approval_is_rejected_even_with_fresh_kernel_authorization() {
     .as_bytes();
     let approval_id = issue_once_approval(&authority, effect_id, &resource, taint_digest);
 
-    let revocation = prepare_approval_revocation(
-        approval_id,
-        "owner:owner",
-        "2026-09-03T00:30:00Z",
-    )
-    .expect("revocation must prepare");
+    let revocation =
+        prepare_approval_revocation(approval_id, "owner:owner", "2026-09-03T00:30:00Z")
+            .expect("revocation must prepare");
     let revocation_effect = EffectId(next_id());
     create_authorized_effect(
         &authority,
@@ -219,11 +216,8 @@ fn revoked_human_approval_is_rejected_even_with_fresh_kernel_authorization() {
         revocation.intent_digest(),
         "owner:owner",
     );
-    let revocation_decision = append_allow(
-        &authority,
-        APPROVAL_REVOKE_ACTION,
-        revocation.resource(),
-    );
+    let revocation_decision =
+        append_allow(&authority, APPROVAL_REVOKE_ACTION, revocation.resource());
     ApprovalRevocationStore::open(&authority)
         .expect("revocation store must open")
         .revoke(revocation, revocation_decision, revocation_effect)
