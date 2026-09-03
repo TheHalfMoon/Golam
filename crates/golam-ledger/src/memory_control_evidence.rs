@@ -14,8 +14,7 @@ use crate::memory_evidence::MemoryEvidenceStore;
 
 const CONTROL_EVIDENCE_DOMAIN: &[u8] = b"golam:memory-control-authority-evidence:v1";
 const CONTROL_CHAIN_DOMAIN: &[u8] = b"golam:memory-control-authority-chain:v1";
-const CONTROL_SCOPE_FACT: &[u8] =
-    b"canonical-managed-memory-only;external-artifacts-not-mutated";
+const CONTROL_SCOPE_FACT: &[u8] = b"canonical-managed-memory-only;external-artifacts-not-mutated";
 
 #[derive(Debug)]
 pub enum MemoryControlEvidenceError {
@@ -85,8 +84,9 @@ pub struct MemoryControlEvidenceStore {
 impl MemoryControlEvidenceStore {
     pub fn open(layout: &AuthorityLayout) -> Result<Self, MemoryControlEvidenceError> {
         drop(
-            MemoryEvidenceStore::open(layout.authority_db_path())
-                .map_err(|_| MemoryControlEvidenceError::InvalidStoredRecord("memory evidence schema"))?,
+            MemoryEvidenceStore::open(layout.authority_db_path()).map_err(|_| {
+                MemoryControlEvidenceError::InvalidStoredRecord("memory evidence schema")
+            })?,
         );
         let connection = Connection::open(layout.authority_db_path())?;
         connection.execute_batch(
@@ -153,7 +153,8 @@ impl MemoryControlEvidenceStore {
 
         let record_bytes = authority.record_bytes();
         if record_bytes.is_empty()
-            || authority.approving_principal().is_some() == authority.verifier_policy_ref().is_some()
+            || authority.approving_principal().is_some()
+                == authority.verifier_policy_ref().is_some()
         {
             return Err(MemoryControlEvidenceError::InvalidStoredRecord(
                 "authority mode or record bytes",
@@ -210,7 +211,9 @@ impl MemoryControlEvidenceStore {
                 authority.mutation_authority_ref().bytes().to_vec(),
                 authority.authority_evidence_ref().bytes().to_vec(),
                 authority.approving_principal().map(|value| value.as_str()),
-                authority.verifier_policy_ref().map(|value| value.bytes().to_vec()),
+                authority
+                    .verifier_policy_ref()
+                    .map(|value| value.bytes().to_vec()),
                 CONTROL_SCOPE_FACT,
                 record_bytes,
                 integrity_hash.to_vec(),
@@ -240,16 +243,22 @@ fn validate_binding(
     let intent = prepared.intent();
     let target = authority.target();
     if authority.effect_id() != intent.effect_id {
-        return Err(MemoryControlEvidenceError::BindingMismatch("effect identity"));
+        return Err(MemoryControlEvidenceError::BindingMismatch(
+            "effect identity",
+        ));
     }
     if intent.candidate_ref.is_some() {
-        return Err(MemoryControlEvidenceError::BindingMismatch("candidate-less operation"));
+        return Err(MemoryControlEvidenceError::BindingMismatch(
+            "candidate-less operation",
+        ));
     }
     if intent.operation != target.operation {
         return Err(MemoryControlEvidenceError::BindingMismatch("operation"));
     }
     if intent.item_ids.len() != 1 || intent.item_ids[0] != target.item_id {
-        return Err(MemoryControlEvidenceError::BindingMismatch("item identity"));
+        return Err(MemoryControlEvidenceError::BindingMismatch(
+            "item identity",
+        ));
     }
     if intent.expected_current_versions.len() != 1
         || intent.expected_current_versions[0].item_id != target.item_id
@@ -282,15 +291,19 @@ fn control_integrity_hash(
     encoder.push_bytes(&authority.evidence_id().bytes())?;
     encoder.push_u128(authority.effect_id().0);
     encoder.push_bytes(&prepared.binding_digest())?;
-    encoder.push_u8(u8::try_from(operation_code(target.operation)).map_err(|_| {
-        MemoryControlEvidenceError::IntegerOverflow
-    })?);
+    encoder.push_u8(
+        u8::try_from(operation_code(target.operation))
+            .map_err(|_| MemoryControlEvidenceError::IntegerOverflow)?,
+    );
     encoder.push_bytes(&target.item_id.0.bytes())?;
     encoder.push_bytes(&target.expected_version.0.bytes())?;
     encoder.push_bytes(&authority.kernel_authorization_ref().bytes())?;
     encoder.push_bytes(&authority.mutation_authority_ref().bytes())?;
     encoder.push_bytes(&authority.authority_evidence_ref().bytes())?;
-    match (authority.approving_principal(), authority.verifier_policy_ref()) {
+    match (
+        authority.approving_principal(),
+        authority.verifier_policy_ref(),
+    ) {
         (Some(principal), None) => {
             encoder.push_u8(1);
             encoder.push_bytes(principal.as_str().as_bytes())?;
@@ -335,11 +348,8 @@ fn verify_chain(tx: &Transaction<'_>) -> Result<Option<[u8; 32]>, MemoryControlE
         if stored_previous != previous {
             return Err(MemoryControlEvidenceError::ChainIntegrity);
         }
-        let expected = chain_integrity_hash(
-            BindingDigest::new(evidence_id),
-            payload_hash,
-            previous,
-        )?;
+        let expected =
+            chain_integrity_hash(BindingDigest::new(evidence_id), payload_hash, previous)?;
         if expected != stored_hash {
             return Err(MemoryControlEvidenceError::ChainIntegrity);
         }
@@ -376,10 +386,7 @@ fn operation_code(operation: MemoryOperation) -> i64 {
     }
 }
 
-fn hash32(
-    value: Vec<u8>,
-    reason: &'static str,
-) -> Result<[u8; 32], MemoryControlEvidenceError> {
+fn hash32(value: Vec<u8>, reason: &'static str) -> Result<[u8; 32], MemoryControlEvidenceError> {
     value
         .try_into()
         .map_err(|_| MemoryControlEvidenceError::InvalidStoredRecord(reason))
@@ -395,6 +402,10 @@ mod tests {
             CONTROL_SCOPE_FACT,
             b"canonical-managed-memory-only;external-artifacts-not-mutated"
         );
-        assert!(!CONTROL_SCOPE_FACT.windows(7).any(|value| value == b"deleted"));
+        assert!(
+            !CONTROL_SCOPE_FACT
+                .windows(7)
+                .any(|value| value == b"deleted")
+        );
     }
 }
