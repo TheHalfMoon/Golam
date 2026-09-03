@@ -49,6 +49,7 @@ jobs:
           python scripts/qualification/repair-t005-040-git-observation.py
           python - <<'PY'
           from pathlib import Path
+          import re
 
           observe = Path('crates/golamd/src/git_observe.rs')
           text = observe.read_text()
@@ -60,14 +61,14 @@ jobs:
 
           read = Path('crates/golamd/src/git_read.rs')
           text = read.read_text()
-          dead = '''    pub(crate) const fn operation_deadline(&self) -> GitOperationDeadline {
-              self.deadline
-          }
-
-          '''
-          if text.count(dead) != 1:
-              raise SystemExit(f'{read}: expected one unused deadline accessor, found {text.count(dead)}')
-          read.write_text(text.replace(dead, '', 1))
+          pattern = re.compile(
+              r'\n\s*pub\(crate\) const fn operation_deadline\(&self\) -> GitOperationDeadline \{\s*self\.deadline\s*\}\s*',
+              re.MULTILINE,
+          )
+          text, count = pattern.subn('\n', text, count=1)
+          if count != 1:
+              raise SystemExit(f'{read}: expected one unused deadline accessor, found {count}')
+          read.write_text(text)
 
           pack = Path('crates/golamd/src/git_pack.rs')
           text = pack.read_text()
