@@ -454,9 +454,9 @@ impl ManagedMemoryWriter {
             ));
         }
 
+        invalidate_memory_derivatives(&self.memory)?;
         let mut operational = MemoryOperationalStore::open(&self.memory)?;
         operational.record_version(&write.prepared, &write.version, &write.markdown_path)?;
-        invalidate_memory_derivatives(&self.memory)?;
         let sqlite_readback_ref = verify_memory_sqlite_readback(
             &self.memory,
             &write.prepared,
