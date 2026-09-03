@@ -1,111 +1,62 @@
 name: ci
 
 on:
+  pull_request:
   push:
-    branches:
-      - 'impl/005-local-tools-context-memory'
+    branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  repair-git-observation:
-    runs-on: ubuntu-latest
+  rust:
+    name: rust-${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: impl/005-local-tools-context-memory
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
-      - name: Apply bounded T005-040 closure repair
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('scripts/qualification/repair-t005-040-closure.py')
-          text = path.read_text()
-          fixes = (
-              (
-                  r'b"tree 2222222222222222222222222222222222222222\n\nmissing identities"',
-                  r'b"tree 2222222222222222222222222222222222222222\\n\\nmissing identities"',
-                  2,
-              ),
-              (r'b"hello\n"', r'b"hello\\n"', 2),
-          )
-          for old, new, expected in fixes:
-              observed = text.count(old)
-              if observed != expected:
-                  raise SystemExit(
-                      f'{path}: expected {expected} escaped-literal repair matches, found {observed}: {old!r}'
-                  )
-              text = text.replace(old, new)
-
-          generic = 'replace_once(status, "        require_time(started, bounds.max_duration)?;\\n", "        deadline.require_active()?;\\n")'
-          if text.count(generic) != 2:
-              raise SystemExit(f'{path}: expected two ordered status deadline replacements, found {text.count(generic)}')
-          first = '\n'.join([
-              '_text = status.read_text()',
-              '_needle = "        require_time(started, bounds.max_duration)?;" + chr(10)',
-              'if _text.count(_needle) != 3:',
-              '    raise SystemExit(f"{status}: expected 3 ordered deadline sites, found {_text.count(_needle)}")',
-              '_replacement = "        deadline.require_active()?;" + chr(10)',
-              'status.write_text(_text.replace(_needle, _replacement, 1))',
-          ])
-          second = '\n'.join([
-              '_text = status.read_text()',
-              '_needle = "        require_time(started, bounds.max_duration)?;" + chr(10)',
-              'if _text.count(_needle) != 2:',
-              '    raise SystemExit(f"{status}: expected 2 remaining deadline sites, found {_text.count(_needle)}")',
-              '_replacement = "        deadline.require_active()?;" + chr(10)',
-              'status.write_text(_text.replace(_needle, _replacement, 1))',
-          ])
-          text = text.replace(generic, first, 1)
-          text = text.replace(generic, second, 1)
-          path.write_text(text)
-          PY
-          python scripts/qualification/repair-t005-040-closure.py
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('crates/golamd/src/git_observe.rs')
-          text = path.read_text()
-          needle = '        let id = GitObjectId::parse("1111111111111111111111111111111111111111").unwrap();' + chr(10)
-          if text.count(needle) != 1:
-              raise SystemExit(f'{path}: expected one obsolete parser-test id binding, found {text.count(needle)}')
-          path.write_text(text.replace(needle, '', 1))
-          PY
       - name: Format
-        run: cargo +1.98.0 fmt --all
+        run: cargo +1.98.0 fmt --all -- --check
       - name: Clippy
-        run: cargo +1.98.0 clippy --locked -p golamd --all-targets -- -D warnings
-      - name: Focused T005-040 tests
+        run: cargo +1.98.0 clippy --locked --workspace --all-targets -- -D warnings
+      - name: Test
+        run: cargo +1.98.0 test --locked --workspace --all-targets
+      - name: Property qualification
         run: |
-          cargo +1.98.0 test --locked -p golamd --bin golamd local_dir::tests::
-          cargo +1.98.0 test --locked -p golamd --bin golamd git_read_budget::tests::
-          cargo +1.98.0 test --locked -p golamd --bin golamd git_pack::tests::
-          cargo +1.98.0 test --locked -p golamd --bin golamd git_observe::tests::
-          cargo +1.98.0 test --locked -p golamd --bin golamd git_status::tests::
-      - name: Guard source mutation set and push
-        shell: bash
+          cargo +1.98.0 test --locked -p golam-effects --test qualification_properties
+          cargo +1.98.0 test --locked -p golam-ledger --test qualification_properties
+      - name: Bounded fuzz smoke
         run: |
-          set -euo pipefail
-          git rm -f scripts/qualification/repair-t005-040-closure.py
-          mapfile -t changed < <(git diff HEAD --name-only | sort)
-          printf '%s\n' "${changed[@]}"
-          expected=(
-            crates/golamd/src/git_observe.rs
-            crates/golamd/src/git_pack.rs
-            crates/golamd/src/git_status.rs
-            crates/golamd/src/local_dir.rs
-            scripts/qualification/repair-t005-040-closure.py
-          )
-          mapfile -t expected_sorted < <(printf '%s\n' "${expected[@]}" | sort)
-          test "${#changed[@]}" -eq "${#expected_sorted[@]}"
-          for i in "${!changed[@]}"; do
-            test "${changed[$i]}" = "${expected_sorted[$i]}"
-          done
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add crates/golamd/src/git_observe.rs crates/golamd/src/git_pack.rs crates/golamd/src/git_status.rs crates/golamd/src/local_dir.rs
-          git commit -m "fix(005): close Git observation evidence and deadline boundaries"
-          git push origin HEAD:impl/005-local-tools-context-memory
+          cargo +1.98.0 test --locked -p golam-ipc --test fuzz_smoke
+          cargo +1.98.0 test --locked -p golam-ledger --test fuzz_smoke
+          cargo +1.98.0 test --locked -p golam-kernel --test spec003_fuzz_smoke
+      - name: IPC transport qualification (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc unix_transport::
+      - name: IPC transport qualification (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc windows_transport::
+      - name: Authenticated daemon IPC qualification
+        run: |
+          cargo +1.98.0 test --locked -p golamd --bin golamd connection::tests::
+      - name: Adversarial authority qualification
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc --test adversarial
+          cargo +1.98.0 test --locked -p golam-kernel --test hostile_adapter
+          cargo +1.98.0 test --locked -p golam-kernel client_auth::tests::
+      - name: Build daemon for external locality observation
+        run: cargo +1.98.0 build --locked -p golamd --bin golamd
+      - name: Strict-local external network observation (Unix)
+        if: runner.os != 'Windows'
+        run: bash scripts/qualification/strict-local-no-network.sh target/debug/golamd
+      - name: Strict-local external network observation (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/qualification/strict-local-no-network.ps1 target/debug/golamd.exe
