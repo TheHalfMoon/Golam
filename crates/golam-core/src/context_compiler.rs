@@ -4,13 +4,13 @@ use core::fmt;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::CanonicalEncoder;
+use crate::CoreError;
 use crate::context_evidence::{
     ContextCapsule, ContextEvidence, ContextValidationError, EvidenceRequirement,
     EvidenceSourceKind, RankingEvidence, SufficiencyState, missing_requirements,
 };
 use crate::digest::sha256;
 use crate::tool_request::BindingDigest;
-use crate::CoreError;
 
 const MAX_L0_REQUIREMENTS: usize = 128;
 const MAX_L0_RETRIEVED_ITEMS: usize = 128;
@@ -562,7 +562,10 @@ mod tests {
             1_000,
         )
         .unwrap();
-        assert_eq!(output.capsule.sufficiency_state, SufficiencyState::Sufficient);
+        assert_eq!(
+            output.capsule.sufficiency_state,
+            SufficiencyState::Sufficient
+        );
         assert_eq!(output.capsule.evidence_refs, vec![digest(21)]);
         assert_eq!(
             output.rejected_evidence,
@@ -598,10 +601,20 @@ mod tests {
             1_000,
         )
         .unwrap();
-        assert_eq!(output.capsule.sufficiency_state, SufficiencyState::Insufficient);
+        assert_eq!(
+            output.capsule.sufficiency_state,
+            SufficiencyState::Insufficient
+        );
         assert_eq!(output.capsule.missing_requirements, vec![digest(10)]);
         assert_eq!(output.replan.as_ref().unwrap().next_attempt, 1);
-        assert_eq!(output.replan.as_ref().unwrap().remaining_attempts_after_next, 1);
+        assert_eq!(
+            output
+                .replan
+                .as_ref()
+                .unwrap()
+                .remaining_attempts_after_next,
+            1
+        );
         assert_eq!(
             output.rejected_evidence[0].reason,
             RejectedEvidenceReason::Stale
@@ -687,7 +700,10 @@ mod tests {
         let second = compile_l0_context(&value, &[file, memory], 0, 1_000).unwrap();
         assert_eq!(first, second);
         assert_eq!(first.capsule.memory_refs, vec![digest(21)]);
-        assert_eq!(first.capsule.sufficiency_state, SufficiencyState::Sufficient);
+        assert_eq!(
+            first.capsule.sufficiency_state,
+            SufficiencyState::Sufficient
+        );
         assert!(first.replan.is_none());
     }
 }
