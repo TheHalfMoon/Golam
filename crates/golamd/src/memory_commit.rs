@@ -7,6 +7,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use golam_core::digest::sha256;
+use golam_core::memory::MemoryVersionStatus;
 use golam_core::memory_markdown::{ManagedMarkdownError, parse_managed_markdown};
 use golam_core::memory_storage::MemoryLayout;
 use golam_core::target_identity::ObservedFileKind;
@@ -20,6 +21,8 @@ use crate::local_fs::{
 
 const MARKDOWN_READBACK_DOMAIN: &[u8] = b"golam:managed-markdown-readback:v1";
 const MAX_COMMIT_BYTES: usize = 1024 * 1024;
+const FORGOTTEN_CANONICAL_MARKDOWN: &[u8] = b"[golam memory forgotten]\n";
+const REDACTED_CANONICAL_MARKDOWN: &[u8] = b"[golam memory redacted]\n";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MarkdownCommitReceipt {
@@ -42,6 +45,7 @@ pub enum MemoryCommitError {
     Resolution(LocalFsResolutionError),
     UnsupportedPlatform,
     InvalidTargetKind(ObservedFileKind),
+    InvalidControlStatus,
     TargetIdentityMismatch,
     PreparedPathMismatch,
     ContentDigestMismatch,
@@ -69,6 +73,9 @@ impl fmt::Display for MemoryCommitError {
             Self::InvalidTargetKind(kind) => write!(
                 f,
                 "managed Markdown conditional replacement requires a regular file, observed {kind:?}"
+            ),
+            Self::InvalidControlStatus => f.write_str(
+                "managed Markdown control commit requires EXPIRED, FORGOTTEN, or REDACTED status",
             ),
             Self::TargetIdentityMismatch => {
                 f.write_str("managed Markdown target identity no longer matches PREPARED authority")
@@ -138,6 +145,54 @@ impl From<LocalFsResolutionError> for MemoryCommitError {
     fn from(value: LocalFsResolutionError) -> Self {
         Self::Resolution(value)
     }
+}
+
+pub fn commit_prepared_control_markdown(
+    resolver: &LocalFsResolver,
+    requested: &RequestedTarget,
+    layout: &MemoryLayout,
+    prepared: &PreparedManagedMemoryWrite,
+    current_canonical_bytes: &[u8],
+    observed_at_unix_ms: u64,
+) -> Result<ManagedMarkdownCommitObservation, MemoryCommitError> {
+    let replacement = controlled_replacement_bytes(
+        prepared.version().status,
+        current_canonical_bytes,
+        prepared.expected_content_digest(),
+        prepared.version().content_digest,
+    )?;
+    commit_prepared_existing_markdown(
+        resolver,
+        requested,
+        layout,
+        prepared,
+        &replacement,
+        observed_at_unix_ms,
+    )
+}
+
+fn controlled_replacement_bytes(
+    status: MemoryVersionStatus,
+    current_canonical_bytes: &[u8],
+    expected_current_digest: BindingDigest,
+    governed_new_digest: BindingDigest,
+) -> Result<Vec<u8>, MemoryCommitError> {
+    let replacement = match status {
+        MemoryVersionStatus::Expired => {
+            if digest(current_canonical_bytes) != expected_current_digest {
+                return Err(MemoryCommitError::ContentDigestMismatch);
+            }
+            current_canonical_bytes.to_vec()
+        }
+        MemoryVersionStatus::Forgotten => FORGOTTEN_CANONICAL_MARKDOWN.to_vec(),
+        MemoryVersionStatus::Redacted => REDACTED_CANONICAL_MARKDOWN.to_vec(),
+        _ => return Err(MemoryCommitError::InvalidControlStatus),
+    };
+    if digest(&replacement) != governed_new_digest {
+        return Err(MemoryCommitError::ContentDigestMismatch);
+    }
+    parse_managed_markdown(&replacement)?;
+    Ok(replacement)
 }
 
 pub fn commit_prepared_existing_markdown(
@@ -498,6 +553,51 @@ mod tests {
             std::process::id()
         )))
         .unwrap()
+    }
+
+    #[test]
+    fn control_replacements_are_deterministic_and_remove_prior_plaintext() {
+        let prior = b"private prior memory\n";
+        let forgotten = controlled_replacement_bytes(
+            MemoryVersionStatus::Forgotten,
+            prior,
+            digest(prior),
+            digest(FORGOTTEN_CANONICAL_MARKDOWN),
+        )
+        .unwrap();
+        let redacted = controlled_replacement_bytes(
+            MemoryVersionStatus::Redacted,
+            prior,
+            digest(prior),
+            digest(REDACTED_CANONICAL_MARKDOWN),
+        )
+        .unwrap();
+        assert_eq!(forgotten, FORGOTTEN_CANONICAL_MARKDOWN);
+        assert_eq!(redacted, REDACTED_CANONICAL_MARKDOWN);
+        assert!(!forgotten.windows(7).any(|value| value == b"private"));
+        assert!(!redacted.windows(7).any(|value| value == b"private"));
+    }
+
+    #[test]
+    fn expiry_preserves_only_the_exact_prepared_content() {
+        let current = b"still canonical\n";
+        let preserved = controlled_replacement_bytes(
+            MemoryVersionStatus::Expired,
+            current,
+            digest(current),
+            digest(current),
+        )
+        .unwrap();
+        assert_eq!(preserved, current);
+        assert!(matches!(
+            controlled_replacement_bytes(
+                MemoryVersionStatus::Expired,
+                b"changed\n",
+                digest(current),
+                digest(current),
+            ),
+            Err(MemoryCommitError::ContentDigestMismatch)
+        ));
     }
 
     #[cfg(unix)]
