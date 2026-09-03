@@ -39,7 +39,10 @@ pub struct ValidatedMemoryPromotion {
 }
 
 impl ValidatedMemoryPromotion {
-    pub fn operational_evidence(&self, recorded_at_unix_ms: u64) -> PromotionOperationalEvidence<'_> {
+    pub fn operational_evidence(
+        &self,
+        recorded_at_unix_ms: u64,
+    ) -> PromotionOperationalEvidence<'_> {
         PromotionOperationalEvidence {
             evidence_id: self.evidence_id,
             candidate_id: self.candidate_id,
@@ -194,9 +197,9 @@ impl MemoryPromotionAuthorityValidator {
     ) -> Result<ValidatedMemoryPromotion, MemoryPromotionAuthorityError> {
         request.candidate.validate_for_canonical_promotion()?;
         let approval_policy_ref = match request.candidate.promotion_requirement {
-            PromotionRequirement::AttributableHumanApproval { approval_policy_ref } => {
-                approval_policy_ref
-            }
+            PromotionRequirement::AttributableHumanApproval {
+                approval_policy_ref,
+            } => approval_policy_ref,
             PromotionRequirement::DeterministicPreregisteredVerifier { .. } => {
                 return Err(MemoryPromotionAuthorityError::WrongPromotionRequirement);
             }
@@ -225,8 +228,9 @@ impl MemoryPromotionAuthorityValidator {
         if approver != request.initiating_principal.as_str() {
             return Err(MemoryPromotionAuthorityError::ApprovalPrincipalMismatch);
         }
-        let approving_principal = PrincipalId::new(approver)
-            .map_err(|_| MemoryPromotionAuthorityError::InvalidStoredRecord("approval principal"))?;
+        let approving_principal = PrincipalId::new(approver).map_err(|_| {
+            MemoryPromotionAuthorityError::InvalidStoredRecord("approval principal")
+        })?;
         let promotion_authority_ref = human_promotion_ref(
             request.candidate.candidate_id,
             approval_policy_ref,
@@ -265,9 +269,9 @@ impl MemoryPromotionAuthorityValidator {
     ) -> Result<ValidatedMemoryPromotion, MemoryPromotionAuthorityError> {
         request.candidate.validate_for_canonical_promotion()?;
         let governed_policy_ref = match request.candidate.promotion_requirement {
-            PromotionRequirement::DeterministicPreregisteredVerifier { verifier_policy_ref } => {
-                verifier_policy_ref
-            }
+            PromotionRequirement::DeterministicPreregisteredVerifier {
+                verifier_policy_ref,
+            } => verifier_policy_ref,
             PromotionRequirement::AttributableHumanApproval { .. } => {
                 return Err(MemoryPromotionAuthorityError::WrongPromotionRequirement);
             }
@@ -486,7 +490,9 @@ pub fn verifier_policy_ref(
     encoder.push_bytes(&rule_id)?;
     encoder.push_u64(version);
     encoder.push_bytes(authority_source_binding)?;
-    Ok(BindingDigest::new(*blake3::hash(&encoder.finish()).as_bytes()))
+    Ok(BindingDigest::new(
+        *blake3::hash(&encoder.finish()).as_bytes(),
+    ))
 }
 
 pub fn promotion_resource(scope: MemoryScope, mode: &str, policy_ref: BindingDigest) -> String {
@@ -521,7 +527,9 @@ fn kernel_authorization_ref(
     encoder.push_bytes(resource.as_bytes())?;
     encoder.push_bytes(&context_hash)?;
     encoder.push_u64(global_seq);
-    Ok(BindingDigest::new(*blake3::hash(&encoder.finish()).as_bytes()))
+    Ok(BindingDigest::new(
+        *blake3::hash(&encoder.finish()).as_bytes(),
+    ))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -545,7 +553,9 @@ fn human_promotion_ref(
     encoder.push_bytes(&parent_decision_id)?;
     encoder.push_u64(current_uses);
     encoder.push_u64(max_uses);
-    Ok(BindingDigest::new(*blake3::hash(&encoder.finish()).as_bytes()))
+    Ok(BindingDigest::new(
+        *blake3::hash(&encoder.finish()).as_bytes(),
+    ))
 }
 
 fn verifier_promotion_ref(
@@ -566,7 +576,9 @@ fn verifier_promotion_ref(
     encoder.push_bytes(authority_source_binding)?;
     encoder.push_bytes(registered_by.as_bytes())?;
     encoder.push_u64(created_global_seq);
-    Ok(BindingDigest::new(*blake3::hash(&encoder.finish()).as_bytes()))
+    Ok(BindingDigest::new(
+        *blake3::hash(&encoder.finish()).as_bytes(),
+    ))
 }
 
 fn authority_evidence_ref(
@@ -579,7 +591,9 @@ fn authority_evidence_ref(
     encoder.push_bytes(&candidate_id.0.bytes())?;
     encoder.push_bytes(&promotion_authority_ref.bytes())?;
     encoder.push_bytes(evidence)?;
-    Ok(BindingDigest::new(*blake3::hash(&encoder.finish()).as_bytes()))
+    Ok(BindingDigest::new(
+        *blake3::hash(&encoder.finish()).as_bytes(),
+    ))
 }
 
 fn promotion_evidence_id(
@@ -594,13 +608,12 @@ fn promotion_evidence_id(
     encoder.push_bytes(&kernel_authorization_ref.bytes())?;
     encoder.push_bytes(&promotion_authority_ref.bytes())?;
     encoder.push_bytes(&authority_evidence_ref.bytes())?;
-    Ok(BindingDigest::new(*blake3::hash(&encoder.finish()).as_bytes()))
+    Ok(BindingDigest::new(
+        *blake3::hash(&encoder.finish()).as_bytes(),
+    ))
 }
 
-fn hash32(
-    value: Vec<u8>,
-    reason: &'static str,
-) -> Result<[u8; 32], MemoryPromotionAuthorityError> {
+fn hash32(value: Vec<u8>, reason: &'static str) -> Result<[u8; 32], MemoryPromotionAuthorityError> {
     value
         .try_into()
         .map_err(|_| MemoryPromotionAuthorityError::InvalidStoredRecord(reason))
@@ -778,10 +791,7 @@ mod tests {
             .approval_id()
     }
 
-    fn register_verifier(
-        authority: &AuthorityLayout,
-        source_binding: &[u8],
-    ) -> ([u8; 16], u64) {
+    fn register_verifier(authority: &AuthorityLayout, source_binding: &[u8]) -> ([u8; 16], u64) {
         let prepared = prepare_verifier_rule(
             VerifierRuleKind::DeterministicVerifier,
             1,
@@ -802,7 +812,12 @@ mod tests {
             )
             .unwrap(),
             TAINT_AUTHORITY_MUTATION_RISK_CLASS,
-            *blake3::hash(&TaintSet::from_labels([TaintLabel::UserTrusted]).canonical_bytes().unwrap()).as_bytes(),
+            *blake3::hash(
+                &TaintSet::from_labels([TaintLabel::UserTrusted])
+                    .canonical_bytes()
+                    .unwrap(),
+            )
+            .as_bytes(),
             "2026-09-03T00:00:00Z",
             None,
             1,
@@ -833,7 +848,11 @@ mod tests {
             prepared.intent_digest(),
             "owner:owner",
         );
-        let decision = append_allow(authority, VERIFIER_RULE_REGISTER_ACTION, prepared.resource());
+        let decision = append_allow(
+            authority,
+            VERIFIER_RULE_REGISTER_ACTION,
+            prepared.resource(),
+        );
         VerifierRuleStore::open(authority)
             .unwrap()
             .register(prepared, decision, approval_id, registration_effect)
