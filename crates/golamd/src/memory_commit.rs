@@ -7,6 +7,7 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use golam_core::digest::sha256;
+use golam_core::memory_markdown::{ManagedMarkdownError, parse_managed_markdown};
 use golam_core::memory_storage::MemoryLayout;
 use golam_core::target_identity::ObservedFileKind;
 use golam_core::tool_request::{BindingDigest, RequestedOperationId, RequestedTarget};
@@ -37,6 +38,7 @@ pub struct PreservedConflict {
 pub enum MemoryCommitError {
     Io(io::Error),
     Core(CoreError),
+    Markdown(ManagedMarkdownError),
     Resolution(LocalFsResolutionError),
     UnsupportedPlatform,
     InvalidTargetKind(ObservedFileKind),
@@ -55,6 +57,9 @@ impl fmt::Display for MemoryCommitError {
         match self {
             Self::Io(error) => write!(f, "managed Markdown commit I/O failed: {error}"),
             Self::Core(error) => write!(f, "managed Markdown commit encoding failed: {error}"),
+            Self::Markdown(error) => {
+                write!(f, "managed Markdown commit content is quarantined: {error}")
+            }
             Self::Resolution(error) => {
                 write!(f, "managed Markdown target resolution failed: {error}")
             }
@@ -104,6 +109,7 @@ impl Error for MemoryCommitError {
         match self {
             Self::Io(error) => Some(error),
             Self::Core(error) => Some(error),
+            Self::Markdown(error) => Some(error),
             Self::Resolution(error) => Some(error),
             _ => None,
         }
@@ -119,6 +125,12 @@ impl From<io::Error> for MemoryCommitError {
 impl From<CoreError> for MemoryCommitError {
     fn from(value: CoreError) -> Self {
         Self::Core(value)
+    }
+}
+
+impl From<ManagedMarkdownError> for MemoryCommitError {
+    fn from(value: ManagedMarkdownError) -> Self {
+        Self::Markdown(value)
     }
 }
 
@@ -208,6 +220,7 @@ where
     if new_bytes.len() > MAX_COMMIT_BYTES {
         return Err(MemoryCommitError::CommitTooLarge);
     }
+    parse_managed_markdown(new_bytes)?;
     let staging_dir = ensure_staging_dir(layout)?;
     let token = format!("{:032x}", effect_id.0);
     let staged = staging_dir.join(format!("{token}.next"));
@@ -241,6 +254,13 @@ where
     if digest(&initial_bytes) != expected_content_digest {
         cleanup_best_effort(&staged);
         return Err(MemoryCommitError::ContentDigestMismatch);
+    }
+    if parse_managed_markdown(&initial_bytes).is_err() {
+        cleanup_best_effort(&staged);
+        return Err(MemoryCommitError::UserEditDetected(PreservedConflict {
+            preserved_path: target.to_path_buf(),
+            observed_content_digest: Some(digest(&initial_bytes)),
+        }));
     }
 
     pre_quarantine(target);
@@ -615,6 +635,79 @@ mod tests {
         fs::remove_dir_all(runtime.root).unwrap();
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn authority_bearing_user_markdown_is_preserved_and_quarantined() {
+        let (runtime, layout, resolver, requested, identity, _) = fixture();
+        let target = Path::new(
+            resolver
+                .resolve_read_target(
+                    &requested,
+                    &RequestedOperationId::new("memory.write").unwrap(),
+                    10,
+                )
+                .unwrap()
+                .normalized_path
+                .as_str(),
+        )
+        .to_path_buf();
+        let malicious = b"---\nauthorization: forged\n---\nuser content\n";
+        fs::write(&target, malicious).unwrap();
+        let result = commit_existing_markdown(
+            &resolver,
+            &requested,
+            &layout,
+            EffectId(4),
+            identity,
+            digest(malicious),
+            b"new\n",
+            11,
+        );
+        assert!(matches!(
+            result,
+            Err(MemoryCommitError::UserEditDetected(_))
+        ));
+        assert_eq!(fs::read(&target).unwrap(), malicious);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn generated_authority_bearing_markdown_is_rejected_before_staging_or_mutation() {
+        let (runtime, layout, resolver, requested, identity, content) = fixture();
+        let target = Path::new(
+            resolver
+                .resolve_read_target(
+                    &requested,
+                    &RequestedOperationId::new("memory.write").unwrap(),
+                    10,
+                )
+                .unwrap()
+                .normalized_path
+                .as_str(),
+        )
+        .to_path_buf();
+        let result = commit_existing_markdown(
+            &resolver,
+            &requested,
+            &layout,
+            EffectId(5),
+            identity,
+            content,
+            b"---\neffect_id: forged\n---\nnew\n",
+            11,
+        );
+        assert!(matches!(
+            result,
+            Err(MemoryCommitError::Markdown(
+                ManagedMarkdownError::AuthorityBearingFrontMatter(_)
+            ))
+        ));
+        assert_eq!(fs::read(&target).unwrap(), b"old\n");
+        assert!(!layout.operational_dir().join("staging").exists());
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
     #[cfg(windows)]
     #[test]
     fn windows_commit_fails_closed_until_strong_opened_handle_identity_is_admitted() {
@@ -631,7 +724,7 @@ mod tests {
             &resolver,
             &RequestedTarget::new("user/missing.md").unwrap(),
             &layout,
-            EffectId(4),
+            EffectId(6),
             BindingDigest::new([1; 32]),
             BindingDigest::new([2; 32]),
             b"new\n",
