@@ -53,7 +53,9 @@ impl fmt::Display for MemoryCommitError {
         match self {
             Self::Io(error) => write!(f, "managed Markdown commit I/O failed: {error}"),
             Self::Core(error) => write!(f, "managed Markdown commit encoding failed: {error}"),
-            Self::Resolution(error) => write!(f, "managed Markdown target resolution failed: {error}"),
+            Self::Resolution(error) => {
+                write!(f, "managed Markdown target resolution failed: {error}")
+            }
             Self::UnsupportedPlatform => f.write_str(
                 "managed Markdown conditional replacement is not qualified on this platform",
             ),
@@ -232,14 +234,7 @@ where
     let target_bytes = match fs::read(target) {
         Ok(bytes) => bytes,
         Err(_) => {
-            return rollback_after_install(
-                target,
-                &previous,
-                &staged,
-                &displaced,
-                None,
-                true,
-            );
+            return rollback_after_install(target, &previous, &staged, &displaced, None, true);
         }
     };
     let new_digest = digest(&target_bytes);
@@ -415,7 +410,7 @@ mod tests {
     use super::*;
     use golam_core::memory_storage::MemoryVaultScope;
     use golam_core::paths::RuntimeLayout;
-    use golam_core::tool_request::{ResourceClassId, RequestedOperationId};
+    use golam_core::tool_request::{RequestedOperationId, ResourceClassId};
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -521,7 +516,10 @@ mod tests {
             11,
             |target| fs::write(target, b"user edit\n").unwrap(),
         );
-        assert!(matches!(result, Err(MemoryCommitError::UserEditDetected(_))));
+        assert!(matches!(
+            result,
+            Err(MemoryCommitError::UserEditDetected(_))
+        ));
         let target = resolver
             .resolve_read_target(
                 &requested,
@@ -555,7 +553,10 @@ mod tests {
                 fs::write(target, b"replacement\n").unwrap();
             },
         );
-        assert!(matches!(result, Err(MemoryCommitError::UserEditDetected(_))));
+        assert!(matches!(
+            result,
+            Err(MemoryCommitError::UserEditDetected(_))
+        ));
         let target = resolver
             .resolve_read_target(
                 &requested,
@@ -592,7 +593,10 @@ mod tests {
             b"new\n",
             10,
         );
-        assert!(matches!(result, Err(MemoryCommitError::UnsupportedPlatform)));
+        assert!(matches!(
+            result,
+            Err(MemoryCommitError::UnsupportedPlatform)
+        ));
         fs::remove_dir_all(runtime.root).unwrap();
     }
 }
