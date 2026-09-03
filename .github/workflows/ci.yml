@@ -17,10 +17,21 @@ jobs:
           ref: impl/005-local-tools-context-memory
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
-      - name: Register privileged managed-memory writer
+      - name: Repair and register privileged managed-memory writer
         run: |
           python - <<'PY'
           from pathlib import Path
+
+          writer = Path('crates/golam-kernel/src/managed_memory_writer.rs')
+          text = writer.read_text()
+          for name in ['effect_id', 'expected_target_identity_ref', 'expected_content_digest']:
+              old = f'    pub const fn {name}('
+              new = f'    pub fn {name}('
+              if text.count(old) != 1:
+                  raise SystemExit(f'expected one const accessor {name}, found {text.count(old)}')
+              text = text.replace(old, new, 1)
+          writer.write_text(text)
+
           path = Path('crates/golam-kernel/src/lib.rs')
           text = path.read_text()
           old = 'mod effect_execution;\nmod operations;\n'
@@ -46,15 +57,9 @@ jobs:
           set -euo pipefail
           mapfile -t changed < <(git diff --name-only | sort)
           printf '%s\n' "${changed[@]}"
-          test "${#changed[@]}" -ge 1
-          test "${#changed[@]}" -le 2
-          for path in "${changed[@]}"; do
-            case "$path" in
-              crates/golam-kernel/src/lib.rs|crates/golam-kernel/src/managed_memory_writer.rs) ;;
-              *) echo "unexpected mutation: $path"; exit 1 ;;
-            esac
-          done
-          printf '%s\n' "${changed[@]}" | grep -Fx 'crates/golam-kernel/src/lib.rs'
+          test "${#changed[@]}" -eq 2
+          test "${changed[0]}" = "crates/golam-kernel/src/lib.rs"
+          test "${changed[1]}" = "crates/golam-kernel/src/managed_memory_writer.rs"
           git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
