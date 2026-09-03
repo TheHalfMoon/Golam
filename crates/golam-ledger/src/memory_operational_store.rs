@@ -159,7 +159,10 @@ impl MemoryOperationalStore {
                 self.store_id.0.bytes().to_vec(),
                 digest.bytes().to_vec(),
                 operation_code(intent.operation),
-                intent.expected_markdown_target_identity_ref.bytes().to_vec(),
+                intent
+                    .expected_markdown_target_identity_ref
+                    .bytes()
+                    .to_vec(),
                 intent.expected_markdown_content_digest.bytes().to_vec(),
                 intent.expected_markdown_version.0.bytes().to_vec(),
             ],
@@ -359,10 +362,7 @@ impl MemoryOperationalStore {
         self.connection
             .query_row(
                 "SELECT current_version_id FROM memory_items WHERE item_id = ?1 AND store_ref = ?2",
-                params![
-                    item_id.0.bytes().to_vec(),
-                    self.store_id.0.bytes().to_vec()
-                ],
+                params![item_id.0.bytes().to_vec(), self.store_id.0.bytes().to_vec()],
                 |row| row.get::<_, Vec<u8>>(0),
             )
             .optional()?
