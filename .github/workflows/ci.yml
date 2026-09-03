@@ -22,7 +22,8 @@ jobs:
       - name: Clippy validator
         run: cargo +1.98.0 clippy --locked -p golam-ledger --all-targets -- -D warnings
       - name: Focused validator tests
-        run: cargo +1.98.0 test --locked -p golam-ledger --lib memory_promotion_authority::tests::
+        run: |
+          cargo +1.98.0 test --locked -p golam-ledger --lib memory_promotion_authority::tests::
       - name: Guard exact mutation and push
         shell: bash
         run: |
