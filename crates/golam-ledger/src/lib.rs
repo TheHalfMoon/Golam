@@ -38,6 +38,8 @@ pub mod memory_evidence;
 #[path = "memory_operational_store.rs"]
 pub mod memory_operational;
 pub mod memory_promotion_authority;
+#[cfg(test)]
+mod memory_promotion_authority_adversarial;
 pub mod memory_promotion_operational;
 pub mod policy;
 pub mod protocol_audit;
