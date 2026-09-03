@@ -77,8 +77,7 @@ pub fn validate_memory_transition(
     }
     if version
         .predecessor_versions
-        .iter()
-        .any(|predecessor| *predecessor == version.version_id)
+        .contains(&version.version_id)
     {
         return Err(MemoryTransitionError::SelfPredecessor);
     }
