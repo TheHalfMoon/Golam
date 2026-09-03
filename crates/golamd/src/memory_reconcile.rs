@@ -43,15 +43,19 @@ impl fmt::Display for MemoryStartupReconciliationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Layout(error) => write!(f, "memory restart layout failed: {error}"),
-            Self::Resolution(error) => write!(f, "memory restart target resolution failed: {error}"),
-            Self::Restart(error) => write!(f, "memory restart kernel reconciliation failed: {error}"),
+            Self::Resolution(error) => {
+                write!(f, "memory restart target resolution failed: {error}")
+            }
+            Self::Restart(error) => {
+                write!(f, "memory restart kernel reconciliation failed: {error}")
+            }
             Self::Core(error) => write!(f, "memory restart readback encoding failed: {error}"),
             Self::PathOutsideVault => {
                 f.write_str("memory restart PREPARED Markdown path is outside the canonical vault")
             }
-            Self::NonUnicodePath => {
-                f.write_str("memory restart Markdown path is not representable by the bounded target contract")
-            }
+            Self::NonUnicodePath => f.write_str(
+                "memory restart Markdown path is not representable by the bounded target contract",
+            ),
             Self::ClockBeforeEpoch => {
                 f.write_str("memory restart cannot obtain a monotonic Unix-time observation")
             }
@@ -105,8 +109,8 @@ pub fn reconcile_managed_memory_on_startup<P: AuthorizationPolicy>(
     }
 
     let memory = MemoryLayout::initialize(runtime)?;
-    let operation = RequestedOperationId::new("read")
-        .expect("constant memory restart read operation is valid");
+    let operation =
+        RequestedOperationId::new("read").expect("constant memory restart read operation is valid");
     let resolver = LocalFsResolver::new(
         memory.vault_dir(),
         ResourceClassId::new("memory.reconcile")
