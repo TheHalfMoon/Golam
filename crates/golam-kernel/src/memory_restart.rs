@@ -71,11 +71,6 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
     ) -> Result<MemoryRestartResolution, ManagedMemoryRestartError> {
         let memory = MemoryLayout::initialize(&self.runtime)?;
         let restart = MemoryRestartStore::open(&self.authority, &memory)?;
-        Ok(restart.reconcile(
-            case,
-            observation,
-            finished_at,
-            terminal_at_unix_ms,
-        )?)
+        Ok(restart.reconcile(case, observation, finished_at, terminal_at_unix_ms)?)
     }
 }
