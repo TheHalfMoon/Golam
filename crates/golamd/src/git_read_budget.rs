@@ -41,10 +41,7 @@ impl GitOperationDeadline {
     /// Run one synchronous, non-preemptive Git operation step under the same
     /// absolute operation deadline. The result is discarded if the step
     /// returns after the shared deadline has expired.
-    pub fn run_step<T>(
-        &self,
-        step: impl FnOnce() -> T,
-    ) -> Result<T, GitOperationBudgetError> {
+    pub fn run_step<T>(&self, step: impl FnOnce() -> T) -> Result<T, GitOperationBudgetError> {
         self.require_active()?;
         let result = step();
         self.require_active()?;
