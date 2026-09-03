@@ -157,6 +157,7 @@ pub fn canonical_event_bytes(record: &EventRecord) -> Result<Vec<u8>, CoreError>
     encoder.push_bytes(EVENT_DOMAIN)?;
     encoder.push_u16(record.schema_version);
     encoder.push_u128(record.event_id.0);
+    encoder.push_u128(record.session_id.0);
     encoder.push_u64(record.global_seq);
     encoder.push_u64(record.session_seq);
     encoder.push_u8(record.kind.code());
