@@ -12,7 +12,9 @@ use golam_core::memory::{
     DerivativeIndexGeneration, DerivativeIndexStatus, MemoryDerivativeGenerationId, MemoryItemId,
     MemoryScope, MemoryVersionId, MemoryVersionStatus,
 };
-use golam_core::memory_markdown::{ManagedMarkdownDocument, ManagedMarkdownError, parse_managed_markdown};
+use golam_core::memory_markdown::{
+    ManagedMarkdownDocument, ManagedMarkdownError, parse_managed_markdown,
+};
 use golam_core::memory_storage::MemoryLayout;
 use golam_core::tool_request::BindingDigest;
 use golam_core::{CanonicalEncoder, CoreError};
@@ -76,9 +78,15 @@ impl fmt::Display for MemoryDerivativeError {
             Self::Io(error) => write!(f, "memory derivative I/O failed: {error}"),
             Self::Sqlite(error) => write!(f, "memory derivative SQLite failed: {error}"),
             Self::Core(error) => write!(f, "memory derivative canonical encoding failed: {error}"),
-            Self::Operational(error) => write!(f, "memory derivative operational state failed: {error}"),
-            Self::Markdown(error) => write!(f, "memory derivative canonical Markdown failed: {error}"),
-            Self::InvalidRecord(reason) => write!(f, "invalid memory derivative source record: {reason}"),
+            Self::Operational(error) => {
+                write!(f, "memory derivative operational state failed: {error}")
+            }
+            Self::Markdown(error) => {
+                write!(f, "memory derivative canonical Markdown failed: {error}")
+            }
+            Self::InvalidRecord(reason) => {
+                write!(f, "invalid memory derivative source record: {reason}")
+            }
             Self::UnsafeCanonicalPath(path) => write!(
                 f,
                 "memory derivative canonical source escapes the managed vault: {}",
@@ -231,7 +239,9 @@ pub fn load_or_rebuild_text_metadata_index(
                         bytes,
                     });
                 }
-                Ok(_) | Err(MemoryDerivativeError::Io(_)) | Err(MemoryDerivativeError::DerivativeCorrupt) => {
+                Ok(_)
+                | Err(MemoryDerivativeError::Io(_))
+                | Err(MemoryDerivativeError::DerivativeCorrupt) => {
                     let _ = persist_generation(layout, &current, DerivativeIndexStatus::Failed);
                 }
                 Err(error) => return Err(error),
@@ -327,12 +337,7 @@ fn build_index_plan(
         let key = (source.item_id.0.bytes(), source.version_id.0.bytes());
         let terms = document_terms(&document, source.scope, source.status)?;
         for term in terms {
-            add_posting(
-                &mut postings,
-                term,
-                key,
-                &mut total_postings,
-            )?;
+            add_posting(&mut postings, term, key, &mut total_postings)?;
         }
         documents.push(IndexedDocument {
             item_id: source.item_id,
@@ -363,7 +368,9 @@ fn build_index_plan(
     };
     let bytes = serialize_index(layout, &generation, &documents, &postings)?;
     if bytes.len() > MAX_INDEX_BYTES {
-        return Err(MemoryDerivativeError::BoundExceeded("serialized index bytes"));
+        return Err(MemoryDerivativeError::BoundExceeded(
+            "serialized index bytes",
+        ));
     }
     let index_digest = BindingDigest::new(sha256(&bytes));
     Ok(IndexPlan {
@@ -551,10 +558,7 @@ fn lexical_terms(text: &str) -> Result<BTreeSet<String>, MemoryDerivativeError> 
     Ok(output)
 }
 
-fn insert_term(
-    terms: &mut BTreeSet<String>,
-    term: String,
-) -> Result<(), MemoryDerivativeError> {
+fn insert_term(terms: &mut BTreeSet<String>, term: String) -> Result<(), MemoryDerivativeError> {
     if term.len() > MAX_INDEX_TERM_BYTES {
         return Err(MemoryDerivativeError::BoundExceeded("index term bytes"));
     }
@@ -645,10 +649,7 @@ fn current_generation(
     let current_count: i64 = connection.query_row(
         "SELECT COUNT(*) FROM memory_derivative_generations \
          WHERE store_ref = ?1 AND index_kind_ref = ?2 AND status = 1",
-        params![
-            layout.store_id().0.bytes().to_vec(),
-            kind.bytes().to_vec()
-        ],
+        params![layout.store_id().0.bytes().to_vec(), kind.bytes().to_vec()],
         |row| row.get(0),
     )?;
     if current_count > 1 {
@@ -661,10 +662,7 @@ fn current_generation(
             "SELECT generation_id, canonical_cut_digest, implementation_identity, built_at_unix_ms \
              FROM memory_derivative_generations \
              WHERE store_ref = ?1 AND index_kind_ref = ?2 AND status = 1 LIMIT 1",
-            params![
-                layout.store_id().0.bytes().to_vec(),
-                kind.bytes().to_vec()
-            ],
+            params![layout.store_id().0.bytes().to_vec(), kind.bytes().to_vec()],
             |row| {
                 Ok((
                     row.get::<_, Vec<u8>>(0)?,
@@ -691,8 +689,9 @@ fn current_generation(
                     "derivative implementation identity",
                 )?),
                 status: DerivativeIndexStatus::Current,
-                built_at_unix_ms: u64::try_from(built_at)
-                    .map_err(|_| MemoryDerivativeError::InvalidRecord("negative derivative timestamp"))?,
+                built_at_unix_ms: u64::try_from(built_at).map_err(|_| {
+                    MemoryDerivativeError::InvalidRecord("negative derivative timestamp")
+                })?,
             })
         })
         .transpose()
@@ -823,9 +822,14 @@ fn read_existing_index(path: &Path) -> Result<Vec<u8>, MemoryDerivativeError> {
         Err(error) => return Err(error.into()),
     };
     if metadata.file_type().is_symlink() || !metadata.is_file() {
-        return Err(MemoryDerivativeError::UnsafeDerivativePath(path.to_path_buf()));
+        return Err(MemoryDerivativeError::UnsafeDerivativePath(
+            path.to_path_buf(),
+        ));
     }
-    if usize::try_from(metadata.len()).map_or(true, |len| len > MAX_INDEX_BYTES) {
+    let Ok(length) = usize::try_from(metadata.len()) else {
+        return Err(MemoryDerivativeError::DerivativeCorrupt);
+    };
+    if length > MAX_INDEX_BYTES {
         return Err(MemoryDerivativeError::DerivativeCorrupt);
     }
     let bytes = fs::read(path)?;
@@ -854,7 +858,9 @@ fn remove_projection_file(path: &Path) -> Result<(), MemoryDerivativeError> {
     match fs::symlink_metadata(path) {
         Ok(metadata) => {
             if metadata.is_dir() && !metadata.file_type().is_symlink() {
-                return Err(MemoryDerivativeError::UnsafeDerivativePath(path.to_path_buf()));
+                return Err(MemoryDerivativeError::UnsafeDerivativePath(
+                    path.to_path_buf(),
+                ));
             }
             fs::remove_file(path)?;
             Ok(())
@@ -929,7 +935,9 @@ fn decode_status(value: i64) -> Result<MemoryVersionStatus, MemoryDerivativeErro
         4 => Ok(MemoryVersionStatus::Expired),
         5 => Ok(MemoryVersionStatus::Forgotten),
         6 => Ok(MemoryVersionStatus::Redacted),
-        _ => Err(MemoryDerivativeError::InvalidRecord("memory version status")),
+        _ => Err(MemoryDerivativeError::InvalidRecord(
+            "memory version status",
+        )),
     }
 }
 
@@ -961,7 +969,10 @@ const fn derivative_status_code(status: DerivativeIndexStatus) -> i64 {
 }
 
 const fn is_retrievable(status: MemoryVersionStatus) -> bool {
-    matches!(status, MemoryVersionStatus::Active | MemoryVersionStatus::Contradicted)
+    matches!(
+        status,
+        MemoryVersionStatus::Active | MemoryVersionStatus::Contradicted
+    )
 }
 
 const fn scope_name(scope: MemoryScope) -> &'static str {
@@ -1026,7 +1037,8 @@ mod tests {
         let path = layout.item_path(MemoryVaultScope::User, item_id).unwrap();
         let mut metadata = BTreeMap::new();
         metadata.insert("topic".to_owned(), "Alpha Memory".to_owned());
-        let document = ManagedMarkdownDocument::new(metadata, "Alpha beta durable memory\n").unwrap();
+        let document =
+            ManagedMarkdownDocument::new(metadata, "Alpha beta durable memory\n").unwrap();
         let bytes = document.serialize().unwrap();
         let content_digest = BindingDigest::new(sha256(&bytes));
         fs::write(&path, bytes).unwrap();
@@ -1090,11 +1102,20 @@ mod tests {
         let first_bytes = fs::read(&first.index_path).unwrap();
         let second = rebuild_text_metadata_index(&layout, 200).unwrap();
         let second_bytes = fs::read(&second.index_path).unwrap();
-        assert_eq!(first.generation.generation_id, second.generation.generation_id);
-        assert_eq!(first.generation.canonical_cut_digest, second.generation.canonical_cut_digest);
+        assert_eq!(
+            first.generation.generation_id,
+            second.generation.generation_id
+        );
+        assert_eq!(
+            first.generation.canonical_cut_digest,
+            second.generation.canonical_cut_digest
+        );
         assert_eq!(first.index_digest, second.index_digest);
         assert_eq!(first_bytes, second_bytes);
-        assert_eq!(current_generation(&layout).unwrap().unwrap().generation_id, second.generation.generation_id);
+        assert_eq!(
+            current_generation(&layout).unwrap().unwrap().generation_id,
+            second.generation.generation_id
+        );
         fs::remove_dir_all(runtime.root).unwrap();
     }
 
@@ -1104,13 +1125,22 @@ mod tests {
         let first = rebuild_text_metadata_index(&layout, 100).unwrap();
         fs::write(&first.index_path, b"corrupt derivative").unwrap();
         let loaded = load_or_rebuild_text_metadata_index(&layout, 200).unwrap();
-        assert_eq!(loaded.receipt.generation.generation_id, first.generation.generation_id);
-        assert_eq!(BindingDigest::new(sha256(&loaded.bytes)), first.index_digest);
+        assert_eq!(
+            loaded.receipt.generation.generation_id,
+            first.generation.generation_id
+        );
+        assert_eq!(
+            BindingDigest::new(sha256(&loaded.bytes)),
+            first.index_digest
+        );
         fs::remove_file(&first.index_path).unwrap();
         let reopened = MemoryOperationalStore::open(&layout).unwrap();
         drop(reopened);
         let rebuilt = load_or_rebuild_text_metadata_index(&layout, 300).unwrap();
-        assert_eq!(rebuilt.receipt.generation.generation_id, first.generation.generation_id);
+        assert_eq!(
+            rebuilt.receipt.generation.generation_id,
+            first.generation.generation_id
+        );
         fs::remove_dir_all(runtime.root).unwrap();
     }
 
@@ -1142,8 +1172,10 @@ mod tests {
     #[test]
     fn expired_and_forgotten_statuses_are_not_text_retrievable() {
         let document = ManagedMarkdownDocument::new(BTreeMap::new(), "secret alpha\n").unwrap();
-        let expired = document_terms(&document, MemoryScope::User, MemoryVersionStatus::Expired).unwrap();
-        let forgotten = document_terms(&document, MemoryScope::User, MemoryVersionStatus::Forgotten).unwrap();
+        let expired =
+            document_terms(&document, MemoryScope::User, MemoryVersionStatus::Expired).unwrap();
+        let forgotten =
+            document_terms(&document, MemoryScope::User, MemoryVersionStatus::Forgotten).unwrap();
         assert!(!expired.iter().any(|term| term.contains("secret")));
         assert!(!forgotten.iter().any(|term| term.contains("secret")));
         assert!(expired.contains("status:expired"));

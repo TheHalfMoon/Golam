@@ -82,7 +82,9 @@ impl From<MemoryDerivativeError> for MemoryWriterReadbackError {
 pub fn invalidate_memory_derivatives(
     layout: &MemoryLayout,
 ) -> Result<usize, MemoryWriterReadbackError> {
-    Ok(crate::memory_derivative::invalidate_memory_derivatives(layout)?)
+    Ok(crate::memory_derivative::invalidate_memory_derivatives(
+        layout,
+    )?)
 }
 
 pub fn verify_memory_sqlite_readback(
