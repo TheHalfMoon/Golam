@@ -1092,6 +1092,7 @@ dependencies = [
  "golam-effects",
  "golam-ipc",
  "golam-kernel",
+ "golam-ledger",
  "miniz_oxide",
 ]
 
