@@ -41,30 +41,23 @@ jobs:
                   )
               text = text.replace(old, new)
 
-          helper_anchor = '    path.write_text(text.replace(old, new, 1))\n\n\n'
-          if text.count(helper_anchor) != 1:
-              raise SystemExit(f'{path}: replace_once helper anchor changed')
-          helper = '''    path.write_text(text.replace(old, new, 1))
-
-
-def replace_first(path: Path, old: str, new: str, expected_count: int) -> None:
-    text = path.read_text()
-    count = text.count(old)
-    if count != expected_count:
-        raise SystemExit(
-            f"{path}: expected {expected_count} remaining matches, found {count}: {old[:160]!r}"
-        )
-    path.write_text(text.replace(old, new, 1))
-
-
-'''
-          text = text.replace(helper_anchor, helper, 1)
-
           generic = 'replace_once(status, "        require_time(started, bounds.max_duration)?;\\n", "        deadline.require_active()?;\\n")'
           if text.count(generic) != 2:
               raise SystemExit(f'{path}: expected two ordered status deadline replacements, found {text.count(generic)}')
-          first = 'replace_first(status, "        require_time(started, bounds.max_duration)?;\\n", "        deadline.require_active()?;\\n", 3)'
-          second = 'replace_first(status, "        require_time(started, bounds.max_duration)?;\\n", "        deadline.require_active()?;\\n", 2)'
+          first = '\n'.join([
+              '_text = status.read_text()',
+              '_needle = "        require_time(started, bounds.max_duration)?;\\\\n"',
+              'if _text.count(_needle) != 3:',
+              '    raise SystemExit(f"{status}: expected 3 ordered deadline sites, found {_text.count(_needle)}")',
+              'status.write_text(_text.replace(_needle, "        deadline.require_active()?;\\\\n", 1))',
+          ])
+          second = '\n'.join([
+              '_text = status.read_text()',
+              '_needle = "        require_time(started, bounds.max_duration)?;\\\\n"',
+              'if _text.count(_needle) != 2:',
+              '    raise SystemExit(f"{status}: expected 2 remaining deadline sites, found {_text.count(_needle)}")',
+              'status.write_text(_text.replace(_needle, "        deadline.require_active()?;\\\\n", 1))',
+          ])
           text = text.replace(generic, first, 1)
           text = text.replace(generic, second, 1)
           path.write_text(text)
