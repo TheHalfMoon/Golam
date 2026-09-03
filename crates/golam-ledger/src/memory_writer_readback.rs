@@ -26,11 +26,18 @@ impl fmt::Display for MemoryWriterReadbackError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Sqlite(error) => write!(f, "managed-memory SQLite readback failed: {error}"),
-            Self::Core(error) => write!(f, "managed-memory SQLite readback encoding failed: {error}"),
-            Self::MissingEffectState => f.write_str("managed-memory SQLite effect state is missing"),
+            Self::Core(error) => {
+                write!(f, "managed-memory SQLite readback encoding failed: {error}")
+            }
+            Self::MissingEffectState => {
+                f.write_str("managed-memory SQLite effect state is missing")
+            }
             Self::MissingVersion => f.write_str("managed-memory SQLite version row is missing"),
             Self::BindingMismatch(field) => {
-                write!(f, "managed-memory SQLite readback binding mismatch: {field}")
+                write!(
+                    f,
+                    "managed-memory SQLite readback binding mismatch: {field}"
+                )
             }
             Self::NonUnicodePath => f.write_str("managed-memory Markdown path is not UTF-8"),
         }
