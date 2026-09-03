@@ -27,7 +27,10 @@ impl fmt::Display for ManagedMemoryRestartError {
         match self {
             Self::Layout(error) => write!(f, "managed-memory restart layout failed: {error}"),
             Self::WriterAuthority(error) => {
-                write!(f, "managed-memory restart authority initialization failed: {error}")
+                write!(
+                    f,
+                    "managed-memory restart authority initialization failed: {error}"
+                )
             }
             Self::Restart(error) => write!(f, "managed-memory restart failed: {error}"),
         }
