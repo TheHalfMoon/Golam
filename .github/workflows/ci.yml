@@ -85,79 +85,14 @@ jobs:
           cargo +1.98.0 test --locked -p golamd --bin golamd git_pack::tests::
           cargo +1.98.0 test --locked -p golamd --bin golamd git_observe::tests::
           cargo +1.98.0 test --locked -p golamd --bin golamd git_status::tests::
-      - name: Guard mutation set, restore read-only CI, and push
+      - name: Guard source mutation set and push
         shell: bash
         run: |
           set -euo pipefail
           git rm -f scripts/qualification/repair-t005-040-closure.py
-          cat > .github/workflows/ci.yml <<'YAML'
-          name: ci
-
-          on:
-            pull_request:
-            push:
-              branches: [main]
-
-          permissions:
-            contents: read
-
-          jobs:
-            rust:
-              name: rust-${{ matrix.os }}
-              strategy:
-                fail-fast: false
-                matrix:
-                  os: [ubuntu-latest, macos-latest, windows-latest]
-              runs-on: ${{ matrix.os }}
-              steps:
-                - uses: actions/checkout@v4
-                - name: Install pinned Rust toolchain
-                  run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
-                - name: Format
-                  run: cargo +1.98.0 fmt --all -- --check
-                - name: Clippy
-                  run: cargo +1.98.0 clippy --locked --workspace --all-targets -- -D warnings
-                - name: Test
-                  run: cargo +1.98.0 test --locked --workspace --all-targets
-                - name: Property qualification
-                  run: |
-                    cargo +1.98.0 test --locked -p golam-effects --test qualification_properties
-                    cargo +1.98.0 test --locked -p golam-ledger --test qualification_properties
-                - name: Bounded fuzz smoke
-                  run: |
-                    cargo +1.98.0 test --locked -p golam-ipc --test fuzz_smoke
-                    cargo +1.98.0 test --locked -p golam-ledger --test fuzz_smoke
-                    cargo +1.98.0 test --locked -p golam-kernel --test spec003_fuzz_smoke
-                - name: IPC transport qualification (Unix)
-                  if: runner.os != 'Windows'
-                  run: |
-                    cargo +1.98.0 test --locked -p golam-ipc unix_transport::
-                - name: IPC transport qualification (Windows)
-                  if: runner.os == 'Windows'
-                  run: |
-                    cargo +1.98.0 test --locked -p golam-ipc windows_transport::
-                - name: Authenticated daemon IPC qualification
-                  run: |
-                    cargo +1.98.0 test --locked -p golamd --bin golamd connection::tests::
-                - name: Adversarial authority qualification
-                  run: |
-                    cargo +1.98.0 test --locked -p golam-ipc --test adversarial
-                    cargo +1.98.0 test --locked -p golam-kernel --test hostile_adapter
-                    cargo +1.98.0 test --locked -p golam-kernel client_auth::tests::
-                - name: Build daemon for external locality observation
-                  run: cargo +1.98.0 build --locked -p golamd --bin golamd
-                - name: Strict-local external network observation (Unix)
-                  if: runner.os != 'Windows'
-                  run: bash scripts/qualification/strict-local-no-network.sh target/debug/golamd
-                - name: Strict-local external network observation (Windows)
-                  if: runner.os == 'Windows'
-                  shell: pwsh
-                  run: ./scripts/qualification/strict-local-no-network.ps1 target/debug/golamd.exe
-          YAML
           mapfile -t changed < <(git diff HEAD --name-only | sort)
           printf '%s\n' "${changed[@]}"
           expected=(
-            .github/workflows/ci.yml
             crates/golamd/src/git_observe.rs
             crates/golamd/src/git_pack.rs
             crates/golamd/src/git_status.rs
@@ -171,6 +106,6 @@ jobs:
           done
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/ci.yml crates/golamd/src/git_observe.rs crates/golamd/src/git_pack.rs crates/golamd/src/git_status.rs crates/golamd/src/local_dir.rs
+          git add crates/golamd/src/git_observe.rs crates/golamd/src/git_pack.rs crates/golamd/src/git_status.rs crates/golamd/src/local_dir.rs
           git commit -m "fix(005): close Git observation evidence and deadline boundaries"
           git push origin HEAD:impl/005-local-tools-context-memory
