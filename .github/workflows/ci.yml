@@ -18,7 +18,35 @@ jobs:
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
       - name: Apply bounded repair
-        run: python scripts/qualification/repair-t005-040-git-observation.py
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/qualification/repair-t005-040-git-observation.py')
+          text = path.read_text()
+          old = '''replace_once(
+              pack,
+              ''' + "'''" + '''                let body = apply_delta(&base.bytes, &delta, bounds.max_object_bytes)?;\n                (base.kind, body)\n''' + "'''" + ''',
+              ''' + "'''" + '''                let body = deadline\n                    .run_step(|| apply_delta(&base.bytes, &delta, bounds.max_object_bytes))??;\n                (base.kind, body)\n''' + "'''" + ''',
+          )
+          # The REF_DELTA branch has the same body after the first replacement; patch the remaining copy.
+          replace_once(
+              pack,
+              ''' + "'''" + '''                let body = apply_delta(&base.bytes, &delta, bounds.max_object_bytes)?;\n                (base.kind, body)\n''' + "'''" + ''',
+              ''' + "'''" + '''                let body = deadline\n                    .run_step(|| apply_delta(&base.bytes, &delta, bounds.max_object_bytes))??;\n                (base.kind, body)\n''' + "'''" + ''',
+          )'''
+          new = '''text = pack.read_text()
+          old = ''' + "'''" + '''                let body = apply_delta(&base.bytes, &delta, bounds.max_object_bytes)?;\n                (base.kind, body)\n''' + "'''" + '''
+          if text.count(old) != 2:
+              raise SystemExit(f"{pack}: expected two delta apply bodies, found {text.count(old)}")
+          text = text.replace(old, ''' + "'''" + '''                let body = deadline\n                    .run_step(|| apply_delta(&base.bytes, &delta, bounds.max_object_bytes))??;\n                (base.kind, body)\n''' + "'''" + ''')
+          pack.write_text(text)'''
+          if text.count(old) != 1:
+              raise SystemExit(f'expected one script repair block, found {text.count(old)}')
+          path.write_text(text.replace(old, new, 1))
+          PY
+          python scripts/qualification/repair-t005-040-git-observation.py
       - name: Format
         run: cargo +1.98.0 fmt --all
       - name: Clippy
