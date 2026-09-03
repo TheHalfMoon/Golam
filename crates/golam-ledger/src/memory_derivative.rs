@@ -473,7 +473,7 @@ fn read_canonical_document(
     }
     let mut file = File::open(&canonical_path)?;
     let mut bytes = Vec::new();
-    file.by_ref()
+    Read::by_ref(&mut file)
         .take(to_u64(MAX_CANONICAL_MARKDOWN_BYTES + 1)?)
         .read_to_end(&mut bytes)?;
     if bytes.len() > MAX_CANONICAL_MARKDOWN_BYTES {
