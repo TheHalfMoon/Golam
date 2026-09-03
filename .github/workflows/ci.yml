@@ -40,6 +40,33 @@ jobs:
                       f'{path}: expected {expected} escaped-literal repair matches, found {observed}: {old!r}'
                   )
               text = text.replace(old, new)
+
+          helper_anchor = '    path.write_text(text.replace(old, new, 1))\n\n\n'
+          if text.count(helper_anchor) != 1:
+              raise SystemExit(f'{path}: replace_once helper anchor changed')
+          helper = '''    path.write_text(text.replace(old, new, 1))
+
+
+def replace_first(path: Path, old: str, new: str, expected_count: int) -> None:
+    text = path.read_text()
+    count = text.count(old)
+    if count != expected_count:
+        raise SystemExit(
+            f"{path}: expected {expected_count} remaining matches, found {count}: {old[:160]!r}"
+        )
+    path.write_text(text.replace(old, new, 1))
+
+
+'''
+          text = text.replace(helper_anchor, helper, 1)
+
+          generic = 'replace_once(status, "        require_time(started, bounds.max_duration)?;\\n", "        deadline.require_active()?;\\n")'
+          if text.count(generic) != 2:
+              raise SystemExit(f'{path}: expected two ordered status deadline replacements, found {text.count(generic)}')
+          first = 'replace_first(status, "        require_time(started, bounds.max_duration)?;\\n", "        deadline.require_active()?;\\n", 3)'
+          second = 'replace_first(status, "        require_time(started, bounds.max_duration)?;\\n", "        deadline.require_active()?;\\n", 2)'
+          text = text.replace(generic, first, 1)
+          text = text.replace(generic, second, 1)
           path.write_text(text)
           PY
           python scripts/qualification/repair-t005-040-closure.py
