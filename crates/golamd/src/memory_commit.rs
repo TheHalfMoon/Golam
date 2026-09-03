@@ -415,6 +415,7 @@ fn cleanup_best_effort(path: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     use golam_core::memory_storage::MemoryVaultScope;
     use golam_core::paths::RuntimeLayout;
     use golam_core::tool_request::{RequestedOperationId, ResourceClassId};
