@@ -814,6 +814,7 @@ mod tests {
             layout.operational_db_path(),
             runtime.data_dir.join("authority/golam.db")
         );
+        drop(store);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 

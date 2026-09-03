@@ -330,6 +330,8 @@ mod tests {
         store
             .require_exact(evidence.evidence_id, evidence.candidate_id)
             .unwrap();
+        drop(store);
+        drop(_operational);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 
@@ -362,6 +364,8 @@ mod tests {
             }),
             Err(MemoryPromotionOperationalError::InvalidAuthorityMode)
         ));
+        drop(store);
+        drop(_operational);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 
@@ -389,6 +393,8 @@ mod tests {
             }),
             Err(MemoryPromotionOperationalError::ImmutablePromotionMismatch)
         ));
+        drop(store);
+        drop(_operational);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 }
