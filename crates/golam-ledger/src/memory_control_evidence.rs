@@ -256,9 +256,7 @@ fn validate_binding(
         return Err(MemoryControlEvidenceError::BindingMismatch("operation"));
     }
     if intent.item_ids.len() != 1 || intent.item_ids[0] != target.item_id {
-        return Err(MemoryControlEvidenceError::BindingMismatch(
-            "item identity",
-        ));
+        return Err(MemoryControlEvidenceError::BindingMismatch("item identity"));
     }
     if intent.expected_current_versions.len() != 1
         || intent.expected_current_versions[0].item_id != target.item_id
