@@ -65,6 +65,15 @@ jobs:
           path.write_text(text)
           PY
           python scripts/qualification/repair-t005-040-closure.py
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('crates/golamd/src/git_observe.rs')
+          text = path.read_text()
+          needle = '        let id = GitObjectId::parse("1111111111111111111111111111111111111111").unwrap();' + chr(10)
+          if text.count(needle) != 1:
+              raise SystemExit(f'{path}: expected one obsolete parser-test id binding, found {text.count(needle)}')
+          path.write_text(text.replace(needle, '', 1))
+          PY
       - name: Format
         run: cargo +1.98.0 fmt --all
       - name: Clippy
