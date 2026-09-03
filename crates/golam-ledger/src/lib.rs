@@ -37,6 +37,7 @@ pub mod manual_review;
 pub mod memory_evidence;
 #[path = "memory_operational_store.rs"]
 pub mod memory_operational;
+pub mod memory_promotion_operational;
 pub mod policy;
 pub mod protocol_audit;
 pub mod recovery;
