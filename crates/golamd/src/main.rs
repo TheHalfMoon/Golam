@@ -19,6 +19,7 @@ pub mod local_read;
 pub mod local_search;
 pub mod local_walk;
 pub mod memory_commit;
+mod memory_reconcile;
 #[cfg(test)]
 mod spec004_compaction_tests;
 
@@ -115,7 +116,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     let runtime = RuntimeLayout::initialize(default_runtime_root()?)?;
     let startup = start_kernel(&runtime, RuntimeAuthorityPolicy::for_runtime(&runtime)?)?;
-    let kernel = match startup {
+    let mut kernel = match startup {
         KernelStartup::Serving { kernel, report } => {
             eprintln!(
                 "golamd: recovery_mode={:?} issues={} runtime={}",
@@ -142,6 +143,16 @@ fn run() -> Result<(), Box<dyn Error>> {
             .into());
         }
     };
+
+    let memory_restart =
+        memory_reconcile::reconcile_managed_memory_on_startup(&runtime, &mut kernel)?;
+    eprintln!(
+        "golamd: memory_restart_scanned={} committed={} no_mutation={} blocked_unknown={}",
+        memory_restart.scanned,
+        memory_restart.committed,
+        memory_restart.no_mutation,
+        memory_restart.blocked_unknown
+    );
 
     let mut router = CommandRouter::new(kernel);
     let mut approval = ForegroundApproval::new();
