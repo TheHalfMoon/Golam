@@ -188,8 +188,6 @@ impl MemoryRestartStore {
         authority: &AuthorityLayout,
         memory: &MemoryLayout,
     ) -> Result<Self, MemoryRestartError> {
-        // Opening the canonical stores verifies/initializes the exact schemas before
-        // restart code performs read-only classification or bounded reconciliation writes.
         drop(MemoryEvidenceStore::open(authority.authority_db_path())?);
         drop(MemoryOperationalStore::open(memory)?);
         Ok(Self {
@@ -316,8 +314,6 @@ impl MemoryRestartStore {
             return Err(MemoryRestartError::StaleCase);
         }
         if case.memory_store_ref != self.memory.store_id() {
-            // A stale/wrong store binding cannot be projected into the current operational
-            // store without changing the PREPARED authority. Fail the whole startup closed.
             return Err(MemoryRestartError::StoreBindingMismatch);
         }
 
@@ -382,7 +378,6 @@ impl MemoryRestartStore {
             None,
             &bytes,
         )?;
-
         let outcome = MemoryMutationOutcome {
             effect_id: case.effect_id,
             mutation_intent_digest: case.intent_digest,
@@ -443,7 +438,6 @@ impl MemoryRestartStore {
             Some(committed.sqlite_readback_ref),
             &bytes,
         )?;
-
         let mut verification_refs = vec![
             committed.markdown_readback_ref,
             committed.sqlite_readback_ref,
@@ -552,8 +546,7 @@ impl MemoryRestartStore {
             .query_row(
                 r#"SELECT v.store_ref, v.item_id, v.markdown_path, v.content_digest,
                           v.promotion_evidence_ref, v.created_by_principal, v.writer_id,
-                          v.effect_id, v.intent_digest,
-                          i.current_version_id
+                          v.effect_id, v.intent_digest, i.current_version_id
                    FROM memory_versions v
                    JOIN memory_items i ON i.item_id = v.item_id
                    WHERE v.version_id = ?1"#,
@@ -705,7 +698,6 @@ impl MemoryRestartStore {
             return Ok(None);
         };
         let operational_ref = digest32(operational_ref, "operational reconciliation ref")?;
-
         let authority = self.authority_connection()?;
         let mut statement = authority.prepare(
             r#"SELECT evidence_id, state, authority_journal_readback_ref,
@@ -758,10 +750,7 @@ impl MemoryRestartStore {
         Ok(None)
     }
 
-    fn ensure_operational_prepared(
-        &self,
-        case: &MemoryRestartCase,
-    ) -> Result<(), MemoryRestartError> {
+    fn ensure_operational_prepared(&self, case: &MemoryRestartCase) -> Result<(), MemoryRestartError> {
         drop(MemoryOperationalStore::open(&self.memory)?);
         let connection = self.operational_connection()?;
         let existing = connection
@@ -843,8 +832,7 @@ impl MemoryRestartStore {
         &self,
         outcome: &MemoryMutationOutcome,
     ) -> Result<Option<BindingDigest>, MemoryRestartError> {
-        let existing = self.existing_terminal(outcome.effect_id)?;
-        if let Some((id, status)) = existing {
+        if let Some((id, status)) = self.existing_terminal(outcome.effect_id)? {
             if terminal_status_compatible(status, outcome.status) {
                 return Ok(Some(id));
             }
@@ -902,7 +890,6 @@ impl MemoryRestartStore {
         let mut state = effects
             .current_state(effect_id)?
             .ok_or(MemoryRestartError::InvalidRecord("effect current state"))?;
-
         if matches!(state.as_str(), "succeeded" | "failed") {
             return if desired.matches_terminal(&state) {
                 Ok(())
@@ -917,7 +904,6 @@ impl MemoryRestartStore {
                 Err(MemoryRestartError::UnsupportedEffectState(state))
             };
         }
-
         if state == "authorized" {
             let attempt_id = EffectAttemptId(restart_u128(effect_id, b"attempt"));
             effects.compare_and_swap(CompareAndSwapEffect {
@@ -940,7 +926,6 @@ impl MemoryRestartStore {
             })?;
             state = "executing".to_owned();
         }
-
         if state == "executing" {
             let attempt = self.latest_attempt(effect_id)?;
             let attempt_id = match attempt {
@@ -978,7 +963,6 @@ impl MemoryRestartStore {
                     attempt_id
                 }
             };
-
             if desired == DesiredEffectOutcome::Unknown {
                 effects.compare_and_swap(CompareAndSwapEffect {
                     transition_id: EffectTransitionId(restart_u128(
@@ -995,7 +979,6 @@ impl MemoryRestartStore {
                 })?;
                 return Ok(());
             }
-
             if self
                 .latest_attempt(effect_id)?
                 .and_then(|value| value.finished_outcome)
@@ -1033,7 +1016,6 @@ impl MemoryRestartStore {
                 return Ok(());
             }
         }
-
         if state == "unknown_outcome" {
             effects.compare_and_swap(CompareAndSwapEffect {
                 transition_id: EffectTransitionId(restart_u128(effect_id, b"unknown-reconciling")),
@@ -1049,7 +1031,6 @@ impl MemoryRestartStore {
             })?;
             state = "reconciling".to_owned();
         }
-
         if state == "reconciling" {
             if desired == DesiredEffectOutcome::Unknown {
                 return Ok(());
@@ -1071,7 +1052,6 @@ impl MemoryRestartStore {
             })?;
             return Ok(());
         }
-
         if desired == DesiredEffectOutcome::Unknown && state == "unknown_outcome" {
             return Ok(());
         }
@@ -1205,7 +1185,7 @@ impl DesiredEffectOutcome {
         }
     }
 
-    const fn matches_terminal(self, state: &str) -> bool {
+    fn matches_terminal(self, state: &str) -> bool {
         matches!(
             (self, state),
             (Self::Succeeded, "succeeded") | (Self::Failed, "failed")
