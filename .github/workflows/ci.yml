@@ -1,70 +1,62 @@
 name: ci
 
 on:
+  pull_request:
   push:
-    branches:
-      - 'impl/005-local-tools-context-memory'
+    branches: [main]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  bind-managed-memory-commit:
-    runs-on: ubuntu-latest
+  rust:
+    name: rust-${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: impl/005-local-tools-context-memory
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
-      - name: Bind Markdown commit to kernel-issued prepared token
+      - name: Format
+        run: cargo +1.98.0 fmt --all -- --check
+      - name: Clippy
+        run: cargo +1.98.0 clippy --locked --workspace --all-targets -- -D warnings
+      - name: Test
+        run: cargo +1.98.0 test --locked --workspace --all-targets
+      - name: Property qualification
         run: |
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('crates/golamd/src/memory_commit.rs')
-          text = path.read_text()
-          old = 'use golam_core::{CanonicalEncoder, CoreError, EffectId};\n'
-          new = '''use golam_core::{CanonicalEncoder, CoreError, EffectId};\nuse golam_kernel::{ManagedMarkdownCommitObservation, PreparedManagedMemoryWrite};\n'''
-          if text.count(old) != 1:
-              raise SystemExit(f'expected one kernel import insertion point, found {text.count(old)}')
-          text = text.replace(old, new, 1)
-
-          old = '    TargetIdentityMismatch,\n    ContentDigestMismatch,\n'
-          new = '    TargetIdentityMismatch,\n    PreparedPathMismatch,\n    ContentDigestMismatch,\n'
-          if text.count(old) != 1:
-              raise SystemExit(f'expected one error insertion point, found {text.count(old)}')
-          text = text.replace(old, new, 1)
-
-          old = '''            Self::TargetIdentityMismatch => {\n                f.write_str("managed Markdown target identity no longer matches PREPARED authority")\n            }\n            Self::ContentDigestMismatch => {\n'''
-          new = '''            Self::TargetIdentityMismatch => {\n                f.write_str("managed Markdown target identity no longer matches PREPARED authority")\n            }\n            Self::PreparedPathMismatch => {\n                f.write_str("managed Markdown target path does not match the kernel-issued prepared writer token")\n            }\n            Self::ContentDigestMismatch => {\n'''
-          if text.count(old) != 1:
-              raise SystemExit(f'expected one display insertion point, found {text.count(old)}')
-          text = text.replace(old, new, 1)
-
-          marker = '''#[expect(\n    clippy::too_many_arguments,\n    reason = "commit primitive binds exact prepared target state"\n)]\npub fn commit_existing_markdown(\n'''
-          if text.count(marker) != 1:
-              raise SystemExit(f'expected one raw commit marker, found {text.count(marker)}')
-          wrapper = '''pub fn commit_prepared_existing_markdown(\n    resolver: &LocalFsResolver,\n    requested: &RequestedTarget,\n    layout: &MemoryLayout,\n    prepared: &PreparedManagedMemoryWrite,\n    new_bytes: &[u8],\n    observed_at_unix_ms: u64,\n) -> Result<ManagedMarkdownCommitObservation, MemoryCommitError> {\n    let operation = RequestedOperationId::new("memory.write")\n        .map_err(|_| MemoryCommitError::TargetIdentityMismatch)?;\n    let resolved = resolver.resolve_read_target(requested, &operation, observed_at_unix_ms)?;\n    if Path::new(resolved.normalized_path.as_str()) != prepared.markdown_path() {\n        return Err(MemoryCommitError::PreparedPathMismatch);\n    }\n    let receipt = commit_existing_markdown(\n        resolver,\n        requested,\n        layout,\n        prepared.effect_id(),\n        prepared.expected_target_identity_ref(),\n        prepared.expected_content_digest(),\n        new_bytes,\n        observed_at_unix_ms,\n    )?;\n    Ok(ManagedMarkdownCommitObservation {\n        readback_ref: receipt.readback_ref,\n        target_identity_ref: receipt.target_identity_ref,\n        content_digest: receipt.content_digest,\n    })\n}\n\n#[expect(\n    clippy::too_many_arguments,\n    reason = "private commit primitive binds exact prepared target state"\n)]\nfn commit_existing_markdown(\n'''
-          text = text.replace(marker, wrapper, 1)
-          path.write_text(text)
-          PY
-      - name: Format and qualify
+          cargo +1.98.0 test --locked -p golam-effects --test qualification_properties
+          cargo +1.98.0 test --locked -p golam-ledger --test qualification_properties
+      - name: Bounded fuzz smoke
         run: |
-          cargo +1.98.0 fmt --all
-          cargo +1.98.0 fmt --all -- --check
-          cargo +1.98.0 clippy --locked -p golamd --all-targets -- -D warnings
-          cargo +1.98.0 test --locked -p golamd --bin golamd memory_commit::tests::
-      - name: Guard exact source mutation and push
-        shell: bash
+          cargo +1.98.0 test --locked -p golam-ipc --test fuzz_smoke
+          cargo +1.98.0 test --locked -p golam-ledger --test fuzz_smoke
+          cargo +1.98.0 test --locked -p golam-kernel --test spec003_fuzz_smoke
+      - name: IPC transport qualification (Unix)
+        if: runner.os != 'Windows'
         run: |
-          set -euo pipefail
-          mapfile -t changed < <(git diff --name-only | sort)
-          printf '%s\n' "${changed[@]}"
-          test "${#changed[@]}" -eq 1
-          test "${changed[0]}" = "crates/golamd/src/memory_commit.rs"
-          git diff --check
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add crates/golamd/src/memory_commit.rs
-          git commit -m "fix(005): bind Markdown commit to prepared writer token"
-          git push origin HEAD:impl/005-local-tools-context-memory
+          cargo +1.98.0 test --locked -p golam-ipc unix_transport::
+      - name: IPC transport qualification (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc windows_transport::
+      - name: Authenticated daemon IPC qualification
+        run: |
+          cargo +1.98.0 test --locked -p golamd --bin golamd connection::tests::
+      - name: Adversarial authority qualification
+        run: |
+          cargo +1.98.0 test --locked -p golam-ipc --test adversarial
+          cargo +1.98.0 test --locked -p golam-kernel --test hostile_adapter
+          cargo +1.98.0 test --locked -p golam-kernel client_auth::tests::
+      - name: Build daemon for external locality observation
+        run: cargo +1.98.0 build --locked -p golamd --bin golamd
+      - name: Strict-local external network observation (Unix)
+        if: runner.os != 'Windows'
+        run: bash scripts/qualification/strict-local-no-network.sh target/debug/golamd
+      - name: Strict-local external network observation (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/qualification/strict-local-no-network.ps1 target/debug/golamd.exe
