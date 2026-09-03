@@ -2,7 +2,9 @@
 
 use std::error::Error;
 use std::fmt;
-use std::fs::{self, File, ReadDir};
+#[cfg(any(test, target_os = "linux", target_os = "android"))]
+use std::fs;
+use std::fs::{File, ReadDir};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -212,18 +214,7 @@ fn require_platform() -> Result<(), LocalDirectorySnapshotError> {
     Ok(())
 }
 
-#[cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd"))]
-fn require_platform() -> Result<(), LocalDirectorySnapshotError> {
-    Ok(())
-}
-
-#[cfg(not(any(
-    target_os = "linux",
-    target_os = "android",
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "freebsd"
-)))]
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
 fn require_platform() -> Result<(), LocalDirectorySnapshotError> {
     Err(LocalDirectorySnapshotError::UnsupportedPlatform)
 }
@@ -235,20 +226,7 @@ fn read_dir_from_handle(directory: &File) -> io::Result<ReadDir> {
     fs::read_dir(format!("/proc/self/fd/{}", directory.as_raw_fd()))
 }
 
-#[cfg(any(target_os = "macos", target_os = "ios", target_os = "freebsd"))]
-fn read_dir_from_handle(directory: &File) -> io::Result<ReadDir> {
-    use std::os::fd::AsRawFd;
-
-    fs::read_dir(format!("/dev/fd/{}", directory.as_raw_fd()))
-}
-
-#[cfg(not(any(
-    target_os = "linux",
-    target_os = "android",
-    target_os = "macos",
-    target_os = "ios",
-    target_os = "freebsd"
-)))]
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
 fn read_dir_from_handle(_directory: &File) -> io::Result<ReadDir> {
     Err(io::Error::new(
         io::ErrorKind::Unsupported,
@@ -294,13 +272,7 @@ mod tests {
         }
     }
 
-    #[cfg(any(
-        target_os = "linux",
-        target_os = "android",
-        target_os = "macos",
-        target_os = "ios",
-        target_os = "freebsd"
-    ))]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     #[test]
     fn retained_handle_snapshot_is_sorted_and_identity_bound() {
         let root = unique_root();
@@ -321,13 +293,7 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
-    #[cfg(any(
-        target_os = "linux",
-        target_os = "android",
-        target_os = "macos",
-        target_os = "ios",
-        target_os = "freebsd"
-    ))]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     #[test]
     fn path_replacement_after_handle_open_fails_closed_before_returning_names() {
         use std::os::unix::fs::symlink;
@@ -363,13 +329,7 @@ mod tests {
         fs::remove_dir_all(outside).unwrap();
     }
 
-    #[cfg(any(
-        target_os = "linux",
-        target_os = "android",
-        target_os = "macos",
-        target_os = "ios",
-        target_os = "freebsd"
-    ))]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     fn assert_context_directory_replacement_fails_closed(relative: &str) {
         use std::os::unix::fs::symlink;
 
@@ -404,33 +364,21 @@ mod tests {
         fs::remove_dir_all(outside).unwrap();
     }
 
-    #[cfg(any(
-        target_os = "linux",
-        target_os = "android",
-        target_os = "macos",
-        target_os = "ios",
-        target_os = "freebsd"
-    ))]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     #[test]
     fn pack_directory_replacement_fails_closed_before_enumeration_returns() {
         assert_context_directory_replacement_fails_closed(".git/objects/pack");
     }
 
-    #[cfg(any(
-        target_os = "linux",
-        target_os = "android",
-        target_os = "macos",
-        target_os = "ios",
-        target_os = "freebsd"
-    ))]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     #[test]
     fn worktree_directory_replacement_fails_closed_before_enumeration_returns() {
         assert_context_directory_replacement_fails_closed("nested/worktree");
     }
 
-    #[cfg(windows)]
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
     #[test]
-    fn windows_directory_snapshot_fails_closed_until_handle_enumeration_is_admitted() {
+    fn unqualified_platform_directory_snapshot_fails_closed_until_handle_enumeration_is_admitted() {
         let root = unique_root();
         fs::create_dir(&root).unwrap();
         let resolver = resolver(&root);
