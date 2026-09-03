@@ -8,6 +8,55 @@ pub const DECOMPRESSION_INPUT_QUANTUM_BYTES: usize = 64 * 1024;
 pub const DECOMPRESSION_OUTPUT_QUANTUM_BYTES: usize = 64 * 1024;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct GitOperationDeadline {
+    started: Instant,
+    max_duration: Duration,
+}
+
+impl GitOperationDeadline {
+    pub fn start(max_duration: Duration) -> Result<Self, GitOperationBudgetError> {
+        if max_duration.is_zero() {
+            return Err(GitOperationBudgetError::InvalidDuration);
+        }
+        Ok(Self {
+            started: Instant::now(),
+            max_duration,
+        })
+    }
+
+    pub fn require_active(&self) -> Result<(), GitOperationBudgetError> {
+        if self.started.elapsed() >= self.max_duration {
+            return Err(GitOperationBudgetError::DeadlineExceeded);
+        }
+        Ok(())
+    }
+
+    pub fn remaining(&self) -> Result<Duration, GitOperationBudgetError> {
+        self.max_duration
+            .checked_sub(self.started.elapsed())
+            .filter(|remaining| !remaining.is_zero())
+            .ok_or(GitOperationBudgetError::DeadlineExceeded)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GitOperationBudgetError {
+    InvalidDuration,
+    DeadlineExceeded,
+}
+
+impl fmt::Display for GitOperationBudgetError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidDuration => f.write_str("Git operation duration must be positive"),
+            Self::DeadlineExceeded => f.write_str("Git operation deadline exceeded"),
+        }
+    }
+}
+
+impl Error for GitOperationBudgetError {}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DecompressionDeadline {
     started: Instant,
     max_duration: Duration,
@@ -22,6 +71,13 @@ impl DecompressionDeadline {
             started: Instant::now(),
             max_duration,
         })
+    }
+
+    pub fn from_operation(operation: GitOperationDeadline) -> Self {
+        Self {
+            started: operation.started,
+            max_duration: operation.max_duration,
+        }
     }
 
     pub fn run_quantum<T>(
@@ -87,6 +143,45 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::thread;
+
+    #[test]
+    fn operation_deadline_rejects_zero_duration_and_expires_monotonically() {
+        assert_eq!(
+            GitOperationDeadline::start(Duration::ZERO),
+            Err(GitOperationBudgetError::InvalidDuration)
+        );
+
+        let deadline = GitOperationDeadline::start(Duration::from_millis(20)).unwrap();
+        assert!(deadline.remaining().is_ok());
+        thread::sleep(Duration::from_millis(30));
+        assert_eq!(
+            deadline.require_active(),
+            Err(GitOperationBudgetError::DeadlineExceeded)
+        );
+        assert_eq!(
+            deadline.remaining(),
+            Err(GitOperationBudgetError::DeadlineExceeded)
+        );
+    }
+
+    #[test]
+    fn decompression_deadline_can_share_the_operation_absolute_budget() {
+        let operation = GitOperationDeadline::start(Duration::from_millis(20)).unwrap();
+        thread::sleep(Duration::from_millis(30));
+        let deadline = DecompressionDeadline::from_operation(operation);
+        let invoked = AtomicBool::new(false);
+        let mut output = [0_u8; 1];
+
+        let result = deadline.run_quantum(b"a", &mut output, |_, _| {
+            invoked.store(true, Ordering::Relaxed);
+        });
+
+        assert_eq!(
+            result,
+            Err(DecompressionBudgetError::DeadlineExceededBeforeCall)
+        );
+        assert!(!invoked.load(Ordering::Relaxed));
+    }
 
     #[test]
     fn oversized_synchronous_quantum_is_rejected_before_call() {
