@@ -83,7 +83,11 @@ pub fn validate_memory_transition(
         return Err(MemoryTransitionError::SelfPredecessor);
     }
 
-    let expected_for_output = expected_version(intent.item_ids.as_slice(), &intent.expected_current_versions, version.item_id);
+    let expected_for_output = expected_version(
+        intent.item_ids.as_slice(),
+        &intent.expected_current_versions,
+        version.item_id,
+    );
     match intent.operation {
         MemoryOperation::Add => {
             require_single_item(intent.item_ids.len())?;
@@ -217,12 +221,12 @@ fn require_no_conflicts(version: &MemoryVersion) -> Result<(), MemoryTransitionE
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::EffectId;
     use crate::memory::{
         ExpectedMemoryVersion, MemoryCandidateId, MemoryScope, MemoryStoreId, MemoryWriterId,
     };
     use crate::taint::{TaintLabel, TaintSet};
     use crate::tool_request::{BindingDigest, PrincipalId};
-    use crate::EffectId;
 
     fn digest(value: u8) -> BindingDigest {
         BindingDigest::new([value; 32])
@@ -324,12 +328,7 @@ mod tests {
             assert_eq!(
                 validate_memory_transition(
                     &prepared,
-                    &version(
-                        item(1),
-                        MemoryVersionStatus::Active,
-                        vec![previous],
-                        vec![]
-                    )
+                    &version(item(1), MemoryVersionStatus::Active, vec![previous], vec![])
                 ),
                 Ok(())
             );
@@ -404,11 +403,7 @@ mod tests {
     #[test]
     fn secret_derived_tombstone_cannot_smuggle_a_taint_downgrade() {
         let previous = version_id(10);
-        let prepared = prepared(
-            MemoryOperation::Redact,
-            vec![item(1)],
-            vec![Some(previous)],
-        );
+        let prepared = prepared(MemoryOperation::Redact, vec![item(1)], vec![Some(previous)]);
         let mut value = version(
             item(1),
             MemoryVersionStatus::Redacted,
