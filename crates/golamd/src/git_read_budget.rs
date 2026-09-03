@@ -37,6 +37,19 @@ impl GitOperationDeadline {
             .filter(|remaining| !remaining.is_zero())
             .ok_or(GitOperationBudgetError::DeadlineExceeded)
     }
+
+    /// Run one synchronous, non-preemptive Git operation step under the same
+    /// absolute operation deadline. The result is discarded if the step
+    /// returns after the shared deadline has expired.
+    pub fn run_step<T>(
+        &self,
+        step: impl FnOnce() -> T,
+    ) -> Result<T, GitOperationBudgetError> {
+        self.require_active()?;
+        let result = step();
+        self.require_active()?;
+        Ok(result)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -162,6 +175,32 @@ mod tests {
             deadline.remaining(),
             Err(GitOperationBudgetError::DeadlineExceeded)
         );
+    }
+
+    #[test]
+    fn operation_step_rejects_expiry_before_invocation() {
+        let deadline = GitOperationDeadline::start(Duration::from_millis(20)).unwrap();
+        thread::sleep(Duration::from_millis(30));
+        let invoked = AtomicBool::new(false);
+
+        let result = deadline.run_step(|| {
+            invoked.store(true, Ordering::Relaxed);
+        });
+
+        assert_eq!(result, Err(GitOperationBudgetError::DeadlineExceeded));
+        assert!(!invoked.load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn operation_step_discards_nonpreemptive_overrun() {
+        let deadline = GitOperationDeadline::start(Duration::from_millis(20)).unwrap();
+
+        let result = deadline.run_step(|| {
+            thread::sleep(Duration::from_millis(30));
+            7_u8
+        });
+
+        assert_eq!(result, Err(GitOperationBudgetError::DeadlineExceeded));
     }
 
     #[test]
