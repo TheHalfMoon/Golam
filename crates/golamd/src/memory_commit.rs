@@ -11,6 +11,7 @@ use golam_core::memory_storage::MemoryLayout;
 use golam_core::target_identity::ObservedFileKind;
 use golam_core::tool_request::{BindingDigest, RequestedOperationId, RequestedTarget};
 use golam_core::{CanonicalEncoder, CoreError, EffectId};
+use golam_kernel::{ManagedMarkdownCommitObservation, PreparedManagedMemoryWrite};
 
 use crate::local_fs::{
     LocalFsResolutionError, LocalFsResolver, metadata_matches_resolved_identity,
@@ -40,6 +41,7 @@ pub enum MemoryCommitError {
     UnsupportedPlatform,
     InvalidTargetKind(ObservedFileKind),
     TargetIdentityMismatch,
+    PreparedPathMismatch,
     ContentDigestMismatch,
     CommitTooLarge,
     StagingCollision(PathBuf),
@@ -65,6 +67,9 @@ impl fmt::Display for MemoryCommitError {
             ),
             Self::TargetIdentityMismatch => {
                 f.write_str("managed Markdown target identity no longer matches PREPARED authority")
+            }
+            Self::PreparedPathMismatch => {
+                f.write_str("managed Markdown target path does not match the kernel-issued prepared writer token")
             }
             Self::ContentDigestMismatch => {
                 f.write_str("managed Markdown content no longer matches PREPARED authority")
@@ -123,11 +128,42 @@ impl From<LocalFsResolutionError> for MemoryCommitError {
     }
 }
 
+pub fn commit_prepared_existing_markdown(
+    resolver: &LocalFsResolver,
+    requested: &RequestedTarget,
+    layout: &MemoryLayout,
+    prepared: &PreparedManagedMemoryWrite,
+    new_bytes: &[u8],
+    observed_at_unix_ms: u64,
+) -> Result<ManagedMarkdownCommitObservation, MemoryCommitError> {
+    let operation = RequestedOperationId::new("memory.write")
+        .map_err(|_| MemoryCommitError::TargetIdentityMismatch)?;
+    let resolved = resolver.resolve_read_target(requested, &operation, observed_at_unix_ms)?;
+    if Path::new(resolved.normalized_path.as_str()) != prepared.markdown_path() {
+        return Err(MemoryCommitError::PreparedPathMismatch);
+    }
+    let receipt = commit_existing_markdown(
+        resolver,
+        requested,
+        layout,
+        prepared.effect_id(),
+        prepared.expected_target_identity_ref(),
+        prepared.expected_content_digest(),
+        new_bytes,
+        observed_at_unix_ms,
+    )?;
+    Ok(ManagedMarkdownCommitObservation {
+        readback_ref: receipt.readback_ref,
+        target_identity_ref: receipt.target_identity_ref,
+        content_digest: receipt.content_digest,
+    })
+}
+
 #[expect(
     clippy::too_many_arguments,
-    reason = "commit primitive binds exact prepared target state"
+    reason = "private commit primitive binds exact prepared target state"
 )]
-pub fn commit_existing_markdown(
+fn commit_existing_markdown(
     resolver: &LocalFsResolver,
     requested: &RequestedTarget,
     layout: &MemoryLayout,
