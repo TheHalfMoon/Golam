@@ -162,10 +162,10 @@ pub fn observe_status(
     })
 }
 
-fn group_index_entries<'a>(
-    entries: &'a [GitIndexEntry],
+fn group_index_entries(
+    entries: &[GitIndexEntry],
     max_entries: usize,
-) -> Result<BTreeMap<String, Vec<&'a GitIndexEntry>>, GitStatusError> {
+) -> Result<BTreeMap<String, Vec<&GitIndexEntry>>, GitStatusError> {
     if entries.len() > max_entries {
         return Err(GitStatusError::EntryLimitExceeded);
     }
