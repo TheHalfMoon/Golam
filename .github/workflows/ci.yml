@@ -2,14 +2,14 @@ name: ci
 
 on:
   push:
-    branches: [impl/005-local-tools-context-memory]
+    branches:
+      - 'impl/005-local-tools-context-memory'
 
 permissions:
   contents: write
 
 jobs:
   repair-git-observation:
-    if: github.event.head_commit.message == 'ci(005): execute bounded Git observation repair'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
