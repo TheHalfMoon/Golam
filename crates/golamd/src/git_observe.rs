@@ -110,12 +110,14 @@ pub enum GitObjectSource {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitObjectObservation {
+    pub repository_evidence: GitRepositoryEvidence,
     pub object: GitObject,
     pub source: GitObjectSource,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitBlobObservation {
+    pub repository_evidence: GitRepositoryEvidence,
     pub object_id: GitObjectId,
     pub source: GitObjectSource,
     pub bytes: Vec<u8>,
@@ -123,6 +125,7 @@ pub struct GitBlobObservation {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitCommitObservation {
+    pub repository_evidence: GitRepositoryEvidence,
     pub object_id: GitObjectId,
     pub source: GitObjectSource,
     pub tree: GitObjectId,
@@ -130,6 +133,14 @@ pub struct GitCommitObservation {
     pub author: Vec<u8>,
     pub committer: Vec<u8>,
     pub message: Vec<u8>,
+}
+
+struct ParsedGitCommit {
+    tree: GitObjectId,
+    parents: Vec<GitObjectId>,
+    author: Vec<u8>,
+    committer: Vec<u8>,
+    message: Vec<u8>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -149,6 +160,7 @@ pub struct GitTreeEntryObservation {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitTreeObjectObservation {
+    pub repository_evidence: GitRepositoryEvidence,
     pub object_id: GitObjectId,
     pub source: GitObjectSource,
     pub entries: Vec<GitTreeEntryObservation>,
@@ -163,6 +175,7 @@ pub struct GitTreePathObservation {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitTreeWalkObservation {
+    pub repository_evidence: GitRepositoryEvidence,
     pub root_tree: GitObjectId,
     pub entries: Vec<GitTreePathObservation>,
     pub truncated: bool,
@@ -170,6 +183,7 @@ pub struct GitTreeWalkObservation {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitLogObservation {
+    pub repository_evidence: GitRepositoryEvidence,
     pub commits: Vec<GitCommitObservation>,
     pub truncated: bool,
 }
@@ -242,6 +256,7 @@ impl<'a> GitObservationReader<'a> {
         {
             Ok(object) => {
                 return Ok(GitObjectObservation {
+                    repository_evidence: self.repository.evidence().clone(),
                     object,
                     source: GitObjectSource::Loose,
                 });
@@ -285,6 +300,7 @@ impl<'a> GitObservationReader<'a> {
         let declared_size = u64::try_from(packed.bytes.len())
             .map_err(|_| GitObservationError::ObjectSizeOverflow)?;
         Ok(GitObjectObservation {
+            repository_evidence: self.repository.evidence().clone(),
             object: GitObject {
                 id: object_id,
                 kind,
@@ -309,6 +325,7 @@ impl<'a> GitObservationReader<'a> {
             });
         }
         Ok(GitBlobObservation {
+            repository_evidence: observation.repository_evidence,
             object_id,
             source: observation.source,
             bytes: observation.object.bytes,
@@ -326,14 +343,19 @@ impl<'a> GitObservationReader<'a> {
                 observed: observation.object.kind,
             });
         }
-        self.deadline.run_step(|| {
-            parse_commit(
-                object_id,
-                observation.source,
-                &observation.object.bytes,
-                self.bounds,
-            )
-        })?
+        let parsed = self
+            .deadline
+            .run_step(|| parse_commit(&observation.object.bytes, self.bounds))??;
+        Ok(GitCommitObservation {
+            repository_evidence: observation.repository_evidence,
+            object_id,
+            source: observation.source,
+            tree: parsed.tree,
+            parents: parsed.parents,
+            author: parsed.author,
+            committer: parsed.committer,
+            message: parsed.message,
+        })
     }
 
     pub fn read_tree(
@@ -351,6 +373,7 @@ impl<'a> GitObservationReader<'a> {
             .deadline
             .run_step(|| parse_tree(&observation.object.bytes, self.bounds))??;
         Ok(GitTreeObjectObservation {
+            repository_evidence: observation.repository_evidence,
             object_id,
             source: observation.source,
             entries,
@@ -358,6 +381,7 @@ impl<'a> GitObservationReader<'a> {
     }
 
     pub fn observe_head_log(&self) -> Result<GitLogObservation, GitObservationError> {
+        let repository_evidence = self.repository.evidence().clone();
         let mut pending = VecDeque::new();
         let mut seen = HashSet::new();
         let mut commits = Vec::new();
@@ -370,6 +394,7 @@ impl<'a> GitObservationReader<'a> {
             }
             if commits.len() >= self.bounds.max_log_commits {
                 return Ok(GitLogObservation {
+                    repository_evidence: repository_evidence.clone(),
                     commits,
                     truncated: true,
                 });
@@ -384,6 +409,7 @@ impl<'a> GitObservationReader<'a> {
         }
 
         Ok(GitLogObservation {
+            repository_evidence,
             commits,
             truncated: false,
         })
@@ -398,6 +424,7 @@ impl<'a> GitObservationReader<'a> {
         &self,
         root_tree: GitObjectId,
     ) -> Result<GitTreeWalkObservation, GitObservationError> {
+        let repository_evidence = self.repository.evidence().clone();
         let mut pending = VecDeque::new();
         let mut paths = BTreeMap::new();
         pending.push_back((String::new(), root_tree, 0_usize));
@@ -411,6 +438,7 @@ impl<'a> GitObservationReader<'a> {
             for entry in tree.entries {
                 if paths.len() >= self.bounds.max_tree_entries {
                     return Ok(GitTreeWalkObservation {
+                        repository_evidence: repository_evidence.clone(),
                         root_tree,
                         entries: paths.into_values().collect(),
                         truncated: true,
@@ -442,6 +470,7 @@ impl<'a> GitObservationReader<'a> {
         }
 
         Ok(GitTreeWalkObservation {
+            repository_evidence,
             root_tree,
             entries: paths.into_values().collect(),
             truncated: false,
@@ -672,11 +701,9 @@ fn requested(path: &str) -> Result<RequestedTarget, GitObservationError> {
 }
 
 fn parse_commit(
-    object_id: GitObjectId,
-    source: GitObjectSource,
     bytes: &[u8],
     bounds: GitObservationBounds,
-) -> Result<GitCommitObservation, GitObservationError> {
+) -> Result<ParsedGitCommit, GitObservationError> {
     let separator = bytes
         .windows(2)
         .position(|window| window == b"\n\n")
@@ -734,9 +761,7 @@ fn parse_commit(
         }
     }
 
-    Ok(GitCommitObservation {
-        object_id,
-        source,
+    Ok(ParsedGitCommit {
         tree: tree.ok_or(GitObservationError::InvalidCommit)?,
         parents,
         author: author.ok_or(GitObservationError::InvalidCommit)?,
@@ -1138,26 +1163,29 @@ mod tests {
         .unwrap();
 
         assert_eq!(reader.evidence().head.object_id, commit);
+        let expected_evidence = reader.evidence().clone();
         let log = reader.observe_head_log().unwrap();
+        assert_eq!(log.repository_evidence, expected_evidence);
         assert!(!log.truncated);
         assert_eq!(log.commits.len(), 1);
+        assert_eq!(log.commits[0].repository_evidence, expected_evidence);
         assert_eq!(log.commits[0].tree, tree);
         let walk = reader.observe_head_tree().unwrap();
+        assert_eq!(walk.repository_evidence, expected_evidence);
         assert!(!walk.truncated);
         assert_eq!(walk.entries.len(), 1);
         assert_eq!(walk.entries[0].path, "hello.txt");
         assert_eq!(walk.entries[0].object_id, blob);
-        assert_eq!(reader.read_blob(blob).unwrap().bytes, b"hello\n");
+        let blob_observation = reader.read_blob(blob).unwrap();
+        assert_eq!(blob_observation.repository_evidence, expected_evidence);
+        assert_eq!(blob_observation.bytes, b"hello\n");
         fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
     fn pure_commit_and_tree_parsers_reject_malformed_or_unbounded_inputs() {
-        let id = GitObjectId::parse("1111111111111111111111111111111111111111").unwrap();
         assert!(matches!(
             parse_commit(
-                id,
-                GitObjectSource::Loose,
                 b"tree 2222222222222222222222222222222222222222\n\nmissing identities",
                 GitObservationBounds::default()
             ),

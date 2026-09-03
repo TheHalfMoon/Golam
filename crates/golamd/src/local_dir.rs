@@ -363,6 +363,71 @@ mod tests {
         fs::remove_dir_all(outside).unwrap();
     }
 
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd"
+    ))]
+    fn assert_context_directory_replacement_fails_closed(relative: &str) {
+        use std::os::unix::fs::symlink;
+
+        let root = unique_root();
+        let outside = unique_root();
+        let target = root.join(relative);
+        fs::create_dir_all(&target).unwrap();
+        fs::create_dir(&outside).unwrap();
+        fs::write(target.join("inside.txt"), b"inside").unwrap();
+        fs::write(outside.join("outside.txt"), b"outside").unwrap();
+        let resolver = resolver(&root);
+        let original = target.with_file_name(format!(
+            "{}-original",
+            target.file_name().unwrap().to_string_lossy()
+        ));
+
+        let result = snapshot_directory_with_pre_enumeration(
+            &resolver,
+            &RequestedTarget::new(relative).unwrap(),
+            &RequestedOperationId::new("list").unwrap(),
+            bounds(),
+            10,
+            || {
+                fs::rename(&target, &original).unwrap();
+                symlink(&outside, &target).unwrap();
+            },
+        );
+
+        assert!(result.is_err());
+        fs::remove_file(&target).unwrap();
+        fs::remove_dir_all(root).unwrap();
+        fs::remove_dir_all(outside).unwrap();
+    }
+
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd"
+    ))]
+    #[test]
+    fn pack_directory_replacement_fails_closed_before_enumeration_returns() {
+        assert_context_directory_replacement_fails_closed(".git/objects/pack");
+    }
+
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd"
+    ))]
+    #[test]
+    fn worktree_directory_replacement_fails_closed_before_enumeration_returns() {
+        assert_context_directory_replacement_fails_closed("nested/worktree");
+    }
+
     #[cfg(windows)]
     #[test]
     fn windows_directory_snapshot_fails_closed_until_handle_enumeration_is_admitted() {

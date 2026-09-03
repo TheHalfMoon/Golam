@@ -3,10 +3,8 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::error::Error;
 use std::fmt;
-use std::fs;
 use std::io;
-use std::path::Path;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use golam_core::target_identity::ObservedFileKind;
 use golam_core::tool_request::{RequestedOperationId, RequestedTarget};
@@ -17,8 +15,12 @@ use crate::git_index::{
 use crate::git_observe::{
     GitObservationBounds, GitObservationError, GitObservationReader, GitTreeMode,
 };
-use crate::git_read::{GitObjectId, GitReadError};
+use crate::git_read::{GitObjectId, GitReadError, GitRepositoryEvidence};
+use crate::git_read_budget::{GitOperationBudgetError, GitOperationDeadline};
 use crate::git_sha1::{GitObjectSha1, GitObjectSha1Error};
+use crate::local_dir::{
+    LocalDirectorySnapshotBounds, LocalDirectorySnapshotError, snapshot_directory,
+};
 use crate::local_fs::{LocalFsResolutionError, LocalFsResolver};
 use crate::local_read::{LocalFileReadBounds, LocalFileReadError, read_regular_file};
 
@@ -97,6 +99,7 @@ pub struct GitDiffEvidence {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitStatusObservation {
+    pub repository_evidence: GitRepositoryEvidence,
     pub head: GitObjectId,
     pub index_checksum: [u8; 20],
     pub staged: Vec<GitDiffEvidence>,
@@ -112,20 +115,25 @@ pub fn observe_status(
     observed_at_unix_ms: u64,
 ) -> Result<GitStatusObservation, GitStatusError> {
     bounds.validate()?;
-    let started = Instant::now();
-    let observation =
-        GitObservationReader::open(resolver, operation, bounds.observation, observed_at_unix_ms)?;
-    require_time(started, bounds.max_duration)?;
+    let deadline = GitOperationDeadline::start(bounds.max_duration)?;
+    let observation = GitObservationReader::open_with_deadline(
+        resolver,
+        operation,
+        bounds.observation,
+        deadline,
+        observed_at_unix_ms,
+    )?;
+    deadline.require_active()?;
 
     let index_bytes = read_file(
         resolver,
         operation,
         ".git/index",
         u64::try_from(bounds.index.max_bytes).map_err(|_| GitStatusError::SizeOverflow)?,
-        bounds.max_duration,
+        deadline,
         observed_at_unix_ms,
     )?;
-    let index = parse_git_index(&index_bytes, bounds.index)?;
+    let index = deadline.run_step(|| parse_git_index(&index_bytes, bounds.index))??;
     let head_tree = observation.observe_head_tree()?;
     if head_tree.truncated {
         return Err(GitStatusError::IncompleteHeadTree);
@@ -139,20 +147,22 @@ pub fn observe_status(
         }
     }
 
-    let grouped = group_index_entries(&index.entries, bounds.max_entries)?;
-    let stage_zero = stage_zero_entries(&grouped);
-    let staged = staged_diff(&head, &grouped, bounds.max_entries)?;
-    require_time(started, bounds.max_duration)?;
+    let grouped =
+        deadline.run_step(|| group_index_entries(&index.entries, bounds.max_entries))??;
+    let stage_zero = deadline.run_step(|| stage_zero_entries(&grouped))?;
+    let staged = deadline.run_step(|| staged_diff(&head, &grouped, bounds.max_entries))??;
+    deadline.require_active()?;
     let (worktree, untracked) = worktree_diff(
         resolver,
         operation,
         &stage_zero,
         bounds,
         observed_at_unix_ms,
-        started,
+        deadline,
     )?;
 
     Ok(GitStatusObservation {
+        repository_evidence: observation.evidence().clone(),
         head: observation.evidence().head.object_id,
         index_checksum: index.checksum,
         staged,
@@ -267,13 +277,13 @@ fn worktree_diff(
     index: &BTreeMap<String, &GitIndexEntry>,
     bounds: GitStatusBounds,
     observed_at_unix_ms: u64,
-    started: Instant,
+    deadline: GitOperationDeadline,
 ) -> Result<(Vec<GitDiffEvidence>, Vec<String>), GitStatusError> {
     let mut output = Vec::new();
     let mut total_bytes = 0_u64;
 
     for (path, entry) in index {
-        require_time(started, bounds.max_duration)?;
+        deadline.require_active()?;
         if entry.skip_worktree || entry.intent_to_add {
             continue;
         }
@@ -285,7 +295,9 @@ fn worktree_diff(
         }
         let requested = RequestedTarget::new(path)
             .map_err(|_| GitStatusError::InvalidWorktreePath(path.clone()))?;
-        let identity = resolver.resolve_read_target(&requested, operation, observed_at_unix_ms)?;
+        let identity = deadline.run_step(|| {
+            resolver.resolve_read_target(&requested, operation, observed_at_unix_ms)
+        })??;
         match identity.file_kind {
             ObservedFileKind::Missing => {
                 output.push(GitDiffEvidence {
@@ -302,7 +314,7 @@ fn worktree_diff(
                     operation,
                     LocalFileReadBounds {
                         max_bytes: bounds.max_worktree_file_bytes,
-                        max_duration: bounds.max_duration,
+                        max_duration: deadline.remaining()?,
                     },
                     observed_at_unix_ms,
                     observed_at_unix_ms,
@@ -316,7 +328,7 @@ fn worktree_diff(
                 if total_bytes > bounds.max_total_worktree_bytes {
                     return Err(GitStatusError::WorktreeByteLimitExceeded);
                 }
-                let worktree_id = blob_id(&read.bytes)?;
+                let worktree_id = deadline.run_step(|| blob_id(&read.bytes))??;
                 let index_id = index_object_id(entry)?;
                 if worktree_id != index_id {
                     output.push(GitDiffEvidence {
@@ -347,7 +359,7 @@ fn worktree_diff(
         index.keys().map(String::as_str).collect(),
         bounds,
         observed_at_unix_ms,
-        started,
+        deadline,
     )?;
     Ok((output, untracked))
 }
@@ -358,10 +370,11 @@ fn discover_untracked(
     tracked: BTreeSet<&str>,
     bounds: GitStatusBounds,
     observed_at_unix_ms: u64,
-    started: Instant,
+    deadline: GitOperationDeadline,
 ) -> Result<Vec<String>, GitStatusError> {
     let root = RequestedTarget::new(".").map_err(|_| GitStatusError::InvalidInternalPath)?;
-    let root_identity = resolver.resolve_read_target(&root, operation, observed_at_unix_ms)?;
+    let root_identity = deadline
+        .run_step(|| resolver.resolve_read_target(&root, operation, observed_at_unix_ms))??;
     if root_identity.file_kind != ObservedFileKind::Directory {
         return Err(GitStatusError::RepositoryRootChanged);
     }
@@ -371,7 +384,7 @@ fn discover_untracked(
     let mut observed_entries = 0_usize;
 
     while let Some((prefix, expected, depth)) = pending.pop_front() {
-        require_time(started, bounds.max_duration)?;
+        deadline.require_active()?;
         if depth > bounds.max_worktree_depth {
             return Err(GitStatusError::WorktreeDepthExceeded);
         }
@@ -381,34 +394,36 @@ fn discover_untracked(
             RequestedTarget::new(&prefix)
                 .map_err(|_| GitStatusError::InvalidWorktreePath(prefix.clone()))?
         };
-        let current =
-            resolver.resolve_read_target(&requested_dir, operation, observed_at_unix_ms)?;
-        if current.file_kind != ObservedFileKind::Directory
-            || current.resolved_target_identity != expected.resolved_target_identity
-            || current.observed_metadata_digest != expected.observed_metadata_digest
+        let remaining_entries = bounds
+            .max_entries
+            .checked_sub(observed_entries)
+            .filter(|remaining| *remaining > 0)
+            .ok_or(GitStatusError::EntryLimitExceeded)?;
+        let snapshot = snapshot_directory(
+            resolver,
+            &requested_dir,
+            operation,
+            LocalDirectorySnapshotBounds {
+                max_entries: remaining_entries,
+                max_duration: deadline.remaining()?,
+            },
+            observed_at_unix_ms,
+        )?;
+        if snapshot.identity.file_kind != ObservedFileKind::Directory
+            || snapshot.identity.resolved_target_identity != expected.resolved_target_identity
+            || snapshot.identity.observed_metadata_digest != expected.observed_metadata_digest
         {
             return Err(GitStatusError::RepositoryRootChanged);
         }
-
-        let mut names = Vec::new();
-        for entry in fs::read_dir(Path::new(current.normalized_path.as_str()))? {
-            require_time(started, bounds.max_duration)?;
-            observed_entries = observed_entries
-                .checked_add(1)
-                .ok_or(GitStatusError::EntryLimitExceeded)?;
-            if observed_entries > bounds.max_entries {
-                return Err(GitStatusError::EntryLimitExceeded);
-            }
-            let entry = entry?;
-            let name = entry
-                .file_name()
-                .into_string()
-                .map_err(|_| GitStatusError::NonUnicodeWorktreePath)?;
-            names.push(name);
+        observed_entries = observed_entries
+            .checked_add(snapshot.names.len())
+            .ok_or(GitStatusError::EntryLimitExceeded)?;
+        if observed_entries > bounds.max_entries {
+            return Err(GitStatusError::EntryLimitExceeded);
         }
-        names.sort_unstable();
 
-        for name in names {
+        for name in snapshot.names {
+            deadline.require_active()?;
             if prefix.is_empty() && name == ".git" {
                 continue;
             }
@@ -419,8 +434,9 @@ fn discover_untracked(
             };
             let requested = RequestedTarget::new(&path)
                 .map_err(|_| GitStatusError::InvalidWorktreePath(path.clone()))?;
-            let identity =
-                resolver.resolve_read_target(&requested, operation, observed_at_unix_ms)?;
+            let identity = deadline.run_step(|| {
+                resolver.resolve_read_target(&requested, operation, observed_at_unix_ms)
+            })??;
             match identity.file_kind {
                 ObservedFileKind::Directory => {
                     pending.push_back((path, identity, depth + 1));
@@ -446,9 +462,10 @@ fn read_file(
     operation: &RequestedOperationId,
     path: &str,
     max_bytes: u64,
-    max_duration: Duration,
+    deadline: GitOperationDeadline,
     observed_at_unix_ms: u64,
 ) -> Result<Vec<u8>, GitStatusError> {
+    deadline.require_active()?;
     let requested = RequestedTarget::new(path).map_err(|_| GitStatusError::InvalidInternalPath)?;
     let identity = resolver.resolve_read_target(&requested, operation, observed_at_unix_ms)?;
     if identity.file_kind != ObservedFileKind::RegularFile {
@@ -460,7 +477,7 @@ fn read_file(
         operation,
         LocalFileReadBounds {
             max_bytes,
-            max_duration,
+            max_duration: deadline.remaining()?,
         },
         observed_at_unix_ms,
         observed_at_unix_ms,
@@ -504,13 +521,6 @@ const fn modes_equivalent(tree: GitTreeMode, index: GitIndexMode) -> bool {
     )
 }
 
-fn require_time(started: Instant, max_duration: Duration) -> Result<(), GitStatusError> {
-    if started.elapsed() > max_duration {
-        return Err(GitStatusError::DurationLimitExceeded);
-    }
-    Ok(())
-}
-
 #[derive(Debug)]
 pub enum GitStatusError {
     InvalidBounds,
@@ -521,6 +531,8 @@ pub enum GitStatusError {
     Index(GitIndexError),
     Resolution(LocalFsResolutionError),
     LocalRead(LocalFileReadError),
+    DirectorySnapshot(LocalDirectorySnapshotError),
+    OperationBudget(GitOperationBudgetError),
     Sha1(GitObjectSha1Error),
     Io(io::Error),
     MissingIndex,
@@ -551,6 +563,12 @@ impl fmt::Display for GitStatusError {
             Self::Index(error) => write!(f, "Git status index parse failed: {error}"),
             Self::Resolution(error) => write!(f, "Git status target resolution failed: {error}"),
             Self::LocalRead(error) => write!(f, "Git status bounded file read failed: {error}"),
+            Self::DirectorySnapshot(error) => {
+                write!(f, "Git status directory snapshot failed: {error}")
+            }
+            Self::OperationBudget(error) => {
+                write!(f, "Git status operation budget failed: {error}")
+            }
             Self::Sha1(error) => write!(f, "Git status SHA-1 failed: {error}"),
             Self::Io(error) => write!(f, "Git status filesystem I/O failed: {error}"),
             Self::MissingIndex => f.write_str("Git index is missing or not a regular file"),
@@ -595,6 +613,8 @@ impl Error for GitStatusError {
             Self::Index(error) => Some(error),
             Self::Resolution(error) => Some(error),
             Self::LocalRead(error) => Some(error),
+            Self::DirectorySnapshot(error) => Some(error),
+            Self::OperationBudget(error) => Some(error),
             Self::Sha1(error) => Some(error),
             Self::Io(error) => Some(error),
             _ => None,
@@ -629,6 +649,18 @@ impl From<LocalFsResolutionError> for GitStatusError {
 impl From<LocalFileReadError> for GitStatusError {
     fn from(value: LocalFileReadError) -> Self {
         Self::LocalRead(value)
+    }
+}
+
+impl From<LocalDirectorySnapshotError> for GitStatusError {
+    fn from(value: LocalDirectorySnapshotError) -> Self {
+        Self::DirectorySnapshot(value)
+    }
+}
+
+impl From<GitOperationBudgetError> for GitStatusError {
+    fn from(value: GitOperationBudgetError) -> Self {
+        Self::OperationBudget(value)
     }
 }
 

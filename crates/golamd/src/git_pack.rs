@@ -1056,6 +1056,44 @@ mod tests {
     }
 
     #[test]
+    fn resolves_bounded_in_pack_ref_delta_and_verifies_reconstructed_identity() {
+        let fixture = PackFixture::base_and_ref_delta(b"hello", b"hello!");
+        let index = parse_pack_index_v2(&fixture.index, GitPackBounds::default()).unwrap();
+        let object = read_packed_object(
+            &fixture.pack,
+            &index,
+            fixture.object_ids[1],
+            GitPackBounds::default(),
+        )
+        .unwrap();
+        assert_eq!(object.kind, PackedObjectKind::Blob);
+        assert_eq!(object.bytes, b"hello!");
+    }
+
+    #[test]
+    fn shared_operation_deadline_covers_index_parse_and_ref_delta_read() {
+        let fixture = PackFixture::base_and_ref_delta(b"hello", b"hello!");
+        let deadline = GitOperationDeadline::start(Duration::from_millis(20)).unwrap();
+        let index = deadline
+            .run_step(|| parse_pack_index_v2(&fixture.index, GitPackBounds::default()))
+            .unwrap()
+            .unwrap();
+        std::thread::sleep(Duration::from_millis(30));
+        assert!(matches!(
+            read_packed_object_with_deadline(
+                &fixture.pack,
+                &index,
+                fixture.object_ids[1],
+                GitPackBounds::default(),
+                deadline,
+            ),
+            Err(GitPackError::OperationBudget(
+                GitOperationBudgetError::DeadlineExceeded
+            ))
+        ));
+    }
+
+    #[test]
     fn rejects_index_checksum_fanout_and_pack_checksum_corruption() {
         let fixture = PackFixture::single_base(PackedObjectKind::Blob, b"x");
 
@@ -1216,6 +1254,58 @@ mod tests {
             delta.clear();
 
             let base_id = canonical_object_id(PackedObjectKind::Blob, base).unwrap();
+            let target_id = canonical_object_id(PackedObjectKind::Blob, target).unwrap();
+            let pack_checksum = GitObjectSha1::digest(&pack).unwrap();
+            pack.extend_from_slice(&pack_checksum);
+            let index = build_index(
+                &[
+                    Record {
+                        id: base_id,
+                        offset: base_offset,
+                        crc: base_crc,
+                    },
+                    Record {
+                        id: target_id,
+                        offset: delta_offset,
+                        crc: delta_crc,
+                    },
+                ],
+                pack_checksum,
+            );
+            Self {
+                pack,
+                index,
+                object_ids: vec![base_id, target_id],
+            }
+        }
+
+        fn base_and_ref_delta(base: &[u8], target: &[u8]) -> Self {
+            assert_eq!(target, b"hello!");
+            assert_eq!(base, b"hello");
+            let mut pack = pack_header(2);
+
+            let base_offset = pack.len() as u32;
+            let mut base_entry = encode_pack_header(3, base.len());
+            base_entry.extend_from_slice(&zlib_store(base));
+            let base_crc = crc32(&base_entry);
+            pack.extend_from_slice(&base_entry);
+            let base_id = canonical_object_id(PackedObjectKind::Blob, base).unwrap();
+
+            let delta_offset = pack.len() as u32;
+            let delta = [
+                base.len() as u8,
+                target.len() as u8,
+                0x90,
+                base.len() as u8,
+                1,
+                b'!',
+            ];
+            let mut delta_entry = encode_pack_header(7, delta.len());
+            delta_entry.extend_from_slice(&base_id.bytes());
+            delta_entry.extend_from_slice(&zlib_store(&delta));
+            let delta_crc = crc32(&delta_entry);
+            pack.extend_from_slice(&delta_entry);
+
             let target_id = canonical_object_id(PackedObjectKind::Blob, target).unwrap();
             let pack_checksum = GitObjectSha1::digest(&pack).unwrap();
             pack.extend_from_slice(&pack_checksum);
