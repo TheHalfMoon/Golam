@@ -6,8 +6,10 @@ use std::fmt;
 use std::io;
 use std::time::Duration;
 
+use golam_core::digest::sha256;
 use golam_core::target_identity::ObservedFileKind;
-use golam_core::tool_request::{RequestedOperationId, RequestedTarget};
+use golam_core::tool_request::{BindingDigest, RequestedOperationId, RequestedTarget};
+use golam_core::{CanonicalEncoder, CoreError};
 
 use crate::git_index::{
     GitIndexBounds, GitIndexEntry, GitIndexError, GitIndexMode, parse_git_index,
@@ -30,6 +32,7 @@ pub const MAX_TOTAL_WORKTREE_BYTES: u64 = 128 * 1024 * 1024;
 pub const MAX_WORKTREE_DEPTH: usize = 64;
 pub const DEFAULT_STATUS_TIME_BUDGET: Duration = Duration::from_secs(10);
 pub const MAX_STATUS_TIME_BUDGET: Duration = Duration::from_secs(60);
+const STATUS_OBSERVATION_DOMAIN: &[u8] = b"golam:git-status-observation:v1";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct GitStatusBounds {
@@ -99,13 +102,172 @@ pub struct GitDiffEvidence {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitStatusObservation {
-    pub repository_evidence: GitRepositoryEvidence,
-    pub head: GitObjectId,
-    pub index_checksum: [u8; 20],
-    pub staged: Vec<GitDiffEvidence>,
-    pub worktree: Vec<GitDiffEvidence>,
-    pub untracked: Vec<String>,
-    pub observed_at_unix_ms: u64,
+    pub(crate) repository_evidence: GitRepositoryEvidence,
+    pub(crate) head: GitObjectId,
+    pub(crate) index_checksum: [u8; 20],
+    pub(crate) staged: Vec<GitDiffEvidence>,
+    pub(crate) worktree: Vec<GitDiffEvidence>,
+    pub(crate) untracked: Vec<String>,
+    pub(crate) observed_at_unix_ms: u64,
+    binding_digest: BindingDigest,
+}
+
+impl GitStatusObservation {
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        repository_evidence: GitRepositoryEvidence,
+        head: GitObjectId,
+        index_checksum: [u8; 20],
+        staged: Vec<GitDiffEvidence>,
+        worktree: Vec<GitDiffEvidence>,
+        untracked: Vec<String>,
+        observed_at_unix_ms: u64,
+    ) -> Result<Self, GitStatusError> {
+        let binding_digest = status_observation_binding(
+            &repository_evidence,
+            head,
+            &index_checksum,
+            &staged,
+            &worktree,
+            &untracked,
+            observed_at_unix_ms,
+        )?;
+        Ok(Self {
+            repository_evidence,
+            head,
+            index_checksum,
+            staged,
+            worktree,
+            untracked,
+            observed_at_unix_ms,
+            binding_digest,
+        })
+    }
+
+    pub fn repository_evidence(&self) -> &GitRepositoryEvidence {
+        &self.repository_evidence
+    }
+
+    pub const fn head(&self) -> GitObjectId {
+        self.head
+    }
+
+    pub const fn index_checksum(&self) -> [u8; 20] {
+        self.index_checksum
+    }
+
+    pub fn staged(&self) -> &[GitDiffEvidence] {
+        &self.staged
+    }
+
+    pub fn worktree(&self) -> &[GitDiffEvidence] {
+        &self.worktree
+    }
+
+    pub fn untracked(&self) -> &[String] {
+        &self.untracked
+    }
+
+    pub const fn observed_at_unix_ms(&self) -> u64 {
+        self.observed_at_unix_ms
+    }
+
+    pub const fn binding_digest(&self) -> BindingDigest {
+        self.binding_digest
+    }
+
+    pub fn verify_binding(&self) -> Result<(), GitStatusError> {
+        let expected = status_observation_binding(
+            &self.repository_evidence,
+            self.head,
+            &self.index_checksum,
+            &self.staged,
+            &self.worktree,
+            &self.untracked,
+            self.observed_at_unix_ms,
+        )?;
+        if expected != self.binding_digest {
+            return Err(GitStatusError::ObservationBindingMismatch);
+        }
+        Ok(())
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn status_observation_binding(
+    repository_evidence: &GitRepositoryEvidence,
+    head: GitObjectId,
+    index_checksum: &[u8; 20],
+    staged: &[GitDiffEvidence],
+    worktree: &[GitDiffEvidence],
+    untracked: &[String],
+    observed_at_unix_ms: u64,
+) -> Result<BindingDigest, GitStatusError> {
+    repository_evidence.verify_binding()?;
+    let mut encoder = CanonicalEncoder::new();
+    encoder.push_bytes(STATUS_OBSERVATION_DOMAIN)?;
+    encoder.push_bytes(&repository_evidence.binding_digest().bytes())?;
+    push_object_id(&mut encoder, head)?;
+    encoder.push_bytes(index_checksum)?;
+    push_diff_evidence(&mut encoder, staged)?;
+    push_diff_evidence(&mut encoder, worktree)?;
+    encoder.push_u64(status_len(untracked.len())?);
+    for path in untracked {
+        encoder.push_bytes(path.as_bytes())?;
+    }
+    encoder.push_u64(observed_at_unix_ms);
+    Ok(BindingDigest::new(sha256(&encoder.finish())))
+}
+
+fn push_diff_evidence(
+    encoder: &mut CanonicalEncoder,
+    evidence: &[GitDiffEvidence],
+) -> Result<(), GitStatusError> {
+    encoder.push_u64(status_len(evidence.len())?);
+    for entry in evidence {
+        encoder.push_bytes(entry.path.as_bytes())?;
+        encoder.push_u8(change_kind_tag(entry.kind));
+        push_optional_object_id(encoder, entry.before)?;
+        push_optional_object_id(encoder, entry.after)?;
+    }
+    Ok(())
+}
+
+fn push_optional_object_id(
+    encoder: &mut CanonicalEncoder,
+    object_id: Option<GitObjectId>,
+) -> Result<(), GitStatusError> {
+    match object_id {
+        None => encoder.push_u8(0),
+        Some(object_id) => {
+            encoder.push_u8(1);
+            push_object_id(encoder, object_id)?;
+        }
+    }
+    Ok(())
+}
+
+fn push_object_id(
+    encoder: &mut CanonicalEncoder,
+    object_id: GitObjectId,
+) -> Result<(), GitStatusError> {
+    encoder.push_bytes(&object_id.bytes())?;
+    Ok(())
+}
+
+fn status_len(value: usize) -> Result<u64, GitStatusError> {
+    u64::try_from(value).map_err(|_| GitStatusError::SizeOverflow)
+}
+
+const fn change_kind_tag(kind: GitChangeKind) -> u8 {
+    match kind {
+        GitChangeKind::Added => 0,
+        GitChangeKind::Modified => 1,
+        GitChangeKind::Deleted => 2,
+        GitChangeKind::TypeChanged => 3,
+        GitChangeKind::Conflicted => 4,
+        GitChangeKind::IntentToAdd => 5,
+    }
 }
 
 pub fn observe_status(
@@ -161,15 +323,15 @@ pub fn observe_status(
         deadline,
     )?;
 
-    Ok(GitStatusObservation {
-        repository_evidence: observation.evidence().clone(),
-        head: observation.evidence().head.object_id,
-        index_checksum: index.checksum,
+    GitStatusObservation::new(
+        observation.evidence().clone(),
+        observation.evidence().head.object_id,
+        index.checksum,
         staged,
         worktree,
         untracked,
         observed_at_unix_ms,
-    })
+    )
 }
 
 fn group_index_entries(
@@ -526,6 +688,7 @@ pub enum GitStatusError {
     InvalidBounds,
     InvalidInternalPath,
     InvalidWorktreePath(String),
+    Core(CoreError),
     Git(GitReadError),
     Observation(GitObservationError),
     Index(GitIndexError),
@@ -548,6 +711,7 @@ pub enum GitStatusError {
     DurationLimitExceeded,
     RepositoryRootChanged,
     SizeOverflow,
+    ObservationBindingMismatch,
 }
 
 impl fmt::Display for GitStatusError {
@@ -558,6 +722,7 @@ impl fmt::Display for GitStatusError {
                 f.write_str("Git status constructed an invalid internal path")
             }
             Self::InvalidWorktreePath(path) => write!(f, "Git worktree path is invalid: {path}"),
+            Self::Core(error) => write!(f, "Git status canonical binding failed: {error}"),
             Self::Git(error) => write!(f, "Git status repository read failed: {error}"),
             Self::Observation(error) => write!(f, "Git status object observation failed: {error}"),
             Self::Index(error) => write!(f, "Git status index parse failed: {error}"),
@@ -601,6 +766,9 @@ impl fmt::Display for GitStatusError {
             Self::SizeOverflow => {
                 f.write_str("Git status size cannot be represented by the bounded profile")
             }
+            Self::ObservationBindingMismatch => {
+                f.write_str("Git status payload is detached from repository evidence")
+            }
         }
     }
 }
@@ -608,6 +776,7 @@ impl fmt::Display for GitStatusError {
 impl Error for GitStatusError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::Core(error) => Some(error),
             Self::Git(error) => Some(error),
             Self::Observation(error) => Some(error),
             Self::Index(error) => Some(error),
@@ -619,6 +788,12 @@ impl Error for GitStatusError {
             Self::Io(error) => Some(error),
             _ => None,
         }
+    }
+}
+
+impl From<CoreError> for GitStatusError {
+    fn from(value: CoreError) -> Self {
+        Self::Core(value)
     }
 }
 
@@ -679,6 +854,69 @@ impl From<io::Error> for GitStatusError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    use golam_core::tool_request::ResourceClassId;
+
+    use crate::git_read::{GitReadBounds, GitRepositoryReader};
+
+    static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    fn unique_root() -> PathBuf {
+        let counter = TEST_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "golam-git-status-binding-{}-{nanos}-{counter}",
+            std::process::id()
+        ))
+    }
+
+    fn resolver(root: &Path) -> LocalFsResolver {
+        LocalFsResolver::new(
+            root,
+            ResourceClassId::new("workspace.read").unwrap(),
+            vec![RequestedOperationId::new("read").unwrap()],
+            [],
+        )
+        .unwrap()
+    }
+
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd"
+    ))]
+    fn fixture_repository_evidence() -> (PathBuf, GitRepositoryEvidence) {
+        let root = unique_root();
+        fs::create_dir_all(root.join(".git/objects")).unwrap();
+        fs::write(
+            root.join(".git/config"),
+            b"[extensions]\n\tobjectFormat = sha1\n",
+        )
+        .unwrap();
+        fs::write(
+            root.join(".git/HEAD"),
+            b"1111111111111111111111111111111111111111\n",
+        )
+        .unwrap();
+        let resolver = resolver(&root);
+        let reader = GitRepositoryReader::open(
+            &resolver,
+            &RequestedOperationId::new("read").unwrap(),
+            GitReadBounds::default(),
+            10,
+        )
+        .unwrap();
+        (root, reader.evidence().clone())
+    }
 
     #[test]
     fn staged_diff_reports_identity_changes_without_patch_text() {
@@ -746,5 +984,60 @@ mod tests {
         let diff = staged_diff(&BTreeMap::new(), &index, 10).unwrap();
         assert_eq!(diff.len(), 1);
         assert_eq!(diff[0].kind, GitChangeKind::Conflicted);
+    }
+
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd"
+    ))]
+    #[test]
+    fn status_binding_rejects_repository_substitution_and_payload_mutation() {
+        let (root_a, evidence_a) = fixture_repository_evidence();
+        let (root_b, evidence_b) = fixture_repository_evidence();
+        let head = evidence_a.head.object_id;
+        let tracked = GitObjectId::parse("2222222222222222222222222222222222222222").unwrap();
+        let status = GitStatusObservation::new(
+            evidence_a,
+            head,
+            [7_u8; 20],
+            vec![GitDiffEvidence {
+                path: "tracked.txt".to_owned(),
+                kind: GitChangeKind::Modified,
+                before: Some(tracked),
+                after: Some(head),
+            }],
+            Vec::new(),
+            vec!["untracked.txt".to_owned()],
+            10,
+        )
+        .unwrap();
+        assert!(status.verify_binding().is_ok());
+
+        let mut substituted = status.clone();
+        substituted.repository_evidence = evidence_b;
+        assert!(matches!(
+            substituted.verify_binding(),
+            Err(GitStatusError::ObservationBindingMismatch)
+        ));
+
+        let mut mutated = status.clone();
+        mutated.untracked.push("injected.txt".to_owned());
+        assert!(matches!(
+            mutated.verify_binding(),
+            Err(GitStatusError::ObservationBindingMismatch)
+        ));
+
+        let mut staged_mutation = status;
+        staged_mutation.staged[0].path = "other.txt".to_owned();
+        assert!(matches!(
+            staged_mutation.verify_binding(),
+            Err(GitStatusError::ObservationBindingMismatch)
+        ));
+
+        fs::remove_dir_all(root_a).unwrap();
+        fs::remove_dir_all(root_b).unwrap();
     }
 }
