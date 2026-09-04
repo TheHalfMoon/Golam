@@ -61,6 +61,44 @@ pub struct EffectTransitionId(pub u128);
 pub struct EffectAttemptId(pub u128);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ToolReconciliationResolution {
+    Succeeded,
+    Failed,
+    UnknownOutcome,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ToolReconciliationContext {
+    pub effect_id: EffectId,
+    pub session_id: SessionId,
+    pub action: String,
+    pub resource: String,
+    pub execution_semantics: String,
+    pub idempotency_key: Option<String>,
+    pub preconditions_hash: [u8; 32],
+    pub payload_hash: [u8; 32],
+    pub attempt_id: EffectAttemptId,
+    pub started_global_seq: u64,
+    pub handler_id: String,
+    pub handler_version: String,
+    pub dispatch_token: Vec<u8>,
+    pub attempt_outcome: String,
+    pub receipt: Option<Vec<u8>>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ToolReconciliationResult {
+    Resolved {
+        effect_id: EffectId,
+        state: String,
+    },
+    ManualReview {
+        effect_id: EffectId,
+        incident_id: [u8; 16],
+    },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ResourceLimits {
     pub max_frame_bytes: u32,
     pub max_pending_requests: u32,
