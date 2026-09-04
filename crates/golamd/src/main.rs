@@ -1,5 +1,27 @@
 #![forbid(unsafe_code)]
 
+#[cfg(unix)]
+extern crate self as nix;
+
+#[cfg(unix)]
+mod errno {
+    pub use golam_core::unix_fs::Errno;
+}
+#[cfg(unix)]
+mod fcntl {
+    pub use golam_core::unix_fs::{AtFlags, OFlag, open, openat, renameat};
+}
+#[cfg(unix)]
+mod sys {
+    pub mod stat {
+        pub use golam_core::unix_fs::Mode;
+    }
+}
+#[cfg(unix)]
+mod unistd {
+    pub use golam_core::unix_fs::{UnlinkatFlags, linkat, unlinkat};
+}
+
 pub mod benchmark;
 mod connection;
 mod deadline_io;
@@ -21,8 +43,6 @@ pub mod local_search;
 pub mod local_walk;
 pub mod memory_commit;
 mod memory_reconcile;
-#[cfg(unix)]
-mod nix;
 #[cfg(test)]
 mod spec004_compaction_tests;
 
