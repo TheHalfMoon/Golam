@@ -262,14 +262,20 @@ impl LocalFsResolver {
         self.require_authorized_path(&canonical)?;
         let metadata = fs::metadata(&canonical)?;
         let normalized_path = requested_from_path(&canonical)?;
-        let parent_identity = canonical
-            .parent()
-            .filter(|parent| *parent != self.root_path.as_path())
-            .map(|parent| {
-                let metadata = fs::metadata(parent)?;
-                identity_digest(parent, &metadata)
-            })
-            .transpose()?;
+        let parent_identity = if canonical == self.root_path {
+            None
+        } else {
+            let parent = canonical
+                .parent()
+                .ok_or(LocalFsResolutionError::InvalidRequestedPath)?;
+            if !parent.starts_with(&self.root_path) {
+                return Err(LocalFsResolutionError::EscapesAuthorizedRoot(
+                    parent.to_path_buf(),
+                ));
+            }
+            let parent_metadata = fs::metadata(parent)?;
+            Some(identity_digest(parent, &parent_metadata)?)
+        };
         let identity = ResolvedTargetIdentity {
             platform: platform_family(),
             requested_path: requested.clone(),
@@ -379,7 +385,7 @@ fn identity_digest(
     let mut encoder = CanonicalEncoder::new();
     encoder.push_bytes(IDENTITY_DOMAIN)?;
     encoder.push_bytes(&path_bytes(path))?;
-    push_platform_metadata(&mut encoder, metadata)?;
+    push_platform_identity(&mut encoder, metadata)?;
     Ok(BindingDigest::new(sha256(&encoder.finish())))
 }
 
@@ -457,6 +463,33 @@ fn is_alias(metadata: &fs::Metadata) -> bool {
 fn unix_device(metadata: &fs::Metadata) -> u64 {
     use std::os::unix::fs::MetadataExt;
     metadata.dev()
+}
+
+#[cfg(unix)]
+fn push_platform_identity(
+    encoder: &mut CanonicalEncoder,
+    metadata: &fs::Metadata,
+) -> Result<(), CoreError> {
+    use std::os::unix::fs::MetadataExt;
+    encoder.push_u64(metadata.dev());
+    encoder.push_u64(metadata.ino());
+    encoder.push_u64(u64::from(metadata.mode()));
+    encoder.push_u64(u64::from(metadata.uid()));
+    encoder.push_u64(u64::from(metadata.gid()));
+    Ok(())
+}
+
+#[cfg(windows)]
+fn push_platform_identity(
+    encoder: &mut CanonicalEncoder,
+    metadata: &fs::Metadata,
+) -> Result<(), CoreError> {
+    use std::os::windows::fs::MetadataExt;
+    encoder.push_u64(u64::from(metadata.file_attributes()));
+    encoder.push_u64(metadata.file_size());
+    encoder.push_u64(metadata.creation_time());
+    encoder.push_u64(metadata.last_write_time());
+    Ok(())
 }
 
 #[cfg(unix)]
@@ -549,6 +582,28 @@ mod tests {
             .unwrap();
         assert_eq!(identity.file_kind, ObservedFileKind::RegularFile);
         assert!(identity.resolved_target_identity.is_some());
+        assert!(identity.resolved_parent_identity.is_some());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn existing_target_parent_identity_stays_inside_authorized_root() {
+        let root = unique_root();
+        fs::create_dir(&root).unwrap();
+        fs::write(root.join("note.txt"), b"hello").unwrap();
+        let resolver = resolver(&root);
+        let operation = RequestedOperationId::new("read").unwrap();
+        let root_identity = resolver
+            .resolve_read_target(&RequestedTarget::new(".").unwrap(), &operation, 10)
+            .unwrap();
+        let file_identity = resolver
+            .resolve_read_target(&RequestedTarget::new("note.txt").unwrap(), &operation, 10)
+            .unwrap();
+        assert_eq!(root_identity.resolved_parent_identity, None);
+        assert_eq!(
+            file_identity.resolved_parent_identity,
+            root_identity.resolved_target_identity
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -610,6 +665,24 @@ mod tests {
             ),
             Err(LocalFsResolutionError::ProtectedRootOverlap(_))
         ));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_identity_is_stable_across_same_object_content_rewrite() {
+        use std::thread;
+        use std::time::Duration;
+
+        let root = unique_root();
+        fs::create_dir(&root).unwrap();
+        let path = root.join("note.txt");
+        fs::write(&path, b"first").unwrap();
+        let before = identity_digest(&path, &fs::metadata(&path).unwrap()).unwrap();
+        thread::sleep(Duration::from_millis(20));
+        fs::write(&path, b"other").unwrap();
+        let after = identity_digest(&path, &fs::metadata(&path).unwrap()).unwrap();
+        assert_eq!(before, after);
         fs::remove_dir_all(root).unwrap();
     }
 
