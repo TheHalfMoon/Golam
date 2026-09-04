@@ -25,9 +25,10 @@ The selected `fs` feature provides safe Rust wrapper surfaces needed for descrip
 - `nix::fcntl::open` / `nix::fcntl::openat` with owned file descriptors and filesystem flags;
 - `nix::sys::stat::fstat` for descriptor-backed identity revalidation;
 - `nix::fcntl::renameat` for descriptor-relative rename/replace transitions;
+- `nix::unistd::linkat` for no-overwrite descriptor-relative install/rollback transitions between regular-file names under the same retained parent authority;
 - `nix::unistd::unlinkat` for descriptor-relative deletion.
 
-Golam may use only the minimum subset needed to retain an already checked parent/target identity through the mutation boundary. `nix` does not decide authorization, capability, target scope, preconditions, Effect Gate state, reconciliation, or terminal success.
+Golam may use only the minimum subset needed to retain an already checked parent/target identity through the mutation boundary. `linkat` is admitted only as a no-overwrite hard-link transition for already-opened regular files; it does not widen authority to arbitrary link creation. `nix` does not decide authorization, capability, target scope, preconditions, Effect Gate state, reconciliation, or terminal success.
 
 ## Security boundary
 
