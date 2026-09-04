@@ -173,7 +173,8 @@ impl Fixture {
                     handler_id: "golam-fs-unix",
                     handler_version: "1",
                     idempotency_key: Some("phase-f-delete-qualification"),
-                    preconditions_hash: file_delete_preconditions_hash(source, expectation).unwrap(),
+                    preconditions_hash: file_delete_preconditions_hash(source, expectation)
+                        .unwrap(),
                     payload_hash: file_delete_payload_hash(),
                     started_at: "2026-09-04T12:15:01Z",
                 },
@@ -252,8 +253,7 @@ fn rename_then_delete_require_effect_bound_identity_and_verify_terminal_state() 
     );
     fixture.complete(&rename, ToolExecutionCompletion::Succeeded);
 
-    let delete_expectation =
-        fixture.source_expectation(&destination, b"alpha", "file.delete");
+    let delete_expectation = fixture.source_expectation(&destination, b"alpha", "file.delete");
     let delete = fixture.prepare_delete(620, &destination, delete_expectation);
     let receipt = execute_file_delete(
         &fixture.resolver,
@@ -291,7 +291,10 @@ fn rename_denies_existing_destination_and_stale_parent_without_mutating_source()
         ),
         Err(PathMutationError::DestinationExists)
     ));
-    assert_eq!(fs::read(fixture.workspace.join("source.txt")).unwrap(), b"stable");
+    assert_eq!(
+        fs::read(fixture.workspace.join("source.txt")).unwrap(),
+        b"stable"
+    );
     fixture.complete(&prepared, ToolExecutionCompletion::Failed);
 
     let destination = RequestedTarget::new("fresh.txt").unwrap();
@@ -309,7 +312,10 @@ fn rename_denies_existing_destination_and_stale_parent_without_mutating_source()
         ),
         Err(PathMutationError::StaleParent)
     ));
-    assert_eq!(fs::read(fixture.workspace.join("source.txt")).unwrap(), b"stable");
+    assert_eq!(
+        fs::read(fixture.workspace.join("source.txt")).unwrap(),
+        b"stable"
+    );
     assert!(!fixture.workspace.join("fresh.txt").exists());
     fixture.complete(&prepared, ToolExecutionCompletion::Failed);
 }
