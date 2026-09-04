@@ -424,7 +424,7 @@ fn discover_untracked(
 
         for name in snapshot.names {
             deadline.require_active()?;
-            if prefix.is_empty() && name == ".git" {
+            if name == ".git" {
                 continue;
             }
             let path = if prefix.is_empty() {
