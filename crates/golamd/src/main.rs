@@ -102,6 +102,7 @@ mod git_pack_ref_delta_qualification_tests;
 pub mod git_read;
 pub mod git_read_budget;
 pub mod git_sha1;
+#[cfg_attr(all(test, not(unix)), allow(dead_code, unused_imports))]
 pub mod git_status;
 pub mod harness;
 pub mod local_dir;
