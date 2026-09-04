@@ -21,6 +21,8 @@ pub mod local_search;
 pub mod local_walk;
 pub mod memory_commit;
 mod memory_reconcile;
+#[cfg(unix)]
+mod nix;
 #[cfg(test)]
 mod spec004_compaction_tests;
 
