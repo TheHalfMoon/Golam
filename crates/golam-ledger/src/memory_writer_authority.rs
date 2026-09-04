@@ -364,7 +364,8 @@ impl MemoryWriterAuthorityStore {
         let row = self
             .connection
             .query_row(
-                "SELECT i.intent_digest, i.integrity_hash, t.integrity_hash \
+                "SELECT i.intent_digest, i.integrity_hash, t.integrity_hash, \
+                        i.canonical_bytes, t.record_bytes \
                  FROM memory_prepared_intents i \
                  JOIN memory_prepared_targets t ON t.effect_id = i.effect_id \
                  WHERE i.effect_id = ?1",
@@ -374,6 +375,8 @@ impl MemoryWriterAuthorityStore {
                         row.get::<_, Vec<u8>>(0)?,
                         row.get::<_, Vec<u8>>(1)?,
                         row.get::<_, Vec<u8>>(2)?,
+                        row.get::<_, Vec<u8>>(3)?,
+                        row.get::<_, Vec<u8>>(4)?,
                     ))
                 },
             )
@@ -386,6 +389,8 @@ impl MemoryWriterAuthorityStore {
         }
         let intent_hash = hash32(row.1, "prepared integrity hash")?;
         let target_hash = hash32(row.2, "prepared target integrity hash")?;
+        verify_payload_hash(&row.3, intent_hash, "prepared intent payload hash")?;
+        verify_payload_hash(&row.4, target_hash, "prepared target payload hash")?;
         let mut encoder = CanonicalEncoder::new();
         encoder.push_bytes(PREPARED_READBACK_DOMAIN).map_err(|_| {
             MemoryWriterAuthorityError::InvalidStoredRecord("prepared readback domain")
@@ -519,6 +524,17 @@ fn prepared_target_record_bytes(
         .push_bytes(markdown_path.as_bytes())
         .map_err(|_| MemoryWriterAuthorityError::InvalidStoredRecord("prepared target path"))?;
     Ok(encoder.finish())
+}
+
+fn verify_payload_hash(
+    bytes: &[u8],
+    stored_hash: [u8; 32],
+    field: &'static str,
+) -> Result<(), MemoryWriterAuthorityError> {
+    if crate::payload_hash(bytes) != stored_hash {
+        return Err(MemoryWriterAuthorityError::InvalidStoredRecord(field));
+    }
+    Ok(())
 }
 
 fn append_security_chain(
@@ -661,5 +677,16 @@ mod tests {
         )
         .unwrap();
         assert_ne!(first, second);
+    }
+
+    #[test]
+    fn readback_hash_verification_rejects_substituted_payload() {
+        let bytes = b"canonical prepared record";
+        let hash = crate::payload_hash(bytes);
+        verify_payload_hash(bytes, hash, "fixture").unwrap();
+        assert!(matches!(
+            verify_payload_hash(b"substituted", hash, "fixture"),
+            Err(MemoryWriterAuthorityError::InvalidStoredRecord("fixture"))
+        ));
     }
 }
