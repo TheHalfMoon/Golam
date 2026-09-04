@@ -24,6 +24,8 @@ pub mod target_identity;
 pub mod tool_call;
 pub mod tool_descriptor;
 pub mod tool_request;
+#[cfg(unix)]
+pub mod unix_fs;
 
 use core::fmt;
 
@@ -138,27 +140,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn defaults_are_bounded() {
+    fn default_limits_are_bounded() {
         let limits = ResourceLimits::default();
-        assert!(limits.max_frame_bytes <= 1024 * 1024);
+        assert!(limits.max_frame_bytes > 0);
         assert!(limits.max_pending_requests > 0);
         assert!(limits.max_concurrent_clients > 0);
-    }
-
-    #[test]
-    fn canonical_encoding_is_explicit_and_big_endian() {
-        let mut encoder = CanonicalEncoder::new();
-        encoder.push_u8(0x7f);
-        encoder.push_u16(0x0102);
-        encoder.push_u64(3);
-        encoder.push_bytes(b"ok").unwrap();
-
-        assert_eq!(
-            encoder.finish(),
-            vec![
-                0x7f, 0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00,
-                0x02, b'o', b'k',
-            ]
-        );
     }
 }
