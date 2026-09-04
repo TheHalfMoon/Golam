@@ -388,7 +388,30 @@ fn execute_file_rename_unix(
         resolver.resolve_read_target(destination, &operation, observed_at_unix_ms)?;
     if source_after.file_kind != ObservedFileKind::Missing
         || destination_after.file_kind != ObservedFileKind::RegularFile
-        || destination_after.resolved_target_identity != source_identity.resolved_target_identity
+    {
+        return Err(PathMutationError::UnknownOutcome(PathBuf::from(
+            destination_after.normalized_path.as_str(),
+        )));
+    }
+
+    let verified_destination_fd = match openat(
+        &destination_parent_file,
+        destination_name,
+        OFlag::O_RDONLY | OFlag::O_CLOEXEC | OFlag::O_NOFOLLOW,
+        Mode::empty(),
+    ) {
+        Ok(fd) => fd,
+        Err(_) => {
+            return Err(PathMutationError::UnknownOutcome(PathBuf::from(
+                destination_after.normalized_path.as_str(),
+            )));
+        }
+    };
+    let mut verified_destination = File::from(verified_destination_fd);
+    let verified_metadata = verified_destination.metadata()?;
+    if !metadata_matches_resolved_identity(&destination_after, &verified_metadata)?
+        || !same_unix_object(&source_file.metadata()?, &verified_metadata)
+        || verify_content(&mut verified_destination, source_expectation).is_err()
     {
         return Err(PathMutationError::UnknownOutcome(PathBuf::from(
             destination_after.normalized_path.as_str(),
