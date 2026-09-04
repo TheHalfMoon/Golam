@@ -1,5 +1,62 @@
 #![forbid(unsafe_code)]
 
+mod miniz_oxide {
+    pub use miniz_oxide_read::{DataFormat, MZError, MZFlush, MZStatus};
+
+    pub mod inflate {
+        pub mod stream {
+            pub use miniz_oxide_read::inflate::stream::{InflateState, inflate};
+        }
+    }
+
+    #[cfg(unix)]
+    pub mod deflate {
+        const ADLER_MODULUS: u32 = 65_521;
+        const STORED_BLOCK_MAX: usize = u16::MAX as usize;
+
+        pub fn compress_to_vec_zlib(input: &[u8], _level: u8) -> Vec<u8> {
+            let block_count = input.len().div_ceil(STORED_BLOCK_MAX).max(1);
+            let capacity = input
+                .len()
+                .saturating_add(block_count.saturating_mul(5))
+                .saturating_add(6);
+            let mut output = Vec::with_capacity(capacity);
+            output.extend_from_slice(&[0x78, 0x01]);
+
+            if input.is_empty() {
+                push_stored_block(&mut output, &[], true);
+            } else {
+                let chunks = input.chunks(STORED_BLOCK_MAX);
+                let count = chunks.len();
+                for (index, chunk) in chunks.enumerate() {
+                    push_stored_block(&mut output, chunk, index + 1 == count);
+                }
+            }
+
+            output.extend_from_slice(&adler32(input).to_be_bytes());
+            output
+        }
+
+        fn push_stored_block(output: &mut Vec<u8>, bytes: &[u8], final_block: bool) {
+            let len = u16::try_from(bytes.len()).expect("stored DEFLATE chunk is bounded to u16");
+            output.push(u8::from(final_block));
+            output.extend_from_slice(&len.to_le_bytes());
+            output.extend_from_slice(&(!len).to_le_bytes());
+            output.extend_from_slice(bytes);
+        }
+
+        fn adler32(bytes: &[u8]) -> u32 {
+            let mut a = 1_u32;
+            let mut b = 0_u32;
+            for byte in bytes {
+                a = (a + u32::from(*byte)) % ADLER_MODULUS;
+                b = (b + a) % ADLER_MODULUS;
+            }
+            b << 16 | a
+        }
+    }
+}
+
 #[cfg(unix)]
 extern crate self as nix;
 
