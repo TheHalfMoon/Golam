@@ -129,7 +129,8 @@ pub fn parse_git_index(bytes: &[u8], bounds: GitIndexBounds) -> Result<GitIndex,
 
     let entry_count =
         usize::try_from(cursor.read_u32()?).map_err(|_| GitIndexError::EntryLimitExceeded)?;
-    if entry_count > bounds.max_entries {
+    let max_entries_from_remaining = cursor.remaining() / (ENTRY_FIXED_V2_BYTES + 2);
+    if entry_count > bounds.max_entries || entry_count > max_entries_from_remaining {
         return Err(GitIndexError::EntryLimitExceeded);
     }
 
