@@ -274,16 +274,46 @@ pub fn read_packed_object(
     read_packed_object_with_deadline(pack, index, wanted, bounds, deadline)
 }
 
-pub(crate) fn read_packed_object_with_deadline(
+pub(crate) struct ValidatedPack {
+    lookup: PackLookup,
+    bounds: GitPackBounds,
+    pack_checksum: [u8; SHA1_BYTES],
+    index_checksum: [u8; SHA1_BYTES],
+    pack_len: usize,
+    object_count: usize,
+}
+
+pub(crate) fn validate_pack_for_reuse_with_deadline(
     pack: &[u8],
     index: &GitPackIndex,
+    bounds: GitPackBounds,
+    deadline: GitOperationDeadline,
+) -> Result<ValidatedPack, GitPackError> {
+    bounds.validate()?;
+    deadline.require_active()?;
+    deadline.run_step(|| validate_pack(pack, index, bounds))??;
+    let lookup = deadline.run_step(|| PackLookup::new(pack, index))??;
+    Ok(ValidatedPack {
+        lookup,
+        bounds,
+        pack_checksum: index.pack_checksum,
+        index_checksum: index.index_checksum,
+        pack_len: pack.len(),
+        object_count: index.entries.len(),
+    })
+}
+
+pub(crate) fn read_validated_packed_object_with_deadline(
+    pack: &[u8],
+    index: &GitPackIndex,
+    validated: &ValidatedPack,
     wanted: PackObjectId,
     bounds: GitPackBounds,
     deadline: GitOperationDeadline,
 ) -> Result<PackedGitObject, GitPackError> {
     bounds.validate()?;
     deadline.require_active()?;
-    deadline.run_step(|| validate_pack(pack, index, bounds))??;
+    validate_reuse_binding(pack, index, validated, bounds)?;
 
     let wanted_index = deadline
         .run_step(|| {
@@ -292,18 +322,59 @@ pub(crate) fn read_packed_object_with_deadline(
                 .binary_search_by_key(&wanted, |entry| entry.object_id)
         })?
         .map_err(|_| GitPackError::MissingPackedObject(wanted))?;
-    let lookup = deadline.run_step(|| PackLookup::new(pack, index))??;
     let mut active_offsets = HashSet::new();
     resolve_entry(
         pack,
         index,
-        &lookup,
+        &validated.lookup,
         wanted_index,
         bounds,
         deadline,
         0,
         &mut active_offsets,
     )
+}
+
+pub(crate) fn read_packed_object_with_deadline(
+    pack: &[u8],
+    index: &GitPackIndex,
+    wanted: PackObjectId,
+    bounds: GitPackBounds,
+    deadline: GitOperationDeadline,
+) -> Result<PackedGitObject, GitPackError> {
+    let validated = validate_pack_for_reuse_with_deadline(pack, index, bounds, deadline)?;
+    read_validated_packed_object_with_deadline(
+        pack,
+        index,
+        &validated,
+        wanted,
+        bounds,
+        deadline,
+    )
+}
+
+fn validate_reuse_binding(
+    pack: &[u8],
+    index: &GitPackIndex,
+    validated: &ValidatedPack,
+    bounds: GitPackBounds,
+) -> Result<(), GitPackError> {
+    if validated.bounds != bounds
+        || validated.pack_len != pack.len()
+        || validated.object_count != index.entries.len()
+        || validated.pack_checksum != index.pack_checksum
+        || validated.index_checksum != index.index_checksum
+    {
+        return Err(GitPackError::ValidatedPackStateMismatch);
+    }
+    let trailer_start = pack
+        .len()
+        .checked_sub(SHA1_BYTES)
+        .ok_or(GitPackError::ValidatedPackStateMismatch)?;
+    if pack.get(trailer_start..) != Some(validated.pack_checksum.as_slice()) {
+        return Err(GitPackError::ValidatedPackStateMismatch);
+    }
+    Ok(())
 }
 
 fn validate_pack(
@@ -839,6 +910,7 @@ pub enum GitPackError {
     PackChecksumMismatch,
     PackIndexChecksumMismatch,
     PackOffsetInvalid,
+    ValidatedPackStateMismatch,
     MissingPackedObject(PackObjectId),
     PackedEntryCrcMismatch,
     TruncatedPackEntry,
@@ -899,6 +971,9 @@ impl fmt::Display for GitPackError {
             }
             Self::PackOffsetInvalid => {
                 f.write_str("Git pack index contains an invalid or duplicate object offset")
+            }
+            Self::ValidatedPackStateMismatch => {
+                f.write_str("cached Git pack validation no longer matches the loaded pack/index state")
             }
             Self::MissingPackedObject(_) => {
                 f.write_str("requested object is absent from this Git pack index")
@@ -1067,6 +1142,51 @@ mod tests {
         assert!(matches!(
             parse_pack_index_v2(&index, GitPackBounds::default()),
             Err(GitPackError::TruncatedIndex)
+        ));
+    }
+
+    #[test]
+    fn cached_validation_reuses_lookup_and_rejects_detached_state() {
+        let fixture = PackFixture::base_and_ref_delta(b"hello", b"hello!");
+        let bounds = GitPackBounds::default();
+        let deadline = GitOperationDeadline::start(bounds.max_duration).unwrap();
+        let index = parse_pack_index_v2(&fixture.index, bounds).unwrap();
+        let validated =
+            validate_pack_for_reuse_with_deadline(&fixture.pack, &index, bounds, deadline).unwrap();
+
+        let base = read_validated_packed_object_with_deadline(
+            &fixture.pack,
+            &index,
+            &validated,
+            fixture.object_ids[0],
+            bounds,
+            deadline,
+        )
+        .unwrap();
+        let target = read_validated_packed_object_with_deadline(
+            &fixture.pack,
+            &index,
+            &validated,
+            fixture.object_ids[1],
+            bounds,
+            deadline,
+        )
+        .unwrap();
+        assert_eq!(base.bytes, b"hello");
+        assert_eq!(target.bytes, b"hello!");
+
+        let mut detached = fixture.pack.clone();
+        detached.push(0);
+        assert!(matches!(
+            read_validated_packed_object_with_deadline(
+                &detached,
+                &index,
+                &validated,
+                fixture.object_ids[0],
+                bounds,
+                deadline,
+            ),
+            Err(GitPackError::ValidatedPackStateMismatch)
         ));
     }
 
