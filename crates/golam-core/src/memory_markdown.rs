@@ -88,6 +88,9 @@ impl ManagedMarkdownDocument {
         if self.body.as_bytes().contains(&0) || self.body.contains('\r') {
             return Err(ManagedMarkdownError::InvalidBody);
         }
+        if self.metadata.is_empty() && self.body.starts_with("---\n") {
+            return Err(ManagedMarkdownError::InvalidBody);
+        }
         for (key, value) in &self.metadata {
             validate_key(key)?;
             validate_value(value)?;
@@ -272,6 +275,16 @@ mod tests {
         assert_eq!(parsed.serialize().unwrap(), input);
         let first = parsed.content_digest().unwrap();
         assert_eq!(first, parsed.content_digest().unwrap());
+    }
+
+    #[test]
+    fn delimiter_prefixed_plain_body_is_rejected_as_ambiguous() {
+        let body = "---\ntitle: forged-shape\n---\nbody\n";
+        assert_eq!(
+            ManagedMarkdownDocument::new(BTreeMap::new(), body),
+            Err(ManagedMarkdownError::InvalidBody)
+        );
+        assert!(parse_managed_markdown(b"---\n---\nbody\n").is_err());
     }
 
     #[test]
