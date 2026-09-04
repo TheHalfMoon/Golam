@@ -9,8 +9,10 @@ use std::io;
 #[cfg(test)]
 use std::path::Path;
 
+use golam_core::digest::sha256;
 use golam_core::target_identity::ObservedFileKind;
-use golam_core::tool_request::{RequestedOperationId, RequestedTarget};
+use golam_core::tool_request::{BindingDigest, RequestedOperationId, RequestedTarget};
+use golam_core::{CanonicalEncoder, CoreError};
 
 use crate::git_pack::{
     GitPackBounds, GitPackError, GitPackIndex, PackObjectId, PackedObjectKind, ValidatedPack,
@@ -38,6 +40,12 @@ pub const MAX_TREE_ENTRIES: usize = 250_000;
 pub const MAX_TREE_DEPTH: usize = 64;
 pub const MAX_TREE_NAME_BYTES: usize = 4096;
 pub const MAX_COMMIT_HEADER_BYTES: usize = 1024 * 1024;
+const OBJECT_OBSERVATION_DOMAIN: &[u8] = b"golam:git-object-observation:v1";
+const BLOB_OBSERVATION_DOMAIN: &[u8] = b"golam:git-blob-observation:v1";
+const COMMIT_OBSERVATION_DOMAIN: &[u8] = b"golam:git-commit-observation:v1";
+const TREE_OBJECT_OBSERVATION_DOMAIN: &[u8] = b"golam:git-tree-object-observation:v1";
+const TREE_WALK_OBSERVATION_DOMAIN: &[u8] = b"golam:git-tree-walk-observation:v1";
+const LOG_OBSERVATION_DOMAIN: &[u8] = b"golam:git-log-observation:v1";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct GitObservationBounds {
@@ -111,29 +119,207 @@ pub enum GitObjectSource {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitObjectObservation {
-    pub repository_evidence: GitRepositoryEvidence,
-    pub object: GitObject,
-    pub source: GitObjectSource,
+    pub(crate) repository_evidence: GitRepositoryEvidence,
+    pub(crate) object: GitObject,
+    pub(crate) source: GitObjectSource,
+    binding_digest: BindingDigest,
+}
+
+impl GitObjectObservation {
+    fn new(
+        repository_evidence: GitRepositoryEvidence,
+        object: GitObject,
+        source: GitObjectSource,
+    ) -> Result<Self, GitObservationError> {
+        let binding_digest = object_observation_binding(&repository_evidence, &object, &source)?;
+        Ok(Self {
+            repository_evidence,
+            object,
+            source,
+            binding_digest,
+        })
+    }
+
+    pub fn repository_evidence(&self) -> &GitRepositoryEvidence {
+        &self.repository_evidence
+    }
+
+    pub fn object(&self) -> &GitObject {
+        &self.object
+    }
+
+    pub fn source(&self) -> &GitObjectSource {
+        &self.source
+    }
+
+    pub const fn binding_digest(&self) -> BindingDigest {
+        self.binding_digest
+    }
+
+    pub fn verify_binding(&self) -> Result<(), GitObservationError> {
+        let expected = object_observation_binding(
+            &self.repository_evidence,
+            &self.object,
+            &self.source,
+        )?;
+        verify_observation_digest(expected, self.binding_digest)
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitBlobObservation {
-    pub repository_evidence: GitRepositoryEvidence,
-    pub object_id: GitObjectId,
-    pub source: GitObjectSource,
-    pub bytes: Vec<u8>,
+    pub(crate) repository_evidence: GitRepositoryEvidence,
+    pub(crate) object_id: GitObjectId,
+    pub(crate) source: GitObjectSource,
+    pub(crate) bytes: Vec<u8>,
+    binding_digest: BindingDigest,
+}
+
+impl GitBlobObservation {
+    fn new(
+        repository_evidence: GitRepositoryEvidence,
+        object_id: GitObjectId,
+        source: GitObjectSource,
+        bytes: Vec<u8>,
+    ) -> Result<Self, GitObservationError> {
+        let binding_digest =
+            blob_observation_binding(&repository_evidence, object_id, &source, &bytes)?;
+        Ok(Self {
+            repository_evidence,
+            object_id,
+            source,
+            bytes,
+            binding_digest,
+        })
+    }
+
+    pub fn repository_evidence(&self) -> &GitRepositoryEvidence {
+        &self.repository_evidence
+    }
+
+    pub const fn object_id(&self) -> GitObjectId {
+        self.object_id
+    }
+
+    pub fn source(&self) -> &GitObjectSource {
+        &self.source
+    }
+
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
+    }
+
+    pub const fn binding_digest(&self) -> BindingDigest {
+        self.binding_digest
+    }
+
+    pub fn verify_binding(&self) -> Result<(), GitObservationError> {
+        let expected = blob_observation_binding(
+            &self.repository_evidence,
+            self.object_id,
+            &self.source,
+            &self.bytes,
+        )?;
+        verify_observation_digest(expected, self.binding_digest)
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitCommitObservation {
-    pub repository_evidence: GitRepositoryEvidence,
-    pub object_id: GitObjectId,
-    pub source: GitObjectSource,
-    pub tree: GitObjectId,
-    pub parents: Vec<GitObjectId>,
-    pub author: Vec<u8>,
-    pub committer: Vec<u8>,
-    pub message: Vec<u8>,
+    pub(crate) repository_evidence: GitRepositoryEvidence,
+    pub(crate) object_id: GitObjectId,
+    pub(crate) source: GitObjectSource,
+    pub(crate) tree: GitObjectId,
+    pub(crate) parents: Vec<GitObjectId>,
+    pub(crate) author: Vec<u8>,
+    pub(crate) committer: Vec<u8>,
+    pub(crate) message: Vec<u8>,
+    binding_digest: BindingDigest,
+}
+
+impl GitCommitObservation {
+    fn new(
+        repository_evidence: GitRepositoryEvidence,
+        object_id: GitObjectId,
+        source: GitObjectSource,
+        tree: GitObjectId,
+        parents: Vec<GitObjectId>,
+        author: Vec<u8>,
+        committer: Vec<u8>,
+        message: Vec<u8>,
+    ) -> Result<Self, GitObservationError> {
+        let binding_digest = commit_observation_binding(
+            &repository_evidence,
+            object_id,
+            &source,
+            tree,
+            &parents,
+            &author,
+            &committer,
+            &message,
+        )?;
+        Ok(Self {
+            repository_evidence,
+            object_id,
+            source,
+            tree,
+            parents,
+            author,
+            committer,
+            message,
+            binding_digest,
+        })
+    }
+
+    pub fn repository_evidence(&self) -> &GitRepositoryEvidence {
+        &self.repository_evidence
+    }
+
+    pub const fn object_id(&self) -> GitObjectId {
+        self.object_id
+    }
+
+    pub fn source(&self) -> &GitObjectSource {
+        &self.source
+    }
+
+    pub const fn tree(&self) -> GitObjectId {
+        self.tree
+    }
+
+    pub fn parents(&self) -> &[GitObjectId] {
+        &self.parents
+    }
+
+    pub fn author(&self) -> &[u8] {
+        &self.author
+    }
+
+    pub fn committer(&self) -> &[u8] {
+        &self.committer
+    }
+
+    pub fn message(&self) -> &[u8] {
+        &self.message
+    }
+
+    pub const fn binding_digest(&self) -> BindingDigest {
+        self.binding_digest
+    }
+
+    pub fn verify_binding(&self) -> Result<(), GitObservationError> {
+        let expected = commit_observation_binding(
+            &self.repository_evidence,
+            self.object_id,
+            &self.source,
+            self.tree,
+            &self.parents,
+            &self.author,
+            &self.committer,
+            &self.message,
+        )?;
+        verify_observation_digest(expected, self.binding_digest)
+    }
 }
 
 struct ParsedGitCommit {
@@ -161,10 +347,64 @@ pub struct GitTreeEntryObservation {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitTreeObjectObservation {
-    pub repository_evidence: GitRepositoryEvidence,
-    pub object_id: GitObjectId,
-    pub source: GitObjectSource,
-    pub entries: Vec<GitTreeEntryObservation>,
+    pub(crate) repository_evidence: GitRepositoryEvidence,
+    pub(crate) object_id: GitObjectId,
+    pub(crate) source: GitObjectSource,
+    pub(crate) entries: Vec<GitTreeEntryObservation>,
+    binding_digest: BindingDigest,
+}
+
+impl GitTreeObjectObservation {
+    fn new(
+        repository_evidence: GitRepositoryEvidence,
+        object_id: GitObjectId,
+        source: GitObjectSource,
+        entries: Vec<GitTreeEntryObservation>,
+    ) -> Result<Self, GitObservationError> {
+        let binding_digest = tree_object_observation_binding(
+            &repository_evidence,
+            object_id,
+            &source,
+            &entries,
+        )?;
+        Ok(Self {
+            repository_evidence,
+            object_id,
+            source,
+            entries,
+            binding_digest,
+        })
+    }
+
+    pub fn repository_evidence(&self) -> &GitRepositoryEvidence {
+        &self.repository_evidence
+    }
+
+    pub const fn object_id(&self) -> GitObjectId {
+        self.object_id
+    }
+
+    pub fn source(&self) -> &GitObjectSource {
+        &self.source
+    }
+
+    pub fn entries(&self) -> &[GitTreeEntryObservation] {
+        &self.entries
+    }
+
+    pub const fn binding_digest(&self) -> BindingDigest {
+        self.binding_digest
+    }
+
+    pub fn verify_binding(&self) -> Result<(), GitObservationError> {
+        let expected = tree_object_observation_binding(
+            &self.repository_evidence,
+            self.object_id,
+            &self.source,
+            &self.entries,
+        )?;
+        verify_observation_digest(expected, self.binding_digest)
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -176,17 +416,291 @@ pub struct GitTreePathObservation {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitTreeWalkObservation {
-    pub repository_evidence: GitRepositoryEvidence,
-    pub root_tree: GitObjectId,
-    pub entries: Vec<GitTreePathObservation>,
-    pub truncated: bool,
+    pub(crate) repository_evidence: GitRepositoryEvidence,
+    pub(crate) root_tree: GitObjectId,
+    pub(crate) entries: Vec<GitTreePathObservation>,
+    pub(crate) truncated: bool,
+    binding_digest: BindingDigest,
+}
+
+impl GitTreeWalkObservation {
+    fn new(
+        repository_evidence: GitRepositoryEvidence,
+        root_tree: GitObjectId,
+        entries: Vec<GitTreePathObservation>,
+        truncated: bool,
+    ) -> Result<Self, GitObservationError> {
+        let binding_digest = tree_walk_observation_binding(
+            &repository_evidence,
+            root_tree,
+            &entries,
+            truncated,
+        )?;
+        Ok(Self {
+            repository_evidence,
+            root_tree,
+            entries,
+            truncated,
+            binding_digest,
+        })
+    }
+
+    pub fn repository_evidence(&self) -> &GitRepositoryEvidence {
+        &self.repository_evidence
+    }
+
+    pub const fn root_tree(&self) -> GitObjectId {
+        self.root_tree
+    }
+
+    pub fn entries(&self) -> &[GitTreePathObservation] {
+        &self.entries
+    }
+
+    pub const fn truncated(&self) -> bool {
+        self.truncated
+    }
+
+    pub const fn binding_digest(&self) -> BindingDigest {
+        self.binding_digest
+    }
+
+    pub fn verify_binding(&self) -> Result<(), GitObservationError> {
+        let expected = tree_walk_observation_binding(
+            &self.repository_evidence,
+            self.root_tree,
+            &self.entries,
+            self.truncated,
+        )?;
+        verify_observation_digest(expected, self.binding_digest)
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GitLogObservation {
-    pub repository_evidence: GitRepositoryEvidence,
-    pub commits: Vec<GitCommitObservation>,
-    pub truncated: bool,
+    pub(crate) repository_evidence: GitRepositoryEvidence,
+    pub(crate) commits: Vec<GitCommitObservation>,
+    pub(crate) truncated: bool,
+    binding_digest: BindingDigest,
+}
+
+impl GitLogObservation {
+    fn new(
+        repository_evidence: GitRepositoryEvidence,
+        commits: Vec<GitCommitObservation>,
+        truncated: bool,
+    ) -> Result<Self, GitObservationError> {
+        for commit in &commits {
+            commit.verify_binding()?;
+        }
+        let binding_digest = log_observation_binding(&repository_evidence, &commits, truncated)?;
+        Ok(Self {
+            repository_evidence,
+            commits,
+            truncated,
+            binding_digest,
+        })
+    }
+
+    pub fn repository_evidence(&self) -> &GitRepositoryEvidence {
+        &self.repository_evidence
+    }
+
+    pub fn commits(&self) -> &[GitCommitObservation] {
+        &self.commits
+    }
+
+    pub const fn truncated(&self) -> bool {
+        self.truncated
+    }
+
+    pub const fn binding_digest(&self) -> BindingDigest {
+        self.binding_digest
+    }
+
+    pub fn verify_binding(&self) -> Result<(), GitObservationError> {
+        for commit in &self.commits {
+            commit.verify_binding()?;
+        }
+        let expected =
+            log_observation_binding(&self.repository_evidence, &self.commits, self.truncated)?;
+        verify_observation_digest(expected, self.binding_digest)
+    }
+}
+
+fn object_observation_binding(
+    repository_evidence: &GitRepositoryEvidence,
+    object: &GitObject,
+    source: &GitObjectSource,
+) -> Result<BindingDigest, GitObservationError> {
+    repository_evidence.verify_binding()?;
+    let mut encoder = observation_encoder(OBJECT_OBSERVATION_DOMAIN, repository_evidence)?;
+    push_object_id(&mut encoder, object.id)?;
+    encoder.push_u8(object_kind_tag(object.kind));
+    encoder.push_u64(object.declared_size);
+    encoder.push_bytes(&object.bytes)?;
+    push_object_source(&mut encoder, source)?;
+    Ok(BindingDigest::new(sha256(&encoder.finish())))
+}
+
+fn blob_observation_binding(
+    repository_evidence: &GitRepositoryEvidence,
+    object_id: GitObjectId,
+    source: &GitObjectSource,
+    bytes: &[u8],
+) -> Result<BindingDigest, GitObservationError> {
+    repository_evidence.verify_binding()?;
+    let mut encoder = observation_encoder(BLOB_OBSERVATION_DOMAIN, repository_evidence)?;
+    push_object_id(&mut encoder, object_id)?;
+    push_object_source(&mut encoder, source)?;
+    encoder.push_bytes(bytes)?;
+    Ok(BindingDigest::new(sha256(&encoder.finish())))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn commit_observation_binding(
+    repository_evidence: &GitRepositoryEvidence,
+    object_id: GitObjectId,
+    source: &GitObjectSource,
+    tree: GitObjectId,
+    parents: &[GitObjectId],
+    author: &[u8],
+    committer: &[u8],
+    message: &[u8],
+) -> Result<BindingDigest, GitObservationError> {
+    repository_evidence.verify_binding()?;
+    let mut encoder = observation_encoder(COMMIT_OBSERVATION_DOMAIN, repository_evidence)?;
+    push_object_id(&mut encoder, object_id)?;
+    push_object_source(&mut encoder, source)?;
+    push_object_id(&mut encoder, tree)?;
+    encoder.push_u64(observation_len(parents.len())?);
+    for parent in parents {
+        push_object_id(&mut encoder, *parent)?;
+    }
+    encoder.push_bytes(author)?;
+    encoder.push_bytes(committer)?;
+    encoder.push_bytes(message)?;
+    Ok(BindingDigest::new(sha256(&encoder.finish())))
+}
+
+fn tree_object_observation_binding(
+    repository_evidence: &GitRepositoryEvidence,
+    object_id: GitObjectId,
+    source: &GitObjectSource,
+    entries: &[GitTreeEntryObservation],
+) -> Result<BindingDigest, GitObservationError> {
+    repository_evidence.verify_binding()?;
+    let mut encoder = observation_encoder(TREE_OBJECT_OBSERVATION_DOMAIN, repository_evidence)?;
+    push_object_id(&mut encoder, object_id)?;
+    push_object_source(&mut encoder, source)?;
+    encoder.push_u64(observation_len(entries.len())?);
+    for entry in entries {
+        push_tree_mode(&mut encoder, entry.mode);
+        encoder.push_bytes(&entry.name)?;
+        push_object_id(&mut encoder, entry.object_id)?;
+    }
+    Ok(BindingDigest::new(sha256(&encoder.finish())))
+}
+
+fn tree_walk_observation_binding(
+    repository_evidence: &GitRepositoryEvidence,
+    root_tree: GitObjectId,
+    entries: &[GitTreePathObservation],
+    truncated: bool,
+) -> Result<BindingDigest, GitObservationError> {
+    repository_evidence.verify_binding()?;
+    let mut encoder = observation_encoder(TREE_WALK_OBSERVATION_DOMAIN, repository_evidence)?;
+    push_object_id(&mut encoder, root_tree)?;
+    encoder.push_u64(observation_len(entries.len())?);
+    for entry in entries {
+        encoder.push_bytes(entry.path.as_bytes())?;
+        push_tree_mode(&mut encoder, entry.mode);
+        push_object_id(&mut encoder, entry.object_id)?;
+    }
+    encoder.push_u8(u8::from(truncated));
+    Ok(BindingDigest::new(sha256(&encoder.finish())))
+}
+
+fn log_observation_binding(
+    repository_evidence: &GitRepositoryEvidence,
+    commits: &[GitCommitObservation],
+    truncated: bool,
+) -> Result<BindingDigest, GitObservationError> {
+    repository_evidence.verify_binding()?;
+    let mut encoder = observation_encoder(LOG_OBSERVATION_DOMAIN, repository_evidence)?;
+    encoder.push_u64(observation_len(commits.len())?);
+    for commit in commits {
+        encoder.push_bytes(&commit.binding_digest().bytes())?;
+    }
+    encoder.push_u8(u8::from(truncated));
+    Ok(BindingDigest::new(sha256(&encoder.finish())))
+}
+
+fn observation_encoder(
+    domain: &[u8],
+    repository_evidence: &GitRepositoryEvidence,
+) -> Result<CanonicalEncoder, GitObservationError> {
+    let mut encoder = CanonicalEncoder::new();
+    encoder.push_bytes(domain)?;
+    encoder.push_bytes(&repository_evidence.binding_digest().bytes())?;
+    Ok(encoder)
+}
+
+fn push_object_source(
+    encoder: &mut CanonicalEncoder,
+    source: &GitObjectSource,
+) -> Result<(), GitObservationError> {
+    match source {
+        GitObjectSource::Loose => encoder.push_u8(0),
+        GitObjectSource::Pack { pack_name } => {
+            encoder.push_u8(1);
+            encoder.push_bytes(pack_name.as_bytes())?;
+        }
+    }
+    Ok(())
+}
+
+fn push_tree_mode(encoder: &mut CanonicalEncoder, mode: GitTreeMode) {
+    match mode {
+        GitTreeMode::RegularFile { executable } => {
+            encoder.push_u8(0);
+            encoder.push_u8(u8::from(executable));
+        }
+        GitTreeMode::SymbolicLink => encoder.push_u8(1),
+        GitTreeMode::Directory => encoder.push_u8(2),
+        GitTreeMode::Gitlink => encoder.push_u8(3),
+    }
+}
+
+fn push_object_id(
+    encoder: &mut CanonicalEncoder,
+    object_id: GitObjectId,
+) -> Result<(), GitObservationError> {
+    encoder.push_bytes(&object_id.bytes())?;
+    Ok(())
+}
+
+fn observation_len(value: usize) -> Result<u64, GitObservationError> {
+    u64::try_from(value).map_err(|_| GitObservationError::ObjectSizeOverflow)
+}
+
+fn object_kind_tag(kind: GitObjectKind) -> u8 {
+    match kind {
+        GitObjectKind::Blob => 0,
+        GitObjectKind::Tree => 1,
+        GitObjectKind::Commit => 2,
+        GitObjectKind::Tag => 3,
+    }
+}
+
+fn verify_observation_digest(
+    expected: BindingDigest,
+    observed: BindingDigest,
+) -> Result<(), GitObservationError> {
+    if expected != observed {
+        return Err(GitObservationError::ObservationBindingMismatch);
+    }
+    Ok(())
 }
 
 struct LoadedPack {
@@ -257,11 +771,11 @@ impl<'a> GitObservationReader<'a> {
             .read_loose_object(object_id, self.observed_at_unix_ms)
         {
             Ok(object) => {
-                return Ok(GitObjectObservation {
-                    repository_evidence: self.repository.evidence().clone(),
+                return GitObjectObservation::new(
+                    self.repository.evidence().clone(),
                     object,
-                    source: GitObjectSource::Loose,
-                });
+                    GitObjectSource::Loose,
+                );
             }
             Err(GitReadError::MissingObject(_)) => {}
             Err(error) => return Err(error.into()),
@@ -302,18 +816,18 @@ impl<'a> GitObservationReader<'a> {
         };
         let declared_size = u64::try_from(packed.bytes.len())
             .map_err(|_| GitObservationError::ObjectSizeOverflow)?;
-        Ok(GitObjectObservation {
-            repository_evidence: self.repository.evidence().clone(),
-            object: GitObject {
+        GitObjectObservation::new(
+            self.repository.evidence().clone(),
+            GitObject {
                 id: object_id,
                 kind,
                 declared_size,
                 bytes: packed.bytes,
             },
-            source: GitObjectSource::Pack {
+            GitObjectSource::Pack {
                 pack_name: pack.name.clone(),
             },
-        })
+        )
     }
 
     pub fn read_blob(
@@ -327,12 +841,12 @@ impl<'a> GitObservationReader<'a> {
                 observed: observation.object.kind,
             });
         }
-        Ok(GitBlobObservation {
-            repository_evidence: observation.repository_evidence,
+        GitBlobObservation::new(
+            observation.repository_evidence,
             object_id,
-            source: observation.source,
-            bytes: observation.object.bytes,
-        })
+            observation.source,
+            observation.object.bytes,
+        )
     }
 
     pub fn read_commit(
@@ -349,16 +863,16 @@ impl<'a> GitObservationReader<'a> {
         let parsed = self
             .deadline
             .run_step(|| parse_commit(&observation.object.bytes, self.bounds))??;
-        Ok(GitCommitObservation {
-            repository_evidence: observation.repository_evidence,
+        GitCommitObservation::new(
+            observation.repository_evidence,
             object_id,
-            source: observation.source,
-            tree: parsed.tree,
-            parents: parsed.parents,
-            author: parsed.author,
-            committer: parsed.committer,
-            message: parsed.message,
-        })
+            observation.source,
+            parsed.tree,
+            parsed.parents,
+            parsed.author,
+            parsed.committer,
+            parsed.message,
+        )
     }
 
     pub fn read_tree(
@@ -375,12 +889,12 @@ impl<'a> GitObservationReader<'a> {
         let entries = self
             .deadline
             .run_step(|| parse_tree(&observation.object.bytes, self.bounds))??;
-        Ok(GitTreeObjectObservation {
-            repository_evidence: observation.repository_evidence,
+        GitTreeObjectObservation::new(
+            observation.repository_evidence,
             object_id,
-            source: observation.source,
+            observation.source,
             entries,
-        })
+        )
     }
 
     pub fn observe_head_log(&self) -> Result<GitLogObservation, GitObservationError> {
@@ -396,11 +910,7 @@ impl<'a> GitObservationReader<'a> {
                 continue;
             }
             if commits.len() >= self.bounds.max_log_commits {
-                return Ok(GitLogObservation {
-                    repository_evidence: repository_evidence.clone(),
-                    commits,
-                    truncated: true,
-                });
+                return GitLogObservation::new(repository_evidence.clone(), commits, true);
             }
             let commit = self.read_commit(object_id)?;
             for parent in &commit.parents {
@@ -411,11 +921,7 @@ impl<'a> GitObservationReader<'a> {
             commits.push(commit);
         }
 
-        Ok(GitLogObservation {
-            repository_evidence,
-            commits,
-            truncated: false,
-        })
+        GitLogObservation::new(repository_evidence, commits, false)
     }
 
     pub fn observe_head_tree(&self) -> Result<GitTreeWalkObservation, GitObservationError> {
@@ -440,12 +946,12 @@ impl<'a> GitObservationReader<'a> {
             let tree = self.read_tree(tree_id)?;
             for entry in tree.entries {
                 if paths.len() >= self.bounds.max_tree_entries {
-                    return Ok(GitTreeWalkObservation {
-                        repository_evidence: repository_evidence.clone(),
+                    return GitTreeWalkObservation::new(
+                        repository_evidence.clone(),
                         root_tree,
-                        entries: paths.into_values().collect(),
-                        truncated: true,
-                    });
+                        paths.into_values().collect(),
+                        true,
+                    );
                 }
                 let name = std::str::from_utf8(&entry.name)
                     .map_err(|_| GitObservationError::NonUnicodeTreeName)?;
@@ -472,12 +978,12 @@ impl<'a> GitObservationReader<'a> {
             }
         }
 
-        Ok(GitTreeWalkObservation {
+        GitTreeWalkObservation::new(
             repository_evidence,
             root_tree,
-            entries: paths.into_values().collect(),
-            truncated: false,
-        })
+            paths.into_values().collect(),
+            false,
+        )
     }
 }
 
@@ -865,6 +1371,7 @@ fn object_id_from_raw(raw: &[u8]) -> Result<GitObjectId, GitObservationError> {
 pub enum GitObservationError {
     InvalidBounds,
     InvalidInternalPath,
+    Core(CoreError),
     Git(GitReadError),
     Pack(GitPackError),
     Resolution(LocalFsResolutionError),
@@ -887,6 +1394,7 @@ pub enum GitObservationError {
     DuplicatePackedObject(GitObjectId),
     MissingObject(GitObjectId),
     ObjectSizeOverflow,
+    ObservationBindingMismatch,
     UnexpectedObjectKind {
         expected: GitObjectKind,
         observed: GitObjectKind,
@@ -913,6 +1421,7 @@ impl fmt::Display for GitObservationError {
             Self::InvalidInternalPath => {
                 f.write_str("Git observation constructed an invalid internal path")
             }
+            Self::Core(error) => write!(f, "Git observation canonical binding failed: {error}"),
             Self::Git(error) => write!(f, "bounded Git repository read failed: {error}"),
             Self::Pack(error) => write!(f, "bounded Git pack read failed: {error}"),
             Self::Resolution(error) => write!(f, "Git observation path resolution failed: {error}"),
@@ -971,6 +1480,9 @@ impl fmt::Display for GitObservationError {
             Self::ObjectSizeOverflow => f.write_str(
                 "Git object or storage size cannot be represented by the bounded profile",
             ),
+            Self::ObservationBindingMismatch => {
+                f.write_str("Git observation payload is detached from repository evidence")
+            }
             Self::UnexpectedObjectKind { expected, observed } => write!(
                 f,
                 "Git object kind mismatch: expected {expected:?}, observed {observed:?}"
@@ -999,6 +1511,7 @@ impl fmt::Display for GitObservationError {
 impl Error for GitObservationError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::Core(error) => Some(error),
             Self::Git(error) => Some(error),
             Self::Pack(error) => Some(error),
             Self::Resolution(error) => Some(error),
@@ -1008,6 +1521,12 @@ impl Error for GitObservationError {
             Self::Io(error) => Some(error),
             _ => None,
         }
+    }
+}
+
+impl From<CoreError> for GitObservationError {
+    fn from(value: CoreError) -> Self {
+        Self::Core(value)
     }
 }
 
@@ -1171,21 +1690,78 @@ mod tests {
         assert_eq!(reader.evidence().head.object_id, commit);
         let expected_evidence = reader.evidence().clone();
         let log = reader.observe_head_log().unwrap();
+        assert!(log.verify_binding().is_ok());
         assert_eq!(log.repository_evidence, expected_evidence);
         assert!(!log.truncated);
         assert_eq!(log.commits.len(), 1);
+        assert!(log.commits[0].verify_binding().is_ok());
         assert_eq!(log.commits[0].repository_evidence, expected_evidence);
         assert_eq!(log.commits[0].tree, tree);
         let walk = reader.observe_head_tree().unwrap();
+        assert!(walk.verify_binding().is_ok());
         assert_eq!(walk.repository_evidence, expected_evidence);
         assert!(!walk.truncated);
         assert_eq!(walk.entries.len(), 1);
         assert_eq!(walk.entries[0].path, "hello.txt");
         assert_eq!(walk.entries[0].object_id, blob);
         let blob_observation = reader.read_blob(blob).unwrap();
+        assert!(blob_observation.verify_binding().is_ok());
         assert_eq!(blob_observation.repository_evidence, expected_evidence);
         assert_eq!(blob_observation.bytes, b"hello\n");
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd"
+    ))]
+    #[test]
+    fn observation_binding_rejects_repository_substitution_and_payload_mutation() {
+        let (root_a, _, _, blob_a) = fixture_repo();
+        let (root_b, _, _, _) = fixture_repo();
+        let resolver_a = resolver(&root_a);
+        let resolver_b = resolver(&root_b);
+        let reader_a = GitObservationReader::open(
+            &resolver_a,
+            &RequestedOperationId::new("read").unwrap(),
+            GitObservationBounds::default(),
+            10,
+        )
+        .unwrap();
+        let reader_b = GitObservationReader::open(
+            &resolver_b,
+            &RequestedOperationId::new("read").unwrap(),
+            GitObservationBounds::default(),
+            10,
+        )
+        .unwrap();
+
+        let mut substituted = reader_a.read_blob(blob_a).unwrap();
+        substituted.repository_evidence = reader_b.evidence().clone();
+        assert!(matches!(
+            substituted.verify_binding(),
+            Err(GitObservationError::ObservationBindingMismatch)
+        ));
+
+        let mut mutated_blob = reader_a.read_blob(blob_a).unwrap();
+        mutated_blob.bytes.push(b'!');
+        assert!(matches!(
+            mutated_blob.verify_binding(),
+            Err(GitObservationError::ObservationBindingMismatch)
+        ));
+
+        let mut mutated_log = reader_a.observe_head_log().unwrap();
+        mutated_log.commits[0].message.push(b'!');
+        assert!(matches!(
+            mutated_log.verify_binding(),
+            Err(GitObservationError::ObservationBindingMismatch)
+        ));
+
+        fs::remove_dir_all(root_a).unwrap();
+        fs::remove_dir_all(root_b).unwrap();
     }
 
     #[test]
