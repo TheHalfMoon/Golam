@@ -20,6 +20,7 @@ pub struct EffectSnapshot {
     pub risk_class: String,
     pub execution_semantics: String,
     pub idempotency_key: Option<String>,
+    pub preconditions: Vec<u8>,
     pub payload_hash: [u8; 32],
     pub current_state: String,
     pub latest_attempt: Option<StoredEffectAttempt>,
@@ -94,7 +95,8 @@ impl EffectReader {
             .connection
             .query_row(
                 "SELECT i.session_id, i.requested_by, i.action, i.resource, i.risk_class, \
-                 i.execution_semantics, i.idempotency_key, i.payload_hash, t.to_state, t.attempt_id \
+                 i.execution_semantics, i.idempotency_key, i.preconditions, i.payload_hash, \
+                 t.to_state, t.attempt_id \
                  FROM effect_intents i JOIN effect_transitions t ON t.effect_id = i.effect_id \
                  WHERE i.effect_id = ?1 AND t.global_seq = (\
                    SELECT MAX(t2.global_seq) FROM effect_transitions t2 WHERE t2.effect_id = i.effect_id\
@@ -110,8 +112,9 @@ impl EffectReader {
                         row.get::<_, String>(5)?,
                         row.get::<_, Option<String>>(6)?,
                         row.get::<_, Vec<u8>>(7)?,
-                        row.get::<_, String>(8)?,
-                        row.get::<_, Option<Vec<u8>>>(9)?,
+                        row.get::<_, Vec<u8>>(8)?,
+                        row.get::<_, String>(9)?,
+                        row.get::<_, Option<Vec<u8>>>(10)?,
                     ))
                 },
             )
@@ -120,7 +123,7 @@ impl EffectReader {
             return Ok(None);
         };
         let latest_attempt = raw
-            .9
+            .10
             .map(|value| self.attempt(EffectAttemptId(id_from_vec(value)?)))
             .transpose()?
             .flatten();
@@ -133,8 +136,9 @@ impl EffectReader {
             risk_class: raw.4,
             execution_semantics: raw.5,
             idempotency_key: raw.6,
-            payload_hash: hash_from_vec(raw.7)?,
-            current_state: raw.8,
+            preconditions: raw.7,
+            payload_hash: hash_from_vec(raw.8)?,
+            current_state: raw.9,
             latest_attempt,
         }))
     }
@@ -284,6 +288,7 @@ mod tests {
         let snapshot = reader.snapshot(effect_id).unwrap().unwrap();
         assert_eq!(snapshot.session_id, SessionId(2));
         assert_eq!(snapshot.risk_class, "synthetic");
+        assert_eq!(snapshot.preconditions, b"[]");
         assert_eq!(snapshot.current_state, "executing");
         assert_eq!(
             snapshot.latest_attempt.unwrap().attempt_id,
