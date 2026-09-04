@@ -9,9 +9,9 @@ use std::path::PathBuf;
 
 use golam_core::digest::sha256;
 use golam_core::target_identity::{FileMutationExpectation, ObservedFileKind};
-use golam_core::tool_request::{BindingDigest, RequestedTarget};
 #[cfg(unix)]
 use golam_core::tool_request::RequestedOperationId;
+use golam_core::tool_request::{BindingDigest, RequestedTarget};
 use golam_core::{CanonicalEncoder, CoreError, EffectId};
 use golam_kernel::PreparedToolEffect;
 
