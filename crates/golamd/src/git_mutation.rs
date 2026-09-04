@@ -3,9 +3,9 @@
 #[cfg(unix)]
 use std::collections::BTreeMap;
 use std::error::Error;
+use std::fmt;
 #[cfg(unix)]
 use std::fs;
-use std::fmt;
 use std::io;
 #[cfg(unix)]
 use std::path::Path;
@@ -19,19 +19,24 @@ use golam_kernel::PreparedToolEffect;
 #[cfg(unix)]
 use miniz_oxide::deflate::compress_to_vec_zlib;
 
-#[cfg(unix)]
-use crate::git_index::{GitIndex, GitIndexBounds, GitIndexEntry, GitIndexMode, GitIndexVersion, parse_git_index};
 use crate::git_index::GitIndexError;
+#[cfg(unix)]
+use crate::git_index::{
+    GitIndex, GitIndexBounds, GitIndexEntry, GitIndexMode, GitIndexVersion, parse_git_index,
+};
 #[cfg(unix)]
 use crate::git_observe::GitTreeMode;
 use crate::git_read::{GitHeadRepresentation, GitObjectId, GitReadError};
 #[cfg(unix)]
 use crate::git_read::{GitObjectKind, GitReadBounds, GitRefSource, GitRepositoryReader};
 use crate::git_sha1::{GitObjectSha1, GitObjectSha1Error};
-use crate::git_status::{GitChangeKind, GitDiffEvidence, GitStatusBounds, GitStatusError, GitStatusObservation, observe_status};
-use crate::local_fs::{LocalFsResolutionError, LocalFsResolver};
+use crate::git_status::{
+    GitChangeKind, GitDiffEvidence, GitStatusBounds, GitStatusError, GitStatusObservation,
+    observe_status,
+};
 #[cfg(unix)]
 use crate::local_fs::metadata_matches_resolved_identity;
+use crate::local_fs::{LocalFsResolutionError, LocalFsResolver};
 use crate::local_read::LocalFileReadError;
 #[cfg(unix)]
 use crate::local_read::{LocalFileReadBounds, read_regular_file};
@@ -332,7 +337,10 @@ pub fn git_commit_payload_hash(metadata: &GitCommitMetadata) -> Result<[u8; 32],
     encoder.push_bytes(COMMIT_PAYLOAD_DOMAIN)?;
     encoder.push_bytes(metadata.author_name.as_bytes())?;
     encoder.push_bytes(metadata.author_email.as_bytes())?;
-    encoder.push_u64(u64::try_from(metadata.timestamp_seconds).map_err(|_| GitMutationError::InvalidCommitMetadata)?);
+    encoder.push_u64(
+        u64::try_from(metadata.timestamp_seconds)
+            .map_err(|_| GitMutationError::InvalidCommitMetadata)?,
+    );
     encoder.push_bytes(metadata.message.as_bytes())?;
     Ok(sha256(&encoder.finish()))
 }
@@ -427,23 +435,11 @@ pub fn execute_git_branch_create(
 ) -> Result<GitMutationReceipt, GitMutationError> {
     #[cfg(unix)]
     {
-        execute_git_branch_create_unix(
-            resolver,
-            prepared,
-            expectation,
-            branch,
-            observed_at_unix_ms,
-        )
+        execute_git_branch_create_unix(resolver, prepared, expectation, branch, observed_at_unix_ms)
     }
     #[cfg(not(unix))]
     {
-        let _ = (
-            resolver,
-            prepared,
-            expectation,
-            branch,
-            observed_at_unix_ms,
-        );
+        let _ = (resolver, prepared, expectation, branch, observed_at_unix_ms);
         Err(GitMutationError::UnsupportedPlatform)
     }
 }
@@ -874,8 +870,14 @@ fn verify_logical_state_unchanged_after_object_write(
             != before.repository_evidence.repository_root.normalized_path
         || current.repository_evidence.git_directory.normalized_path
             != before.repository_evidence.git_directory.normalized_path
-        || current.repository_evidence.object_store_directory.normalized_path
-            != before.repository_evidence.object_store_directory.normalized_path
+        || current
+            .repository_evidence
+            .object_store_directory
+            .normalized_path
+            != before
+                .repository_evidence
+                .object_store_directory
+                .normalized_path
     {
         return Err(GitMutationError::StaleRepository);
     }
@@ -890,7 +892,9 @@ fn verify_add_result(
     blob_id: GitObjectId,
 ) -> Result<(), GitMutationError> {
     if after.head != before.head || after.index_checksum == before.index_checksum {
-        return Err(GitMutationError::UnknownOutcome(PathBuf::from(".git/index")));
+        return Err(GitMutationError::UnknownOutcome(PathBuf::from(
+            ".git/index",
+        )));
     }
     let staged_target = after
         .staged
@@ -906,7 +910,9 @@ fn verify_add_result(
         || untracked_without_path(&after.untracked, path)
             != untracked_without_path(&before.untracked, path)
     {
-        return Err(GitMutationError::UnknownOutcome(PathBuf::from(".git/index")));
+        return Err(GitMutationError::UnknownOutcome(PathBuf::from(
+            ".git/index",
+        )));
     }
     Ok(())
 }
@@ -947,9 +953,7 @@ fn push_changes(
     encoder: &mut CanonicalEncoder,
     changes: &[GitDiffEvidence],
 ) -> Result<(), CoreError> {
-    encoder.push_u64(
-        u64::try_from(changes.len()).map_err(|_| CoreError::CanonicalLengthOverflow)?,
-    );
+    encoder.push_u64(u64::try_from(changes.len()).map_err(|_| CoreError::CanonicalLengthOverflow)?);
     for change in changes {
         encoder.push_bytes(change.path.as_bytes())?;
         encoder.push_u8(match change.kind {
@@ -1347,11 +1351,7 @@ fn write_or_verify_loose_object(
 
     let hex = id.to_hex();
     let fanout_name = &hex[..2];
-    match mkdirat(
-        &objects,
-        fanout_name,
-        Mode::from_bits_truncate(0o700),
-    ) {
+    match mkdirat(&objects, fanout_name, Mode::from_bits_truncate(0o700)) {
         Ok(()) => objects.sync_all()?,
         Err(nix::errno::Errno::EEXIST) => {}
         Err(error) => return Err(GitMutationError::Unix(error)),
@@ -1569,18 +1569,8 @@ fn replace_expected_relative(
         ))));
     }
 
-    unlinkat(
-        &parent,
-        temp_name.as_str(),
-        UnlinkatFlags::NoRemoveDir,
-    )?;
-    if unlinkat(
-        &parent,
-        guard_name.as_str(),
-        UnlinkatFlags::NoRemoveDir,
-    )
-    .is_err()
-    {
+    unlinkat(&parent, temp_name.as_str(), UnlinkatFlags::NoRemoveDir)?;
+    if unlinkat(&parent, guard_name.as_str(), UnlinkatFlags::NoRemoveDir).is_err() {
         return Err(GitMutationError::UnknownOutcome(PathBuf::from(format!(
             "{parent_request}/{guard_name}"
         ))));
@@ -1600,14 +1590,7 @@ fn restore_or_preserve_conflict(
     use nix::fcntl::AtFlags;
     use nix::unistd::linkat;
 
-    let restored = linkat(
-        parent,
-        guard_name,
-        parent,
-        target_name,
-        AtFlags::empty(),
-    )
-    .is_ok();
+    let restored = linkat(parent, guard_name, parent, target_name, AtFlags::empty()).is_ok();
     cleanup_at(parent, temp_name);
     if restored {
         cleanup_at(parent, guard_name);
@@ -1751,9 +1734,9 @@ fn validate_branch_name(branch: &str) -> Result<(), GitMutationError> {
         || branch.ends_with('.')
         || branch.ends_with(".lock")
         || branch.contains("..")
-        || branch.bytes().any(|byte| {
-            !(byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
-        })
+        || branch
+            .bytes()
+            .any(|byte| !(byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.')))
     {
         return Err(GitMutationError::InvalidBranchName);
     }
@@ -2018,15 +2001,8 @@ mod tests {
         let expectation = GitMutationExpectation::from_status(&status).unwrap();
         let file = fixture.file_expectation(&target, "git.add", b"qualified\n");
         let add = fixture.prepare_add(6301, expectation, &target, file);
-        let add_receipt = execute_git_add(
-            &fixture.resolver,
-            &add,
-            expectation,
-            &target,
-            file,
-            101,
-        )
-        .unwrap();
+        let add_receipt =
+            execute_git_add(&fixture.resolver, &add, expectation, &target, file, 101).unwrap();
         assert_eq!(add_receipt.action, "git.add");
         fixture.complete(&add, ToolExecutionCompletion::Succeeded);
 
@@ -2040,14 +2016,8 @@ mod tests {
             message: "qualify governed Git mutation".into(),
         };
         let commit = fixture.prepare_commit(6302, expectation, &metadata);
-        let commit_receipt = execute_git_commit(
-            &fixture.resolver,
-            &commit,
-            expectation,
-            &metadata,
-            102,
-        )
-        .unwrap();
+        let commit_receipt =
+            execute_git_commit(&fixture.resolver, &commit, expectation, &metadata, 102).unwrap();
         assert_ne!(commit_receipt.current_head, commit_receipt.previous_head);
         fixture.complete(&commit, ToolExecutionCompletion::Succeeded);
 
@@ -2057,14 +2027,9 @@ mod tests {
         assert!(status.untracked.is_empty());
         let expectation = GitMutationExpectation::from_status(&status).unwrap();
         let branch = fixture.prepare_branch(6303, expectation, "candidate");
-        let branch_receipt = execute_git_branch_create(
-            &fixture.resolver,
-            &branch,
-            expectation,
-            "candidate",
-            103,
-        )
-        .unwrap();
+        let branch_receipt =
+            execute_git_branch_create(&fixture.resolver, &branch, expectation, "candidate", 103)
+                .unwrap();
         assert_eq!(branch_receipt.current_head, commit_receipt.current_head);
         assert_eq!(
             fs::read_to_string(fixture.repo.join(".git/refs/heads/candidate")).unwrap(),
@@ -2146,13 +2111,7 @@ mod tests {
         let existing = fs::read(fixture.repo.join(".git/refs/heads/main")).unwrap();
         let prepared = fixture.prepare_branch(6330, expectation, "main");
         assert!(matches!(
-            execute_git_branch_create(
-                &fixture.resolver,
-                &prepared,
-                expectation,
-                "main",
-                130,
-            ),
+            execute_git_branch_create(&fixture.resolver, &prepared, expectation, "main", 130,),
             Err(GitMutationError::BranchExists)
         ));
         assert_eq!(

@@ -157,11 +157,8 @@ impl GitObjectObservation {
     }
 
     pub fn verify_binding(&self) -> Result<(), GitObservationError> {
-        let expected = object_observation_binding(
-            &self.repository_evidence,
-            &self.object,
-            &self.source,
-        )?;
+        let expected =
+            object_observation_binding(&self.repository_evidence, &self.object, &self.source)?;
         verify_observation_digest(expected, self.binding_digest)
     }
 }
@@ -361,12 +358,8 @@ impl GitTreeObjectObservation {
         source: GitObjectSource,
         entries: Vec<GitTreeEntryObservation>,
     ) -> Result<Self, GitObservationError> {
-        let binding_digest = tree_object_observation_binding(
-            &repository_evidence,
-            object_id,
-            &source,
-            &entries,
-        )?;
+        let binding_digest =
+            tree_object_observation_binding(&repository_evidence, object_id, &source, &entries)?;
         Ok(Self {
             repository_evidence,
             object_id,
@@ -430,12 +423,8 @@ impl GitTreeWalkObservation {
         entries: Vec<GitTreePathObservation>,
         truncated: bool,
     ) -> Result<Self, GitObservationError> {
-        let binding_digest = tree_walk_observation_binding(
-            &repository_evidence,
-            root_tree,
-            &entries,
-            truncated,
-        )?;
+        let binding_digest =
+            tree_walk_observation_binding(&repository_evidence, root_tree, &entries, truncated)?;
         Ok(Self {
             repository_evidence,
             root_tree,
