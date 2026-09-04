@@ -372,6 +372,9 @@ pub fn execute_git_add(
     target_expectation: FileMutationExpectation,
     observed_at_unix_ms: u64,
 ) -> Result<GitMutationReceipt, GitMutationError> {
+    if !cfg!(target_os = "linux") {
+        return Err(GitMutationError::UnsupportedPlatform);
+    }
     #[cfg(unix)]
     {
         execute_git_add_unix(
@@ -404,6 +407,9 @@ pub fn execute_git_commit(
     metadata: &GitCommitMetadata,
     observed_at_unix_ms: u64,
 ) -> Result<GitMutationReceipt, GitMutationError> {
+    if !cfg!(target_os = "linux") {
+        return Err(GitMutationError::UnsupportedPlatform);
+    }
     #[cfg(unix)]
     {
         execute_git_commit_unix(
@@ -434,6 +440,9 @@ pub fn execute_git_branch_create(
     branch: &str,
     observed_at_unix_ms: u64,
 ) -> Result<GitMutationReceipt, GitMutationError> {
+    if !cfg!(target_os = "linux") {
+        return Err(GitMutationError::UnsupportedPlatform);
+    }
     #[cfg(unix)]
     {
         execute_git_branch_create_unix(resolver, prepared, expectation, branch, observed_at_unix_ms)
@@ -1773,6 +1782,7 @@ fn validate_branch_name(branch: &str) -> Result<(), GitMutationError> {
     if branch.is_empty()
         || branch.len() > MAX_BRANCH_BYTES
         || branch.starts_with(['.', '-'])
+        || branch.starts_with("refs-")
         || branch.ends_with('.')
         || branch.ends_with(".lock")
         || branch.contains("..")
@@ -1814,7 +1824,7 @@ fn hex20(bytes: [u8; 20]) -> String {
     out
 }
 
-#[cfg(all(test, unix))]
+#[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
