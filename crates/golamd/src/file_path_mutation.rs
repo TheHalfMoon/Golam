@@ -58,20 +58,40 @@ impl fmt::Display for PathMutationError {
         match self {
             Self::Io(error) => write!(f, "filesystem path mutation I/O failed: {error}"),
             Self::Core(error) => write!(f, "filesystem path mutation encoding failed: {error}"),
-            Self::Resolution(error) => write!(f, "filesystem path mutation resolution failed: {error}"),
-            Self::UnsupportedPlatform => f.write_str("identity-preserving rename/delete is not qualified on this platform"),
-            Self::InvalidEffectBinding => f.write_str("prepared tool effect does not bind this exact path mutation"),
-            Self::InvalidExpectation => f.write_str("path mutation expectation is incomplete or inconsistent"),
+            Self::Resolution(error) => {
+                write!(f, "filesystem path mutation resolution failed: {error}")
+            }
+            Self::UnsupportedPlatform => {
+                f.write_str("identity-preserving rename/delete is not qualified on this platform")
+            }
+            Self::InvalidEffectBinding => {
+                f.write_str("prepared tool effect does not bind this exact path mutation")
+            }
+            Self::InvalidExpectation => {
+                f.write_str("path mutation expectation is incomplete or inconsistent")
+            }
             Self::StaleSource => f.write_str("path mutation source identity is stale"),
             Self::StaleParent => f.write_str("path mutation parent identity is stale"),
             Self::StaleContent => f.write_str("path mutation source content is stale"),
             Self::DestinationExists => f.write_str("rename destination already exists"),
-            Self::InvalidTargetName => f.write_str("path mutation target name is invalid for descriptor-relative use"),
-            Self::MutationTooLarge => f.write_str("path mutation verification exceeds the byte bound"),
-            Self::GuardCollision(path) => write!(f, "path mutation guard already exists: {}", path.display()),
-            Self::UnknownOutcome(path) => write!(f, "path mutation completion is ambiguous and requires reconciliation at {}", path.display()),
+            Self::InvalidTargetName => {
+                f.write_str("path mutation target name is invalid for descriptor-relative use")
+            }
+            Self::MutationTooLarge => {
+                f.write_str("path mutation verification exceeds the byte bound")
+            }
+            Self::GuardCollision(path) => {
+                write!(f, "path mutation guard already exists: {}", path.display())
+            }
+            Self::UnknownOutcome(path) => write!(
+                f,
+                "path mutation completion is ambiguous and requires reconciliation at {}",
+                path.display()
+            ),
             #[cfg(unix)]
-            Self::Unix(error) => write!(f, "filesystem path mutation Unix primitive failed: {error}"),
+            Self::Unix(error) => {
+                write!(f, "filesystem path mutation Unix primitive failed: {error}")
+            }
         }
     }
 }
@@ -240,7 +260,6 @@ fn execute_file_rename_unix(
     observed_at_unix_ms: u64,
 ) -> Result<PathMutationReceipt, PathMutationError> {
     use std::fs::File;
-    use std::io::Read;
 
     use nix::fcntl::{AtFlags, OFlag, open, openat};
     use nix::sys::stat::Mode;
@@ -356,13 +375,7 @@ fn execute_file_rename_unix(
         return Err(PathMutationError::StaleSource);
     }
 
-    if unlinkat(
-        &source_parent_file,
-        source_name,
-        UnlinkatFlags::NoRemoveDir,
-    )
-    .is_err()
-    {
+    if unlinkat(&source_parent_file, source_name, UnlinkatFlags::NoRemoveDir).is_err() {
         return Err(PathMutationError::UnknownOutcome(PathBuf::from(
             destination_identity.normalized_path.as_str(),
         )));
@@ -402,7 +415,6 @@ fn execute_file_delete_unix(
     observed_at_unix_ms: u64,
 ) -> Result<PathMutationReceipt, PathMutationError> {
     use std::fs::File;
-    use std::io::Read;
 
     use nix::fcntl::{AtFlags, OFlag, open, openat};
     use nix::sys::stat::Mode;
@@ -579,7 +591,9 @@ fn parent_request(requested: &RequestedTarget) -> Result<RequestedTarget, PathMu
     let value = if parent.as_os_str().is_empty() {
         "."
     } else {
-        parent.to_str().ok_or(PathMutationError::InvalidTargetName)?
+        parent
+            .to_str()
+            .ok_or(PathMutationError::InvalidTargetName)?
     };
     RequestedTarget::new(value).map_err(|_| PathMutationError::InvalidTargetName)
 }
@@ -676,7 +690,8 @@ mod tests {
             expected_size: Some(3),
             expected_parent_identity: Some(digest(3)),
         };
-        let base = file_rename_preconditions_hash(&source, &destination, expectation, digest(4)).unwrap();
+        let base =
+            file_rename_preconditions_hash(&source, &destination, expectation, digest(4)).unwrap();
         assert_ne!(
             base,
             file_rename_preconditions_hash(&source, &destination, expectation, digest(5)).unwrap()
