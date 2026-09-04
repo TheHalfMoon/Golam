@@ -90,6 +90,10 @@ pub mod file_path_mutation;
 mod file_path_mutation_qualification_tests;
 pub mod git_index;
 pub mod git_mutation;
+#[allow(
+    clippy::too_many_arguments,
+    reason = "sealed Git observation constructors keep every evidence-bound field explicit"
+)]
 pub mod git_observe;
 pub mod git_pack;
 #[cfg(test)]
