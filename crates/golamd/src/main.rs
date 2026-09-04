@@ -89,6 +89,7 @@ pub mod file_path_mutation;
 #[cfg(all(test, unix))]
 mod file_path_mutation_qualification_tests;
 pub mod git_index;
+#[cfg_attr(not(unix), allow(dead_code, unused_imports))]
 pub mod git_mutation;
 #[allow(
     clippy::too_many_arguments,
