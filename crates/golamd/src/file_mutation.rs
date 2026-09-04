@@ -3,17 +3,22 @@
 use std::error::Error;
 use std::fmt;
 use std::io;
-use std::path::{Path, PathBuf};
+#[cfg(unix)]
+use std::path::Path;
+use std::path::PathBuf;
 
 use golam_core::digest::sha256;
 use golam_core::target_identity::{FileMutationExpectation, ObservedFileKind};
-use golam_core::tool_request::{BindingDigest, RequestedOperationId, RequestedTarget};
+use golam_core::tool_request::{BindingDigest, RequestedTarget};
+#[cfg(unix)]
+use golam_core::tool_request::RequestedOperationId;
 use golam_core::{CanonicalEncoder, CoreError, EffectId};
 use golam_kernel::PreparedToolEffect;
 
 use crate::local_fs::{LocalFsResolutionError, LocalFsResolver};
 
 const FILE_PRECONDITION_DOMAIN: &[u8] = b"golam:file-mutation-preconditions:v1";
+#[cfg(unix)]
 const MAX_FILE_MUTATION_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -68,7 +73,9 @@ impl fmt::Display for FileMutationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io(error) => write!(f, "filesystem mutation I/O failed: {error}"),
-            Self::Core(error) => write!(f, "filesystem mutation canonical encoding failed: {error}"),
+            Self::Core(error) => {
+                write!(f, "filesystem mutation canonical encoding failed: {error}")
+            }
             Self::Resolution(error) => write!(f, "filesystem mutation resolution failed: {error}"),
             Self::UnsupportedPlatform => f.write_str(
                 "identity-preserving filesystem mutation is not qualified on this platform",
@@ -85,11 +92,14 @@ impl fmt::Display for FileMutationError {
             Self::StaleContent => f.write_str("filesystem target content precondition is stale"),
             Self::TargetExists => f.write_str("filesystem create target already exists"),
             Self::InvalidTargetKind(kind) => {
-                write!(f, "filesystem mutation requires a regular file, observed {kind:?}")
+                write!(
+                    f,
+                    "filesystem mutation requires a regular file, observed {kind:?}"
+                )
             }
-            Self::InvalidTargetName => {
-                f.write_str("filesystem mutation target name is invalid for descriptor-relative use")
-            }
+            Self::InvalidTargetName => f.write_str(
+                "filesystem mutation target name is invalid for descriptor-relative use",
+            ),
             Self::StagingCollision(path) => write!(
                 f,
                 "filesystem mutation staging entry already exists and requires reconciliation: {}",
@@ -229,7 +239,6 @@ fn execute_file_write_unix(
 ) -> Result<FileMutationReceipt, FileMutationError> {
     use std::fs::File;
     use std::io::{Read, Seek, SeekFrom, Write};
-    use std::os::unix::fs::MetadataExt;
 
     use nix::fcntl::{AtFlags, OFlag, open, openat, renameat};
     use nix::sys::stat::Mode;
@@ -365,7 +374,9 @@ fn execute_file_write_unix(
             }
             let mut current_bytes = Vec::with_capacity(current_metadata.len() as usize);
             current.read_to_end(&mut current_bytes)?;
-            if expectation.expected_content_digest != Some(BindingDigest::new(sha256(&current_bytes))) {
+            if expectation.expected_content_digest
+                != Some(BindingDigest::new(sha256(&current_bytes)))
+            {
                 return Err(FileMutationError::StaleContent);
             }
             if let Some(size) = expectation.expected_size
@@ -411,7 +422,9 @@ fn execute_file_write_unix(
             ) {
                 Ok(fd) => fd,
                 Err(_) => {
-                    return Err(FileMutationError::UnknownOutcome(parent_path.join(&guard_name)));
+                    return Err(FileMutationError::UnknownOutcome(
+                        parent_path.join(&guard_name),
+                    ));
                 }
             };
             let guard_file = File::from(guard_fd);
@@ -424,7 +437,9 @@ fn execute_file_write_unix(
                     AtFlags::empty(),
                 );
                 cleanup_at(&parent_file, &stage_name);
-                return Err(FileMutationError::ConflictPreserved(parent_path.join(&guard_name)));
+                return Err(FileMutationError::ConflictPreserved(
+                    parent_path.join(&guard_name),
+                ));
             }
 
             if let Err(_error) = linkat(
@@ -447,7 +462,9 @@ fn execute_file_write_unix(
                     cleanup_at(&parent_file, &guard_name);
                     return Err(FileMutationError::StaleTarget);
                 }
-                return Err(FileMutationError::ConflictPreserved(parent_path.join(&guard_name)));
+                return Err(FileMutationError::ConflictPreserved(
+                    parent_path.join(&guard_name),
+                ));
             }
 
             let installed_fd = openat(
@@ -464,16 +481,24 @@ fn execute_file_write_unix(
             if !same_unix_object(&staged_metadata, &installed_metadata)
                 || sha256(&installed_bytes) != expected_payload
             {
-                return Err(FileMutationError::UnknownOutcome(parent_path.join(&guard_name)));
+                return Err(FileMutationError::UnknownOutcome(
+                    parent_path.join(&guard_name),
+                ));
             }
 
-            unlinkat(&parent_file, stage_name.as_str(), UnlinkatFlags::NoRemoveDir)?;
+            unlinkat(
+                &parent_file,
+                stage_name.as_str(),
+                UnlinkatFlags::NoRemoveDir,
+            )?;
             if let Err(_error) = unlinkat(
                 &parent_file,
                 guard_name.as_str(),
                 UnlinkatFlags::NoRemoveDir,
             ) {
-                return Err(FileMutationError::UnknownOutcome(parent_path.join(&guard_name)));
+                return Err(FileMutationError::UnknownOutcome(
+                    parent_path.join(&guard_name),
+                ));
             }
             parent_file.sync_all()?;
             verified_receipt(
@@ -514,11 +539,15 @@ fn validate_observed_target(
 
 #[cfg(unix)]
 fn parent_request(requested: &RequestedTarget) -> Result<RequestedTarget, FileMutationError> {
-    let parent = Path::new(requested.as_str()).parent().unwrap_or_else(|| Path::new("."));
+    let parent = Path::new(requested.as_str())
+        .parent()
+        .unwrap_or_else(|| Path::new("."));
     let value = if parent.as_os_str().is_empty() {
         "."
     } else {
-        parent.to_str().ok_or(FileMutationError::InvalidTargetName)?
+        parent
+            .to_str()
+            .ok_or(FileMutationError::InvalidTargetName)?
     };
     RequestedTarget::new(value).map_err(|_| FileMutationError::InvalidTargetName)
 }
@@ -533,10 +562,7 @@ fn target_name(requested: &RequestedTarget) -> Result<&str, FileMutationError> {
 }
 
 #[cfg(unix)]
-fn require_missing_at(
-    parent: &std::fs::File,
-    name: &str,
-) -> Result<(), FileMutationError> {
+fn require_missing_at(parent: &std::fs::File, name: &str) -> Result<(), FileMutationError> {
     use nix::fcntl::{OFlag, openat};
     use nix::sys::stat::Mode;
 
@@ -576,8 +602,10 @@ fn verified_receipt(
     use std::fs::File;
     use std::io::Read;
 
-    use nix::fcntl::{OFlag, openat};
+    use nix::fcntl::{OFlag, open, openat};
     use nix::sys::stat::Mode;
+
+    use crate::local_fs::metadata_matches_resolved_identity;
 
     let operation = RequestedOperationId::new(mode.action())
         .map_err(|_| FileMutationError::InvalidEffectBinding)?;
@@ -589,7 +617,15 @@ fn verified_receipt(
     }
     let parent_request = parent_request(requested)?;
     let parent = resolver.resolve_read_target(&parent_request, &operation, observed_at_unix_ms)?;
-    let parent_file = File::open(parent.normalized_path.as_str())?;
+    let parent_fd = open(
+        Path::new(parent.normalized_path.as_str()),
+        OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_CLOEXEC | OFlag::O_NOFOLLOW,
+        Mode::empty(),
+    )?;
+    let parent_file = File::from(parent_fd);
+    if !metadata_matches_resolved_identity(&parent, &parent_file.metadata()?)? {
+        return Err(FileMutationError::StaleParent);
+    }
     let name = target_name(requested)?;
     let fd = openat(
         &parent_file,
