@@ -432,11 +432,12 @@ impl ManagedMemoryWriter {
         markdown: ManagedMarkdownCommitObservation,
         finish: ManagedMemoryExecutionFinish<'_>,
     ) -> Result<CommittedManagedMemoryWrite, ManagedMemoryWriterError> {
+        validate_committed_markdown_digest(write.version.content_digest, markdown.content_digest)?;
         match self.finalize_existing_write_inner(write, markdown, finish) {
             Ok(result) => Ok(result),
             Err(error) => {
                 let reason = error.to_string();
-                self.record_unknown_outcome(write, Some(markdown.readback_ref), finish, &reason);
+                self.record_unknown_outcome(write, Some(markdown.readback_ref), finish, &reason)?;
                 Err(ManagedMemoryWriterError::UnknownOutcomeAfterCommit(reason))
             }
         }
@@ -448,12 +449,6 @@ impl ManagedMemoryWriter {
         markdown: ManagedMarkdownCommitObservation,
         finish: ManagedMemoryExecutionFinish<'_>,
     ) -> Result<CommittedManagedMemoryWrite, ManagedMemoryWriterError> {
-        if markdown.content_digest != write.version.content_digest {
-            return Err(ManagedMemoryWriterError::BindingMismatch(
-                "committed Markdown content digest",
-            ));
-        }
-
         invalidate_memory_derivatives(&self.memory)?;
         let mut operational = MemoryOperationalStore::open(&self.memory)?;
         operational.record_version(&write.prepared, &write.version, &write.markdown_path)?;
@@ -557,73 +552,82 @@ impl ManagedMemoryWriter {
         markdown_readback_ref: Option<BindingDigest>,
         finish: ManagedMemoryExecutionFinish<'_>,
         reason: &str,
-    ) {
-        let reconciliation_bytes = unknown_bytes(write.effect_id(), reason);
+    ) -> Result<(), ManagedMemoryWriterError> {
+        let reconciliation_bytes = unknown_bytes(write.effect_id(), reason)?;
         let reconciliation_ref = BindingDigest::new(sha256(&reconciliation_bytes));
         let intent_digest = BindingDigest::new(write.prepared.binding_digest());
 
-        if let Ok(mut operational) = MemoryOperationalStore::open(&self.memory) {
-            let _ = operational.record_reconciliation(
-                write.effect_id(),
-                intent_digest,
-                MemoryReconciliationState::Blocked,
-                reconciliation_ref,
-            );
-            let _ = operational.mark_terminal(
-                write.effect_id(),
-                intent_digest,
-                MemoryMutationStatus::UnknownOutcome,
-            );
-        }
+        let mut operational = MemoryOperationalStore::open(&self.memory)?;
+        operational.record_reconciliation(
+            write.effect_id(),
+            intent_digest,
+            MemoryReconciliationState::Blocked,
+            reconciliation_ref,
+        )?;
+        operational.mark_terminal(
+            write.effect_id(),
+            intent_digest,
+            MemoryMutationStatus::UnknownOutcome,
+        )?;
 
-        if let Ok(mut evidence) = MemoryEvidenceStore::open(self.authority.authority_db_path()) {
-            let _ = evidence.persist_reconciliation(ReconciliationEvidence {
-                evidence_id: reconciliation_ref,
-                effect_id: write.effect_id(),
-                state: MemoryReconciliationState::Blocked,
-                authority_journal_readback_ref: Some(write.authority_readback_ref),
-                markdown_readback_ref,
-                memory_sqlite_readback_ref: None,
-                record_bytes: &reconciliation_bytes,
-            });
-            let outcome = MemoryMutationOutcome {
-                effect_id: write.effect_id(),
-                mutation_intent_digest: intent_digest,
-                status: MemoryMutationStatus::UnknownOutcome,
-                canonical_version_refs: Vec::new(),
-                authority_journal_readback_ref: Some(write.authority_readback_ref),
-                markdown_readback_ref,
-                memory_sqlite_readback_ref: None,
-                reconciliation_ref: Some(reconciliation_ref),
-                verification_refs: Vec::new(),
-                integrity_evidence_refs: vec![reconciliation_ref],
-                terminal_at_unix_ms: finish.terminal_at_unix_ms,
-            };
-            if let Ok(bytes) = terminal_bytes(&outcome) {
-                let id = BindingDigest::new(sha256(&bytes));
-                let _ = evidence.persist_terminal_outcome(id, &outcome, &bytes);
-            }
-        }
+        let mut evidence = MemoryEvidenceStore::open(self.authority.authority_db_path())?;
+        evidence.persist_reconciliation(ReconciliationEvidence {
+            evidence_id: reconciliation_ref,
+            effect_id: write.effect_id(),
+            state: MemoryReconciliationState::Blocked,
+            authority_journal_readback_ref: Some(write.authority_readback_ref),
+            markdown_readback_ref,
+            memory_sqlite_readback_ref: None,
+            record_bytes: &reconciliation_bytes,
+        })?;
+        let outcome = MemoryMutationOutcome {
+            effect_id: write.effect_id(),
+            mutation_intent_digest: intent_digest,
+            status: MemoryMutationStatus::UnknownOutcome,
+            canonical_version_refs: Vec::new(),
+            authority_journal_readback_ref: Some(write.authority_readback_ref),
+            markdown_readback_ref,
+            memory_sqlite_readback_ref: None,
+            reconciliation_ref: Some(reconciliation_ref),
+            verification_refs: Vec::new(),
+            integrity_evidence_refs: vec![reconciliation_ref],
+            terminal_at_unix_ms: finish.terminal_at_unix_ms,
+        };
+        let bytes = terminal_bytes(&outcome)?;
+        let id = BindingDigest::new(sha256(&bytes));
+        evidence.persist_terminal_outcome(id, &outcome, &bytes)?;
 
-        if let Ok(mut effects) = EffectStore::open(&self.authority) {
-            let _ = effects.finish_attempt(FinishEffectAttempt {
-                attempt_id: write.attempt_id,
-                finished_at: finish.finished_at,
-                outcome: "unknown",
-                receipt: Some(&reconciliation_bytes),
-            });
-            let _ = effects.compare_and_swap(CompareAndSwapEffect {
-                transition_id: finish.terminal_transition_id,
-                effect_id: write.effect_id(),
-                expected_state: "executing",
-                next_state: "unknown_outcome",
-                attempt_id: Some(write.attempt_id),
-                reason_code: Some("managed_memory_unknown_outcome"),
-                evidence_ref: Some(&reconciliation_ref.bytes()),
-                event_id: finish.terminal_event_id,
-            });
-        }
+        let mut effects = EffectStore::open(&self.authority)?;
+        effects.finish_attempt(FinishEffectAttempt {
+            attempt_id: write.attempt_id,
+            finished_at: finish.finished_at,
+            outcome: "unknown",
+            receipt: Some(&reconciliation_bytes),
+        })?;
+        effects.compare_and_swap(CompareAndSwapEffect {
+            transition_id: finish.terminal_transition_id,
+            effect_id: write.effect_id(),
+            expected_state: "executing",
+            next_state: "unknown_outcome",
+            attempt_id: Some(write.attempt_id),
+            reason_code: Some("managed_memory_unknown_outcome"),
+            evidence_ref: Some(&reconciliation_ref.bytes()),
+            event_id: finish.terminal_event_id,
+        })?;
+        Ok(())
     }
+}
+
+fn validate_committed_markdown_digest(
+    expected: BindingDigest,
+    observed: BindingDigest,
+) -> Result<(), ManagedMemoryWriterError> {
+    if observed != expected {
+        return Err(ManagedMemoryWriterError::BindingMismatch(
+            "committed Markdown content digest",
+        ));
+    }
+    Ok(())
 }
 
 fn validate_common_bindings(
@@ -828,12 +832,17 @@ fn terminal_bytes(outcome: &MemoryMutationOutcome) -> Result<Vec<u8>, ManagedMem
     Ok(encoder.finish())
 }
 
-fn unknown_bytes(effect_id: EffectId, reason: &str) -> Vec<u8> {
+fn unknown_bytes(effect_id: EffectId, reason: &str) -> Result<Vec<u8>, ManagedMemoryWriterError> {
+    let reason_digest = sha256(reason.as_bytes());
     let mut encoder = CanonicalEncoder::new();
-    let _ = encoder.push_bytes(UNKNOWN_DOMAIN);
+    encoder
+        .push_bytes(UNKNOWN_DOMAIN)
+        .map_err(|_| ManagedMemoryWriterError::CanonicalEncoding)?;
     encoder.push_u128(effect_id.0);
-    let _ = encoder.push_bytes(reason.as_bytes());
-    encoder.finish()
+    encoder
+        .push_bytes(&reason_digest)
+        .map_err(|_| ManagedMemoryWriterError::CanonicalEncoding)?;
+    Ok(encoder.finish())
 }
 
 #[cfg(test)]
@@ -850,5 +859,33 @@ mod tests {
             ManagedMemoryWriter::writer_id().0,
             BindingDigest::new([0; 32])
         );
+    }
+
+    #[test]
+    fn finalization_digest_validation_is_precommit_and_fail_closed() {
+        assert!(validate_committed_markdown_digest(digest(1), digest(1)).is_ok());
+        assert!(matches!(
+            validate_committed_markdown_digest(digest(1), digest(2)),
+            Err(ManagedMemoryWriterError::BindingMismatch(
+                "committed Markdown content digest"
+            ))
+        ));
+    }
+
+    #[test]
+    fn unknown_reason_encoding_is_bounded_and_reason_sensitive() {
+        let first = unknown_bytes(EffectId(7), "first reason").unwrap();
+        let second = unknown_bytes(EffectId(7), "second reason").unwrap();
+        assert_ne!(first, second);
+        assert_eq!(first, unknown_bytes(EffectId(7), "first reason").unwrap());
+        let large = "x".repeat(1024 * 1024);
+        assert_eq!(
+            unknown_bytes(EffectId(7), &large).unwrap().len(),
+            first.len()
+        );
+    }
+
+    fn digest(value: u8) -> BindingDigest {
+        BindingDigest::new([value; 32])
     }
 }
