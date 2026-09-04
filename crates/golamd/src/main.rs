@@ -3,6 +3,7 @@
 pub mod benchmark;
 mod connection;
 mod deadline_io;
+pub mod file_mutation;
 pub mod git_index;
 pub mod git_observe;
 pub mod git_pack;
