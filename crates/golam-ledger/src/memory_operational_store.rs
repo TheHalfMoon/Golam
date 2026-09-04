@@ -25,6 +25,22 @@ pub const REQUIRED_MEMORY_OPERATIONAL_TABLES: &[&str] = &[
     "memory_derivative_generations",
 ];
 
+const MEMORY_PROMOTION_STATE_SCHEMA: &str = r#"
+CREATE TABLE IF NOT EXISTS memory_promotion_state (
+    evidence_id BLOB PRIMARY KEY NOT NULL CHECK (length(evidence_id) = 32),
+    store_ref BLOB NOT NULL CHECK (length(store_ref) = 32),
+    schema_ref BLOB NOT NULL CHECK (length(schema_ref) = 32),
+    candidate_id BLOB NOT NULL CHECK (length(candidate_id) = 32),
+    promotion_authority_ref BLOB NOT NULL CHECK (length(promotion_authority_ref) = 32),
+    approving_principal TEXT,
+    verifier_policy_ref BLOB CHECK (verifier_policy_ref IS NULL OR length(verifier_policy_ref) = 32),
+    authority_evidence_ref BLOB NOT NULL CHECK (length(authority_evidence_ref) = 32),
+    recorded_at_unix_ms INTEGER NOT NULL,
+    integrity_hash BLOB NOT NULL CHECK (length(integrity_hash) = 32),
+    CHECK ((approving_principal IS NULL) != (verifier_policy_ref IS NULL))
+);
+"#;
+
 #[derive(Debug)]
 pub enum MemoryOperationalError {
     Sqlite(rusqlite::Error),
@@ -32,9 +48,11 @@ pub enum MemoryOperationalError {
     InvalidRecord(&'static str),
     StoreBindingMismatch,
     FutureSchema { found: i64, supported: i64 },
+    UnsupportedSchema { found: i64, supported: i64 },
     MissingPreparedEffect(EffectId),
     IntentDigestMismatch,
     ImmutableVersionMismatch,
+    TerminalStatusConflict,
     StaleCurrentVersion,
     NonUnicodePath,
     IntegerOverflow,
@@ -53,6 +71,10 @@ impl fmt::Display for MemoryOperationalError {
                 f,
                 "memory operational schema {found} is newer than supported {supported}"
             ),
+            Self::UnsupportedSchema { found, supported } => write!(
+                f,
+                "memory operational schema {found} cannot be migrated to supported {supported}"
+            ),
             Self::MissingPreparedEffect(effect_id) => write!(
                 f,
                 "memory operational effect {} has no PREPARED state",
@@ -63,6 +85,9 @@ impl fmt::Display for MemoryOperationalError {
             }
             Self::ImmutableVersionMismatch => {
                 f.write_str("memory version identity already exists with different protected state")
+            }
+            Self::TerminalStatusConflict => {
+                f.write_str("memory effect terminal status is immutable once recorded")
             }
             Self::StaleCurrentVersion => {
                 f.write_str("memory current version does not match the prepared expected version")
@@ -324,11 +349,29 @@ impl MemoryOperationalStore {
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
         require_prepared(&tx, self.store_id, effect_id, intent_digest)?;
-        tx.execute(
-            "UPDATE memory_effect_state SET state = 'terminal', terminal_status = ?1 \
-             WHERE effect_id = ?2",
-            params![mutation_status_code(status), effect_blob(effect_id)],
-        )?;
+        let requested = mutation_status_code(status);
+        let existing: Option<i64> = tx
+            .query_row(
+                "SELECT terminal_status FROM memory_effect_state WHERE effect_id = ?1",
+                params![effect_blob(effect_id)],
+                |row| row.get::<_, Option<i64>>(0),
+            )
+            .optional()?
+            .flatten();
+        match existing {
+            Some(stored) if stored == requested => {}
+            Some(_) => return Err(MemoryOperationalError::TerminalStatusConflict),
+            None => {
+                let changed = tx.execute(
+                    "UPDATE memory_effect_state SET state = 'terminal', terminal_status = ?1 \
+                     WHERE effect_id = ?2 AND terminal_status IS NULL",
+                    params![requested, effect_blob(effect_id)],
+                )?;
+                if changed != 1 {
+                    return Err(MemoryOperationalError::TerminalStatusConflict);
+                }
+            }
+        }
         tx.commit()?;
         Ok(())
     }
@@ -378,11 +421,13 @@ impl MemoryOperationalStore {
         Ok(self
             .connection
             .query_row(
-                "SELECT 1 FROM memory_effect_state \
-                 WHERE store_ref = ?1 AND terminal_status = ?2 LIMIT 1",
+                "SELECT 1 FROM memory_effect_state e \
+                 LEFT JOIN memory_reconciliation_state r ON r.effect_id = e.effect_id \
+                 WHERE e.store_ref = ?1 AND (e.terminal_status = ?2 OR r.state = ?3) LIMIT 1",
                 params![
                     self.store_id.0.bytes().to_vec(),
-                    mutation_status_code(MemoryMutationStatus::UnknownOutcome)
+                    mutation_status_code(MemoryMutationStatus::UnknownOutcome),
+                    reconciliation_state_code(MemoryReconciliationState::Blocked)
                 ],
                 |row| row.get::<_, i64>(0),
             )
@@ -455,19 +500,6 @@ fn migrate(connection: &Connection, store_id: MemoryStoreId) -> Result<(), Memor
             evidence_ref BLOB NOT NULL CHECK (length(evidence_ref) = 32),
             FOREIGN KEY(effect_id) REFERENCES memory_effect_state(effect_id)
         );
-        CREATE TABLE IF NOT EXISTS memory_promotion_state (
-            evidence_id BLOB PRIMARY KEY NOT NULL CHECK (length(evidence_id) = 32),
-            store_ref BLOB NOT NULL CHECK (length(store_ref) = 32),
-            schema_ref BLOB NOT NULL CHECK (length(schema_ref) = 32),
-            candidate_id BLOB NOT NULL CHECK (length(candidate_id) = 32),
-            promotion_authority_ref BLOB NOT NULL CHECK (length(promotion_authority_ref) = 32),
-            approving_principal TEXT,
-            verifier_policy_ref BLOB CHECK (verifier_policy_ref IS NULL OR length(verifier_policy_ref) = 32),
-            authority_evidence_ref BLOB NOT NULL CHECK (length(authority_evidence_ref) = 32),
-            recorded_at_unix_ms INTEGER NOT NULL,
-            integrity_hash BLOB NOT NULL CHECK (length(integrity_hash) = 32),
-            CHECK ((approving_principal IS NULL) != (verifier_policy_ref IS NULL))
-        );
         CREATE TABLE IF NOT EXISTS memory_derivative_generations (
             generation_id BLOB PRIMARY KEY NOT NULL CHECK (length(generation_id) = 32),
             store_ref BLOB NOT NULL CHECK (length(store_ref) = 32),
@@ -490,18 +522,35 @@ fn migrate(connection: &Connection, store_id: MemoryStoreId) -> Result<(), Memor
         .optional()?;
     match meta {
         None => {
-            connection.execute(
+            let tx = connection.unchecked_transaction()?;
+            tx.execute_batch(MEMORY_PROMOTION_STATE_SCHEMA)?;
+            tx.execute(
                 "INSERT INTO memory_operational_meta \
                  (singleton, schema_version, store_ref) VALUES (1, ?1, ?2)",
                 params![supported, store_id.0.bytes().to_vec()],
             )?;
+            tx.commit()?;
         }
         Some((found, stored)) => {
+            if stored != store_id.0.bytes().to_vec() {
+                return Err(MemoryOperationalError::StoreBindingMismatch);
+            }
             if found > supported {
                 return Err(MemoryOperationalError::FutureSchema { found, supported });
             }
-            if found != supported || stored != store_id.0.bytes().to_vec() {
-                return Err(MemoryOperationalError::StoreBindingMismatch);
+            if found == supported {
+                return Ok(());
+            }
+            if found == 1 && supported == 2 {
+                let tx = connection.unchecked_transaction()?;
+                tx.execute_batch(MEMORY_PROMOTION_STATE_SCHEMA)?;
+                tx.execute(
+                    "UPDATE memory_operational_meta SET schema_version = ?1 WHERE singleton = 1",
+                    params![supported],
+                )?;
+                tx.commit()?;
+            } else {
+                return Err(MemoryOperationalError::UnsupportedSchema { found, supported });
             }
         }
     }
@@ -857,21 +906,100 @@ mod tests {
     }
 
     #[test]
-    fn unknown_outcome_blocks_dependent_memory_work() {
+    fn unknown_outcome_and_blocked_reconciliation_block_dependent_memory_work() {
         let store_id = MemoryStoreId(digest(40));
         let mut store = MemoryOperationalStore::open_in_memory(store_id).unwrap();
-        let prepared = prepared(store_id, 41, None);
-        let intent_digest = BindingDigest::new(prepared.binding_digest());
-        store.record_prepared(&prepared).unwrap();
+        let first = prepared(store_id, 41, None);
+        let first_digest = BindingDigest::new(first.binding_digest());
+        store.record_prepared(&first).unwrap();
         assert!(!store.has_blocking_unknown_outcome().unwrap());
         store
             .mark_terminal(
                 EffectId(41),
-                intent_digest,
+                first_digest,
                 MemoryMutationStatus::UnknownOutcome,
             )
             .unwrap();
         assert!(store.has_blocking_unknown_outcome().unwrap());
+
+        let store_id = MemoryStoreId(digest(42));
+        let mut store = MemoryOperationalStore::open_in_memory(store_id).unwrap();
+        let second = prepared(store_id, 43, None);
+        let second_digest = BindingDigest::new(second.binding_digest());
+        store.record_prepared(&second).unwrap();
+        store
+            .record_reconciliation(
+                EffectId(43),
+                second_digest,
+                MemoryReconciliationState::Blocked,
+                digest(44),
+            )
+            .unwrap();
+        assert!(store.has_blocking_unknown_outcome().unwrap());
+    }
+
+    #[test]
+    fn terminal_status_is_one_shot_and_idempotent_for_same_status() {
+        let store_id = MemoryStoreId(digest(45));
+        let mut store = MemoryOperationalStore::open_in_memory(store_id).unwrap();
+        let prepared = prepared(store_id, 46, None);
+        let intent_digest = BindingDigest::new(prepared.binding_digest());
+        store.record_prepared(&prepared).unwrap();
+        store
+            .mark_terminal(EffectId(46), intent_digest, MemoryMutationStatus::Committed)
+            .unwrap();
+        store
+            .mark_terminal(EffectId(46), intent_digest, MemoryMutationStatus::Committed)
+            .unwrap();
+        assert!(matches!(
+            store.mark_terminal(
+                EffectId(46),
+                intent_digest,
+                MemoryMutationStatus::UnknownOutcome
+            ),
+            Err(MemoryOperationalError::TerminalStatusConflict)
+        ));
+    }
+
+    #[test]
+    fn legacy_v1_schema_migrates_atomically_to_v2() {
+        let store_id = MemoryStoreId(digest(47));
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE memory_operational_meta (\
+                    singleton INTEGER PRIMARY KEY CHECK (singleton = 1), \
+                    schema_version INTEGER NOT NULL, \
+                    store_ref BLOB NOT NULL CHECK (length(store_ref) = 32)\
+                 );",
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO memory_operational_meta (singleton, schema_version, store_ref) \
+                 VALUES (1, 1, ?1)",
+                params![store_id.0.bytes().to_vec()],
+            )
+            .unwrap();
+        let store = MemoryOperationalStore::initialize(connection, store_id).unwrap();
+        let version: i64 = store
+            .connection
+            .query_row(
+                "SELECT schema_version FROM memory_operational_meta WHERE singleton = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(version, 2);
+        let promotion_table: i64 = store
+            .connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_schema WHERE type = 'table' AND name = 'memory_promotion_state'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(promotion_table, 1);
     }
 
     #[test]
