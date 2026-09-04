@@ -26,6 +26,8 @@ pub mod benchmark;
 mod connection;
 mod deadline_io;
 pub mod file_mutation;
+#[cfg(all(test, unix))]
+mod file_mutation_qualification_tests;
 pub mod git_index;
 pub mod git_observe;
 pub mod git_pack;
