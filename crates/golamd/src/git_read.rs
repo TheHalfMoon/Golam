@@ -3,10 +3,15 @@
 use std::collections::HashSet;
 use std::error::Error;
 use std::fmt;
+use std::ops::Deref;
 use std::time::Duration;
 
-use golam_core::target_identity::{ObservedFileKind, ResolvedTargetIdentity};
-use golam_core::tool_request::{RequestedOperationId, RequestedTarget};
+use golam_core::digest::sha256;
+use golam_core::target_identity::{
+    ObservedFileKind, PlatformFamily, ResolvedTargetIdentity,
+};
+use golam_core::tool_request::{BindingDigest, RequestedOperationId, RequestedTarget};
+use golam_core::{CanonicalEncoder, CoreError};
 use miniz_oxide::inflate::stream::{InflateState, inflate};
 use miniz_oxide::{DataFormat, MZError, MZFlush, MZStatus};
 
@@ -29,6 +34,7 @@ pub const MAX_SYMBOLIC_REF_DEPTH: usize = 16;
 pub const DEFAULT_GIT_READ_TIME_BUDGET: Duration = Duration::from_secs(10);
 pub const MAX_GIT_READ_TIME_BUDGET: Duration = Duration::from_secs(60);
 const MAX_CONFIG_BYTES: u64 = 1024 * 1024;
+const GIT_REPOSITORY_EVIDENCE_DOMAIN: &[u8] = b"golam:git-repository-evidence:v1";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct GitReadBounds {
@@ -153,8 +159,11 @@ pub struct GitHeadObservation {
     pub object_id: GitObjectId,
 }
 
+/// Read-only view of validated repository evidence. The view is public so existing
+/// observation consumers can inspect evidence fields, but only this module can
+/// construct or mutate the digest-bound `GitRepositoryEvidence` wrapper.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct GitRepositoryEvidence {
+pub struct GitRepositoryEvidenceView {
     pub repository_root: ResolvedTargetIdentity,
     pub git_directory: ResolvedTargetIdentity,
     pub object_store_directory: ResolvedTargetIdentity,
@@ -164,10 +173,51 @@ pub struct GitRepositoryEvidence {
     pub bounds: GitReadBounds,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GitRepositoryEvidence {
+    view: GitRepositoryEvidenceView,
+    binding_digest: BindingDigest,
+}
+
+impl Deref for GitRepositoryEvidence {
+    type Target = GitRepositoryEvidenceView;
+
+    fn deref(&self) -> &Self::Target {
+        &self.view
+    }
+}
+
+impl GitRepositoryEvidence {
+    fn new(view: GitRepositoryEvidenceView) -> Result<Self, GitReadError> {
+        validate_repository_evidence_view(&view)?;
+        let binding_digest = repository_evidence_binding_digest(&view)?;
+        Ok(Self {
+            view,
+            binding_digest,
+        })
+    }
+
+    pub const fn binding_digest(&self) -> BindingDigest {
+        self.binding_digest
+    }
+
+    pub fn canonical_bytes(&self) -> Result<Vec<u8>, GitReadError> {
+        repository_evidence_canonical_bytes(&self.view)
+    }
+
+    pub fn verify_binding(&self) -> Result<(), GitReadError> {
+        validate_repository_evidence_view(&self.view)?;
+        if repository_evidence_binding_digest(&self.view)? != self.binding_digest {
+            return Err(GitReadError::EvidenceBindingMismatch);
+        }
+        Ok(())
+    }
+}
+
 pub struct GitRepositoryReader<'a> {
     resolver: &'a LocalFsResolver,
     operation: RequestedOperationId,
-    evidence: GitRepositoryEvidence,
+    evidence: Option<GitRepositoryEvidence>,
     bounds: GitReadBounds,
     deadline: GitOperationDeadline,
 }
@@ -237,41 +287,48 @@ impl<'a> GitRepositoryReader<'a> {
         let mut reader = Self {
             resolver,
             operation: operation.clone(),
-            evidence: GitRepositoryEvidence {
-                repository_root,
-                git_directory,
-                object_store_directory,
-                object_format,
-                head: GitHeadObservation {
-                    raw: raw_head,
-                    representation: representation.clone(),
-                    resolved_ref: None,
-                    object_id: GitObjectId([0; 20]),
-                },
-                observed_at_unix_ms,
-                bounds,
-            },
+            evidence: None,
             bounds,
             deadline,
         };
 
-        let (resolved_ref, object_id) = match representation {
-            GitHeadRepresentation::Detached(id) => (None, id),
+        let (resolved_ref, object_id) = match &representation {
+            GitHeadRepresentation::Detached(id) => (None, *id),
             GitHeadRepresentation::Symbolic(reference) => {
-                let resolution = reader.resolve_ref(&reference, observed_at_unix_ms)?;
+                let resolution = reader.resolve_ref(reference, observed_at_unix_ms)?;
                 let id = resolution.object_id;
                 (Some(resolution), id)
             }
         };
         reader.deadline.require_active()?;
-        reader.evidence.head.resolved_ref = resolved_ref;
-        reader.evidence.head.object_id = object_id;
+        reader.evidence = Some(GitRepositoryEvidence::new(GitRepositoryEvidenceView {
+            repository_root,
+            git_directory,
+            object_store_directory,
+            object_format,
+            head: GitHeadObservation {
+                raw: raw_head,
+                representation,
+                resolved_ref,
+                object_id,
+            },
+            observed_at_unix_ms,
+            bounds,
+        })?);
         Ok(reader)
     }
 
     pub fn evidence(&self) -> &GitRepositoryEvidence {
-        &self.evidence
+        let evidence = self
+            .evidence
+            .as_ref()
+            .expect("GitRepositoryReader is returned only after evidence is sealed");
+        evidence
+            .verify_binding()
+            .expect("sealed Git repository evidence must remain binding-valid");
+        evidence
     }
+
     pub fn resolve_ref(
         &self,
         reference: &str,
@@ -385,6 +442,9 @@ impl<'a> GitRepositoryReader<'a> {
 pub enum GitReadError {
     InvalidBounds,
     InvalidInternalPath,
+    InvalidRepositoryEvidence(&'static str),
+    EvidenceBindingMismatch,
+    EvidenceEncoding(CoreError),
     Resolution(LocalFsResolutionError),
     LocalRead(LocalFileReadError),
     OperationBudget(GitOperationBudgetError),
@@ -423,6 +483,15 @@ impl fmt::Display for GitReadError {
             }
             Self::InvalidInternalPath => {
                 f.write_str("Git reader constructed an invalid bounded internal path")
+            }
+            Self::InvalidRepositoryEvidence(field) => {
+                write!(f, "Git repository evidence is invalid: {field}")
+            }
+            Self::EvidenceBindingMismatch => {
+                f.write_str("Git repository evidence binding digest does not match its fields")
+            }
+            Self::EvidenceEncoding(error) => {
+                write!(f, "Git repository evidence canonical encoding failed: {error}")
             }
             Self::Resolution(error) => write!(f, "Git repository path resolution failed: {error}"),
             Self::LocalRead(error) => write!(f, "Git bounded file read failed: {error}"),
@@ -495,6 +564,7 @@ impl fmt::Display for GitReadError {
 impl Error for GitReadError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
+            Self::EvidenceEncoding(error) => Some(error),
             Self::Resolution(error) => Some(error),
             Self::LocalRead(error) => Some(error),
             Self::OperationBudget(error) => Some(error),
@@ -502,6 +572,12 @@ impl Error for GitReadError {
             Self::Sha1(error) => Some(error),
             _ => None,
         }
+    }
+}
+
+impl From<CoreError> for GitReadError {
+    fn from(value: CoreError) -> Self {
+        Self::EvidenceEncoding(value)
     }
 }
 
@@ -533,6 +609,191 @@ impl From<GitObjectSha1Error> for GitReadError {
     fn from(value: GitObjectSha1Error) -> Self {
         Self::Sha1(value)
     }
+}
+
+fn validate_repository_evidence_view(view: &GitRepositoryEvidenceView) -> Result<(), GitReadError> {
+    view.bounds.validate()?;
+    for (identity, field) in [
+        (&view.repository_root, "repository root identity"),
+        (&view.git_directory, "Git directory identity"),
+        (&view.object_store_directory, "object store identity"),
+    ] {
+        identity
+            .validate()
+            .map_err(|_| GitReadError::InvalidRepositoryEvidence(field))?;
+        if identity.file_kind != ObservedFileKind::Directory {
+            return Err(GitReadError::InvalidRepositoryEvidence(field));
+        }
+        if identity.observed_at_unix_ms != view.observed_at_unix_ms {
+            return Err(GitReadError::InvalidRepositoryEvidence(
+                "directory observation timestamp",
+            ));
+        }
+    }
+    if u64::try_from(view.head.raw.len()).map_err(|_| GitReadError::InvalidHead)? > MAX_HEAD_BYTES {
+        return Err(GitReadError::InvalidRepositoryEvidence("HEAD byte bound"));
+    }
+    validate_head_observation(&view.head)?;
+    Ok(())
+}
+
+fn validate_head_observation(head: &GitHeadObservation) -> Result<(), GitReadError> {
+    let parsed = parse_head(&head.raw)?;
+    if parsed != head.representation {
+        return Err(GitReadError::InvalidRepositoryEvidence(
+            "HEAD representation",
+        ));
+    }
+    match (&head.representation, &head.resolved_ref) {
+        (GitHeadRepresentation::Detached(expected), None) if *expected == head.object_id => Ok(()),
+        (GitHeadRepresentation::Symbolic(reference), Some(resolution))
+            if resolution.requested_ref == *reference && resolution.object_id == head.object_id =>
+        {
+            if resolution.symbolic_chain.is_empty()
+                || resolution.symbolic_chain.len() > MAX_SYMBOLIC_REF_DEPTH
+                || resolution.symbolic_chain.first() != Some(reference)
+            {
+                return Err(GitReadError::InvalidRepositoryEvidence(
+                    "symbolic ref chain",
+                ));
+            }
+            let mut seen = HashSet::with_capacity(resolution.symbolic_chain.len());
+            for item in &resolution.symbolic_chain {
+                validate_ref_name(item)?;
+                if !seen.insert(item) {
+                    return Err(GitReadError::InvalidRepositoryEvidence(
+                        "symbolic ref cycle",
+                    ));
+                }
+            }
+            Ok(())
+        }
+        _ => Err(GitReadError::InvalidRepositoryEvidence("HEAD binding")),
+    }
+}
+
+fn repository_evidence_binding_digest(
+    view: &GitRepositoryEvidenceView,
+) -> Result<BindingDigest, GitReadError> {
+    Ok(BindingDigest::new(sha256(
+        &repository_evidence_canonical_bytes(view)?,
+    )))
+}
+
+fn repository_evidence_canonical_bytes(
+    view: &GitRepositoryEvidenceView,
+) -> Result<Vec<u8>, GitReadError> {
+    validate_repository_evidence_view(view)?;
+    let mut encoder = CanonicalEncoder::new();
+    encoder.push_bytes(GIT_REPOSITORY_EVIDENCE_DOMAIN)?;
+    push_resolved_target_identity(&mut encoder, &view.repository_root)?;
+    push_resolved_target_identity(&mut encoder, &view.git_directory)?;
+    push_resolved_target_identity(&mut encoder, &view.object_store_directory)?;
+    encoder.push_u8(match view.object_format {
+        GitObjectFormat::Sha1 => 1,
+    });
+    push_head_observation(&mut encoder, &view.head)?;
+    encoder.push_u64(view.observed_at_unix_ms);
+    push_git_read_bounds(&mut encoder, view.bounds)?;
+    Ok(encoder.finish())
+}
+
+fn push_resolved_target_identity(
+    encoder: &mut CanonicalEncoder,
+    identity: &ResolvedTargetIdentity,
+) -> Result<(), GitReadError> {
+    encoder.push_u8(match identity.platform {
+        PlatformFamily::Unix => 1,
+        PlatformFamily::Windows => 2,
+    });
+    encoder.push_bytes(identity.requested_path.as_str().as_bytes())?;
+    encoder.push_bytes(identity.normalized_path.as_str().as_bytes())?;
+    push_optional_digest(encoder, identity.resolved_parent_identity)?;
+    push_optional_digest(encoder, identity.resolved_target_identity)?;
+    encoder.push_u8(match identity.file_kind {
+        ObservedFileKind::Missing => 1,
+        ObservedFileKind::RegularFile => 2,
+        ObservedFileKind::Directory => 3,
+        ObservedFileKind::SymlinkOrReparsePoint => 4,
+        ObservedFileKind::Special => 5,
+    });
+    encoder.push_u64(
+        u64::try_from(identity.symlink_or_reparse_chain.len())
+            .map_err(|_| GitReadError::InvalidRepositoryEvidence("alias chain length"))?,
+    );
+    for digest in &identity.symlink_or_reparse_chain {
+        encoder.push_bytes(&digest.bytes())?;
+    }
+    encoder.push_bytes(&identity.observed_metadata_digest.bytes())?;
+    encoder.push_u64(identity.observed_at_unix_ms);
+    Ok(())
+}
+
+fn push_head_observation(
+    encoder: &mut CanonicalEncoder,
+    head: &GitHeadObservation,
+) -> Result<(), GitReadError> {
+    encoder.push_bytes(&head.raw)?;
+    match &head.representation {
+        GitHeadRepresentation::Detached(id) => {
+            encoder.push_u8(1);
+            encoder.push_bytes(&id.bytes())?;
+        }
+        GitHeadRepresentation::Symbolic(reference) => {
+            encoder.push_u8(2);
+            encoder.push_bytes(reference.as_bytes())?;
+        }
+    }
+    match &head.resolved_ref {
+        Some(resolution) => {
+            encoder.push_u8(1);
+            encoder.push_bytes(resolution.requested_ref.as_bytes())?;
+            encoder.push_u64(
+                u64::try_from(resolution.symbolic_chain.len())
+                    .map_err(|_| GitReadError::InvalidRepositoryEvidence("ref chain length"))?,
+            );
+            for reference in &resolution.symbolic_chain {
+                encoder.push_bytes(reference.as_bytes())?;
+            }
+            encoder.push_bytes(&resolution.object_id.bytes())?;
+            encoder.push_u8(match resolution.source {
+                GitRefSource::Loose => 1,
+                GitRefSource::Packed => 2,
+            });
+        }
+        None => encoder.push_u8(0),
+    }
+    encoder.push_bytes(&head.object_id.bytes())?;
+    Ok(())
+}
+
+fn push_git_read_bounds(
+    encoder: &mut CanonicalEncoder,
+    bounds: GitReadBounds,
+) -> Result<(), GitReadError> {
+    encoder.push_u64(bounds.max_loose_compressed_bytes);
+    encoder.push_u64(
+        u64::try_from(bounds.max_single_object_decompressed_bytes)
+            .map_err(|_| GitReadError::InvalidBounds)?,
+    );
+    encoder.push_u64(bounds.max_packed_refs_bytes);
+    encoder.push_u64(u64::try_from(bounds.max_packed_refs).map_err(|_| GitReadError::InvalidBounds)?);
+    encoder.push_u128(bounds.max_duration.as_nanos());
+    Ok(())
+}
+
+fn push_optional_digest(
+    encoder: &mut CanonicalEncoder,
+    digest: Option<BindingDigest>,
+) -> Result<(), GitReadError> {
+    match digest {
+        Some(value) => {
+            encoder.push_u8(1);
+            encoder.push_bytes(&value.bytes())?;
+        }
+        None => encoder.push_u8(0),
+    }
+    Ok(())
 }
 
 fn resolve_directory(
@@ -995,11 +1256,63 @@ mod tests {
             reader.evidence().head.object_id.to_hex(),
             "ce013625030ba8dba906f756967f9e9ca394464a"
         );
+        assert!(reader.evidence().verify_binding().is_ok());
+        assert_ne!(
+            reader.evidence().binding_digest(),
+            BindingDigest::new([0_u8; 32])
+        );
         let object = reader
             .read_loose_object(reader.evidence().head.object_id, 2)
             .unwrap();
         assert_eq!(object.kind, GitObjectKind::Blob);
         assert_eq!(object.bytes, b"hello\n");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(any(
+        target_os = "linux",
+        target_os = "android",
+        target_os = "macos",
+        target_os = "ios",
+        target_os = "freebsd"
+    ))]
+    #[test]
+    fn repository_evidence_rejects_detached_or_substituted_bindings() {
+        let root = fixture_root();
+        fs::create_dir_all(root.join(".git/objects")).unwrap();
+        fs::write(
+            root.join(".git/HEAD"),
+            b"e69de29bb2d1d6434b8b29ae775ad8c2e48c5391\n",
+        )
+        .unwrap();
+        let operation = RequestedOperationId::new("git-read").unwrap();
+        let resolver = LocalFsResolver::new(
+            &root,
+            ResourceClassId::new("project").unwrap(),
+            vec![operation.clone()],
+            Vec::<PathBuf>::new(),
+        )
+        .unwrap();
+        let reader =
+            GitRepositoryReader::open(&resolver, &operation, GitReadBounds::default(), 7).unwrap();
+        let evidence = reader.evidence().clone();
+
+        let mut detached = evidence.clone();
+        detached.binding_digest = BindingDigest::new([0x55; 32]);
+        assert!(matches!(
+            detached.verify_binding(),
+            Err(GitReadError::EvidenceBindingMismatch)
+        ));
+
+        let mut substituted = evidence;
+        substituted.view.observed_at_unix_ms = 8;
+        substituted.view.repository_root.observed_at_unix_ms = 8;
+        substituted.view.git_directory.observed_at_unix_ms = 8;
+        substituted.view.object_store_directory.observed_at_unix_ms = 8;
+        assert!(matches!(
+            substituted.verify_binding(),
+            Err(GitReadError::EvidenceBindingMismatch)
+        ));
         fs::remove_dir_all(root).unwrap();
     }
 
