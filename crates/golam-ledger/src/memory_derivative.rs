@@ -40,6 +40,10 @@ const MAX_LEXICAL_TERM_BYTES: usize = 128;
 const MAX_INDEX_TERM_BYTES: usize = 512;
 const MAX_INDEX_BYTES: usize = 128 * 1024 * 1024;
 
+type PostingKey = ([u8; 32], [u8; 32]);
+type PostingSet = BTreeSet<PostingKey>;
+type Postings = BTreeMap<String, PostingSet>;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct MemoryDerivativeIndexReceipt {
     pub generation: DerivativeIndexGeneration,
@@ -307,7 +311,7 @@ fn build_index_plan(
     let canonical_vault = fs::canonicalize(layout.vault_dir())?;
     let mut total_canonical_bytes = 0usize;
     let mut documents = Vec::with_capacity(sources.len());
-    let mut postings: BTreeMap<String, BTreeSet<([u8; 32], [u8; 32])>> = BTreeMap::new();
+    let mut postings: Postings = BTreeMap::new();
     let mut total_postings = 0usize;
     let mut cut_encoder = CanonicalEncoder::new();
     cut_encoder.push_bytes(CANONICAL_CUT_DOMAIN)?;
@@ -567,9 +571,9 @@ fn insert_term(terms: &mut BTreeSet<String>, term: String) -> Result<(), MemoryD
 }
 
 fn add_posting(
-    postings: &mut BTreeMap<String, BTreeSet<([u8; 32], [u8; 32])>>,
+    postings: &mut Postings,
     term: String,
-    key: ([u8; 32], [u8; 32]),
+    key: PostingKey,
     total_postings: &mut usize,
 ) -> Result<(), MemoryDerivativeError> {
     if !postings.contains_key(&term) && postings.len() >= MAX_UNIQUE_TERMS {
@@ -609,7 +613,7 @@ fn serialize_index(
     layout: &MemoryLayout,
     generation: &DerivativeIndexGeneration,
     documents: &[IndexedDocument],
-    postings: &BTreeMap<String, BTreeSet<([u8; 32], [u8; 32])>>,
+    postings: &Postings,
 ) -> Result<Vec<u8>, MemoryDerivativeError> {
     let mut encoder = CanonicalEncoder::new();
     encoder.push_bytes(INDEX_FILE_DOMAIN)?;
