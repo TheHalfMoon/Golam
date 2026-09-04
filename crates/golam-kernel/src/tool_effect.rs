@@ -140,10 +140,7 @@ pub enum ToolEffectError {
     MissingAttempt(EffectId),
     NotToolEffect(EffectId),
     InvalidStoredPreconditions(EffectId),
-    NotReconcilable {
-        effect_id: EffectId,
-        actual: String,
-    },
+    NotReconcilable { effect_id: EffectId, actual: String },
     MissingTerminalEvidence(EffectId),
 }
 
@@ -175,7 +172,11 @@ impl fmt::Display for ToolEffectError {
                 write!(f, "tool effect has no durable attempt: {}", effect_id.0)
             }
             Self::NotToolEffect(effect_id) => {
-                write!(f, "effect is not an exact durable tool effect: {}", effect_id.0)
+                write!(
+                    f,
+                    "effect is not an exact durable tool effect: {}",
+                    effect_id.0
+                )
             }
             Self::InvalidStoredPreconditions(effect_id) => write!(
                 f,
@@ -607,8 +608,11 @@ fn validate_tool_snapshot(
         return Err(ToolEffectError::NotToolEffect(snapshot.effect_id));
     }
     let preconditions_hash = stored_preconditions_hash(snapshot)?;
-    let expected_dispatch_token =
-        dispatch_token(snapshot.effect_id, preconditions_hash, snapshot.payload_hash);
+    let expected_dispatch_token = dispatch_token(
+        snapshot.effect_id,
+        preconditions_hash,
+        snapshot.payload_hash,
+    );
     if attempt.dispatch_token != expected_dispatch_token {
         return Err(ToolEffectError::NotToolEffect(snapshot.effect_id));
     }
@@ -760,7 +764,10 @@ mod tests {
         assert_eq!(context.attempt_id, prepared.attempt_id());
         assert_eq!(context.preconditions_hash, [11; 32]);
         assert_eq!(context.payload_hash, [12; 32]);
-        assert_eq!(context.dispatch_token, dispatch_token(effect_id, [11; 32], [12; 32]));
+        assert_eq!(
+            context.dispatch_token,
+            dispatch_token(effect_id, [11; 32], [12; 32])
+        );
 
         let effects = EffectStore::open(&kernel.authority).unwrap();
         assert_eq!(effects.attempt_count(effect_id).unwrap(), 1);
