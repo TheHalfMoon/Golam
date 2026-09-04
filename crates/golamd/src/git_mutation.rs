@@ -2118,7 +2118,10 @@ mod tests {
         let status = fixture.status("git.add");
         let expectation = GitMutationExpectation::from_status(&status).unwrap();
         let file = fixture.file_expectation(&target, "git.add", b"nested\n");
-        assert_eq!(file.expected_parent_identity, parent.resolved_target_identity);
+        assert_eq!(
+            file.expected_parent_identity,
+            parent.resolved_target_identity
+        );
         let prepared = fixture.prepare_add(6304, expectation, &target, file);
         execute_git_add(
             &fixture.resolver,
