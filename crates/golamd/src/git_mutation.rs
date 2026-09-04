@@ -12,7 +12,7 @@ use std::path::Path;
 use std::path::PathBuf;
 
 use golam_core::digest::sha256;
-use golam_core::target_identity::{FileMutationExpectation, ObservedFileKind};
+use golam_core::target_identity::{FileMutationExpectation, ObservedFileKind, PlatformFamily};
 use golam_core::tool_request::{BindingDigest, RequestedOperationId, RequestedTarget};
 use golam_core::{CanonicalEncoder, CoreError, EffectId};
 use golam_kernel::PreparedToolEffect;
@@ -26,7 +26,7 @@ use crate::git_index::{
 };
 #[cfg(unix)]
 use crate::git_observe::GitTreeMode;
-use crate::git_read::{GitHeadRepresentation, GitObjectId, GitReadError};
+use crate::git_read::{GitHeadRepresentation, GitObjectFormat, GitObjectId, GitReadError};
 #[cfg(unix)]
 use crate::git_read::{GitObjectKind, GitReadBounds, GitRefSource, GitRepositoryReader};
 use crate::git_sha1::{GitObjectSha1, GitObjectSha1Error};
@@ -42,6 +42,7 @@ use crate::local_read::LocalFileReadError;
 use crate::local_read::{LocalFileReadBounds, read_regular_file};
 
 const EXPECTATION_DOMAIN: &[u8] = b"golam:git-mutation-expectation:v2";
+const REPOSITORY_IDENTITY_DOMAIN: &[u8] = b"golam:git-mutation-repository-identity:v1";
 const STATUS_DOMAIN: &[u8] = b"golam:git-status-state:v2";
 const ADD_PRECONDITION_DOMAIN: &[u8] = b"golam:git-add-preconditions:v2";
 const ADD_PAYLOAD_DOMAIN: &[u8] = b"golam:git-add-payload:v2";
@@ -66,9 +67,9 @@ pub struct GitMutationExpectation {
 
 impl GitMutationExpectation {
     pub fn from_status(status: &GitStatusObservation) -> Result<Self, GitMutationError> {
-        status.repository_evidence.verify_binding()?;
+        status.verify_binding()?;
         Ok(Self {
-            repository_binding: status.repository_evidence.binding_digest(),
+            repository_binding: git_repository_identity_digest(status)?,
             head: status.head,
             index_checksum: status.index_checksum,
             status_digest: git_status_digest(status)?,
@@ -499,20 +500,13 @@ fn execute_git_add_unix(
         observed_at_unix_ms,
     )?;
     if read.identity.resolved_target_identity != target_expectation.expected_identity
+        || read.identity.resolved_parent_identity != target_expectation.expected_parent_identity
         || read.identity.file_kind != ObservedFileKind::RegularFile
         || read.content_digest != expected_content
         || target_expectation
             .expected_size
             .is_some_and(|size| size != read.bytes.len() as u64)
     {
-        return Err(GitMutationError::StaleWorktree);
-    }
-    let root = resolver.resolve_read_target(
-        &RequestedTarget::new(".").map_err(|_| GitMutationError::InvalidTarget)?,
-        &operation,
-        observed_at_unix_ms,
-    )?;
-    if root.resolved_target_identity != target_expectation.expected_parent_identity {
         return Err(GitMutationError::StaleWorktree);
     }
     let metadata = fs::symlink_metadata(Path::new(read.identity.normalized_path.as_str()))?;
@@ -741,6 +735,7 @@ fn execute_git_commit_unix(
         GitStatusBounds::default(),
         observed_at_unix_ms,
     )?;
+    after.verify_binding()?;
     if after.head != commit_id
         || after.index_checksum != before.index_checksum
         || !after.staged.is_empty()
@@ -818,8 +813,10 @@ fn execute_git_branch_create_unix(
         GitStatusBounds::default(),
         observed_at_unix_ms,
     )?;
+    after.verify_binding()?;
     if after.head != before.head
         || after.index_checksum != before.index_checksum
+        || git_repository_identity_digest(&after)? != expectation.repository_binding
         || git_status_digest(&after)? != expectation.status_digest
     {
         return Err(GitMutationError::UnknownOutcome(PathBuf::from(format!(
@@ -843,8 +840,8 @@ fn verify_expectation(
     status: &GitStatusObservation,
     expected: GitMutationExpectation,
 ) -> Result<(), GitMutationError> {
-    status.repository_evidence.verify_binding()?;
-    if status.repository_evidence.binding_digest() != expected.repository_binding
+    status.verify_binding()?;
+    if git_repository_identity_digest(status)? != expected.repository_binding
         || status.head != expected.head
         || status.index_checksum != expected.index_checksum
         || git_status_digest(status)? != expected.status_digest
@@ -859,8 +856,9 @@ fn verify_logical_state_unchanged_after_object_write(
     before: &GitStatusObservation,
     expected: GitMutationExpectation,
 ) -> Result<(), GitMutationError> {
-    current.repository_evidence.verify_binding()?;
-    if current.head != expected.head
+    current.verify_binding()?;
+    if git_repository_identity_digest(current)? != expected.repository_binding
+        || current.head != expected.head
         || current.index_checksum != expected.index_checksum
         || git_status_digest(current)? != expected.status_digest
         || current.staged != before.staged
@@ -891,6 +889,8 @@ fn verify_add_result(
     path: &str,
     blob_id: GitObjectId,
 ) -> Result<(), GitMutationError> {
+    before.verify_binding()?;
+    after.verify_binding()?;
     if after.head != before.head || after.index_checksum == before.index_checksum {
         return Err(GitMutationError::UnknownOutcome(PathBuf::from(
             ".git/index",
@@ -933,7 +933,49 @@ fn untracked_without_path(paths: &[String], path: &str) -> Vec<String> {
         .collect()
 }
 
+fn git_repository_identity_digest(
+    status: &GitStatusObservation,
+) -> Result<BindingDigest, GitMutationError> {
+    status.verify_binding()?;
+    let evidence = status.repository_evidence();
+    let mut encoder = CanonicalEncoder::new();
+    encoder.push_bytes(REPOSITORY_IDENTITY_DOMAIN)?;
+    for identity in [
+        &evidence.repository_root,
+        &evidence.git_directory,
+        &evidence.object_store_directory,
+    ] {
+        encoder.push_u8(match identity.platform {
+            PlatformFamily::Unix => 1,
+            PlatformFamily::Windows => 2,
+        });
+        encoder.push_bytes(identity.requested_path.as_str().as_bytes())?;
+        encoder.push_bytes(identity.normalized_path.as_str().as_bytes())?;
+        push_digest(&mut encoder, identity.resolved_parent_identity)?;
+        push_digest(&mut encoder, identity.resolved_target_identity)?;
+        encoder.push_u8(match identity.file_kind {
+            ObservedFileKind::Missing => 1,
+            ObservedFileKind::RegularFile => 2,
+            ObservedFileKind::Directory => 3,
+            ObservedFileKind::SymlinkOrReparsePoint => 4,
+            ObservedFileKind::Special => 5,
+        });
+        encoder.push_u64(
+            u64::try_from(identity.symlink_or_reparse_chain.len())
+                .map_err(|_| CoreError::CanonicalLengthOverflow)?,
+        );
+        for alias in &identity.symlink_or_reparse_chain {
+            encoder.push_bytes(&alias.bytes())?;
+        }
+    }
+    encoder.push_u8(match evidence.object_format {
+        GitObjectFormat::Sha1 => 1,
+    });
+    Ok(BindingDigest::new(sha256(&encoder.finish())))
+}
+
 pub fn git_status_digest(status: &GitStatusObservation) -> Result<BindingDigest, GitMutationError> {
+    status.verify_binding()?;
     let mut encoder = CanonicalEncoder::new();
     encoder.push_bytes(STATUS_DOMAIN)?;
     encoder.push_bytes(&status.head.bytes())?;
@@ -1864,17 +1906,13 @@ mod tests {
                 .resolver
                 .resolve_read_target(target, &operation, 100)
                 .unwrap();
-            let root = self
-                .resolver
-                .resolve_read_target(&RequestedTarget::new(".").unwrap(), &operation, 100)
-                .unwrap();
             FileMutationExpectation {
                 expected_exists: true,
                 expected_kind: Some(ObservedFileKind::RegularFile),
                 expected_identity: identity.resolved_target_identity,
                 expected_content_digest: Some(BindingDigest::new(sha256(bytes))),
                 expected_size: Some(bytes.len() as u64),
-                expected_parent_identity: root.resolved_target_identity,
+                expected_parent_identity: identity.resolved_parent_identity,
             }
         }
 
@@ -2036,6 +2074,62 @@ mod tests {
             format!("{}\n", commit_receipt.current_head.to_hex())
         );
         fixture.complete(&branch, ToolExecutionCompletion::Succeeded);
+    }
+
+    #[test]
+    fn observation_time_change_does_not_invalidate_stable_repository_preconditions() {
+        let fixture = Fixture::new();
+        let status = fixture.status("git.branch.create");
+        let expectation = GitMutationExpectation::from_status(&status).unwrap();
+        let later = observe_status(
+            &fixture.resolver,
+            &RequestedOperationId::new("git.branch.create").unwrap(),
+            GitStatusBounds::default(),
+            101,
+        )
+        .unwrap();
+        verify_expectation(&later, expectation).unwrap();
+    }
+
+    #[test]
+    fn tampered_status_observation_cannot_mint_mutation_preconditions() {
+        let fixture = Fixture::new();
+        let mut status = fixture.status("git.branch.create");
+        status.untracked.push("forged.txt".to_owned());
+        assert!(matches!(
+            GitMutationExpectation::from_status(&status),
+            Err(GitMutationError::Status(
+                GitStatusError::ObservationBindingMismatch
+            ))
+        ));
+    }
+
+    #[test]
+    fn nested_git_add_binds_the_actual_parent_identity() {
+        let mut fixture = Fixture::new();
+        fs::create_dir_all(fixture.repo.join("nested")).unwrap();
+        fs::write(fixture.repo.join("nested/note.txt"), b"nested\n").unwrap();
+        let target = RequestedTarget::new("nested/note.txt").unwrap();
+        let operation = RequestedOperationId::new("git.add").unwrap();
+        let parent = fixture
+            .resolver
+            .resolve_read_target(&RequestedTarget::new("nested").unwrap(), &operation, 100)
+            .unwrap();
+        let status = fixture.status("git.add");
+        let expectation = GitMutationExpectation::from_status(&status).unwrap();
+        let file = fixture.file_expectation(&target, "git.add", b"nested\n");
+        assert_eq!(file.expected_parent_identity, parent.resolved_target_identity);
+        let prepared = fixture.prepare_add(6304, expectation, &target, file);
+        execute_git_add(
+            &fixture.resolver,
+            &prepared,
+            expectation,
+            &target,
+            file,
+            104,
+        )
+        .unwrap();
+        fixture.complete(&prepared, ToolExecutionCompletion::Succeeded);
     }
 
     #[test]
