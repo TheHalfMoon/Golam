@@ -14,7 +14,7 @@ mod fcntl {
 #[cfg(unix)]
 mod sys {
     pub mod stat {
-        pub use golam_core::unix_fs::Mode;
+        pub use golam_core::unix_fs::{Mode, mkdirat};
     }
 }
 #[cfg(unix)]
