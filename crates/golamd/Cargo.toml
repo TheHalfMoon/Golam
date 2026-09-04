@@ -12,8 +12,5 @@ golam-ipc = { path = "../golam-ipc" }
 golam-kernel = { path = "../golam-kernel" }
 miniz_oxide = { version = "=0.9.1", default-features = false }
 
-[target.'cfg(unix)'.dependencies]
-nix = { workspace = true }
-
 [lints]
 workspace = true
