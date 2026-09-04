@@ -8,7 +8,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use golam_core::digest::sha256;
 use golam_core::paths::RuntimeLayout;
 use golam_core::target_identity::{FileMutationExpectation, ObservedFileKind};
-use golam_core::tool_request::{BindingDigest, RequestedOperationId, RequestedTarget, ResourceClassId};
+use golam_core::tool_request::{
+    BindingDigest, RequestedOperationId, RequestedTarget, ResourceClassId,
+};
 use golam_core::{EffectId, EventId, SessionId};
 use golam_kernel::{
     AuthorizationPolicy, AuthorizationRequest, CompleteToolEffect, KernelApi, KernelCreateSession,
@@ -34,7 +36,6 @@ impl AuthorizationPolicy for AllowPhaseF {
 struct Fixture {
     base: PathBuf,
     workspace: PathBuf,
-    runtime: RuntimeLayout,
     resolver: LocalFsResolver,
     kernel: KernelApi<AllowPhaseF>,
 }
@@ -74,7 +75,6 @@ impl Fixture {
         Self {
             base,
             workspace,
-            runtime,
             resolver,
             kernel,
         }
@@ -209,7 +209,10 @@ fn create_write_and_replace_require_fresh_effect_bound_state_and_verify_readback
     )
     .unwrap();
     assert_eq!(create_receipt.effect_id, EffectId(100));
-    assert_eq!(fs::read(fixture.workspace.join("note.txt")).unwrap(), b"alpha");
+    assert_eq!(
+        fs::read(fixture.workspace.join("note.txt")).unwrap(),
+        b"alpha"
+    );
     fixture.complete(&create, ToolExecutionCompletion::Succeeded);
 
     let write_expectation = fixture.expectation(FileWriteMode::Write, &target, Some(b"alpha"));
@@ -230,7 +233,10 @@ fn create_write_and_replace_require_fresh_effect_bound_state_and_verify_readback
         12,
     )
     .unwrap();
-    assert_eq!(fs::read(fixture.workspace.join("note.txt")).unwrap(), b"beta");
+    assert_eq!(
+        fs::read(fixture.workspace.join("note.txt")).unwrap(),
+        b"beta"
+    );
     fixture.complete(&write, ToolExecutionCompletion::Succeeded);
 
     let replace_expectation = fixture.expectation(FileWriteMode::Replace, &target, Some(b"beta"));
@@ -252,7 +258,10 @@ fn create_write_and_replace_require_fresh_effect_bound_state_and_verify_readback
     )
     .unwrap();
     assert_eq!(replace_receipt.effect_id, EffectId(300));
-    assert_eq!(fs::read(fixture.workspace.join("note.txt")).unwrap(), b"gamma");
+    assert_eq!(
+        fs::read(fixture.workspace.join("note.txt")).unwrap(),
+        b"gamma"
+    );
     fixture.complete(&replace, ToolExecutionCompletion::Succeeded);
 }
 
@@ -289,13 +298,7 @@ fn stale_content_and_parent_preconditions_deny_before_commit() {
 
     let mut stale_parent = fixture.expectation(FileWriteMode::Write, &target, Some(b"stable"));
     stale_parent.expected_parent_identity = Some(BindingDigest::new([0x55; 32]));
-    let prepared = fixture.prepare(
-        500,
-        FileWriteMode::Write,
-        &target,
-        stale_parent,
-        b"mutated",
-    );
+    let prepared = fixture.prepare(500, FileWriteMode::Write, &target, stale_parent, b"mutated");
     assert!(matches!(
         execute_file_write(
             &fixture.resolver,
