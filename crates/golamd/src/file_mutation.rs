@@ -224,7 +224,7 @@ pub fn execute_file_write(
 }
 
 #[cfg(unix)]
-#[expect(
+#[allow(
     clippy::too_many_arguments,
     reason = "mutation boundary keeps exact authority and stale-state bindings explicit"
 )]
