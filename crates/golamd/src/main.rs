@@ -32,6 +32,7 @@ pub mod file_path_mutation;
 #[cfg(all(test, unix))]
 mod file_path_mutation_qualification_tests;
 pub mod git_index;
+pub mod git_mutation;
 pub mod git_observe;
 pub mod git_pack;
 #[cfg(test)]
