@@ -330,8 +330,7 @@ fn prepared_rename_rejects_symlink_substitution_without_touching_preserved_sourc
     fs::write(&source_path, b"authority-bound").unwrap();
     let source = RequestedTarget::new("source.txt").unwrap();
     let destination = RequestedTarget::new("destination.txt").unwrap();
-    let expectation =
-        fixture.source_expectation(&source, b"authority-bound", "file.rename");
+    let expectation = fixture.source_expectation(&source, b"authority-bound", "file.rename");
     let parent = fixture.root_identity("file.rename");
     let prepared = fixture.prepare_rename(650, &source, &destination, expectation, parent);
 
