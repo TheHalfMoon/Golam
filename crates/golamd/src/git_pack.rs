@@ -175,6 +175,13 @@ pub fn parse_pack_index_v2(
     if object_count > bounds.max_objects {
         return Err(GitPackError::ObjectLimitExceeded);
     }
+    let minimum_object_bytes = object_count
+        .checked_mul(SHA1_BYTES + 8)
+        .and_then(|value| value.checked_add(SHA1_BYTES))
+        .ok_or(GitPackError::TruncatedIndex)?;
+    if cursor.remaining() < minimum_object_bytes {
+        return Err(GitPackError::TruncatedIndex);
+    }
 
     let mut object_ids = Vec::with_capacity(object_count);
     for _ in 0..object_count {
@@ -1038,6 +1045,29 @@ mod tests {
         .unwrap();
         assert_eq!(object.kind, PackedObjectKind::Blob);
         assert_eq!(object.bytes, body);
+    }
+
+    #[test]
+    fn rejects_truncated_index_before_per_object_allocation() {
+        let mut index = Vec::new();
+        index.extend_from_slice(&PACK_INDEX_MAGIC);
+        index.extend_from_slice(&2_u32.to_be_bytes());
+        for slot in 0..256 {
+            let count = if slot == 255 {
+                MAX_PACK_OBJECTS as u32
+            } else {
+                0
+            };
+            index.extend_from_slice(&count.to_be_bytes());
+        }
+        index.extend_from_slice(&[0_u8; SHA1_BYTES]);
+        let checksum = GitObjectSha1::digest(&index).unwrap();
+        index.extend_from_slice(&checksum);
+
+        assert!(matches!(
+            parse_pack_index_v2(&index, GitPackBounds::default()),
+            Err(GitPackError::TruncatedIndex)
+        ));
     }
 
     #[test]
