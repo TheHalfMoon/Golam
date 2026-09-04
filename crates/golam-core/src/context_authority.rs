@@ -106,12 +106,7 @@ pub fn compile_l0_context_with_live_precedence(
     now_unix_ms: u64,
 ) -> Result<AuthorityReconciledL0Context, ContextAuthorityError> {
     let reconciliation = reconcile_live_authority(retrieved, now_unix_ms)?;
-    let compiled = compile_l0_context(
-        plan,
-        &reconciliation.filtered,
-        replan_attempt,
-        now_unix_ms,
-    )?;
+    let compiled = compile_l0_context(plan, &reconciliation.filtered, replan_attempt, now_unix_ms)?;
     Ok(AuthorityReconciledL0Context {
         compiled,
         conflicts: reconciliation.conflicts,
@@ -133,10 +128,8 @@ fn reconcile_live_authority(
         return Err(ContextAuthorityError::TooManyItems);
     }
 
-    let mut live_by_subject: BTreeMap<
-        (BindingDigest, PermissionScopeId),
-        &L0RetrievedEvidence,
-    > = BTreeMap::new();
+    let mut live_by_subject: BTreeMap<(BindingDigest, PermissionScopeId), &L0RetrievedEvidence> =
+        BTreeMap::new();
     for candidate in retrieved.iter().filter(|candidate| is_live(candidate)) {
         candidate
             .evidence
@@ -173,8 +166,14 @@ fn reconcile_live_authority(
 
     let mut suppressed = BTreeSet::new();
     let mut conflicts = Vec::new();
-    for memory in retrieved.iter().filter(|candidate| is_managed_memory(candidate)) {
-        let key = (memory.evidence.content_ref, memory.evidence.permission_scope);
+    for memory in retrieved
+        .iter()
+        .filter(|candidate| is_managed_memory(candidate))
+    {
+        let key = (
+            memory.evidence.content_ref,
+            memory.evidence.permission_scope,
+        );
         let Some(live) = live_by_subject.get(&key).copied() else {
             continue;
         };
@@ -377,7 +376,10 @@ mod tests {
             vec![memory.evidence.evidence_id]
         );
         assert_eq!(output.conflicts.len(), 1);
-        assert_eq!(output.conflicts[0].live_evidence_ref, live.evidence.evidence_id);
+        assert_eq!(
+            output.conflicts[0].live_evidence_ref,
+            live.evidence.evidence_id
+        );
         assert_eq!(
             output.conflicts[0].memory_evidence_ref,
             memory.evidence.evidence_id
@@ -410,7 +412,10 @@ mod tests {
         };
         let output = compile_l0_context_with_live_precedence(
             &plan(
-                vec![EvidenceSourceKind::GitObject, EvidenceSourceKind::ManagedMemory],
+                vec![
+                    EvidenceSourceKind::GitObject,
+                    EvidenceSourceKind::ManagedMemory,
+                ],
                 vec![L0SourceRoute::Git, L0SourceRoute::ManagedMemory],
             ),
             &[live.clone(), memory],
