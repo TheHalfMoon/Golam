@@ -22,7 +22,7 @@ use crate::file_path_mutation::{
     file_delete_preconditions_hash, file_delete_resource, file_rename_payload_hash,
     file_rename_preconditions_hash, file_rename_resource,
 };
-use crate::local_fs::LocalFsResolver;
+use crate::local_fs::{LocalFsResolutionError, LocalFsResolver};
 
 static TEST_COUNTER: AtomicU64 = AtomicU64::new(0);
 
@@ -317,5 +317,75 @@ fn rename_denies_existing_destination_and_stale_parent_without_mutating_source()
         b"stable"
     );
     assert!(!fixture.workspace.join("fresh.txt").exists());
+    fixture.complete(&prepared, ToolExecutionCompletion::Failed);
+}
+
+#[test]
+fn prepared_rename_rejects_symlink_substitution_without_touching_preserved_source() {
+    use std::os::unix::fs::symlink;
+
+    let mut fixture = Fixture::new();
+    let source_path = fixture.workspace.join("source.txt");
+    let preserved_path = fixture.workspace.join("preserved.txt");
+    fs::write(&source_path, b"authority-bound").unwrap();
+    let source = RequestedTarget::new("source.txt").unwrap();
+    let destination = RequestedTarget::new("destination.txt").unwrap();
+    let expectation =
+        fixture.source_expectation(&source, b"authority-bound", "file.rename");
+    let parent = fixture.root_identity("file.rename");
+    let prepared = fixture.prepare_rename(650, &source, &destination, expectation, parent);
+
+    fs::rename(&source_path, &preserved_path).unwrap();
+    symlink("preserved.txt", &source_path).unwrap();
+
+    assert!(matches!(
+        execute_file_rename(
+            &fixture.resolver,
+            &prepared,
+            &source,
+            &destination,
+            expectation,
+            parent,
+            30,
+        ),
+        Err(PathMutationError::Resolution(
+            LocalFsResolutionError::AliasBoundary { .. }
+        ))
+    ));
+    assert_eq!(fs::read(&preserved_path).unwrap(), b"authority-bound");
+    assert!(!fixture.workspace.join("destination.txt").exists());
+    fixture.complete(&prepared, ToolExecutionCompletion::Failed);
+}
+
+#[test]
+fn prepared_rename_rejects_source_inode_swap_without_committing_destination() {
+    let mut fixture = Fixture::new();
+    let source_path = fixture.workspace.join("source.txt");
+    let preserved_path = fixture.workspace.join("preserved.txt");
+    fs::write(&source_path, b"original").unwrap();
+    let source = RequestedTarget::new("source.txt").unwrap();
+    let destination = RequestedTarget::new("destination.txt").unwrap();
+    let expectation = fixture.source_expectation(&source, b"original", "file.rename");
+    let parent = fixture.root_identity("file.rename");
+    let prepared = fixture.prepare_rename(660, &source, &destination, expectation, parent);
+
+    fs::rename(&source_path, &preserved_path).unwrap();
+    fs::write(&source_path, b"substituted").unwrap();
+
+    assert!(matches!(
+        execute_file_rename(
+            &fixture.resolver,
+            &prepared,
+            &source,
+            &destination,
+            expectation,
+            parent,
+            31,
+        ),
+        Err(PathMutationError::StaleSource)
+    ));
+    assert_eq!(fs::read(&preserved_path).unwrap(), b"original");
+    assert_eq!(fs::read(&source_path).unwrap(), b"substituted");
+    assert!(!fixture.workspace.join("destination.txt").exists());
     fixture.complete(&prepared, ToolExecutionCompletion::Failed);
 }
