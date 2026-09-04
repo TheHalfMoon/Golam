@@ -4,7 +4,9 @@ use std::error::Error;
 use std::fmt;
 
 use golam_core::{EffectAttemptId, EffectId, EffectTransitionId, EventId, SessionId};
-use golam_ledger::dispatch::{EffectDispatchStoreError, PrepareEffectDispatch, encode_effect_dependencies};
+use golam_ledger::dispatch::{
+    EffectDispatchStoreError, PrepareEffectDispatch, encode_effect_dependencies,
+};
 use golam_ledger::effect_completion::{
     CompleteEffectExecution, EffectCompletionError, EffectCompletionStore, ExecutionCompletion,
 };
@@ -126,7 +128,10 @@ impl fmt::Display for ToolEffectError {
             Self::Completion(error) => write!(f, "tool effect completion error: {error}"),
             Self::InvalidMetadata => f.write_str("tool effect metadata must be non-empty"),
             Self::UnsupportedSemantics(value) => {
-                write!(f, "unsupported consequential tool effect semantics: {value}")
+                write!(
+                    f,
+                    "unsupported consequential tool effect semantics: {value}"
+                )
             }
             Self::IdentifierOverflow(effect_id) => write!(
                 f,
@@ -234,7 +239,11 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         })?;
         drop(effects);
 
-        let dispatch_token = dispatch_token(input.effect_id, input.preconditions_hash, input.payload_hash);
+        let dispatch_token = dispatch_token(
+            input.effect_id,
+            input.preconditions_hash,
+            input.payload_hash,
+        );
         let dispatch = self.prepare_effect_dispatch(PrepareEffectDispatch {
             effect_id: input.effect_id,
             attempt_id: EffectAttemptId(stage_id(input.effect_id, STAGE_ATTEMPT)?),
