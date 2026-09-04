@@ -7,9 +7,7 @@ use std::ops::Deref;
 use std::time::Duration;
 
 use golam_core::digest::sha256;
-use golam_core::target_identity::{
-    ObservedFileKind, PlatformFamily, ResolvedTargetIdentity,
-};
+use golam_core::target_identity::{ObservedFileKind, PlatformFamily, ResolvedTargetIdentity};
 use golam_core::tool_request::{BindingDigest, RequestedOperationId, RequestedTarget};
 use golam_core::{CanonicalEncoder, CoreError};
 use miniz_oxide::inflate::stream::{InflateState, inflate};
@@ -491,7 +489,10 @@ impl fmt::Display for GitReadError {
                 f.write_str("Git repository evidence binding digest does not match its fields")
             }
             Self::EvidenceEncoding(error) => {
-                write!(f, "Git repository evidence canonical encoding failed: {error}")
+                write!(
+                    f,
+                    "Git repository evidence canonical encoding failed: {error}"
+                )
             }
             Self::Resolution(error) => write!(f, "Git repository path resolution failed: {error}"),
             Self::LocalRead(error) => write!(f, "Git bounded file read failed: {error}"),
@@ -777,7 +778,8 @@ fn push_git_read_bounds(
             .map_err(|_| GitReadError::InvalidBounds)?,
     );
     encoder.push_u64(bounds.max_packed_refs_bytes);
-    encoder.push_u64(u64::try_from(bounds.max_packed_refs).map_err(|_| GitReadError::InvalidBounds)?);
+    encoder
+        .push_u64(u64::try_from(bounds.max_packed_refs).map_err(|_| GitReadError::InvalidBounds)?);
     encoder.push_u128(bounds.max_duration.as_nanos());
     Ok(())
 }
