@@ -13,8 +13,9 @@ use golam_core::target_identity::ObservedFileKind;
 use golam_core::tool_request::{RequestedOperationId, RequestedTarget};
 
 use crate::git_pack::{
-    GitPackBounds, GitPackError, GitPackIndex, PackObjectId, PackedObjectKind, parse_pack_index_v2,
-    read_packed_object_with_deadline,
+    GitPackBounds, GitPackError, GitPackIndex, PackObjectId, PackedObjectKind, ValidatedPack,
+    parse_pack_index_v2, read_validated_packed_object_with_deadline,
+    validate_pack_for_reuse_with_deadline,
 };
 use crate::git_read::{
     GitObject, GitObjectId, GitObjectKind, GitReadBounds, GitReadError, GitRepositoryEvidence,
@@ -192,6 +193,7 @@ struct LoadedPack {
     name: String,
     index: GitPackIndex,
     bytes: Vec<u8>,
+    validated: ValidatedPack,
 }
 
 pub struct GitObservationReader<'a> {
@@ -284,9 +286,10 @@ impl<'a> GitObservationReader<'a> {
         let pack = match_index
             .and_then(|index| self.packs.get(index))
             .ok_or(GitObservationError::MissingObject(object_id))?;
-        let packed = read_packed_object_with_deadline(
+        let packed = read_validated_packed_object_with_deadline(
             &pack.bytes,
             &pack.index,
+            &pack.validated,
             wanted,
             self.bounds.pack,
             self.deadline,
@@ -610,10 +613,13 @@ fn load_packs(
         if total_pack_bytes > bounds.max_total_pack_bytes {
             return Err(GitObservationError::PackByteLimitExceeded);
         }
+        let validated =
+            validate_pack_for_reuse_with_deadline(&pack_bytes, &index, bounds.pack, deadline)?;
         packs.push(LoadedPack {
             name: pack_name,
             index,
             bytes: pack_bytes,
+            validated,
         });
     }
     if !pack_names.is_empty() {
