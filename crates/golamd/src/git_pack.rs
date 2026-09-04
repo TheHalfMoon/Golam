@@ -343,14 +343,7 @@ pub(crate) fn read_packed_object_with_deadline(
     deadline: GitOperationDeadline,
 ) -> Result<PackedGitObject, GitPackError> {
     let validated = validate_pack_for_reuse_with_deadline(pack, index, bounds, deadline)?;
-    read_validated_packed_object_with_deadline(
-        pack,
-        index,
-        &validated,
-        wanted,
-        bounds,
-        deadline,
-    )
+    read_validated_packed_object_with_deadline(pack, index, &validated, wanted, bounds, deadline)
 }
 
 fn validate_reuse_binding(
@@ -972,9 +965,9 @@ impl fmt::Display for GitPackError {
             Self::PackOffsetInvalid => {
                 f.write_str("Git pack index contains an invalid or duplicate object offset")
             }
-            Self::ValidatedPackStateMismatch => {
-                f.write_str("cached Git pack validation no longer matches the loaded pack/index state")
-            }
+            Self::ValidatedPackStateMismatch => f.write_str(
+                "cached Git pack validation no longer matches the loaded pack/index state",
+            ),
             Self::MissingPackedObject(_) => {
                 f.write_str("requested object is absent from this Git pack index")
             }
