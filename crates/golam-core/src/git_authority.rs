@@ -99,7 +99,10 @@ mod tests {
             OrdinaryGitMutation::Commit,
             OrdinaryGitMutation::BranchCreate,
         ] {
-            assert_eq!(classify_ordinary_git_action(operation.action()), Ok(operation));
+            assert_eq!(
+                classify_ordinary_git_action(operation.action()),
+                Ok(operation)
+            );
         }
         assert_eq!(
             classify_ordinary_git_action("git.push"),
