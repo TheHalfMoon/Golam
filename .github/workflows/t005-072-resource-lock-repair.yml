@@ -32,6 +32,7 @@ jobs:
               raise SystemExit('expected exactly one seccompiler conversion annotation')
           path.write_text(text.replace(old, new))
           PY
+          cargo +1.98.0 fmt --all
       - name: Resolve exact lock metadata and compile candidate
         run: cargo +1.98.0 check -p golamd
       - name: Verify format and bounded delta
