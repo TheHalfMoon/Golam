@@ -23,7 +23,7 @@ use golam_ledger::manual_review::{
 
 use crate::{
     AuthorizationContext, AuthorizationPolicy, AuthorizationRequest, KernelApi, KernelError,
-    PreparedEffectDispatch, Principal,
+    PreparedEffectDispatch, Principal, ToolMutationEvidenceKernelError, ToolMutationVerifiedStatus,
 };
 
 const TOOL_EFFECT_ID_STRIDE: u128 = 32;
@@ -133,6 +133,7 @@ pub enum ToolEffectError {
     Completion(EffectCompletionError),
     Read(EffectReadError),
     ManualReview(ManualReviewError),
+    MutationEvidence(ToolMutationEvidenceKernelError),
     InvalidMetadata,
     UnsupportedSemantics(String),
     IdentifierOverflow(EffectId),
@@ -141,7 +142,6 @@ pub enum ToolEffectError {
     NotToolEffect(EffectId),
     InvalidStoredPreconditions(EffectId),
     NotReconcilable { effect_id: EffectId, actual: String },
-    MissingTerminalEvidence(EffectId),
 }
 
 impl fmt::Display for ToolEffectError {
@@ -153,6 +153,9 @@ impl fmt::Display for ToolEffectError {
             Self::Completion(error) => write!(f, "tool effect completion error: {error}"),
             Self::Read(error) => write!(f, "tool effect read error: {error}"),
             Self::ManualReview(error) => write!(f, "tool effect manual-review error: {error}"),
+            Self::MutationEvidence(error) => {
+                write!(f, "tool effect mutation-evidence error: {error}")
+            }
             Self::InvalidMetadata => f.write_str("tool effect metadata must be non-empty"),
             Self::UnsupportedSemantics(value) => {
                 write!(
@@ -188,11 +191,6 @@ impl fmt::Display for ToolEffectError {
                 "tool effect is not reconcilable: effect={} state={actual}",
                 effect_id.0
             ),
-            Self::MissingTerminalEvidence(effect_id) => write!(
-                f,
-                "tool effect reconciliation cannot resolve success without terminal evidence: {}",
-                effect_id.0
-            ),
         }
     }
 }
@@ -206,6 +204,7 @@ impl Error for ToolEffectError {
             Self::Completion(error) => Some(error),
             Self::Read(error) => Some(error),
             Self::ManualReview(error) => Some(error),
+            Self::MutationEvidence(error) => Some(error),
             Self::InvalidMetadata
             | Self::UnsupportedSemantics(_)
             | Self::IdentifierOverflow(_)
@@ -213,8 +212,7 @@ impl Error for ToolEffectError {
             | Self::MissingAttempt(_)
             | Self::NotToolEffect(_)
             | Self::InvalidStoredPreconditions(_)
-            | Self::NotReconcilable { .. }
-            | Self::MissingTerminalEvidence(_) => None,
+            | Self::NotReconcilable { .. } => None,
         }
     }
 }
@@ -252,6 +250,12 @@ impl From<EffectReadError> for ToolEffectError {
 impl From<ManualReviewError> for ToolEffectError {
     fn from(value: ManualReviewError) -> Self {
         Self::ManualReview(value)
+    }
+}
+
+impl From<ToolMutationEvidenceKernelError> for ToolEffectError {
+    fn from(value: ToolMutationEvidenceKernelError) -> Self {
+        Self::MutationEvidence(value)
     }
 }
 
@@ -479,6 +483,8 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             });
         }
         let attempt_id = attempt.attempt_id;
+        let preconditions_hash = stored_preconditions_hash(&snapshot)?;
+        let payload_hash = snapshot.payload_hash;
         drop(reader);
 
         self.require_authority(&AuthorizationRequest {
@@ -490,16 +496,21 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
 
         match resolution {
             ToolReconciliationResolution::Succeeded => {
-                if evidence_ref.is_none_or(<[u8]>::is_empty) {
-                    return Err(ToolEffectError::MissingTerminalEvidence(effect_id));
-                }
+                let receipt_hash = self.require_verified_tool_mutation_receipt(
+                    effect_id,
+                    &snapshot.action,
+                    &snapshot.resource,
+                    preconditions_hash,
+                    payload_hash,
+                    ToolMutationVerifiedStatus::Succeeded,
+                )?;
                 resolve_tool_terminal(
                     &self.authority,
                     effect_id,
                     attempt_id,
                     "succeeded",
                     reason_code,
-                    evidence_ref,
+                    Some(&receipt_hash),
                 )?;
                 Ok(ToolReconciliationResult::Resolved {
                     effect_id,
@@ -507,13 +518,21 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
                 })
             }
             ToolReconciliationResolution::Failed => {
+                let receipt_hash = self.require_verified_tool_mutation_receipt(
+                    effect_id,
+                    &snapshot.action,
+                    &snapshot.resource,
+                    preconditions_hash,
+                    payload_hash,
+                    ToolMutationVerifiedStatus::Failed,
+                )?;
                 resolve_tool_terminal(
                     &self.authority,
                     effect_id,
                     attempt_id,
                     "failed",
                     reason_code,
-                    evidence_ref,
+                    Some(&receipt_hash),
                 )?;
                 Ok(ToolReconciliationResult::Resolved {
                     effect_id,
@@ -781,11 +800,20 @@ mod tests {
     }
 
     #[test]
-    fn reconciliation_success_requires_terminal_evidence_and_ambiguity_goes_manual_review() {
+    fn reconciliation_requires_protected_verified_receipt_and_ambiguity_goes_manual_review() {
         let runtime = runtime();
         let mut kernel = kernel_with_session(&runtime);
         let effect_id = EffectId(651);
-        prepare(&mut kernel, effect_id);
+        let prepared = prepare(&mut kernel, effect_id);
+        kernel
+            .record_tool_mutation_intent(
+                Principal::test("phase-f-reconcile"),
+                &prepared,
+                "golam-git-linux-v1",
+                b"git-add:note.txt",
+                "phase-f-reconcile",
+            )
+            .unwrap();
         kernel
             .begin_tool_reconciliation(
                 Principal::test("phase-f-reconcile"),
@@ -801,19 +829,31 @@ mod tests {
                 effect_id,
                 ToolReconciliationResolution::Succeeded,
                 Some("readback_verified"),
-                None,
+                Some(b"caller-supplied-bytes-are-not-terminal-proof"),
                 "2026-09-05T00:00:03Z",
                 "phase-f-reconcile",
             ),
-            Err(ToolEffectError::MissingTerminalEvidence(id)) if id == effect_id
+            Err(ToolEffectError::MutationEvidence(
+                ToolMutationEvidenceKernelError::MissingVerifiedReceipt(id)
+            )) if id == effect_id
         ));
+        kernel
+            .record_tool_mutation_verified_receipt(
+                Principal::test("phase-f-reconcile"),
+                &prepared,
+                "golam-git-linux-v1",
+                ToolMutationVerifiedStatus::Succeeded,
+                b"verified-post-operation-readback",
+                "phase-f-reconcile",
+            )
+            .unwrap();
         let resolved = kernel
             .resolve_tool_reconciliation(
                 Principal::test("phase-f-reconcile"),
                 effect_id,
                 ToolReconciliationResolution::Succeeded,
                 Some("readback_verified"),
-                Some(b"exact-target-readback-evidence"),
+                None,
                 "2026-09-05T00:00:03Z",
                 "phase-f-reconcile",
             )
