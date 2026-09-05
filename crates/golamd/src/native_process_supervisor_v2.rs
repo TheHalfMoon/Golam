@@ -18,6 +18,7 @@ pub struct RootContainmentBinding {
     pub seccomp_tsync_installed: bool,
     pub spawn_denied: bool,
     pub strict_local: bool,
+    pub linux_capability_sets_empty: bool,
     pub identity_bound_regular_file_roots: bool,
     pub ipc_creation_denied: bool,
     pub cross_process_control_denied: bool,
@@ -48,6 +49,7 @@ impl RootContainmentBinding {
             || !self.seccomp_tsync_installed
             || !self.spawn_denied
             || !self.strict_local
+            || !self.linux_capability_sets_empty
             || !self.identity_bound_regular_file_roots
             || !self.ipc_creation_denied
             || !self.cross_process_control_denied
@@ -414,6 +416,7 @@ mod tests {
             seccomp_tsync_installed: true,
             spawn_denied: true,
             strict_local: true,
+            linux_capability_sets_empty: true,
             identity_bound_regular_file_roots: true,
             ipc_creation_denied: true,
             cross_process_control_denied: true,
@@ -427,6 +430,13 @@ mod tests {
     fn hardened_receipt_is_required() {
         let mut invalid = binding();
         invalid.ipc_creation_denied = false;
+        assert!(matches!(
+            RootProcessSupervisor::new(invalid, FakeControl::default()),
+            Err(NativeProcessSupervisorError::InvalidContainmentBinding(_))
+        ));
+
+        let mut invalid = binding();
+        invalid.linux_capability_sets_empty = false;
         assert!(matches!(
             RootProcessSupervisor::new(invalid, FakeControl::default()),
             Err(NativeProcessSupervisorError::InvalidContainmentBinding(_))
