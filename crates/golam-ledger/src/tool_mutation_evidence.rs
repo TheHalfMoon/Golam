@@ -324,7 +324,7 @@ impl ToolMutationEvidenceStore {
         };
         let preconditions_hash = hash32(raw.2)?;
         let payload_hash = hash32(raw.3)?;
-        let intent_integrity_hash = hash32(raw.6)?;
+        let stored_intent_integrity_hash = hash32(raw.6)?;
         validate_binding(&raw.0, &raw.1, &raw.4, &raw.5)?;
         let status = raw
             .7
@@ -341,7 +341,7 @@ impl ToolMutationEvidenceStore {
             payload_hash,
             provider_id: raw.4,
             intent_bytes: raw.5,
-            intent_integrity_hash,
+            intent_integrity_hash: stored_intent_integrity_hash,
             verified_status: status,
             receipt_bytes: raw.8,
             receipt_integrity_hash: raw.9.map(hash32).transpose()?,
