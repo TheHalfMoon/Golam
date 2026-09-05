@@ -6,7 +6,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use golam_core::authority::AuthorityLayout;
 use golam_core::paths::RuntimeLayout;
-use golam_core::{EffectId, EventId, SessionId, ToolReconciliationResolution, ToolReconciliationResult};
+use golam_core::{
+    EffectId, EventId, SessionId, ToolReconciliationResolution, ToolReconciliationResult,
+};
 use golam_kernel::{
     AuthorizationPolicy, AuthorizationRequest, KernelApi, KernelCreateSession, PolicyDecision,
     PrepareToolEffect, Principal, ToolEffectError, ToolMutationEvidenceKernelError,
