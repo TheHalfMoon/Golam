@@ -32,7 +32,7 @@ Existing lock identity:
 ```text
 package=nix
 version=0.31.3
-registry_checksum=9fb9654ba8355388abeb8dcb4fc62f511300867002afc858860463bdd9fe0c44
+registry_checksum=cf20d2fde8ff38632c426f1165ed7436270b44f199fc55284c38276f9db47c3d
 ```
 
 ## Selected API surface
