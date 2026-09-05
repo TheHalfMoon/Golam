@@ -213,7 +213,7 @@ fn generic_git_authorized_root_cannot_overlap_protected_golam_state() {
         result,
         Err(LocalFsResolutionError::ProtectedRootOverlap(_))
     ));
-    fs::remove_dir_all(base).unwrap();
+    let _ = fs::remove_dir_all(base);
 }
 
 fn initialize_repo(root: &Path) {
