@@ -296,11 +296,7 @@ mod linux_x86_64 {
             )
             .expect("lease approval");
         let decision = kernel
-            .authorize_capability_lease_issue(
-                Principal::local_owner("issuer"),
-                &resource,
-                SCOPE,
-            )
+            .authorize_capability_lease_issue(Principal::local_owner("issuer"), &resource, SCOPE)
             .expect("lease authorization");
         assert_eq!(decision.decision, AuthorizationDecision::Allow);
         kernel

@@ -60,10 +60,15 @@ impl fmt::Display for CapabilityLeaseEffectError {
         match self {
             Self::Kernel(error) => write!(f, "capability lease effect kernel error: {error}"),
             Self::Lease(error) => write!(f, "capability lease effect binding error: {error}"),
-            Self::Dispatch(error) => write!(f, "capability lease effect dispatch encoding error: {error}"),
+            Self::Dispatch(error) => write!(
+                f,
+                "capability lease effect dispatch encoding error: {error}"
+            ),
             Self::Store(error) => write!(f, "capability lease effect store error: {error}"),
             Self::Approval(error) => write!(f, "capability lease approval error: {error}"),
-            Self::ApprovalScope(error) => write!(f, "capability lease approval scope error: {error}"),
+            Self::ApprovalScope(error) => {
+                write!(f, "capability lease approval scope error: {error}")
+            }
         }
     }
 }
