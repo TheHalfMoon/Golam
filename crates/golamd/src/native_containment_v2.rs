@@ -749,11 +749,11 @@ mod linux_x86_64 {
 
         #[test]
         fn root_identity_mode_and_path_are_bound() {
-            let mut plan = fixture_plan();
-            plan.executable.mode ^= 1;
+            let mut identity = fixture_plan().executable;
+            identity.mode ^= 1;
             assert!(matches!(
-                validate_plan(&plan),
-                Err(NativeContainmentError::InvalidPlan(_))
+                revalidate_identity(&identity),
+                Err(NativeContainmentError::PathIdentityChanged(_))
             ));
         }
 
