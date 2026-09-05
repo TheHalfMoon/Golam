@@ -22,9 +22,7 @@ use golam_kernel::{
 };
 
 use crate::local_fs::{LocalFsResolutionError, LocalFsResolver};
-use crate::static_elf_v2::{
-    MAX_STATIC_EXECUTABLE_BYTES, StaticElfV2Error, validate_static_elf_v2,
-};
+use crate::static_elf_v2::{MAX_STATIC_EXECUTABLE_BYTES, StaticElfV2Error, validate_static_elf_v2};
 
 pub const PROCESS_STAGE_ACTION: &str = "process.stage";
 pub const PROCESS_EXECUTE_ACTION: &str = "process.execute";
@@ -75,23 +73,55 @@ pub enum ProcessStageError {
 impl fmt::Display for ProcessStageError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::UnsupportedPlatform => f.write_str("process staging v2 is supported only on Linux x86_64"),
-            Self::InvalidRequestBinding(reason) => write!(f, "process staging request binding is invalid: {reason}"),
-            Self::Resolution(error) => write!(f, "process staging target resolution failed: {error}"),
-            Self::StaticElf(error) => write!(f, "process staging executable class rejected: {error}"),
+            Self::UnsupportedPlatform => {
+                f.write_str("process staging v2 is supported only on Linux x86_64")
+            }
+            Self::InvalidRequestBinding(reason) => {
+                write!(f, "process staging request binding is invalid: {reason}")
+            }
+            Self::Resolution(error) => {
+                write!(f, "process staging target resolution failed: {error}")
+            }
+            Self::StaticElf(error) => {
+                write!(f, "process staging executable class rejected: {error}")
+            }
             Self::Core(error) => write!(f, "process staging canonical encoding failed: {error}"),
             Self::Io(error) => write!(f, "process staging I/O failed: {error}"),
             Self::Effect(error) => write!(f, "process staging Effect Gate failed: {error}"),
-            Self::SourceTooLarge => f.write_str("process staging source exceeds the executable byte bound"),
-            Self::SourceIdentityChanged => f.write_str("process staging source identity changed before preparation"),
-            Self::SourceContentChanged => f.write_str("process staging source content changed before preparation"),
-            Self::InvalidStagingParent => f.write_str("process staging parent is not an exact private directory"),
-            Self::StagingParentChanged => f.write_str("process staging parent identity changed before creation"),
-            Self::StagingCollision(path) => write!(f, "process staging target already exists: {}", path.display()),
-            Self::StagedIdentityChanged => f.write_str("fresh process staging inode identity changed during readback"),
-            Self::StagedContentChanged => f.write_str("fresh process staging content changed during readback"),
-            Self::StagedPermissionsChanged => f.write_str("fresh process staging permissions are not exactly 0500"),
-            Self::AmbiguousAfterCreate(path) => write!(f, "process staging outcome is ambiguous after inode creation: {}", path.display()),
+            Self::SourceTooLarge => {
+                f.write_str("process staging source exceeds the executable byte bound")
+            }
+            Self::SourceIdentityChanged => {
+                f.write_str("process staging source identity changed before preparation")
+            }
+            Self::SourceContentChanged => {
+                f.write_str("process staging source content changed before preparation")
+            }
+            Self::InvalidStagingParent => {
+                f.write_str("process staging parent is not an exact private directory")
+            }
+            Self::StagingParentChanged => {
+                f.write_str("process staging parent identity changed before creation")
+            }
+            Self::StagingCollision(path) => write!(
+                f,
+                "process staging target already exists: {}",
+                path.display()
+            ),
+            Self::StagedIdentityChanged => {
+                f.write_str("fresh process staging inode identity changed during readback")
+            }
+            Self::StagedContentChanged => {
+                f.write_str("fresh process staging content changed during readback")
+            }
+            Self::StagedPermissionsChanged => {
+                f.write_str("fresh process staging permissions are not exactly 0500")
+            }
+            Self::AmbiguousAfterCreate(path) => write!(
+                f,
+                "process staging outcome is ambiguous after inode creation: {}",
+                path.display()
+            ),
         }
     }
 }
@@ -183,34 +213,60 @@ fn stage_linux_x86_64<P: AuthorizationPolicy>(
 
     let request = input.request.request();
     if request.initiating_principal.as_str() != principal.subject {
-        return Err(ProcessStageError::InvalidRequestBinding("principal mismatch"));
+        return Err(ProcessStageError::InvalidRequestBinding(
+            "principal mismatch",
+        ));
     }
     if request.requested_operation.as_str() != PROCESS_EXECUTE_ACTION {
-        return Err(ProcessStageError::InvalidRequestBinding("operation is not process.execute"));
+        return Err(ProcessStageError::InvalidRequestBinding(
+            "operation is not process.execute",
+        ));
     }
-    if request.authorized_resource_class != input.source_resolver.authorized_root().policy_resource_class {
-        return Err(ProcessStageError::InvalidRequestBinding("resource class does not match the authorized root"));
+    if request.authorized_resource_class
+        != input
+            .source_resolver
+            .authorized_root()
+            .policy_resource_class
+    {
+        return Err(ProcessStageError::InvalidRequestBinding(
+            "resource class does not match the authorized root",
+        ));
     }
-    let requested = request
-        .requested_target
-        .as_ref()
-        .ok_or(ProcessStageError::InvalidRequestBinding("process request has no executable target"))?;
+    let requested =
+        request
+            .requested_target
+            .as_ref()
+            .ok_or(ProcessStageError::InvalidRequestBinding(
+                "process request has no executable target",
+            ))?;
     if request.target_resolution_plan_ref.is_some() {
-        return Err(ProcessStageError::InvalidRequestBinding("first process profile requires an exact resolved target"));
+        return Err(ProcessStageError::InvalidRequestBinding(
+            "first process profile requires an exact resolved target",
+        ));
     }
-    let operation = RequestedOperationId::new(PROCESS_EXECUTE_ACTION)
-        .map_err(|_| ProcessStageError::InvalidRequestBinding("process.execute is not canonical"))?;
-    let resolved = input
-        .source_resolver
-        .resolve_read_target(requested, &operation, input.observed_at_unix_ms)?;
+    let operation = RequestedOperationId::new(PROCESS_EXECUTE_ACTION).map_err(|_| {
+        ProcessStageError::InvalidRequestBinding("process.execute is not canonical")
+    })?;
+    let resolved = input.source_resolver.resolve_read_target(
+        requested,
+        &operation,
+        input.observed_at_unix_ms,
+    )?;
     if resolved.file_kind != ObservedFileKind::RegularFile {
-        return Err(ProcessStageError::InvalidRequestBinding("executable target is not a regular file"));
+        return Err(ProcessStageError::InvalidRequestBinding(
+            "executable target is not a regular file",
+        ));
     }
-    let source_identity = resolved
-        .resolved_target_identity
-        .ok_or(ProcessStageError::InvalidRequestBinding("resolved executable identity is missing"))?;
+    let source_identity =
+        resolved
+            .resolved_target_identity
+            .ok_or(ProcessStageError::InvalidRequestBinding(
+                "resolved executable identity is missing",
+            ))?;
     if request.target_identity_ref != Some(source_identity) {
-        return Err(ProcessStageError::InvalidRequestBinding("prepared request target identity is stale"));
+        return Err(ProcessStageError::InvalidRequestBinding(
+            "prepared request target identity is stale",
+        ));
     }
 
     let mut source = File::open(Path::new(resolved.normalized_path.as_str()))?;
@@ -274,12 +330,26 @@ fn stage_linux_x86_64<P: AuthorizationPolicy>(
     let current_parent_metadata = match fs::metadata(&parent) {
         Ok(metadata) => metadata,
         Err(error) => {
-            complete_known_stage_failure(kernel, principal, &prepared, input.started_at, scope, "process_stage_parent_read_failed")?;
+            complete_known_stage_failure(
+                kernel,
+                principal,
+                &prepared,
+                input.started_at,
+                scope,
+                "process_stage_parent_read_failed",
+            )?;
             return Err(error.into());
         }
     };
     if staging_parent_binding(&parent, &current_parent_metadata)? != parent_binding {
-        complete_known_stage_failure(kernel, principal, &prepared, input.started_at, scope, "process_stage_parent_changed")?;
+        complete_known_stage_failure(
+            kernel,
+            principal,
+            &prepared,
+            input.started_at,
+            scope,
+            "process_stage_parent_changed",
+        )?;
         return Err(ProcessStageError::StagingParentChanged);
     }
 
@@ -294,11 +364,25 @@ fn stage_linux_x86_64<P: AuthorizationPolicy>(
     ) {
         Ok(fd) => fd,
         Err(error) if error == golam_core::unix_fs::Errno::EEXIST => {
-            complete_known_stage_failure(kernel, principal, &prepared, input.started_at, scope, "process_stage_collision")?;
+            complete_known_stage_failure(
+                kernel,
+                principal,
+                &prepared,
+                input.started_at,
+                scope,
+                "process_stage_collision",
+            )?;
             return Err(ProcessStageError::StagingCollision(stage_path));
         }
         Err(error) => {
-            complete_known_stage_failure(kernel, principal, &prepared, input.started_at, scope, "process_stage_create_failed")?;
+            complete_known_stage_failure(
+                kernel,
+                principal,
+                &prepared,
+                input.started_at,
+                scope,
+                "process_stage_create_failed",
+            )?;
             return Err(io::Error::from_raw_os_error(error as i32).into());
         }
     };
