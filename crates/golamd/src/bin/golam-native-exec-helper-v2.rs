@@ -1,8 +1,10 @@
 #![forbid(unsafe_code)]
 
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[allow(dead_code)]
 #[path = "../native_containment_v2.rs"]
 mod native_containment_v2;
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[allow(dead_code)]
 #[path = "../static_elf_v2.rs"]
 mod static_elf_v2;
