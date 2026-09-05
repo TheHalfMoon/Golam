@@ -776,6 +776,7 @@ mod tests {
             Some("reconciling")
         );
         drop(effects);
+        drop(kernel);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 
@@ -849,6 +850,7 @@ mod tests {
                 .unwrap(),
             ToolReconciliationResult::ManualReview { effect_id, .. } if effect_id == second
         ));
+        drop(kernel);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 }
