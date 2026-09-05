@@ -496,24 +496,14 @@ mod tests {
 
     #[test]
     fn plaintext_changes_do_not_change_persistable_binding_hash() {
-        let first = bind_stdin_fallback_process_secret(fallback_input(
-            b"secret-one",
-            &[],
-            &[],
-            &[],
-            &[],
-        ))
-        .unwrap()
-        .0;
-        let second = bind_stdin_fallback_process_secret(fallback_input(
-            b"secret-two",
-            &[],
-            &[],
-            &[],
-            &[],
-        ))
-        .unwrap()
-        .0;
+        let first =
+            bind_stdin_fallback_process_secret(fallback_input(b"secret-one", &[], &[], &[], &[]))
+                .unwrap()
+                .0;
+        let second =
+            bind_stdin_fallback_process_secret(fallback_input(b"secret-two", &[], &[], &[], &[]))
+                .unwrap()
+                .0;
         assert_eq!(first.evidence_hash, second.evidence_hash);
     }
 }
