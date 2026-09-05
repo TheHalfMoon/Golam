@@ -72,6 +72,9 @@ mod linux_x86_64 {
                 "golam-process-v2-qualification-{}-{t}-{n}",
                 std::process::id()
             ));
+            fs::create_dir(&root).expect("qualification root");
+            fs::set_permissions(&root, fs::Permissions::from_mode(0o700))
+                .expect("qualification root mode");
             let runtime = RuntimeLayout::initialize(root.join("runtime")).expect("runtime");
             let source_root = root.join("source");
             let staging_root = root.join("stage");
