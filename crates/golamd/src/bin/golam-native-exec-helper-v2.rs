@@ -11,7 +11,7 @@ mod static_elf_v2;
 mod linux_x86_64 {
     use std::ffi::{CString, OsString};
     use std::fs::File;
-    use std::io::Read;
+    use std::io::{Read, Write};
     use std::os::unix::ffi::OsStringExt;
     use std::os::unix::fs::MetadataExt;
     use std::path::PathBuf;
@@ -31,18 +31,28 @@ mod linux_x86_64 {
     const MAX_ARG_COUNT: usize = 256;
     const MAX_ARG_BYTES: usize = 64 * 1024;
     const MAX_ROOT_COUNT: usize = 64;
+    const READY_PREFIX: &str = "GOLAM_NATIVE_EXEC_V2_READY:";
+
+    #[derive(Debug)]
+    struct ExpectedObject {
+        path: PathBuf,
+        device: u64,
+        inode: u64,
+        mode: u32,
+    }
 
     #[derive(Debug)]
     struct Config {
         expected_parent_pid: u32,
+        execution_binding_digest: [u8; 32],
         executable_path: PathBuf,
         executable_device: u64,
         executable_inode: u64,
         executable_mode: u32,
         executable_digest: [u8; 32],
-        cwd_path: PathBuf,
-        read_paths: Vec<PathBuf>,
-        write_paths: Vec<PathBuf>,
+        cwd: ExpectedObject,
+        read_roots: Vec<ExpectedObject>,
+        write_roots: Vec<ExpectedObject>,
         cpu_seconds: u64,
         address_space_bytes: u64,
         max_created_file_bytes: u64,
@@ -66,21 +76,20 @@ mod linux_x86_64 {
         verify_staged_file(&initial_file, &config)?;
         drop(initial_file);
 
-        let cwd = observe_native_object(&config.cwd_path)
-            .map_err(|error| format!("observe cwd identity: {error}"))?;
+        let cwd = observe_expected_object(&config.cwd, "cwd")?;
         let executable = expected_executable_identity(&config);
         let filesystem_read_roots = config
-            .read_paths
+            .read_roots
             .iter()
-            .map(|path| observe_native_object(path).map_err(|error| error.to_string()))
+            .map(|expected| observe_expected_object(expected, "read root"))
             .collect::<Result<Vec<_>, _>>()?;
         let filesystem_write_roots = config
-            .write_paths
+            .write_roots
             .iter()
-            .map(|path| observe_native_object(path).map_err(|error| error.to_string()))
+            .map(|expected| observe_expected_object(expected, "write root"))
             .collect::<Result<Vec<_>, _>>()?;
 
-        std::env::set_current_dir(&config.cwd_path)
+        std::env::set_current_dir(&config.cwd.path)
             .map_err(|error| format!("set exact contained cwd: {error}"))?;
         let plan = LinuxContainmentPlan {
             profile_token: PROFILE_TOKEN.to_owned(),
@@ -125,6 +134,7 @@ mod linux_x86_64 {
             .map_err(|error| format!("reopen staged executable after containment: {error}"))?;
         verify_staged_file(&executable_file, &config)?;
         bind_parent_death(config.expected_parent_pid)?;
+        emit_ready(config.execution_binding_digest)?;
 
         let argv = config
             .argv
@@ -161,6 +171,22 @@ mod linux_x86_64 {
         Ok(())
     }
 
+    fn observe_expected_object(
+        expected: &ExpectedObject,
+        label: &str,
+    ) -> Result<NativeObjectIdentity, String> {
+        let observed = observe_native_object(&expected.path)
+            .map_err(|error| format!("observe {label} identity: {error}"))?;
+        if observed.canonical_path != expected.path
+            || observed.device != expected.device
+            || observed.inode != expected.inode
+            || observed.mode != expected.mode
+        {
+            return Err(format!("{label} identity changed before containment"));
+        }
+        Ok(observed)
+    }
+
     fn expected_executable_identity(config: &Config) -> NativeObjectIdentity {
         NativeObjectIdentity {
             canonical_path: config.executable_path.clone(),
@@ -171,6 +197,11 @@ mod linux_x86_64 {
     }
 
     fn verify_staged_file(file: &File, config: &Config) -> Result<(), String> {
+        let path_metadata = std::fs::symlink_metadata(&config.executable_path)
+            .map_err(|error| format!("read staged executable path metadata: {error}"))?;
+        if path_metadata.file_type().is_symlink() {
+            return Err("staged executable path must not be a symlink".to_owned());
+        }
         let metadata = file
             .metadata()
             .map_err(|error| format!("read staged executable metadata: {error}"))?;
@@ -210,17 +241,30 @@ mod linux_x86_64 {
         Ok(())
     }
 
+    fn emit_ready(binding_digest: [u8; 32]) -> Result<(), String> {
+        let mut stderr = std::io::stderr().lock();
+        writeln!(stderr, "{READY_PREFIX}{}", encode_hex(&binding_digest))
+            .map_err(|error| format!("write containment-ready receipt: {error}"))?;
+        stderr
+            .flush()
+            .map_err(|error| format!("flush containment-ready receipt: {error}"))
+    }
+
     fn parse_args() -> Result<Config, String> {
         let mut args = std::env::args_os().skip(1).peekable();
         let mut expected_parent_pid = None;
+        let mut execution_binding_digest = None;
         let mut executable_path = None;
         let mut executable_device = None;
         let mut executable_inode = None;
         let mut executable_mode = None;
         let mut executable_digest = None;
         let mut cwd_path = None;
-        let mut read_paths = Vec::new();
-        let mut write_paths = Vec::new();
+        let mut cwd_device = None;
+        let mut cwd_inode = None;
+        let mut cwd_mode = None;
+        let mut read_roots = Vec::new();
+        let mut write_roots = Vec::new();
         let mut cpu_seconds = None;
         let mut address_space_bytes = None;
         let mut max_created_file_bytes = None;
@@ -241,23 +285,29 @@ mod linux_x86_64 {
                 "--expected-parent-pid" => {
                     expected_parent_pid = Some(parse_u32(value(&mut args)?)?)
                 }
+                "--execution-binding-sha256" => {
+                    execution_binding_digest = Some(parse_digest(value(&mut args)?)?)
+                }
                 "--executable-path-hex" => executable_path = Some(parse_path(value(&mut args)?)?),
                 "--executable-device" => executable_device = Some(parse_u64(value(&mut args)?)?),
                 "--executable-inode" => executable_inode = Some(parse_u64(value(&mut args)?)?),
                 "--executable-mode" => executable_mode = Some(parse_u32(value(&mut args)?)?),
                 "--executable-sha256" => executable_digest = Some(parse_digest(value(&mut args)?)?),
                 "--cwd-path-hex" => cwd_path = Some(parse_path(value(&mut args)?)?),
-                "--read-path-hex" => {
-                    if read_paths.len() >= MAX_ROOT_COUNT {
+                "--cwd-device" => cwd_device = Some(parse_u64(value(&mut args)?)?),
+                "--cwd-inode" => cwd_inode = Some(parse_u64(value(&mut args)?)?),
+                "--cwd-mode" => cwd_mode = Some(parse_u32(value(&mut args)?)?),
+                "--read-root" => {
+                    if read_roots.len() >= MAX_ROOT_COUNT {
                         return Err("too many read roots".to_owned());
                     }
-                    read_paths.push(parse_path(value(&mut args)?)?);
+                    read_roots.push(parse_expected_object(value(&mut args)?)?);
                 }
-                "--write-path-hex" => {
-                    if write_paths.len() >= MAX_ROOT_COUNT {
+                "--write-root" => {
+                    if write_roots.len() >= MAX_ROOT_COUNT {
                         return Err("too many write roots".to_owned());
                     }
-                    write_paths.push(parse_path(value(&mut args)?)?);
+                    write_roots.push(parse_expected_object(value(&mut args)?)?);
                 }
                 "--cpu-seconds" => cpu_seconds = Some(parse_u64(value(&mut args)?)?),
                 "--address-space-bytes" => {
@@ -285,14 +335,21 @@ mod linux_x86_64 {
 
         Ok(Config {
             expected_parent_pid: expected_parent_pid.ok_or("missing expected parent pid")?,
+            execution_binding_digest: execution_binding_digest
+                .ok_or("missing execution binding digest")?,
             executable_path: executable_path.ok_or("missing executable path")?,
             executable_device: executable_device.ok_or("missing executable device")?,
             executable_inode: executable_inode.ok_or("missing executable inode")?,
             executable_mode: executable_mode.ok_or("missing executable mode")?,
             executable_digest: executable_digest.ok_or("missing executable digest")?,
-            cwd_path: cwd_path.ok_or("missing cwd path")?,
-            read_paths,
-            write_paths,
+            cwd: ExpectedObject {
+                path: cwd_path.ok_or("missing cwd path")?,
+                device: cwd_device.ok_or("missing cwd device")?,
+                inode: cwd_inode.ok_or("missing cwd inode")?,
+                mode: cwd_mode.ok_or("missing cwd mode")?,
+            },
+            read_roots,
+            write_roots,
             cpu_seconds: cpu_seconds.ok_or("missing cpu limit")?,
             address_space_bytes: address_space_bytes.ok_or("missing address-space limit")?,
             max_created_file_bytes: max_created_file_bytes.ok_or("missing file-size limit")?,
@@ -300,6 +357,26 @@ mod linux_x86_64 {
             wall_time_ms: wall_time_ms.ok_or("missing wall-time limit")?,
             max_output_bytes: max_output_bytes.ok_or("missing output limit")?,
             argv,
+        })
+    }
+
+    fn parse_expected_object(value: OsString) -> Result<ExpectedObject, String> {
+        let value = value
+            .to_str()
+            .ok_or_else(|| "root helper argument is not canonical UTF-8".to_owned())?;
+        let mut parts = value.split(':');
+        let path_hex = parts.next().ok_or("missing root path")?;
+        let device = parts.next().ok_or("missing root device")?;
+        let inode = parts.next().ok_or("missing root inode")?;
+        let mode = parts.next().ok_or("missing root mode")?;
+        if parts.next().is_some() {
+            return Err("root helper argument has extra fields".to_owned());
+        }
+        Ok(ExpectedObject {
+            path: parse_path(OsString::from(path_hex))?,
+            device: parse_u64(OsString::from(device))?,
+            inode: parse_u64(OsString::from(inode))?,
+            mode: parse_u32(OsString::from(mode))?,
         })
     }
 
@@ -348,6 +425,16 @@ mod linux_x86_64 {
                 Ok(high << 4 | low)
             })
             .collect()
+    }
+
+    fn encode_hex(value: &[u8]) -> String {
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+        let mut encoded = String::with_capacity(value.len() * 2);
+        for byte in value {
+            encoded.push(HEX[(byte >> 4) as usize] as char);
+            encoded.push(HEX[(byte & 0x0f) as usize] as char);
+        }
+        encoded
     }
 
     const fn hex_nibble(value: u8) -> Option<u8> {
