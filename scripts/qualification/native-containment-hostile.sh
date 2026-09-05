@@ -19,9 +19,10 @@ stdout_log="$root/stdout.log"
 stderr_log="$root/stderr.log"
 pid=""
 cancel_pid=""
+resource_pid=""
 
 cleanup() {
-  for cleanup_pid in "$pid" "$cancel_pid"; do
+  for cleanup_pid in "$pid" "$cancel_pid" "$resource_pid"; do
     if [[ -n "$cleanup_pid" ]] && kill -0 "$cleanup_pid" 2>/dev/null; then
       kill "$cleanup_pid" 2>/dev/null || true
       wait "$cleanup_pid" 2>/dev/null || true
@@ -98,6 +99,27 @@ run_clean_probe() {
     fi
   done
   exec env -i "$binary" "$@"
+}
+
+run_clean_probe_to_completion() {
+  local stdout_path="$1"
+  local stderr_path="$2"
+  shift 2
+  run_clean_probe "$@" >"$stdout_path" 2>"$stderr_path" &
+  resource_pid=$!
+  if ! wait "$resource_pid"; then
+    resource_pid=""
+    echo "native supervisor hostile probe failed: $*" >&2
+    cat "$stdout_path" >&2 || true
+    cat "$stderr_path" >&2 || true
+    return 1
+  fi
+  resource_pid=""
+  if [[ -s "$stderr_path" ]]; then
+    echo "native supervisor hostile probe emitted unexpected stderr: $*" >&2
+    cat "$stderr_path" >&2
+    return 1
+  fi
 }
 
 # Non-empty ambient environment must fail before untrusted execution.
@@ -229,6 +251,41 @@ if [[ -s "$cancel_stderr" ]]; then
   exit 1
 fi
 
+# Parent-side resource enforcement is part of the same profile. These qualification-only parent
+# modes launch the exact contained helper, feed real monotonic time/output observations through
+# the production supervisor primitive, request termination at the bound, and require exact
+# terminal reconciliation. They do not admit or expose a production process-launch path.
+wall_stdout="$root/wall.stdout"
+wall_stderr="$root/wall.stderr"
+run_clean_probe_to_completion "$wall_stdout" "$wall_stderr" --supervisor-wall-time
+for marker in \
+  'SUPERVISOR_WALL_TIME_ENFORCED=YES' \
+  'SUPERVISOR_WALL_TIME_TERMINAL_RECONCILED=YES'; do
+  if ! grep -q "^${marker}$" "$wall_stdout"; then
+    echo "wall-time supervisor evidence marker missing: $marker" >&2
+    cat "$wall_stdout" >&2 || true
+    exit 1
+  fi
+done
+
+output_stdout="$root/output.stdout"
+output_stderr="$root/output.stderr"
+run_clean_probe_to_completion "$output_stdout" "$output_stderr" --supervisor-output-limit
+for marker in \
+  'SUPERVISOR_OUTPUT_LIMIT_ENFORCED=YES' \
+  'SUPERVISOR_OUTPUT_TERMINAL_RECONCILED=YES'; do
+  if ! grep -q "^${marker}$" "$output_stdout"; then
+    echo "output supervisor evidence marker missing: $marker" >&2
+    cat "$output_stdout" >&2 || true
+    exit 1
+  fi
+done
+accepted_output="$(sed -n 's/^SUPERVISOR_OUTPUT_ACCEPTED_BYTES=//p' "$output_stdout")"
+if [[ -z "$accepted_output" || ! "$accepted_output" =~ ^[0-9]+$ || "$accepted_output" -gt 1024 ]]; then
+  echo "output supervisor retained bytes beyond the hostile bound: ${accepted_output:-missing}" >&2
+  exit 1
+fi
+
 echo "NATIVE_CONTAINMENT_PROFILE_APPLIED=YES"
 echo "NATIVE_CONTAINMENT_EXTERNAL_PROCESS_TREE_COUNT=$managed_count"
 echo "NATIVE_CONTAINMENT_INET_SOCKETS=0"
@@ -241,4 +298,7 @@ echo "NATIVE_CONTAINMENT_INHERITED_DESCRIPTOR=DENIED"
 echo "NATIVE_CONTAINMENT_CANCEL_REQUEST=NON_TERMINAL"
 echo "NATIVE_CONTAINMENT_CANCEL_TERMINAL_OBSERVED=YES"
 echo "NATIVE_CONTAINMENT_DESCENDANT_PERSISTENCE=0"
+echo "NATIVE_CONTAINMENT_WALL_TIME_LIMIT=ENFORCED"
+echo "NATIVE_CONTAINMENT_OUTPUT_LIMIT=ENFORCED"
+echo "NATIVE_CONTAINMENT_OUTPUT_ACCEPTED_BYTES=$accepted_output"
 echo "PRODUCTION_PROFILE_ADMITTED=NO"

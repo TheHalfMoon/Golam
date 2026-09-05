@@ -1,11 +1,13 @@
 #![forbid(unsafe_code)]
 
-//! Root-process ownership and terminal reconciliation for the first Spec 005 native profile.
+//! Root-process ownership, bounded parent-side resource enforcement, and terminal reconciliation
+//! for the first Spec 005 native profile.
 //!
 //! This module intentionally does not create or launch a process. T005-078 owns governed launch.
 //! T005-072 freezes the supervision semantics that a later launcher must satisfy: one owned root
-//! PID, spawn denial proven by the child-side containment receipt, cancellation as a non-terminal
-//! request, and terminal success only after an exact operating-system terminal observation.
+//! PID, spawn denial proven by the child-side containment receipt, bounded wall time and combined
+//! stdout/stderr capture, cancellation as a non-terminal request, and terminal success only after
+//! an exact operating-system terminal observation.
 
 use std::error::Error;
 use std::fmt;
@@ -21,6 +23,8 @@ pub struct RootContainmentBinding {
     pub seccomp_tsync_installed: bool,
     pub spawn_denied: bool,
     pub strict_local: bool,
+    pub wall_time_limit_ms: u64,
+    pub max_stdout_stderr_bytes: u64,
 }
 
 impl RootContainmentBinding {
@@ -33,6 +37,11 @@ impl RootContainmentBinding {
         if self.root_pid == 0 {
             return Err(NativeProcessSupervisorError::InvalidContainmentBinding(
                 "root pid must be nonzero",
+            ));
+        }
+        if self.wall_time_limit_ms == 0 || self.max_stdout_stderr_bytes == 0 {
+            return Err(NativeProcessSupervisorError::InvalidContainmentBinding(
+                "wall-time and output limits must be finite and nonzero",
             ));
         }
         if !self.landlock_ruleset_fully_enforced
@@ -62,9 +71,34 @@ pub struct RootTerminalObservation {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RootTerminationRequestKind {
+    Cancellation,
+    WallTimeLimitExceeded,
+    OutputLimitExceeded,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct CancellationRequestEvidence {
     pub root_pid: u32,
     pub request_dispatched: bool,
+    pub terminal_verified: bool,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ResourceLimitKind {
+    WallTime,
+    CombinedStdoutStderr,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ResourceEnforcementEvidence {
+    pub root_pid: u32,
+    pub limit_kind: ResourceLimitKind,
+    pub limit: u64,
+    pub observed: u64,
+    pub limit_exceeded: bool,
+    pub accepted_output_bytes: u64,
+    pub termination_request_dispatched: bool,
     pub terminal_verified: bool,
 }
 
@@ -80,7 +114,7 @@ pub struct ProcessTreeTerminalEvidence {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum RootProcessState {
     Running,
-    CancellationRequested,
+    TerminationRequested(RootTerminationRequestKind),
     TerminalVerified(ProcessTreeTerminalEvidence),
     UnknownOutcome,
 }
@@ -89,14 +123,16 @@ pub enum RootProcessState {
 pub enum ProcessTreeReconciliation {
     Unresolved {
         root_pid: u32,
-        cancellation_requested: bool,
+        termination_request: Option<RootTerminationRequestKind>,
     },
     TerminalVerified(ProcessTreeTerminalEvidence),
 }
 
 /// Operating-system control is injected by the governed launcher at T005-078.
 ///
-/// T005-072 defines the semantics without introducing a hidden process-launch path.
+/// T005-072 defines the semantics without introducing a hidden process-launch path. The later
+/// launcher must supply exact OS termination/terminal observation and feed monotonic elapsed time
+/// plus every stdout/stderr byte through the methods on `RootProcessSupervisor` before retention.
 pub trait RootProcessControl {
     fn request_termination(&mut self, root_pid: u32) -> Result<(), String>;
 
@@ -111,6 +147,7 @@ pub enum NativeProcessSupervisorError {
     InvalidContainmentBinding(&'static str),
     Control(String),
     TerminalPidMismatch { expected: u32, observed: u32 },
+    NonMonotonicWallTime { previous: u64, observed: u64 },
     UnknownOutcomeRequiresReconciliation,
 }
 
@@ -125,6 +162,10 @@ impl fmt::Display for NativeProcessSupervisorError {
                 f,
                 "native process terminal observation pid mismatch: expected {expected}, observed {observed}"
             ),
+            Self::NonMonotonicWallTime { previous, observed } => write!(
+                f,
+                "native process wall-time observation moved backwards: previous {previous} ms, observed {observed} ms"
+            ),
             Self::UnknownOutcomeRequiresReconciliation => f.write_str(
                 "native process supervision is in UNKNOWN_OUTCOME and requires reconciliation",
             ),
@@ -138,6 +179,8 @@ pub struct RootProcessSupervisor<C> {
     binding: RootContainmentBinding,
     control: C,
     state: RootProcessState,
+    last_elapsed_ms: u64,
+    accepted_output_bytes: u64,
 }
 
 impl<C: RootProcessControl> RootProcessSupervisor<C> {
@@ -150,6 +193,8 @@ impl<C: RootProcessControl> RootProcessSupervisor<C> {
             binding,
             control,
             state: RootProcessState::Running,
+            last_elapsed_ms: 0,
+            accepted_output_bytes: 0,
         })
     }
 
@@ -161,29 +206,123 @@ impl<C: RootProcessControl> RootProcessSupervisor<C> {
         self.binding.root_pid
     }
 
-    /// Dispatch a cancellation request without converting that request into terminal proof.
-    ///
-    /// Repeated cancellation is idempotent while the same root remains unresolved.
+    pub const fn accepted_output_bytes(&self) -> u64 {
+        self.accepted_output_bytes
+    }
+
+    /// Dispatch an explicit cancellation request without converting that request into terminal
+    /// proof. Repeated termination requests are idempotent while the same root remains unresolved.
     pub fn request_cancel(
         &mut self,
     ) -> Result<CancellationRequestEvidence, NativeProcessSupervisorError> {
+        if matches!(self.state, RootProcessState::UnknownOutcome) {
+            return Err(NativeProcessSupervisorError::UnknownOutcomeRequiresReconciliation);
+        }
+        if matches!(self.state, RootProcessState::TerminalVerified(_)) {
+            return Ok(CancellationRequestEvidence {
+                root_pid: self.binding.root_pid,
+                request_dispatched: false,
+                terminal_verified: true,
+            });
+        }
+
+        let request_dispatched =
+            self.dispatch_termination_if_running(RootTerminationRequestKind::Cancellation)?;
+        Ok(CancellationRequestEvidence {
+            root_pid: self.binding.root_pid,
+            request_dispatched,
+            terminal_verified: false,
+        })
+    }
+
+    /// Enforce the bound wall clock using a monotonic elapsed-time observation supplied by the
+    /// trusted parent launcher. Reaching the configured bound requests termination but is never
+    /// itself terminal proof.
+    pub fn observe_wall_time_ms(
+        &mut self,
+        elapsed_ms: u64,
+    ) -> Result<ResourceEnforcementEvidence, NativeProcessSupervisorError> {
+        if matches!(self.state, RootProcessState::UnknownOutcome) {
+            return Err(NativeProcessSupervisorError::UnknownOutcomeRequiresReconciliation);
+        }
+        if elapsed_ms < self.last_elapsed_ms {
+            let previous = self.last_elapsed_ms;
+            self.state = RootProcessState::UnknownOutcome;
+            return Err(NativeProcessSupervisorError::NonMonotonicWallTime {
+                previous,
+                observed: elapsed_ms,
+            });
+        }
+        self.last_elapsed_ms = elapsed_ms;
+
+        let limit = self.binding.wall_time_limit_ms;
+        let limit_exceeded = elapsed_ms >= limit;
+        let terminal_verified = matches!(self.state, RootProcessState::TerminalVerified(_));
+        let termination_request_dispatched = if limit_exceeded && !terminal_verified {
+            self.dispatch_termination_if_running(RootTerminationRequestKind::WallTimeLimitExceeded)?
+        } else {
+            false
+        };
+
+        Ok(ResourceEnforcementEvidence {
+            root_pid: self.binding.root_pid,
+            limit_kind: ResourceLimitKind::WallTime,
+            limit,
+            observed: elapsed_ms,
+            limit_exceeded,
+            accepted_output_bytes: self.accepted_output_bytes,
+            termination_request_dispatched,
+            terminal_verified,
+        })
+    }
+
+    /// Account a stdout/stderr chunk before the caller retains it. A chunk that would exceed the
+    /// combined output bound is rejected in full and requests termination. Saturating arithmetic
+    /// makes counter overflow conservatively exceed every finite profile bound.
+    pub fn account_output_bytes(
+        &mut self,
+        chunk_bytes: u64,
+    ) -> Result<ResourceEnforcementEvidence, NativeProcessSupervisorError> {
+        if matches!(self.state, RootProcessState::UnknownOutcome) {
+            return Err(NativeProcessSupervisorError::UnknownOutcomeRequiresReconciliation);
+        }
+
+        let limit = self.binding.max_stdout_stderr_bytes;
+        let prospective = self.accepted_output_bytes.saturating_add(chunk_bytes);
+        let limit_exceeded = prospective > limit;
+        let terminal_verified = matches!(self.state, RootProcessState::TerminalVerified(_));
+        let termination_request_dispatched = if limit_exceeded && !terminal_verified {
+            self.dispatch_termination_if_running(RootTerminationRequestKind::OutputLimitExceeded)?
+        } else {
+            false
+        };
+
+        if !limit_exceeded {
+            self.accepted_output_bytes = prospective;
+        }
+
+        Ok(ResourceEnforcementEvidence {
+            root_pid: self.binding.root_pid,
+            limit_kind: ResourceLimitKind::CombinedStdoutStderr,
+            limit,
+            observed: prospective,
+            limit_exceeded,
+            accepted_output_bytes: self.accepted_output_bytes,
+            termination_request_dispatched,
+            terminal_verified,
+        })
+    }
+
+    fn dispatch_termination_if_running(
+        &mut self,
+        kind: RootTerminationRequestKind,
+    ) -> Result<bool, NativeProcessSupervisorError> {
         match self.state {
             RootProcessState::UnknownOutcome => {
                 return Err(NativeProcessSupervisorError::UnknownOutcomeRequiresReconciliation);
             }
-            RootProcessState::TerminalVerified(_) => {
-                return Ok(CancellationRequestEvidence {
-                    root_pid: self.binding.root_pid,
-                    request_dispatched: false,
-                    terminal_verified: true,
-                });
-            }
-            RootProcessState::CancellationRequested => {
-                return Ok(CancellationRequestEvidence {
-                    root_pid: self.binding.root_pid,
-                    request_dispatched: false,
-                    terminal_verified: false,
-                });
+            RootProcessState::TerminalVerified(_) | RootProcessState::TerminationRequested(_) => {
+                return Ok(false);
             }
             RootProcessState::Running => {}
         }
@@ -192,12 +331,8 @@ impl<C: RootProcessControl> RootProcessSupervisor<C> {
             self.state = RootProcessState::UnknownOutcome;
             return Err(NativeProcessSupervisorError::Control(error));
         }
-        self.state = RootProcessState::CancellationRequested;
-        Ok(CancellationRequestEvidence {
-            root_pid: self.binding.root_pid,
-            request_dispatched: true,
-            terminal_verified: false,
-        })
+        self.state = RootProcessState::TerminationRequested(kind);
+        Ok(true)
     }
 
     /// Reconcile the exact owned root against operating-system terminal evidence.
@@ -221,12 +356,13 @@ impl<C: RootProcessControl> RootProcessSupervisor<C> {
         };
 
         let Some(observation) = observation else {
+            let termination_request = match self.state {
+                RootProcessState::TerminationRequested(kind) => Some(kind),
+                _ => None,
+            };
             return Ok(ProcessTreeReconciliation::Unresolved {
                 root_pid: self.binding.root_pid,
-                cancellation_requested: matches!(
-                    self.state,
-                    RootProcessState::CancellationRequested
-                ),
+                termination_request,
             });
         };
 
@@ -260,16 +396,16 @@ mod tests {
 
     #[derive(Default)]
     struct FakeControl {
-        cancel_calls: usize,
+        termination_calls: usize,
         terminal: Option<RootTerminalObservation>,
-        cancel_error: Option<String>,
+        termination_error: Option<String>,
         observe_error: Option<String>,
     }
 
     impl RootProcessControl for FakeControl {
         fn request_termination(&mut self, _root_pid: u32) -> Result<(), String> {
-            self.cancel_calls += 1;
-            match self.cancel_error.take() {
+            self.termination_calls += 1;
+            match self.termination_error.take() {
                 Some(error) => Err(error),
                 None => Ok(()),
             }
@@ -295,6 +431,8 @@ mod tests {
             seccomp_tsync_installed: true,
             spawn_denied: true,
             strict_local: true,
+            wall_time_limit_ms: 100,
+            max_stdout_stderr_bytes: 128,
         }
     }
 
@@ -308,7 +446,7 @@ mod tests {
             supervisor.reconcile_terminal().unwrap(),
             ProcessTreeReconciliation::Unresolved {
                 root_pid: 4242,
-                cancellation_requested: true,
+                termination_request: Some(RootTerminationRequestKind::Cancellation),
             }
         );
     }
@@ -318,7 +456,63 @@ mod tests {
         let mut supervisor = RootProcessSupervisor::new(binding(), FakeControl::default()).unwrap();
         assert!(supervisor.request_cancel().unwrap().request_dispatched);
         assert!(!supervisor.request_cancel().unwrap().request_dispatched);
-        assert_eq!(supervisor.into_control().cancel_calls, 1);
+        assert_eq!(supervisor.into_control().termination_calls, 1);
+    }
+
+    #[test]
+    fn wall_time_bound_dispatches_termination_without_terminal_claim() {
+        let mut supervisor = RootProcessSupervisor::new(binding(), FakeControl::default()).unwrap();
+        let before = supervisor.observe_wall_time_ms(99).unwrap();
+        assert!(!before.limit_exceeded);
+        assert!(!before.termination_request_dispatched);
+
+        let at_limit = supervisor.observe_wall_time_ms(100).unwrap();
+        assert!(at_limit.limit_exceeded);
+        assert!(at_limit.termination_request_dispatched);
+        assert!(!at_limit.terminal_verified);
+        assert_eq!(
+            supervisor.state(),
+            &RootProcessState::TerminationRequested(
+                RootTerminationRequestKind::WallTimeLimitExceeded
+            )
+        );
+        assert_eq!(supervisor.into_control().termination_calls, 1);
+    }
+
+    #[test]
+    fn non_monotonic_wall_time_becomes_unknown_outcome() {
+        let mut supervisor = RootProcessSupervisor::new(binding(), FakeControl::default()).unwrap();
+        supervisor.observe_wall_time_ms(50).unwrap();
+        assert!(matches!(
+            supervisor.observe_wall_time_ms(49),
+            Err(NativeProcessSupervisorError::NonMonotonicWallTime { .. })
+        ));
+        assert_eq!(supervisor.state(), &RootProcessState::UnknownOutcome);
+    }
+
+    #[test]
+    fn output_budget_accepts_exact_cap_and_rejects_overflow_chunk() {
+        let mut supervisor = RootProcessSupervisor::new(binding(), FakeControl::default()).unwrap();
+        let first = supervisor.account_output_bytes(64).unwrap();
+        assert!(!first.limit_exceeded);
+        assert_eq!(first.accepted_output_bytes, 64);
+
+        let exact = supervisor.account_output_bytes(64).unwrap();
+        assert!(!exact.limit_exceeded);
+        assert_eq!(exact.accepted_output_bytes, 128);
+
+        let overflow = supervisor.account_output_bytes(1).unwrap();
+        assert!(overflow.limit_exceeded);
+        assert!(overflow.termination_request_dispatched);
+        assert_eq!(overflow.accepted_output_bytes, 128);
+        assert_eq!(supervisor.accepted_output_bytes(), 128);
+        assert_eq!(
+            supervisor.state(),
+            &RootProcessState::TerminationRequested(
+                RootTerminationRequestKind::OutputLimitExceeded
+            )
+        );
+        assert_eq!(supervisor.into_control().termination_calls, 1);
     }
 
     #[test]
@@ -364,7 +558,7 @@ mod tests {
     #[test]
     fn control_failure_never_becomes_success() {
         let control = FakeControl {
-            cancel_error: Some("kill boundary ambiguous".to_owned()),
+            termination_error: Some("kill boundary ambiguous".to_owned()),
             ..FakeControl::default()
         };
         let mut supervisor = RootProcessSupervisor::new(binding(), control).unwrap();
@@ -376,9 +570,16 @@ mod tests {
     }
 
     #[test]
-    fn incomplete_containment_receipt_cannot_mint_supervision_claim() {
+    fn incomplete_containment_receipt_or_resource_binding_cannot_mint_supervision_claim() {
         let mut invalid = binding();
         invalid.seccomp_tsync_installed = false;
+        assert!(matches!(
+            RootProcessSupervisor::new(invalid, FakeControl::default()),
+            Err(NativeProcessSupervisorError::InvalidContainmentBinding(_))
+        ));
+
+        let mut invalid = binding();
+        invalid.max_stdout_stderr_bytes = 0;
         assert!(matches!(
             RootProcessSupervisor::new(invalid, FakeControl::default()),
             Err(NativeProcessSupervisorError::InvalidContainmentBinding(_))
