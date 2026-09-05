@@ -54,7 +54,9 @@ mod linux_x86_64 {
 
     pub fn run() -> Result<(), String> {
         if std::env::vars_os().next().is_some() {
-            return Err("trusted native exec helper requires an empty ambient environment".to_owned());
+            return Err(
+                "trusted native exec helper requires an empty ambient environment".to_owned(),
+            );
         }
         let config = parse_args()?;
         bind_parent_death(config.expected_parent_pid)?;
@@ -143,15 +145,15 @@ mod linux_x86_64 {
         if expected_parent_pid == 0 {
             return Err("expected launcher parent pid must be nonzero".to_owned());
         }
-        set_pdeathsig(Signal::SIGKILL)
-            .map_err(|error| format!("set PR_SET_PDEATHSIG: {error}"))?;
+        set_pdeathsig(Signal::SIGKILL).map_err(|error| format!("set PR_SET_PDEATHSIG: {error}"))?;
         if get_pdeathsig().map_err(|error| format!("read PR_GET_PDEATHSIG: {error}"))?
             != Some(Signal::SIGKILL)
         {
             return Err("parent-death signal readback did not equal SIGKILL".to_owned());
         }
         let observed_parent = getppid().as_raw();
-        if observed_parent <= 0 || u32::try_from(observed_parent).ok() != Some(expected_parent_pid) {
+        if observed_parent <= 0 || u32::try_from(observed_parent).ok() != Some(expected_parent_pid)
+        {
             return Err(format!(
                 "trusted launcher parent changed: expected {expected_parent_pid}, observed {observed_parent}"
             ));
@@ -185,7 +187,10 @@ mod linux_x86_64 {
         if metadata.uid() != geteuid().as_raw() {
             return Err("staged executable is not owned by the current effective uid".to_owned());
         }
-        if usize::try_from(metadata.len()).ok().is_none_or(|len| len > MAX_STATIC_EXECUTABLE_BYTES) {
+        if usize::try_from(metadata.len())
+            .ok()
+            .is_none_or(|len| len > MAX_STATIC_EXECUTABLE_BYTES)
+        {
             return Err("staged executable exceeds the admitted byte bound".to_owned());
         }
         let mut reader = file
@@ -229,10 +234,13 @@ mod linux_x86_64 {
                 .to_str()
                 .ok_or_else(|| "helper flag is not canonical UTF-8".to_owned())?;
             let value = |args: &mut std::iter::Peekable<std::env::ArgsOs>| {
-                args.next().ok_or_else(|| format!("missing value for {flag}"))
+                args.next()
+                    .ok_or_else(|| format!("missing value for {flag}"))
             };
             match flag {
-                "--expected-parent-pid" => expected_parent_pid = Some(parse_u32(value(&mut args)?)?),
+                "--expected-parent-pid" => {
+                    expected_parent_pid = Some(parse_u32(value(&mut args)?)?)
+                }
                 "--executable-path-hex" => executable_path = Some(parse_path(value(&mut args)?)?),
                 "--executable-device" => executable_device = Some(parse_u64(value(&mut args)?)?),
                 "--executable-inode" => executable_inode = Some(parse_u64(value(&mut args)?)?),
@@ -252,8 +260,12 @@ mod linux_x86_64 {
                     write_paths.push(parse_path(value(&mut args)?)?);
                 }
                 "--cpu-seconds" => cpu_seconds = Some(parse_u64(value(&mut args)?)?),
-                "--address-space-bytes" => address_space_bytes = Some(parse_u64(value(&mut args)?)?),
-                "--max-created-file-bytes" => max_created_file_bytes = Some(parse_u64(value(&mut args)?)?),
+                "--address-space-bytes" => {
+                    address_space_bytes = Some(parse_u64(value(&mut args)?)?)
+                }
+                "--max-created-file-bytes" => {
+                    max_created_file_bytes = Some(parse_u64(value(&mut args)?)?)
+                }
                 "--max-open-files" => max_open_files = Some(parse_u64(value(&mut args)?)?),
                 "--wall-time-ms" => wall_time_ms = Some(parse_u64(value(&mut args)?)?),
                 "--max-output-bytes" => max_output_bytes = Some(parse_u64(value(&mut args)?)?),
@@ -329,8 +341,10 @@ mod linux_x86_64 {
         value
             .chunks_exact(2)
             .map(|pair| {
-                let high = hex_nibble(pair[0]).ok_or_else(|| "invalid hex helper argument".to_owned())?;
-                let low = hex_nibble(pair[1]).ok_or_else(|| "invalid hex helper argument".to_owned())?;
+                let high =
+                    hex_nibble(pair[0]).ok_or_else(|| "invalid hex helper argument".to_owned())?;
+                let low =
+                    hex_nibble(pair[1]).ok_or_else(|| "invalid hex helper argument".to_owned())?;
                 Ok(high << 4 | low)
             })
             .collect()
