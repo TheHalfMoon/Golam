@@ -19,8 +19,23 @@ jobs:
           fetch-depth: 1
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
-      - name: Format and compile qualification harness
+      - name: Repair, format and compile qualification harness
         run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('crates/golamd/tests/process_v2_qualification.rs')
+          text = path.read_text()
+          old = '        use golam_kernel::{PrepareToolEffect, ToolReconciliationResolution};\n'
+          new = '        use golam_core::ToolReconciliationResolution;\n        use golam_kernel::PrepareToolEffect;\n'
+          if text.count(old) != 1:
+              raise SystemExit('expected reconciliation import pattern exactly once')
+          text = text.replace(old, new, 1)
+          old = '''                ToolReconciliationResolution::ManualReview,\n                Some("process_restart_terminal_state_unproven"),\n                "2026-09-05T19:20:02Z",\n                SCOPE,\n'''
+          new = '''                ToolReconciliationResolution::ManualReview,\n                Some("process_restart_terminal_state_unproven"),\n                None,\n                "2026-09-05T19:20:02Z",\n                SCOPE,\n'''
+          if text.count(old) != 1:
+              raise SystemExit('expected reconciliation call pattern exactly once')
+          path.write_text(text.replace(old, new, 1))
+          PY
           cargo +1.98.0 fmt --all
           cargo +1.98.0 check --workspace --all-targets
           rm .github/workflows/spec005-process-qualification-patch.yml
