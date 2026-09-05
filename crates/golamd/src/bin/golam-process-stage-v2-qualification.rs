@@ -16,10 +16,13 @@ mod sys {
     }
 }
 
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[path = "../local_fs.rs"]
 mod local_fs;
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[path = "../process_execution_v2.rs"]
 mod process_execution_v2;
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 #[path = "../static_elf_v2.rs"]
 mod static_elf_v2;
 
