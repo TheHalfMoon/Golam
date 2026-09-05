@@ -7,8 +7,48 @@ on:
     paths:
       - .github/workflows/spec005-t080-approval-effect-relay.yml
 
+permissions:
+  contents: write
+
 jobs:
   repair:
     runs-on: ubuntu-latest
     steps:
-      - run: echo relay-ok
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+      - name: Apply and qualify approval effect repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/qualification/spec005_t080_approval_effect_repair.py
+          cargo +1.98.0 fmt --all
+          cargo +1.98.0 fmt --all -- --check
+          cargo +1.98.0 clippy --locked -p golam-kernel -p golamd --all-targets -- -D warnings
+          rustc +1.98.0 -C target-feature=+crt-static -C opt-level=1 scripts/qualification/process-v2-payload.rs -o target/debug/process-v2-payload
+          if readelf -l target/debug/process-v2-payload | grep -q 'INTERP'; then
+            echo 'qualification payload is dynamically linked' >&2
+            exit 1
+          fi
+          cargo +1.98.0 build --locked -p golamd --bin golam-native-exec-helper-v2
+          mkdir -p target/debug/deps
+          cp target/debug/golam-native-exec-helper-v2 target/debug/deps/golam-native-exec-helper-v2
+          chmod 700 target/debug/deps/golam-native-exec-helper-v2 target/debug/process-v2-payload
+          export GOLAM_PROCESS_V2_PAYLOAD="$PWD/target/debug/process-v2-payload"
+          export GOLAM_PROCESS_V2_HELPER="$PWD/target/debug/deps/golam-native-exec-helper-v2"
+          export GOLAM_PROCESS_SECRET_CANARY='SPEC005_PROCESS_SECRET_MUST_NOT_CROSS_EXEC_BOUNDARY'
+          cargo +1.98.0 test --locked -p golamd --test process_v2_qualification -- --ignored --nocapture
+      - name: Commit exact qualified repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin impl/005-local-tools-context-memory
+          test "$(git rev-parse origin/impl/005-local-tools-context-memory)" = "$GITHUB_SHA"
+          git rm .github/workflows/spec005-t080-approval-effect-relay.yml scripts/qualification/spec005_t080_approval_effect_repair.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/golam-kernel/src/approval_lifecycle.rs crates/golam-kernel/src/policy_lifecycle.rs crates/golam-kernel/src/capability_lease_effect.rs crates/golamd/tests/process_v2_qualification.rs
+          git commit -m 'fix(005): govern approval issuance effects'
+          git push origin HEAD:impl/005-local-tools-context-memory
