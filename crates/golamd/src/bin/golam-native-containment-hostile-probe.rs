@@ -6,6 +6,7 @@ mod native_containment;
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 fn main() {
+    use std::fs::File;
     use std::net::TcpStream;
     use std::path::PathBuf;
     use std::process::Command;
@@ -13,6 +14,7 @@ fn main() {
 
     use native_containment::{LinuxContainmentPlan, PROFILE_TOKEN, observe_native_object};
 
+    let cancel_hold = std::env::args_os().nth(1).is_some_and(|arg| arg == "--cancel-hold");
     let executable_path = std::env::current_exe().expect("qualification executable path");
     let executable_path = std::fs::canonicalize(executable_path).expect("canonical executable");
     let cwd_path = std::fs::canonicalize(std::env::current_dir().expect("qualification cwd"))
@@ -86,6 +88,21 @@ fn main() {
             std::process::exit(12);
         }
         Err(_) => println!("FILESYSTEM_WRITE_ESCAPE_DENIED=YES"),
+    }
+
+    match File::open("/dev/null") {
+        Ok(_) => {
+            eprintln!("device access unexpectedly succeeded");
+            std::process::exit(13);
+        }
+        Err(_) => println!("DEVICE_ACCESS_DENIED=YES"),
+    }
+
+    if cancel_hold {
+        println!("CANCEL_HOLD_READY=YES");
+        std::thread::sleep(Duration::from_secs(30));
+        eprintln!("cancel-hold payload was not cancelled within the qualification bound");
+        std::process::exit(14);
     }
 
     println!("HOSTILE_PROBE_READY=YES");
