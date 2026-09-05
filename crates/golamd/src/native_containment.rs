@@ -22,8 +22,7 @@ mod linux_x86_64 {
     use nix::sys::resource::{Resource, setrlimit};
     use nix::sys::stat::fstat;
     use seccompiler::{
-        BpfProgram, SeccompAction, SeccompFilter, SeccompRule, TargetArch,
-        apply_filter_all_threads,
+        BpfProgram, SeccompAction, SeccompFilter, SeccompRule, TargetArch, apply_filter_all_threads,
     };
 
     pub const PROFILE_TOKEN: &str = "platform:linux-x86_64-landlock-v4-seccomp-v1";
@@ -82,7 +81,10 @@ mod linux_x86_64 {
         InvalidProfileToken,
         InvalidPlan(&'static str),
         InvalidPath(PathBuf),
-        PathResolution { path: PathBuf, source: std::io::Error },
+        PathResolution {
+            path: PathBuf,
+            source: std::io::Error,
+        },
         PathIdentityChanged(PathBuf),
         AmbientEnvironmentPresent,
         InheritedSocket(u32),
@@ -98,9 +100,15 @@ mod linux_x86_64 {
     impl fmt::Display for NativeContainmentError {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             match self {
-                Self::InvalidProfileToken => f.write_str("native containment profile token mismatch"),
-                Self::InvalidPlan(reason) => write!(f, "native containment plan is invalid: {reason}"),
-                Self::InvalidPath(path) => write!(f, "native containment path is invalid: {}", path.display()),
+                Self::InvalidProfileToken => {
+                    f.write_str("native containment profile token mismatch")
+                }
+                Self::InvalidPlan(reason) => {
+                    write!(f, "native containment plan is invalid: {reason}")
+                }
+                Self::InvalidPath(path) => {
+                    write!(f, "native containment path is invalid: {}", path.display())
+                }
                 Self::PathResolution { path, source } => write!(
                     f,
                     "native containment path resolution failed for {}: {source}",
@@ -123,9 +131,14 @@ mod linux_x86_64 {
                     "native containment helper inherited an undeclared descriptor {fd}"
                 ),
                 Self::ProcFdInspection(error) => {
-                    write!(f, "native containment descriptor inspection failed: {error}")
+                    write!(
+                        f,
+                        "native containment descriptor inspection failed: {error}"
+                    )
                 }
-                Self::Resource(error) => write!(f, "native containment resource limit failed: {error}"),
+                Self::Resource(error) => {
+                    write!(f, "native containment resource limit failed: {error}")
+                }
                 Self::Landlock(error) => write!(f, "native containment Landlock failure: {error}"),
                 Self::LandlockNotFullyEnforced => {
                     f.write_str("native containment Landlock ruleset was not fully enforced")
@@ -148,14 +161,15 @@ mod linux_x86_64 {
         }
     }
 
-    pub fn observe_native_object(path: &Path) -> Result<NativeObjectIdentity, NativeContainmentError> {
+    pub fn observe_native_object(
+        path: &Path,
+    ) -> Result<NativeObjectIdentity, NativeContainmentError> {
         validate_absolute_path(path)?;
-        let canonical_path = fs::canonicalize(path).map_err(|source| {
-            NativeContainmentError::PathResolution {
+        let canonical_path =
+            fs::canonicalize(path).map_err(|source| NativeContainmentError::PathResolution {
                 path: path.to_owned(),
                 source,
-            }
-        })?;
+            })?;
         validate_absolute_path(&canonical_path)?;
         let descriptor = PathFd::new(&canonical_path).map_err(|error| {
             NativeContainmentError::Landlock(format!("open identity descriptor: {error}"))
@@ -217,10 +231,14 @@ mod linux_x86_64 {
             ));
         }
         if plan.max_open_files < 3 || plan.max_open_files > MAX_OPEN_FILES {
-            return Err(NativeContainmentError::InvalidPlan("invalid open-file limit"));
+            return Err(NativeContainmentError::InvalidPlan(
+                "invalid open-file limit",
+            ));
         }
         if plan.wall_time_ms == 0 {
-            return Err(NativeContainmentError::InvalidPlan("wall-time limit must be finite"));
+            return Err(NativeContainmentError::InvalidPlan(
+                "wall-time limit must be finite",
+            ));
         }
         if plan.max_stdout_stderr_bytes == 0 {
             return Err(NativeContainmentError::InvalidPlan(
