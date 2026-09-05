@@ -62,7 +62,6 @@ mod linux_x86_64 {
         source_root: PathBuf,
         staging_root: PathBuf,
         helper: PathBuf,
-        payload: PathBuf,
         kernel: KernelApi<QualificationPolicy>,
         lease: CapabilityLease,
         resolver: LocalFsResolver,
@@ -140,7 +139,6 @@ mod linux_x86_64 {
                 source_root,
                 staging_root,
                 helper,
-                payload,
                 kernel,
                 lease,
                 resolver,
@@ -202,8 +200,7 @@ mod linux_x86_64 {
         fn execute(
             &mut self,
             request_id: u128,
-            stage_effect_id: u128,
-            execute_effect_id: u128,
+            effect_ids: (u128, u128),
             argv: &[&[u8]],
             wall_time_ms: u64,
             max_output: u64,
@@ -217,7 +214,7 @@ mod linux_x86_64 {
                     request: &request,
                     source_resolver: &self.resolver,
                     staging_parent: &self.staging_root,
-                    stage_effect_id: EffectId(stage_effect_id),
+                    stage_effect_id: EffectId(effect_ids.0),
                     session_id: self.session_id,
                     started_at: "2026-09-05T19:17:00Z",
                     observed_at_unix_ms: OBSERVED_MS,
@@ -247,7 +244,7 @@ mod linux_x86_64 {
                         wall_time_ms,
                         max_stdout_stderr_bytes: max_output,
                     },
-                    execute_effect_id: EffectId(execute_effect_id),
+                    execute_effect_id: EffectId(effect_ids.1),
                     session_id: self.session_id,
                     started_at: "2026-09-05T19:18:00Z",
                     dispatch_at: "2026-09-05T19:18:01Z",
@@ -366,13 +363,14 @@ mod linux_x86_64 {
     fn process_v2_requalifies_strict_local_secrets_limits_cancel_and_terminal_reconciliation() {
         let mut fixture = Fixture::new(&[100, 101, 102, 103, 104]);
 
-        let success = fixture.execute(100, 0x7000, 0x7100, &[b"success"], 2_000, 4096, false);
+        let success = fixture.execute(100, (0x7000, 0x7100), &[b"success"], 2_000, 4096, false);
         assert_eq!(success.status, ProcessExecutionStatusV2::Succeeded);
         assert_eq!(success.exit_code, Some(0));
         assert_eq!(success.observed_descendant_count, 0);
         assert_eq!(success.stdout, b"SUCCESS\n");
 
-        let isolation = fixture.execute(101, 0x7200, 0x7300, &[b"isolation"], 2_000, 4096, false);
+        let isolation =
+            fixture.execute(101, (0x7200, 0x7300), &[b"isolation"], 2_000, 4096, false);
         assert_eq!(isolation.status, ProcessExecutionStatusV2::Succeeded);
         assert_eq!(
             isolation.stdout,
@@ -380,16 +378,16 @@ mod linux_x86_64 {
         );
         assert_eq!(isolation.observed_descendant_count, 0);
 
-        let timeout = fixture.execute(102, 0x7400, 0x7500, &[b"spin"], 100, 4096, false);
+        let timeout = fixture.execute(102, (0x7400, 0x7500), &[b"spin"], 100, 4096, false);
         assert_eq!(timeout.status, ProcessExecutionStatusV2::TimedOut);
         assert_eq!(timeout.observed_descendant_count, 0);
 
-        let output = fixture.execute(103, 0x7600, 0x7700, &[b"output"], 2_000, 128, false);
+        let output = fixture.execute(103, (0x7600, 0x7700), &[b"output"], 2_000, 128, false);
         assert_eq!(output.status, ProcessExecutionStatusV2::OutputLimitExceeded);
         assert!(output.stdout.len() <= 128);
         assert_eq!(output.observed_descendant_count, 0);
 
-        let cancelled = fixture.execute(104, 0x7800, 0x7900, &[b"spin"], 2_000, 4096, true);
+        let cancelled = fixture.execute(104, (0x7800, 0x7900), &[b"spin"], 2_000, 4096, true);
         assert_eq!(cancelled.status, ProcessExecutionStatusV2::Cancelled);
         assert_eq!(cancelled.observed_descendant_count, 0);
     }
