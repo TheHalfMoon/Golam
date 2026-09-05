@@ -85,8 +85,10 @@ mod linux_x86_64 {
             let staging_root = root.join("stage");
             fs::create_dir_all(&source_root).expect("source root");
             fs::create_dir_all(&staging_root).expect("staging root");
-            fs::set_permissions(&source_root, fs::Permissions::from_mode(0o700)).expect("source mode");
-            fs::set_permissions(&staging_root, fs::Permissions::from_mode(0o700)).expect("stage mode");
+            fs::set_permissions(&source_root, fs::Permissions::from_mode(0o700))
+                .expect("source mode");
+            fs::set_permissions(&staging_root, fs::Permissions::from_mode(0o700))
+                .expect("stage mode");
 
             let payload_source = PathBuf::from(
                 std::env::var_os("GOLAM_PROCESS_V2_PAYLOAD")
@@ -120,12 +122,9 @@ mod linux_x86_64 {
                 .map(|id| format!("process-request:{id}"))
                 .collect::<Vec<_>>();
             let resource_refs = resources.iter().map(String::as_str).collect::<Vec<_>>();
-            let lease_scope = CapabilityLeaseScope::normalize(
-                &[PROCESS_EXECUTE_ACTION],
-                &resource_refs,
-                &[],
-            )
-            .expect("lease scope");
+            let lease_scope =
+                CapabilityLeaseScope::normalize(&[PROCESS_EXECUTE_ACTION], &resource_refs, &[])
+                    .expect("lease scope");
             let lease = issue_executor_lease(&runtime, &mut kernel, lease_scope);
 
             let resolver = LocalFsResolver::new(
@@ -149,7 +148,10 @@ mod linux_x86_64 {
             }
         }
 
-        fn prepared_request(&self, request_id: u128) -> golam_core::tool_request::PreparedToolRequest {
+        fn prepared_request(
+            &self,
+            request_id: u128,
+        ) -> golam_core::tool_request::PreparedToolRequest {
             let requested = RequestedTarget::new("payload").expect("requested target");
             let operation = RequestedOperationId::new(PROCESS_EXECUTE_ACTION).expect("operation");
             let resolved = self
@@ -178,7 +180,11 @@ mod linux_x86_64 {
                 candidate_ref: ToolCallCandidateId::from_u128(request_id),
                 requested_operation: operation,
                 requested_target: Some(requested),
-                authorized_resource_class: self.resolver.authorized_root().policy_resource_class.clone(),
+                authorized_resource_class: self
+                    .resolver
+                    .authorized_root()
+                    .policy_resource_class
+                    .clone(),
                 target_identity_ref: Some(target_identity),
                 target_resolution_plan_ref: None,
                 capability_context_ref: capability_context_ref_v2(lease_evidence)
@@ -282,7 +288,8 @@ mod linux_x86_64 {
             .expect("lease binding");
         let effect_id = EffectId(0x6000);
         let dependencies = encode_effect_dependencies(&[]).expect("dependencies");
-        let authority = golam_core::authority::AuthorityLayout::initialize(runtime).expect("authority");
+        let authority =
+            golam_core::authority::AuthorityLayout::initialize(runtime).expect("authority");
         let mut effects = EffectStore::open(&authority).expect("effect store");
         effects
             .propose(ProposeEffect {
@@ -367,7 +374,10 @@ mod linux_x86_64 {
 
         let isolation = fixture.execute(101, 0x7200, 0x7300, &[b"isolation"], 2_000, 4096, false);
         assert_eq!(isolation.status, ProcessExecutionStatusV2::Succeeded);
-        assert_eq!(isolation.stdout, b"ENV_EMPTY\nNETWORK_DENIED\nSPAWN_DENIED\n");
+        assert_eq!(
+            isolation.stdout,
+            b"ENV_EMPTY\nNETWORK_DENIED\nSPAWN_DENIED\n"
+        );
         assert_eq!(isolation.observed_descendant_count, 0);
 
         let timeout = fixture.execute(102, 0x7400, 0x7500, &[b"spin"], 100, 4096, false);
@@ -387,7 +397,8 @@ mod linux_x86_64 {
     #[test]
     #[ignore = "dedicated Linux x86_64 restart qualification; invoked explicitly by CI"]
     fn interrupted_process_effect_restarts_as_unknown_before_reconciliation() {
-        use golam_kernel::{PrepareToolEffect, ToolReconciliationResolution};
+        use golam_core::ToolReconciliationResolution;
+        use golam_kernel::PrepareToolEffect;
 
         let mut fixture = Fixture::new(&[200]);
         let resource = "process-request:200";
@@ -412,9 +423,8 @@ mod linux_x86_64 {
                 SCOPE,
             )
             .expect("prepare interrupted process effect");
-        drop(fixture.kernel);
-
-        let mut restarted = KernelApi::open(&fixture.runtime, QualificationPolicy).expect("restart kernel");
+        let mut restarted =
+            KernelApi::open(&fixture.runtime, QualificationPolicy).expect("restart kernel");
         let context = restarted
             .begin_tool_reconciliation(
                 Principal::local_owner("executor"),
@@ -428,8 +438,9 @@ mod linux_x86_64 {
             .resolve_tool_reconciliation(
                 Principal::local_owner("executor"),
                 effect_id,
-                ToolReconciliationResolution::ManualReview,
+                ToolReconciliationResolution::UnknownOutcome,
                 Some("process_restart_terminal_state_unproven"),
+                None,
                 "2026-09-05T19:20:02Z",
                 SCOPE,
             )
