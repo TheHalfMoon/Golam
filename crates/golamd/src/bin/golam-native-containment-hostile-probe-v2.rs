@@ -151,6 +151,7 @@ mod linux_x86_64 {
             || !receipt.spawn_denied
             || !receipt.strict_local
             || receipt.inherited_non_stdio_handles_observed
+            || !receipt.linux_capability_sets_empty
             || !receipt.identity_bound_regular_file_roots
             || !receipt.ipc_creation_denied
             || !receipt.cross_process_control_denied
@@ -166,6 +167,7 @@ mod linux_x86_64 {
         println!("PROFILE={}", receipt.profile_token);
         println!("SPAWN_DENIED={}", receipt.spawn_denied);
         println!("STRICT_LOCAL={}", receipt.strict_local);
+        println!("LINUX_CAPABILITY_SETS_EMPTY=YES");
         println!("IDENTITY_BOUND_REGULAR_FILE_ROOTS=YES");
         println!("IPC_CREATION_DENIED=YES");
         println!("CROSS_PROCESS_CONTROL_DENIED=YES");
@@ -279,6 +281,7 @@ mod linux_x86_64 {
             seccomp_tsync_installed: true,
             spawn_denied: true,
             strict_local: true,
+            linux_capability_sets_empty: true,
             identity_bound_regular_file_roots: true,
             ipc_creation_denied: true,
             cross_process_control_denied: true,
