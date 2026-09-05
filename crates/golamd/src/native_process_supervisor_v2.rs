@@ -184,7 +184,12 @@ fn observe_direct_descendant_count(root_pid: u32) -> Result<u32, String> {
             .ok_or_else(|| format!("missing state in proc stat record: {}", stat_path.display()))?;
         let parent_pid = fields
             .next()
-            .ok_or_else(|| format!("missing parent pid in proc stat record: {}", stat_path.display()))?
+            .ok_or_else(|| {
+                format!(
+                    "missing parent pid in proc stat record: {}",
+                    stat_path.display()
+                )
+            })?
             .parse::<u32>()
             .map_err(|error| {
                 format!(
@@ -407,16 +412,14 @@ impl<C: RootProcessControl> RootProcessSupervisor<C> {
             return Ok(ProcessTreeReconciliation::TerminalVerified(evidence));
         }
 
-        let observed_descendant_count = match self
-            .control
-            .observe_descendant_count(self.binding.root_pid)
-        {
-            Ok(observed) => observed,
-            Err(error) => {
-                self.state = RootProcessState::UnknownOutcome;
-                return Err(NativeProcessSupervisorError::Control(error));
-            }
-        };
+        let observed_descendant_count =
+            match self.control.observe_descendant_count(self.binding.root_pid) {
+                Ok(observed) => observed,
+                Err(error) => {
+                    self.state = RootProcessState::UnknownOutcome;
+                    return Err(NativeProcessSupervisorError::Control(error));
+                }
+            };
         self.max_observed_descendant_count = self
             .max_observed_descendant_count
             .max(observed_descendant_count);
