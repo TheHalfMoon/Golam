@@ -64,7 +64,9 @@ impl fmt::Display for StaticElfV2Error {
             Self::UnsupportedClass => "first process profile requires ELF64",
             Self::UnsupportedEndian => "first process profile requires little-endian ELF",
             Self::UnsupportedIdentVersion => "ELF identification version is unsupported",
-            Self::UnsupportedOsAbi => "first process profile requires System V/Linux-neutral ELF ABI",
+            Self::UnsupportedOsAbi => {
+                "first process profile requires System V/Linux-neutral ELF ABI"
+            }
             Self::UnsupportedElfType => "first process profile requires a fixed ET_EXEC image",
             Self::UnsupportedMachine => "first process profile requires x86_64 ELF",
             Self::UnsupportedVersion => "ELF header version is unsupported",
@@ -74,7 +76,9 @@ impl fmt::Display for StaticElfV2Error {
             Self::TooManyProgramHeaders => "ELF program-header count exceeds the admission bound",
             Self::SegmentOutOfBounds => "ELF segment file range is out of bounds",
             Self::InvalidLoadSegment => "ELF load segment has invalid file/memory sizes",
-            Self::DynamicSegmentForbidden => "dynamic ELF metadata is not admitted by the first process profile",
+            Self::DynamicSegmentForbidden => {
+                "dynamic ELF metadata is not admitted by the first process profile"
+            }
             Self::InterpreterForbidden => "PT_INTERP is not admitted by the first process profile",
             Self::MissingLoadSegment => "ELF image has no loadable segment",
             Self::MissingExecutableLoadSegment => "ELF image has no executable loadable segment",
