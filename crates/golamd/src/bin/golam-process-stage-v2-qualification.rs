@@ -20,10 +20,10 @@ mod sys {
 
 #[path = "../local_fs.rs"]
 mod local_fs;
-#[path = "../static_elf_v2.rs"]
-mod static_elf_v2;
 #[path = "../process_execution_v2.rs"]
 mod process_execution_v2;
+#[path = "../static_elf_v2.rs"]
+mod static_elf_v2;
 
 fn main() {
     // Compile/test carrier only. Product daemon wiring follows exact-head qualification.
