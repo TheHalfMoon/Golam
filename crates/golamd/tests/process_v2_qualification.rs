@@ -18,18 +18,11 @@ mod linux_x86_64 {
         ToolRequest, ToolRequestId,
     };
     use golam_core::{EffectId, EffectTransitionId, EventId, SessionId};
-    use golam_kernel::policy_lifecycle::IssueApproval;
+    use golam_kernel::policy_lifecycle::capability_lease_effect::PrepareCapabilityLeaseIssueEffect;
     use golam_kernel::{
-        AuthorizationContext, AuthorizationDecision, AuthorizationPolicy, AuthorizationRequest,
-        CapabilityLease, CapabilityLeaseScope, KernelApi, KernelCreateSession, PolicyDecision,
-        Principal,
+        AuthorizationDecision, AuthorizationPolicy, AuthorizationRequest, CapabilityLease,
+        CapabilityLeaseScope, KernelApi, KernelCreateSession, PolicyDecision, Principal,
     };
-    use golam_ledger::approvals::ApprovalScope;
-    use golam_ledger::capability_leases::{
-        CAPABILITY_LEASE_ISSUE_ACTION, CAPABILITY_LEASE_MUTATION_RISK_CLASS,
-    };
-    use golam_ledger::dispatch::encode_effect_dependencies;
-    use golam_ledger::effects::{CompareAndSwapEffect, EffectStore, ProposeEffect};
     use golamd::local_fs::LocalFsResolver;
     use golamd::process_dispatch_v2::{
         ExecuteStagedProcessV2, ProcessExecutionLimitsV2, ProcessExecutionStatusV2,
@@ -124,7 +117,7 @@ mod linux_x86_64 {
             let lease_scope =
                 CapabilityLeaseScope::normalize(&[PROCESS_EXECUTE_ACTION], &resource_refs, &[])
                     .expect("lease scope");
-            let lease = issue_executor_lease(&runtime, &mut kernel, lease_scope);
+            let lease = issue_executor_lease(&mut kernel, lease_scope);
 
             let resolver = LocalFsResolver::new(
                 &source_root,
@@ -270,80 +263,44 @@ mod linux_x86_64 {
     }
 
     fn issue_executor_lease(
-        runtime: &RuntimeLayout,
         kernel: &mut KernelApi<QualificationPolicy>,
         scope: CapabilityLeaseScope,
     ) -> CapabilityLease {
-        let (resource, payload_hash) = kernel
-            .capability_lease_issue_effect_binding(
-                "executor",
-                None,
-                &scope,
-                Some(LEASE_START),
-                Some(LEASE_END),
-            )
-            .expect("lease binding");
         let effect_id = EffectId(0x6000);
-        let dependencies = encode_effect_dependencies(&[]).expect("dependencies");
-        let authority =
-            golam_core::authority::AuthorityLayout::initialize(runtime).expect("authority");
-        let mut effects = EffectStore::open(&authority).expect("effect store");
-        effects
-            .propose(ProposeEffect {
+        let prepared = kernel
+            .prepare_capability_lease_issue_effect(PrepareCapabilityLeaseIssueEffect {
+                issuer: Principal::local_owner("issuer"),
+                beneficiary_principal_id: "executor",
+                parent: None,
+                scope: &scope,
+                not_before: Some(LEASE_START),
+                expires_at: Some(LEASE_END),
                 effect_id,
                 session_id: SessionId(0x5000),
-                requested_by: "issuer",
-                action: CAPABILITY_LEASE_ISSUE_ACTION,
-                resource: &resource,
-                risk_class: CAPABILITY_LEASE_MUTATION_RISK_CLASS,
-                execution_semantics: "at_most_once",
-                idempotency_key: None,
-                preconditions: b"[]",
-                dependencies: &dependencies,
-                payload_hash,
                 proposed_event_id: EventId(0x6001),
-                transition_id: EffectTransitionId(0x6002),
-            })
-            .expect("propose lease effect");
-        effects
-            .compare_and_swap(CompareAndSwapEffect {
-                transition_id: EffectTransitionId(0x6003),
-                effect_id,
-                expected_state: "proposed",
-                next_state: "authorized",
-                attempt_id: None,
-                reason_code: Some("spec005_process_qualification_lease_effect"),
-                evidence_ref: None,
-                event_id: EventId(0x6004),
-            })
-            .expect("authorize lease effect");
-        drop(effects);
-
-        let approval = kernel
-            .issue_approval(IssueApproval {
-                principal: Principal::local_owner("issuer"),
-                approval_scope: ApprovalScope::once(
-                    effect_id,
-                    CAPABILITY_LEASE_ISSUE_ACTION,
-                    &resource,
-                )
-                .expect("approval scope"),
-                risk_class: CAPABILITY_LEASE_MUTATION_RISK_CLASS,
-                taint_digest: [0; 32],
-                issued_at: "2026-09-05T19:15:30Z",
-                expires_at: None,
-                max_uses: 1,
-                issue_effect_id: EffectId(0x6010),
+                proposed_transition_id: EffectTransitionId(0x6002),
+                authorized_event_id: EventId(0x6004),
+                authorized_transition_id: EffectTransitionId(0x6003),
                 authorization_scope: SCOPE,
             })
+            .expect("prepare lease issue effect");
+        let resource = prepared.resource().to_owned();
+        let approval_id = kernel
+            .issue_capability_lease_once_approval(
+                Principal::local_owner("issuer"),
+                effect_id,
+                &resource,
+                "2026-09-05T19:15:30Z",
+                EffectId(0x6010),
+                SCOPE,
+            )
             .expect("lease approval");
         let decision = kernel
-            .authorize(&AuthorizationRequest {
-                principal: Principal::local_owner("issuer"),
-                action: CAPABILITY_LEASE_ISSUE_ACTION,
-                resource: &resource,
-                context: AuthorizationContext::local(SCOPE),
-            })
+            .authorize_capability_lease_issue(
+                Principal::local_owner("issuer"),
+                &resource,
+                SCOPE,
+            )
             .expect("lease authorization");
         assert_eq!(decision.decision, AuthorizationDecision::Allow);
         kernel
@@ -353,7 +310,7 @@ mod linux_x86_64 {
                 scope,
                 Some(LEASE_START),
                 Some(LEASE_END),
-                (decision.decision_id, approval.approval_id(), effect_id),
+                (decision.decision_id, approval_id, effect_id),
             )
             .expect("sealed executor lease")
     }

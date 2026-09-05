@@ -3,6 +3,8 @@
 #[path = "approval_lifecycle.rs"]
 pub mod approval_lifecycle;
 pub use approval_lifecycle::{ApprovalMutationError, IssueApproval};
+#[path = "capability_lease_effect.rs"]
+pub mod capability_lease_effect;
 
 use std::error::Error;
 use std::fmt;
