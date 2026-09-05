@@ -16,6 +16,7 @@ mod runtime_policy;
 mod startup;
 mod synthetic_effect;
 mod tool_effect;
+mod tool_mutation_evidence;
 
 use std::error::Error;
 use std::fmt;
@@ -78,6 +79,9 @@ pub use synthetic_effect::{
 pub use tool_effect::{
     CompleteToolEffect, PrepareToolEffect, PreparedToolEffect, ToolEffectError,
     ToolExecutionCompletion,
+};
+pub use tool_mutation_evidence::{
+    ToolMutationEvidenceKernelError, ToolMutationVerifiedStatus,
 };
 
 use authorization::AuthorizationEngine;
