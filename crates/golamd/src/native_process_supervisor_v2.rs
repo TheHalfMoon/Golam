@@ -153,7 +153,10 @@ impl fmt::Display for NativeProcessSupervisorError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidContainmentBinding(reason) => {
-                write!(f, "native process v2 containment binding is invalid: {reason}")
+                write!(
+                    f,
+                    "native process v2 containment binding is invalid: {reason}"
+                )
             }
             Self::Control(error) => write!(f, "native process v2 control failed: {error}"),
             Self::TerminalPidMismatch { expected, observed } => write!(
