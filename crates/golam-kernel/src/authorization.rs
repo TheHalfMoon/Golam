@@ -87,7 +87,7 @@ impl<'a> Principal<'a> {
         }
     }
 
-    fn audit_subject(self) -> String {
+    pub(crate) fn audit_subject(self) -> String {
         let class = match self.kind {
             PrincipalKind::LocalOwner => "owner",
             PrincipalKind::EnrolledClient => "client",

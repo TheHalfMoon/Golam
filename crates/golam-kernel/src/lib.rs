@@ -242,6 +242,30 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         )
     }
 
+    /// Revalidates a sealed capability lease for a typed authenticated principal.
+    /// Canonical authority identity remains kernel-owned so adapters cannot accidentally
+    /// substitute a raw subject for the principal class/client binding.
+    pub fn validate_principal_capability_lease_use(
+        &self,
+        lease: &CapabilityLease,
+        principal: Principal<'_>,
+        action: &str,
+        resource: &str,
+        context_constraints: &[&str],
+        observed_at: &str,
+    ) -> Result<CapabilityLeaseUseEvidence, CapabilityLeaseUseError> {
+        let principal_id = principal.audit_subject();
+        capability_lease::validate_capability_lease_use(
+            &self.authority,
+            lease,
+            &principal_id,
+            action,
+            resource,
+            context_constraints,
+            observed_at,
+        )
+    }
+
     pub fn enroll_generated_client(
         &mut self,
         principal: Principal<'_>,

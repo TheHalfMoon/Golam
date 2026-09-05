@@ -37,6 +37,7 @@ mod linux_x86_64 {
     const LEASE_START: &str = "2026-09-05T00:00:00Z";
     const LEASE_END: &str = "2026-09-06T00:00:00Z";
     const OBSERVED_MS: u64 = 1_787_000_000_000;
+    const EXECUTOR_PRINCIPAL_ID: &str = "owner:executor";
 
     struct QualificationPolicy;
 
@@ -157,9 +158,9 @@ mod linux_x86_64 {
                 .expect("existing payload identity");
             let lease_evidence = self
                 .kernel
-                .validate_capability_lease_use(
+                .validate_principal_capability_lease_use(
                     &self.lease,
-                    "executor",
+                    Principal::local_owner("executor"),
                     PROCESS_EXECUTE_ACTION,
                     &format!("process-request:{request_id}"),
                     &[],
@@ -273,7 +274,7 @@ mod linux_x86_64 {
         let prepared = kernel
             .prepare_capability_lease_issue_effect(PrepareCapabilityLeaseIssueEffect {
                 issuer: Principal::local_owner("issuer"),
-                beneficiary_principal_id: "executor",
+                beneficiary_principal_id: EXECUTOR_PRINCIPAL_ID,
                 parent: None,
                 scope: &scope,
                 not_before: Some(LEASE_START),
@@ -304,7 +305,7 @@ mod linux_x86_64 {
         assert_eq!(decision.decision, AuthorizationDecision::Allow);
         kernel
             .issue_capability_lease(
-                "executor",
+                EXECUTOR_PRINCIPAL_ID,
                 None,
                 scope,
                 Some(LEASE_START),

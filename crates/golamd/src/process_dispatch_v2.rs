@@ -395,9 +395,9 @@ mod linux_x86_64 {
         )?;
 
         let resource = process_execute_resource_v2(input.request);
-        let lease_evidence = kernel.validate_capability_lease_use(
+        let lease_evidence = kernel.validate_principal_capability_lease_use(
             input.lease,
-            principal.subject,
+            principal,
             PROCESS_EXECUTE_ACTION,
             &resource,
             &[],
@@ -451,9 +451,9 @@ mod linux_x86_64 {
                 "Kernel authorization changed after Effect preparation",
             ));
         }
-        let dispatch_lease_evidence = kernel.validate_capability_lease_use(
+        let dispatch_lease_evidence = kernel.validate_principal_capability_lease_use(
             input.lease,
-            principal.subject,
+            principal,
             PROCESS_EXECUTE_ACTION,
             &resource,
             &[],
