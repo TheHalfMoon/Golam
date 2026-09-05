@@ -238,11 +238,11 @@ mod linux_x86_64 {
         validate_identity(&plan.executable)?;
         require_kind(
             &plan.executable,
-            libc::S_IFREG as u32,
+            libc::S_IFREG,
             "executable must be a regular file",
         )?;
         validate_identity(&plan.cwd)?;
-        require_kind(&plan.cwd, libc::S_IFDIR as u32, "cwd must be a directory")?;
+        require_kind(&plan.cwd, libc::S_IFDIR, "cwd must be a directory")?;
         validate_regular_file_roots(&plan.filesystem_read_roots)?;
         validate_regular_file_roots(&plan.filesystem_write_roots)?;
         reject_read_write_overlap(plan)?;
@@ -535,7 +535,7 @@ mod linux_x86_64 {
         kind: u32,
         reason: &'static str,
     ) -> Result<(), NativeContainmentError> {
-        if identity.mode & libc::S_IFMT as u32 != kind {
+        if identity.mode & libc::S_IFMT != kind {
             return Err(NativeContainmentError::InvalidPlan(reason));
         }
         Ok(())
@@ -549,7 +549,7 @@ mod linux_x86_64 {
             validate_identity(root)?;
             require_kind(
                 root,
-                libc::S_IFREG as u32,
+                libc::S_IFREG,
                 "v2 filesystem roots must be exact existing regular files",
             )?;
             if !seen.insert(root.canonical_path.clone()) {
