@@ -82,6 +82,24 @@ assert_no_inet_sockets() {
   done <<< "$managed"
 }
 
+# The trusted launcher boundary must actually remove ambient descriptors before starting the
+# containment helper. `env -i` clears environment variables only; GitHub-hosted runners may
+# legitimately carry unrelated high-numbered descriptors in the invoking shell.
+run_clean_probe() {
+  (
+    local fd_path
+    local fd
+    shopt -s nullglob
+    for fd_path in "/proc/${BASHPID}/fd/"*; do
+      fd="${fd_path##*/}"
+      if [[ "$fd" =~ ^[0-9]+$ ]] && (( fd > 2 )); then
+        exec {fd}>&-
+      fi
+    done
+    exec env -i "$binary" "$@"
+  )
+}
+
 # Non-empty ambient environment must fail before untrusted execution.
 if env -i GOLAM_HOSTILE_ENV_CANARY=1 "$binary" >"$root/env.stdout" 2>"$root/env.stderr"; then
   echo "non-empty ambient environment unexpectedly passed containment admission" >&2
@@ -108,7 +126,7 @@ if ! grep -q 'inherited an undeclared descriptor' "$root/fd.stderr"; then
 fi
 
 # Normal hostile payload: actual empty ambient environment, no inherited extra descriptors.
-env -i "$binary" >"$stdout_log" 2>"$stderr_log" &
+run_clean_probe >"$stdout_log" 2>"$stderr_log" &
 pid=$!
 
 ready=0
@@ -167,7 +185,7 @@ fi
 # then require an actual OS terminal observation and no pre-cancel descendants.
 cancel_stdout="$root/cancel.stdout"
 cancel_stderr="$root/cancel.stderr"
-env -i "$binary" --cancel-hold >"$cancel_stdout" 2>"$cancel_stderr" &
+run_clean_probe --cancel-hold >"$cancel_stdout" 2>"$cancel_stderr" &
 cancel_pid=$!
 cancel_ready=0
 for _ in $(seq 1 100); do
