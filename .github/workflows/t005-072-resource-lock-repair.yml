@@ -8,7 +8,7 @@ permissions:
   contents: write
 
 jobs:
-  repair-lock:
+  repair-containment:
     if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'impl/005-local-tools-context-memory'
     runs-on: ubuntu-latest
     steps:
@@ -17,18 +17,36 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
       - name: Install pinned Rust toolchain
-        run: rustup toolchain install 1.98.0 --profile minimal
-      - name: Resolve exact lock metadata
-        run: cargo +1.98.0 check -p golamd
-      - name: Verify bounded lockfile delta
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt
+      - name: Repair exact seccompiler conversion binding
         shell: bash
         run: |
           set -euo pipefail
-          changed="$(git diff --name-only)"
-          test "$changed" = "Cargo.lock"
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('crates/golamd/src/native_containment.rs')
+          text = path.read_text()
+          old = '.map_err(|error: seccompiler::Error| NativeContainmentError::Seccomp(error.to_string()))'
+          new = '.map_err(|error| NativeContainmentError::Seccomp(error.to_string()))'
+          if text.count(old) != 1:
+              raise SystemExit('expected exactly one seccompiler conversion annotation')
+          path.write_text(text.replace(old, new))
+          PY
+      - name: Resolve exact lock metadata and compile candidate
+        run: cargo +1.98.0 check -p golamd
+      - name: Verify format and bounded delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +1.98.0 fmt --all -- --check
+          mapfile -t changed < <(git diff --name-only | sort)
+          printf '%s\n' "${changed[@]}"
+          test "${#changed[@]}" -eq 2
+          test "${changed[0]}" = "Cargo.lock"
+          test "${changed[1]}" = "crates/golamd/src/native_containment.rs"
           grep -q '^name = "golamd"$' Cargo.lock
           grep -q '^name = "nix"$' Cargo.lock
-          grep -q '^version = "0.31.3"$' Cargo.lock
+          ! grep -q 'error: seccompiler::Error' crates/golamd/src/native_containment.rs
       - name: Guard expected head and push repair
         shell: bash
         env:
@@ -41,6 +59,6 @@ jobs:
           rm .github/workflows/t005-072-resource-lock-repair.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Cargo.lock .github/workflows/t005-072-resource-lock-repair.yml
-          git commit -m "build(005): reconcile resource lock metadata"
+          git add Cargo.lock crates/golamd/src/native_containment.rs .github/workflows/t005-072-resource-lock-repair.yml
+          git commit -m "fix(005): reconcile containment compile boundary"
           git push origin "HEAD:$BRANCH"
