@@ -278,8 +278,7 @@ fn stage_linux_x86_64<P: AuthorizationPolicy>(
         return Err(ProcessStageError::SourceTooLarge);
     }
     let mut source_bytes = Vec::with_capacity(usize::try_from(source_metadata.len()).unwrap_or(0));
-    source
-        .by_ref()
+    std::io::Read::by_ref(&mut source)
         .take((MAX_STATIC_EXECUTABLE_BYTES + 1) as u64)
         .read_to_end(&mut source_bytes)?;
     if source_bytes.len() > MAX_STATIC_EXECUTABLE_BYTES {
@@ -395,8 +394,7 @@ fn stage_linux_x86_64<P: AuthorizationPolicy>(
         created.sync_all()?;
         created.seek(SeekFrom::Start(0))?;
         let mut readback = Vec::with_capacity(source_bytes.len());
-        created
-            .by_ref()
+        std::io::Read::by_ref(&mut created)
             .take((MAX_STATIC_EXECUTABLE_BYTES + 1) as u64)
             .read_to_end(&mut readback)?;
         if readback.len() != source_bytes.len() || sha256(&readback) != source_digest {
@@ -415,8 +413,7 @@ fn stage_linux_x86_64<P: AuthorizationPolicy>(
         }
         let mut observed_reader = observed;
         let mut observed_bytes = Vec::with_capacity(readback.len());
-        observed_reader
-            .by_ref()
+        std::io::Read::by_ref(&mut observed_reader)
             .take((MAX_STATIC_EXECUTABLE_BYTES + 1) as u64)
             .read_to_end(&mut observed_bytes)?;
         if observed_bytes.len() != readback.len() || sha256(&observed_bytes) != source_digest {
