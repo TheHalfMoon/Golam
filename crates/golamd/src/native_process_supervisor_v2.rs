@@ -136,10 +136,74 @@ pub enum ProcessTreeReconciliation {
 pub trait RootProcessControl {
     fn request_termination(&mut self, root_pid: u32) -> Result<(), String>;
 
+    fn observe_descendant_count(&mut self, root_pid: u32) -> Result<u32, String> {
+        observe_direct_descendant_count(root_pid)
+    }
+
     fn observe_terminal(
         &mut self,
         root_pid: u32,
     ) -> Result<Option<RootTerminalObservation>, String>;
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+fn observe_direct_descendant_count(root_pid: u32) -> Result<u32, String> {
+    let entries = std::fs::read_dir("/proc")
+        .map_err(|error| format!("cannot enumerate /proc for descendant observation: {error}"))?;
+    let mut observed = 0_u32;
+    for entry in entries {
+        let entry = entry.map_err(|error| format!("cannot enumerate /proc entry: {error}"))?;
+        let file_name = entry.file_name();
+        let Some(file_name) = file_name.to_str() else {
+            continue;
+        };
+        let Ok(pid) = file_name.parse::<u32>() else {
+            continue;
+        };
+        if pid == root_pid {
+            continue;
+        }
+
+        let stat_path = entry.path().join("stat");
+        let stat = match std::fs::read_to_string(&stat_path) {
+            Ok(stat) => stat,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                return Err(format!(
+                    "cannot read {} for descendant observation: {error}",
+                    stat_path.display()
+                ));
+            }
+        };
+        let close_paren = stat
+            .rfind(')')
+            .ok_or_else(|| format!("malformed proc stat record: {}", stat_path.display()))?;
+        let mut fields = stat[close_paren + 1..].split_whitespace();
+        let _state = fields
+            .next()
+            .ok_or_else(|| format!("missing state in proc stat record: {}", stat_path.display()))?;
+        let parent_pid = fields
+            .next()
+            .ok_or_else(|| format!("missing parent pid in proc stat record: {}", stat_path.display()))?
+            .parse::<u32>()
+            .map_err(|error| {
+                format!(
+                    "invalid parent pid in proc stat record {}: {error}",
+                    stat_path.display()
+                )
+            })?;
+        if parent_pid == root_pid {
+            observed = observed
+                .checked_add(1)
+                .ok_or_else(|| "descendant count overflow".to_owned())?;
+        }
+    }
+    Ok(observed)
+}
+
+#[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
+fn observe_direct_descendant_count(_root_pid: u32) -> Result<u32, String> {
+    Err("direct process-tree observation is supported only on Linux x86_64".to_owned())
 }
 
 #[derive(Debug)]
@@ -147,6 +211,7 @@ pub enum NativeProcessSupervisorError {
     InvalidContainmentBinding(&'static str),
     Control(String),
     TerminalPidMismatch { expected: u32, observed: u32 },
+    DescendantsObserved { root_pid: u32, observed: u32 },
     NonMonotonicWallTime { previous: u64, observed: u64 },
     UnknownOutcomeRequiresReconciliation,
 }
@@ -164,6 +229,10 @@ impl fmt::Display for NativeProcessSupervisorError {
             Self::TerminalPidMismatch { expected, observed } => write!(
                 f,
                 "native process v2 terminal observation pid mismatch: expected {expected}, observed {observed}"
+            ),
+            Self::DescendantsObserved { root_pid, observed } => write!(
+                f,
+                "native process v2 terminal reconciliation observed {observed} direct descendants for root pid {root_pid}"
             ),
             Self::NonMonotonicWallTime { previous, observed } => write!(
                 f,
@@ -184,6 +253,7 @@ pub struct RootProcessSupervisor<C> {
     state: RootProcessState,
     last_elapsed_ms: u64,
     accepted_output_bytes: u64,
+    max_observed_descendant_count: u32,
 }
 
 impl<C: RootProcessControl> RootProcessSupervisor<C> {
@@ -198,6 +268,7 @@ impl<C: RootProcessControl> RootProcessSupervisor<C> {
             state: RootProcessState::Running,
             last_elapsed_ms: 0,
             accepted_output_bytes: 0,
+            max_observed_descendant_count: 0,
         })
     }
 
@@ -336,6 +407,27 @@ impl<C: RootProcessControl> RootProcessSupervisor<C> {
             return Ok(ProcessTreeReconciliation::TerminalVerified(evidence));
         }
 
+        let observed_descendant_count = match self
+            .control
+            .observe_descendant_count(self.binding.root_pid)
+        {
+            Ok(observed) => observed,
+            Err(error) => {
+                self.state = RootProcessState::UnknownOutcome;
+                return Err(NativeProcessSupervisorError::Control(error));
+            }
+        };
+        self.max_observed_descendant_count = self
+            .max_observed_descendant_count
+            .max(observed_descendant_count);
+        if self.max_observed_descendant_count != 0 {
+            self.state = RootProcessState::UnknownOutcome;
+            return Err(NativeProcessSupervisorError::DescendantsObserved {
+                root_pid: self.binding.root_pid,
+                observed: self.max_observed_descendant_count,
+            });
+        }
+
         let observation = match self.control.observe_terminal(self.binding.root_pid) {
             Ok(observation) => observation,
             Err(error) => {
@@ -366,7 +458,7 @@ impl<C: RootProcessControl> RootProcessSupervisor<C> {
         let evidence = ProcessTreeTerminalEvidence {
             root_pid: observation.root_pid,
             termination: observation.termination,
-            observed_descendant_count: 0,
+            observed_descendant_count: self.max_observed_descendant_count,
             spawn_denial_bound: self.binding.spawn_denied && self.binding.seccomp_tsync_installed,
             terminal_verified: true,
         };
@@ -381,6 +473,8 @@ impl<C: RootProcessControl> RootProcessSupervisor<C> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::VecDeque;
+
     use super::*;
 
     #[derive(Default)]
@@ -388,6 +482,7 @@ mod tests {
         termination_calls: usize,
         terminal: Option<RootTerminalObservation>,
         termination_error: Option<String>,
+        descendant_counts: VecDeque<u32>,
     }
 
     impl RootProcessControl for FakeControl {
@@ -397,6 +492,10 @@ mod tests {
                 Some(error) => Err(error),
                 None => Ok(()),
             }
+        }
+
+        fn observe_descendant_count(&mut self, _root_pid: u32) -> Result<u32, String> {
+            Ok(self.descendant_counts.pop_front().unwrap_or(0))
         }
 
         fn observe_terminal(
@@ -494,6 +593,36 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn independently_observed_descendant_blocks_terminal_success_permanently() {
+        let control = FakeControl {
+            terminal: Some(RootTerminalObservation {
+                root_pid: 4242,
+                termination: RootTerminationKind::Exited(0),
+            }),
+            descendant_counts: VecDeque::from([1, 0]),
+            ..FakeControl::default()
+        };
+        let mut supervisor = RootProcessSupervisor::new(binding(), control).unwrap();
+
+        assert!(matches!(
+            supervisor.reconcile_terminal(),
+            Err(NativeProcessSupervisorError::DescendantsObserved {
+                root_pid: 4242,
+                observed: 1,
+            })
+        ));
+        assert_eq!(supervisor.state(), &RootProcessState::UnknownOutcome);
+        assert!(matches!(
+            supervisor.reconcile_terminal(),
+            Err(NativeProcessSupervisorError::DescendantsObserved {
+                root_pid: 4242,
+                observed: 1,
+            })
+        ));
+        assert_eq!(supervisor.state(), &RootProcessState::UnknownOutcome);
     }
 
     #[test]
