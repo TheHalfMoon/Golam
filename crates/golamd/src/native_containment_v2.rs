@@ -113,7 +113,11 @@ mod linux_x86_64 {
                     write!(f, "native containment v2 plan is invalid: {reason}")
                 }
                 Self::InvalidPath(path) => {
-                    write!(f, "native containment v2 path is invalid: {}", path.display())
+                    write!(
+                        f,
+                        "native containment v2 path is invalid: {}",
+                        path.display()
+                    )
                 }
                 Self::PathResolution { path, source } => write!(
                     f,
@@ -221,7 +225,11 @@ mod linux_x86_64 {
         }
 
         validate_identity(&plan.executable)?;
-        require_kind(&plan.executable, libc::S_IFREG as u32, "executable must be a regular file")?;
+        require_kind(
+            &plan.executable,
+            libc::S_IFREG as u32,
+            "executable must be a regular file",
+        )?;
         validate_identity(&plan.cwd)?;
         require_kind(&plan.cwd, libc::S_IFDIR as u32, "cwd must be a directory")?;
         validate_regular_file_roots(&plan.filesystem_read_roots)?;
@@ -446,11 +454,7 @@ mod linux_x86_64 {
         for root in &plan.filesystem_write_roots {
             ruleset = add_path_rule(ruleset, &root.canonical_path, write_access)?;
         }
-        ruleset = add_path_rule(
-            ruleset,
-            &plan.executable.canonical_path,
-            executable_access,
-        )?;
+        ruleset = add_path_rule(ruleset, &plan.executable.canonical_path, executable_access)?;
         ruleset = add_path_rule(ruleset, &plan.cwd.canonical_path, AccessFs::ReadDir)?;
 
         ruleset
