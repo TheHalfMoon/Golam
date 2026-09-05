@@ -287,7 +287,7 @@ mod linux_x86_64 {
     pub fn compile_seccomp_deny_filter() -> Result<BpfProgram, NativeContainmentError> {
         let mut rules: BTreeMap<i64, Vec<SeccompRule>> = BTreeMap::new();
         for syscall in blocked_syscalls() {
-            rules.insert(syscall, Vec::new());
+            rules.insert(*syscall, Vec::new());
         }
         let arch = TargetArch::try_from(std::env::consts::ARCH)
             .map_err(|error| NativeContainmentError::Seccomp(error.to_string()))?;
@@ -311,10 +311,18 @@ mod linux_x86_64 {
             .map_err(|error| NativeContainmentError::Seccomp(error.to_string()))
     }
 
-    fn blocked_syscalls() -> [i64; 11] {
-        [
+    /// Syscall families denied by the first profile.
+    ///
+    /// In addition to spawn and network creation, the empty IPC contract denies kernel-global
+    /// SysV/POSIX message/shared-memory primitives, cross-process handles/memory/signals and
+    /// keyrings. `io_uring` setup is denied because asynchronous operations could otherwise
+    /// recreate socket or other I/O paths behind the direct syscall deny boundary.
+    fn blocked_syscalls() -> &'static [i64] {
+        &[
+            // Network and local socket IPC creation.
             libc::SYS_socket,
             libc::SYS_socketpair,
+            // Process/namespace escape and privilege-sensitive process inspection.
             libc::SYS_clone,
             libc::SYS_clone3,
             libc::SYS_fork,
@@ -324,6 +332,59 @@ mod linux_x86_64 {
             libc::SYS_umount2,
             libc::SYS_unshare,
             libc::SYS_setns,
+            // SysV message queues.
+            libc::SYS_msgget,
+            libc::SYS_msgsnd,
+            libc::SYS_msgrcv,
+            libc::SYS_msgctl,
+            // SysV semaphores.
+            libc::SYS_semget,
+            libc::SYS_semop,
+            libc::SYS_semctl,
+            libc::SYS_semtimedop,
+            // SysV shared memory.
+            libc::SYS_shmget,
+            libc::SYS_shmat,
+            libc::SYS_shmdt,
+            libc::SYS_shmctl,
+            // POSIX message queues.
+            libc::SYS_mq_open,
+            libc::SYS_mq_unlink,
+            libc::SYS_mq_timedsend,
+            libc::SYS_mq_timedreceive,
+            libc::SYS_mq_notify,
+            libc::SYS_mq_getsetattr,
+            // Anonymous/shared-memory and cross-process descriptor surfaces.
+            libc::SYS_memfd_create,
+            libc::SYS_pidfd_open,
+            libc::SYS_pidfd_getfd,
+            libc::SYS_pidfd_send_signal,
+            libc::SYS_kcmp,
+            // Cross-process memory and signal/control paths.
+            libc::SYS_process_vm_readv,
+            libc::SYS_process_vm_writev,
+            libc::SYS_process_madvise,
+            libc::SYS_process_mrelease,
+            libc::SYS_kill,
+            libc::SYS_tkill,
+            libc::SYS_tgkill,
+            libc::SYS_rt_sigqueueinfo,
+            libc::SYS_rt_tgsigqueueinfo,
+            // Kernel keyrings are not an IPC or secret-broker escape hatch.
+            libc::SYS_add_key,
+            libc::SYS_request_key,
+            libc::SYS_keyctl,
+            // Prevent asynchronous kernel I/O from bypassing direct syscall denials.
+            libc::SYS_io_uring_setup,
+            libc::SYS_io_uring_enter,
+            libc::SYS_io_uring_register,
+            libc::SYS_userfaultfd,
+            libc::SYS_bpf,
+            // The first profile cannot create new device/FIFO nodes or use handle-based FS bypass.
+            libc::SYS_mknod,
+            libc::SYS_mknodat,
+            libc::SYS_name_to_handle_at,
+            libc::SYS_open_by_handle_at,
         ]
     }
 
@@ -565,17 +626,55 @@ mod linux_x86_64 {
         }
 
         #[test]
-        fn seccomp_candidate_compiles_and_binds_spawn_and_socket_denials() {
+        fn seccomp_candidate_compiles_and_binds_spawn_network_and_empty_ipc_denials() {
             let program = compile_seccomp_deny_filter().unwrap();
             assert!(!program.is_empty());
             assert!(program.len() <= 4096);
             let blocked = blocked_syscalls();
-            assert!(blocked.contains(&libc::SYS_socket));
-            assert!(blocked.contains(&libc::SYS_socketpair));
-            assert!(blocked.contains(&libc::SYS_clone));
-            assert!(blocked.contains(&libc::SYS_clone3));
-            assert!(blocked.contains(&libc::SYS_fork));
-            assert!(blocked.contains(&libc::SYS_vfork));
+
+            for syscall in [
+                libc::SYS_socket,
+                libc::SYS_socketpair,
+                libc::SYS_clone,
+                libc::SYS_clone3,
+                libc::SYS_fork,
+                libc::SYS_vfork,
+                libc::SYS_msgget,
+                libc::SYS_msgsnd,
+                libc::SYS_msgrcv,
+                libc::SYS_msgctl,
+                libc::SYS_semget,
+                libc::SYS_semop,
+                libc::SYS_semctl,
+                libc::SYS_semtimedop,
+                libc::SYS_shmget,
+                libc::SYS_shmat,
+                libc::SYS_shmdt,
+                libc::SYS_shmctl,
+                libc::SYS_mq_open,
+                libc::SYS_mq_unlink,
+                libc::SYS_mq_timedsend,
+                libc::SYS_mq_timedreceive,
+                libc::SYS_mq_notify,
+                libc::SYS_mq_getsetattr,
+                libc::SYS_memfd_create,
+                libc::SYS_pidfd_open,
+                libc::SYS_pidfd_getfd,
+                libc::SYS_pidfd_send_signal,
+                libc::SYS_process_vm_readv,
+                libc::SYS_process_vm_writev,
+                libc::SYS_kill,
+                libc::SYS_tkill,
+                libc::SYS_tgkill,
+                libc::SYS_add_key,
+                libc::SYS_request_key,
+                libc::SYS_keyctl,
+                libc::SYS_io_uring_setup,
+                libc::SYS_io_uring_enter,
+                libc::SYS_io_uring_register,
+            ] {
+                assert!(blocked.contains(&syscall), "missing denied syscall {syscall}");
+            }
         }
 
         #[test]
