@@ -90,9 +90,10 @@ impl fmt::Display for ProcessStageError {
             Self::Core(error) => write!(f, "process staging canonical encoding failed: {error}"),
             Self::Io(error) => write!(f, "process staging I/O failed: {error}"),
             Self::Effect(error) => write!(f, "process staging Effect Gate failed: {error}"),
-            Self::ProtectedResource(error) => {
-                write!(f, "process staging parent is outside the admitted runtime boundary: {error}")
-            }
+            Self::ProtectedResource(error) => write!(
+                f,
+                "process staging parent is outside the admitted runtime boundary: {error}"
+            ),
             Self::SourceTooLarge => {
                 f.write_str("process staging source exceeds the executable byte bound")
             }
