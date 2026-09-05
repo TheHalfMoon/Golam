@@ -24,8 +24,11 @@ ed25519-dalek = { version = "=3.0.0", default-features = false, features = ["sig
 getrandom = { version = "=0.4.3", features = ["std"] }
 interprocess = { version = "=2.4.3", default-features = false }
 keyring-core = { version = "=1.0.0", default-features = false }
+landlock = { version = "=0.4.7", default-features = false }
+libc = "=0.2.189"
 nix = { version = "=0.31.3", default-features = false, features = ["fs", "socket", "user"] }
 rusqlite = { version = "=0.40.2", features = ["bundled"] }
+seccompiler = { version = "=0.5.0", default-features = false }
 widestring = "=1.2.1"
 windows-native-keyring-store = { version = "=1.1.0", default-features = false }
 windows-permissions = "=0.2.4"
