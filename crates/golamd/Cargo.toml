@@ -12,6 +12,9 @@ golam-ipc = { path = "../golam-ipc" }
 golam-kernel = { path = "../golam-kernel" }
 miniz_oxide_read = { package = "miniz_oxide", version = "=0.9.1", default-features = false }
 
+[dev-dependencies]
+golam-ledger = { path = "../golam-ledger" }
+
 [target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dependencies]
 landlock.workspace = true
 libc.workspace = true
