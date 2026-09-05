@@ -342,7 +342,6 @@ impl LocalFsResolver {
     }
 }
 
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 pub(crate) fn metadata_matches_resolved_identity(
     identity: &ResolvedTargetIdentity,
     metadata: &fs::Metadata,
