@@ -150,13 +150,7 @@ fn stale_head_after_prepare_is_rejected_before_branch_creation() {
 
     move_head_to_new_valid_commit(&fixture.repo);
     assert!(matches!(
-        execute_git_branch_create(
-            &fixture.resolver,
-            &prepared,
-            expectation,
-            "candidate",
-            101,
-        ),
+        execute_git_branch_create(&fixture.resolver, &prepared, expectation, "candidate", 101,),
         Err(GitMutationError::StaleRepository)
     ));
     assert!(!fixture.repo.join(".git/refs/heads/candidate").exists());
@@ -173,13 +167,7 @@ fn stale_index_after_prepare_is_rejected_before_branch_creation() {
 
     write_empty_index(&fixture.repo, true);
     assert!(matches!(
-        execute_git_branch_create(
-            &fixture.resolver,
-            &prepared,
-            expectation,
-            "candidate",
-            102,
-        ),
+        execute_git_branch_create(&fixture.resolver, &prepared, expectation, "candidate", 102,),
         Err(GitMutationError::StaleRepository)
     ));
     assert!(!fixture.repo.join(".git/refs/heads/candidate").exists());
