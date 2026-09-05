@@ -5,11 +5,11 @@ use std::fmt;
 use std::path::PathBuf;
 
 use golam_core::EffectId;
+pub use golam_ledger::tool_mutation_evidence::ToolMutationVerifiedStatus;
 use golam_ledger::tool_mutation_evidence::{
     RecordToolMutationIntent, RecordToolMutationReceipt, ToolMutationEvidenceError,
     ToolMutationEvidenceStore,
 };
-pub use golam_ledger::tool_mutation_evidence::ToolMutationVerifiedStatus;
 
 use crate::{
     AuthorizationContext, AuthorizationPolicy, AuthorizationRequest, KernelApi, KernelError,
@@ -217,10 +217,7 @@ mod tests {
         .unwrap()
     }
 
-    fn prepared(
-        kernel: &mut KernelApi<AllowTools>,
-        effect_id: EffectId,
-    ) -> PreparedToolEffect {
+    fn prepared(kernel: &mut KernelApi<AllowTools>, effect_id: EffectId) -> PreparedToolEffect {
         kernel
             .prepare_tool_effect(
                 Principal::test("evidence"),
