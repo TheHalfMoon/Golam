@@ -2,14 +2,14 @@
 #![allow(dead_code)]
 #![allow(clippy::redundant_guards)]
 
-#[cfg(unix)]
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 extern crate self as nix;
 
-#[cfg(unix)]
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 mod fcntl {
     pub use golam_core::unix_fs::{OFlag, openat};
 }
-#[cfg(unix)]
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 mod sys {
     pub mod stat {
         pub use golam_core::unix_fs::Mode;
