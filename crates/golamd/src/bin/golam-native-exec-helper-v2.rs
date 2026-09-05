@@ -415,7 +415,7 @@ mod linux_x86_64 {
             return Err("hex helper argument has odd length".to_owned());
         }
         value
-            .chunks_exact(2)
+            .chunks(2)
             .map(|pair| {
                 let high =
                     hex_nibble(pair[0]).ok_or_else(|| "invalid hex helper argument".to_owned())?;
