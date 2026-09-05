@@ -91,6 +91,8 @@ mod file_path_mutation_qualification_tests;
 pub mod git_index;
 #[cfg_attr(not(unix), allow(dead_code, unused_imports))]
 pub mod git_mutation;
+#[cfg(all(test, target_os = "linux"))]
+mod git_mutation_phase_f_qualification_tests;
 #[allow(
     clippy::too_many_arguments,
     reason = "sealed Git observation constructors keep every evidence-bound field explicit"
