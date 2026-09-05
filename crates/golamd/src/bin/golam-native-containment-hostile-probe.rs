@@ -14,7 +14,9 @@ fn main() {
 
     use native_containment::{LinuxContainmentPlan, PROFILE_TOKEN, observe_native_object};
 
-    let cancel_hold = std::env::args_os().nth(1).is_some_and(|arg| arg == "--cancel-hold");
+    let cancel_hold = std::env::args_os()
+        .nth(1)
+        .is_some_and(|arg| arg == "--cancel-hold");
     let executable_path = std::env::current_exe().expect("qualification executable path");
     let executable_path = std::fs::canonicalize(executable_path).expect("canonical executable");
     let cwd_path = std::fs::canonicalize(std::env::current_dir().expect("qualification cwd"))
