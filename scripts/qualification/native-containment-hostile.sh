@@ -84,20 +84,20 @@ assert_no_inet_sockets() {
 
 # The trusted launcher boundary must actually remove ambient descriptors before starting the
 # containment helper. `env -i` clears environment variables only; GitHub-hosted runners may
-# legitimately carry unrelated high-numbered descriptors in the invoking shell.
+# legitimately carry unrelated high-numbered descriptors in the invoking shell. This function
+# is always backgrounded, so Bash already gives it the single process that must become the probe;
+# introducing another subshell here would create a wrapper descendant and falsify tree evidence.
 run_clean_probe() {
-  (
-    local fd_path
-    local fd
-    shopt -s nullglob
-    for fd_path in "/proc/${BASHPID}/fd/"*; do
-      fd="${fd_path##*/}"
-      if [[ "$fd" =~ ^[0-9]+$ ]] && (( fd > 2 )); then
-        exec {fd}>&-
-      fi
-    done
-    exec env -i "$binary" "$@"
-  )
+  local fd_path
+  local fd
+  shopt -s nullglob
+  for fd_path in "/proc/${BASHPID}/fd/"*; do
+    fd="${fd_path##*/}"
+    if [[ "$fd" =~ ^[0-9]+$ ]] && (( fd > 2 )); then
+      exec {fd}>&-
+    fi
+  done
+  exec env -i "$binary" "$@"
 }
 
 # Non-empty ambient environment must fail before untrusted execution.
