@@ -1,0 +1,46 @@
+name: t005-073-format-repair
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  format-repair:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'impl/005-local-tools-context-memory'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt
+      - name: Apply rustfmt
+        run: cargo +1.98.0 fmt --all
+      - name: Verify bounded format delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t changed < <(git diff --name-only | sort)
+          printf '%s\n' "${changed[@]}"
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = "crates/golamd/src/process_secret_evidence.rs"
+          cargo +1.98.0 fmt --all -- --check
+      - name: Guard expected head and push repair
+        shell: bash
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          git fetch origin "$BRANCH"
+          test "$(git rev-parse "origin/$BRANCH")" = "$EXPECTED_HEAD"
+          rm .github/workflows/t005-073-format-repair.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/golamd/src/process_secret_evidence.rs .github/workflows/t005-073-format-repair.yml
+          git commit -m "style(005): format process secret evidence"
+          git push origin "HEAD:$BRANCH"
