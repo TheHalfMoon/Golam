@@ -1,0 +1,45 @@
+name: spec005-process-fixture-repair
+
+on:
+  push:
+    branches:
+      - impl/005-local-tools-context-memory
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/005-local-tools-context-memory
+          fetch-depth: 1
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt
+      - name: Repair qualification parent directory and compile
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('crates/golamd/tests/process_v2_qualification.rs')
+          text = path.read_text()
+          old = '''            let runtime = RuntimeLayout::initialize(root.join("runtime")).expect("runtime");\n'''
+          new = '''            fs::create_dir(&root).expect("qualification root");\n            fs::set_permissions(&root, fs::Permissions::from_mode(0o700))\n                .expect("qualification root mode");\n            let runtime = RuntimeLayout::initialize(root.join("runtime")).expect("runtime");\n'''
+          if text.count(old) != 1:
+              raise SystemExit('expected runtime fixture initialization pattern exactly once')
+          path.write_text(text.replace(old, new, 1))
+          PY
+          cargo +1.98.0 fmt --all
+          cargo +1.98.0 test --locked -p golamd --test process_v2_qualification
+          rm .github/workflows/spec005-process-fixture-repair.yml
+          git diff --check
+      - name: Commit forward-only fixture repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/golamd/tests/process_v2_qualification.rs .github/workflows/spec005-process-fixture-repair.yml
+          git commit -m "test(005): create process qualification parent root"
+          git push origin HEAD:impl/005-local-tools-context-memory
