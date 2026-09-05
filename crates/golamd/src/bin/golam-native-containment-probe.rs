@@ -4,12 +4,16 @@
 #[path = "../native_containment.rs"]
 mod native_containment;
 
+#[allow(dead_code)]
+#[path = "../native_process_supervisor.rs"]
+mod native_process_supervisor;
+
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 fn main() {
     match native_containment::compile_seccomp_deny_filter() {
         Ok(program) => {
             println!(
-                "profile={} seccomp_bpf_instructions={} production_admitted=no",
+                "profile={} seccomp_bpf_instructions={} root_supervision=compiled production_admitted=no",
                 native_containment::PROFILE_TOKEN,
                 program.len()
             );
@@ -24,7 +28,7 @@ fn main() {
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 fn main() {
     println!(
-        "profile={} platform_supported=no production_admitted=no",
+        "profile={} platform_supported=no root_supervision=compiled production_admitted=no",
         native_containment::PROFILE_TOKEN
     );
 }
