@@ -300,7 +300,9 @@ mod linux_x86_64 {
         .map_err(|error| NativeContainmentError::Seccomp(error.to_string()))?;
         filter
             .try_into()
-            .map_err(|error: seccompiler::Error| NativeContainmentError::Seccomp(error.to_string()))
+            .map_err(|error: seccompiler::BackendError| {
+                NativeContainmentError::Seccomp(error.to_string())
+            })
     }
 
     fn install_seccomp_deny_filter() -> Result<(), NativeContainmentError> {

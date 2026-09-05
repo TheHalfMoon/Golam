@@ -1095,6 +1095,7 @@ dependencies = [
  "landlock",
  "libc",
  "miniz_oxide",
+ "nix",
  "seccompiler",
 ]
 
