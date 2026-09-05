@@ -114,12 +114,6 @@ pub mod local_search;
 pub mod local_walk;
 pub mod memory_commit;
 mod memory_reconcile;
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-mod native_containment;
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-mod native_process_supervisor;
-#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-mod process_secret_evidence;
 #[cfg(test)]
 mod spec004_compaction_tests;
 

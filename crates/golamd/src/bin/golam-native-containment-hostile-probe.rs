@@ -94,7 +94,10 @@ mod linux_x86_64 {
                 ChildMode::OutputFlood
             }
             Some(value) => {
-                eprintln!("unsupported hostile probe mode: {}", value.to_string_lossy());
+                eprintln!(
+                    "unsupported hostile probe mode: {}",
+                    value.to_string_lossy()
+                );
                 std::process::exit(64);
             }
         };
@@ -105,9 +108,7 @@ mod linux_x86_64 {
         match mode {
             ChildMode::WallTimeHold => (HOSTILE_WALL_TIME_MS, NORMAL_OUTPUT_BYTES),
             ChildMode::OutputFlood => (NORMAL_WALL_TIME_MS, HOSTILE_OUTPUT_BYTES),
-            ChildMode::Normal | ChildMode::CancelHold => {
-                (NORMAL_WALL_TIME_MS, NORMAL_OUTPUT_BYTES)
-            }
+            ChildMode::Normal | ChildMode::CancelHold => (NORMAL_WALL_TIME_MS, NORMAL_OUTPUT_BYTES),
         }
     }
 
@@ -248,7 +249,11 @@ mod linux_x86_64 {
         (ChildControl { child }, stdout, started)
     }
 
-    fn binding(root_pid: u32, wall_time_limit_ms: u64, max_output_bytes: u64) -> RootContainmentBinding {
+    fn binding(
+        root_pid: u32,
+        wall_time_limit_ms: u64,
+        max_output_bytes: u64,
+    ) -> RootContainmentBinding {
         RootContainmentBinding {
             profile_token: PROFILE_TOKEN.to_owned(),
             root_pid,
@@ -271,7 +276,9 @@ mod linux_x86_64 {
         let mut line = String::new();
         for _ in 0..32 {
             line.clear();
-            let bytes = reader.read_line(&mut line).expect("read qualification child marker");
+            let bytes = reader
+                .read_line(&mut line)
+                .expect("read qualification child marker");
             if bytes == 0 {
                 eprintln!("qualification child exited before readiness marker: {expected}");
                 std::process::exit(20);
@@ -383,7 +390,10 @@ mod linux_x86_64 {
 
         require_terminal(&mut supervisor);
         println!("SUPERVISOR_OUTPUT_LIMIT_ENFORCED=YES");
-        println!("SUPERVISOR_OUTPUT_ACCEPTED_BYTES={}", supervisor.accepted_output_bytes());
+        println!(
+            "SUPERVISOR_OUTPUT_ACCEPTED_BYTES={}",
+            supervisor.accepted_output_bytes()
+        );
         println!("SUPERVISOR_OUTPUT_TERMINAL_RECONCILED=YES");
     }
 }
