@@ -31,7 +31,7 @@ jobs:
               raise SystemExit('expected reconciliation import pattern exactly once')
           text = text.replace(old, new, 1)
           old = '''                ToolReconciliationResolution::ManualReview,\n                Some("process_restart_terminal_state_unproven"),\n                "2026-09-05T19:20:02Z",\n                SCOPE,\n'''
-          new = '''                ToolReconciliationResolution::ManualReview,\n                Some("process_restart_terminal_state_unproven"),\n                None,\n                "2026-09-05T19:20:02Z",\n                SCOPE,\n'''
+          new = '''                ToolReconciliationResolution::UnknownOutcome,\n                Some("process_restart_terminal_state_unproven"),\n                None,\n                "2026-09-05T19:20:02Z",\n                SCOPE,\n'''
           if text.count(old) != 1:
               raise SystemExit('expected reconciliation call pattern exactly once')
           path.write_text(text.replace(old, new, 1))
