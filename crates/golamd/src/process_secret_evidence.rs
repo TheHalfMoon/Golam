@@ -103,7 +103,9 @@ impl fmt::Display for ProcessSecretEvidenceError {
             Self::TooManyEnvironmentValues => {
                 f.write_str("process environment exceeds the bounded item count")
             }
-            Self::CaptureTooLarge => f.write_str("captured process output exceeds the evidence bound"),
+            Self::CaptureTooLarge => {
+                f.write_str("captured process output exceeds the evidence bound")
+            }
             Self::SecretInArgv => f.write_str("plaintext secret is forbidden in process argv"),
             Self::SecretInEnvironment => {
                 f.write_str("plaintext secret is forbidden in process environment")
@@ -255,7 +257,10 @@ fn validate_no_argv_or_environment_leak(
     if environment.len() > MAX_ENV_ITEMS {
         return Err(ProcessSecretEvidenceError::TooManyEnvironmentValues);
     }
-    if argv.iter().any(|item| contains_exact_value(item, secret_value)) {
+    if argv
+        .iter()
+        .any(|item| contains_exact_value(item, secret_value))
+    {
         return Err(ProcessSecretEvidenceError::SecretInArgv);
     }
     if environment
@@ -268,7 +273,10 @@ fn validate_no_argv_or_environment_leak(
 }
 
 fn contains_exact_value(haystack: &[u8], needle: &[u8]) -> bool {
-    !needle.is_empty() && haystack.windows(needle.len()).any(|window| window == needle)
+    !needle.is_empty()
+        && haystack
+            .windows(needle.len())
+            .any(|window| window == needle)
 }
 
 fn redact_exact_value(input: &[u8], secret_value: &[u8]) -> Vec<u8> {
@@ -424,10 +432,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(capture.stdout, b"before [REDACTED_SECRET] after");
-        assert_eq!(
-            capture.stderr,
-            b"[REDACTED_SECRET][REDACTED_SECRET]"
-        );
+        assert_eq!(capture.stderr, b"[REDACTED_SECRET][REDACTED_SECRET]");
     }
 
     #[test]
