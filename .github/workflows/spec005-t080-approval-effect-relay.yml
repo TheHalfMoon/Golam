@@ -27,6 +27,7 @@ jobs:
           python3 scripts/qualification/spec005_t080_approval_effect_repair_v2.py
           python3 scripts/qualification/spec005_t080_approval_effect_repair_v3.py
           python3 scripts/qualification/spec005_t080_payload_recipe_repair.py
+          python3 scripts/qualification/spec005_t080_stage_layout_repair.py
           cargo +1.98.0 fmt --all
           cargo +1.98.0 fmt --all -- --check
           cargo +1.98.0 clippy --locked -p golam-kernel -p golamd --all-targets -- -D warnings
@@ -53,7 +54,7 @@ jobs:
           set -euo pipefail
           git fetch origin impl/005-local-tools-context-memory
           test "$(git rev-parse origin/impl/005-local-tools-context-memory)" = "$GITHUB_SHA"
-          git rm .github/workflows/spec005-t080-approval-effect-relay.yml scripts/qualification/spec005_t080_approval_effect_repair.py scripts/qualification/spec005_t080_approval_effect_repair_v2.py scripts/qualification/spec005_t080_approval_effect_repair_v3.py scripts/qualification/spec005_t080_payload_recipe_repair.py
+          git rm .github/workflows/spec005-t080-approval-effect-relay.yml scripts/qualification/spec005_t080_approval_effect_repair.py scripts/qualification/spec005_t080_approval_effect_repair_v2.py scripts/qualification/spec005_t080_approval_effect_repair_v3.py scripts/qualification/spec005_t080_payload_recipe_repair.py scripts/qualification/spec005_t080_stage_layout_repair.py
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add .github/workflows/ci.yml crates/golam-kernel/src/approval_lifecycle.rs crates/golam-kernel/src/policy_lifecycle.rs crates/golam-kernel/src/capability_lease_effect.rs crates/golamd/tests/process_v2_qualification.rs
