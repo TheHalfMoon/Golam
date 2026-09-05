@@ -8,29 +8,39 @@
 
 use std::error::Error;
 use std::fmt;
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use golam_core::digest::sha256;
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 use golam_core::target_identity::ObservedFileKind;
-use golam_core::tool_request::{BindingDigest, PreparedToolRequest, RequestedOperationId};
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+use golam_core::tool_request::RequestedOperationId;
+use golam_core::tool_request::{BindingDigest, PreparedToolRequest};
 use golam_core::{CanonicalEncoder, CoreError, EffectId, SessionId};
 use golam_kernel::{
-    AuthorizationPolicy, CompleteToolEffect, KernelApi, PrepareToolEffect, Principal,
-    ProtectedResourceError, ToolEffectError, ToolExecutionCompletion,
+    AuthorizationPolicy, KernelApi, Principal, ProtectedResourceError, ToolEffectError,
 };
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+use golam_kernel::{CompleteToolEffect, PrepareToolEffect, ToolExecutionCompletion};
 
 use crate::local_fs::{LocalFsResolutionError, LocalFsResolver};
-use crate::static_elf_v2::{MAX_STATIC_EXECUTABLE_BYTES, StaticElfV2Error, validate_static_elf_v2};
+use crate::static_elf_v2::StaticElfV2Error;
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+use crate::static_elf_v2::{MAX_STATIC_EXECUTABLE_BYTES, validate_static_elf_v2};
 
 pub const PROCESS_STAGE_ACTION: &str = "process.stage";
 pub const PROCESS_EXECUTE_ACTION: &str = "process.execute";
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 const PROCESS_STAGE_HANDLER_ID: &str = "golam-native-stage-linux-x86_64";
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 const PROCESS_STAGE_HANDLER_VERSION: &str = "2";
 const STAGE_PRECONDITION_DOMAIN: &[u8] = b"golam:process-stage-preconditions:v2";
 const STAGE_RECEIPT_DOMAIN: &[u8] = b"golam:process-stage-receipt:v2";
 const STAGED_PERMISSION_BITS: u32 = 0o500;
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 const STAGING_PARENT_PERMISSION_BITS: u32 = 0o700;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
