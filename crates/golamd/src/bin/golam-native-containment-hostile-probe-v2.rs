@@ -29,6 +29,8 @@ mod linux_x86_64 {
     const NORMAL_OUTPUT_BYTES: u64 = 1024 * 1024;
     const HOSTILE_WALL_TIME_MS: u64 = 750;
     const HOSTILE_OUTPUT_BYTES: u64 = 1024;
+    const HOSTILE_STDOUT_FLOOD_BYTES: usize = 256;
+    const HOSTILE_STDERR_FLOOD_BYTES: usize = 768;
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     enum ChildMode {
@@ -233,11 +235,16 @@ mod linux_x86_64 {
             }
             ChildMode::OutputFlood => {
                 println!("OUTPUT_FLOOD_READY=YES");
-                let flood = vec![b'X'; 8 * 1024];
+                let stdout_flood = vec![b'X'; HOSTILE_STDOUT_FLOOD_BYTES];
                 std::io::stdout()
-                    .write_all(&flood)
-                    .expect("hostile output flood");
-                std::io::stdout().flush().expect("flush hostile output");
+                    .write_all(&stdout_flood)
+                    .expect("hostile stdout flood");
+                std::io::stdout().flush().expect("flush hostile stdout");
+                let stderr_flood = vec![b'E'; HOSTILE_STDERR_FLOOD_BYTES];
+                std::io::stderr()
+                    .write_all(&stderr_flood)
+                    .expect("hostile stderr flood");
+                std::io::stderr().flush().expect("flush hostile stderr");
                 thread::sleep(Duration::from_secs(30));
                 eprintln!("output hostile payload escaped parent supervision");
                 std::process::exit(17);
@@ -250,7 +257,14 @@ mod linux_x86_64 {
         }
     }
 
-    fn spawn_child(mode: &str) -> (ChildControl, std::process::ChildStdout, Instant) {
+    fn spawn_child(
+        mode: &str,
+    ) -> (
+        ChildControl,
+        std::process::ChildStdout,
+        std::process::ChildStderr,
+        Instant,
+    ) {
         let executable = std::fs::canonicalize(
             std::env::current_exe().expect("qualification supervisor executable path"),
         )
@@ -260,12 +274,13 @@ mod linux_x86_64 {
             .env_clear()
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(Stdio::piped())
             .spawn()
             .expect("spawn qualification contained child");
         let started = Instant::now();
         let stdout = child.stdout.take().expect("qualification child stdout");
-        (ChildControl { child }, stdout, started)
+        let stderr = child.stderr.take().expect("qualification child stderr");
+        (ChildControl { child }, stdout, stderr, started)
     }
 
     fn binding(
@@ -348,7 +363,7 @@ mod linux_x86_64 {
     }
 
     fn run_wall_time_supervisor_probe() {
-        let (control, stdout, started) = spawn_child("--wall-time-hold");
+        let (control, stdout, _stderr, started) = spawn_child("--wall-time-hold");
         let root_pid = control.child.id();
         let mut supervisor = RootProcessSupervisor::new(
             binding(root_pid, HOSTILE_WALL_TIME_MS, NORMAL_OUTPUT_BYTES),
@@ -378,42 +393,45 @@ mod linux_x86_64 {
     }
 
     fn run_output_supervisor_probe() {
-        let (control, mut stdout, _started) = spawn_child("--output-flood");
+        let (control, stdout, mut stderr, _started) = spawn_child("--output-flood");
         let root_pid = control.child.id();
         let mut supervisor = RootProcessSupervisor::new(
             binding(root_pid, NORMAL_WALL_TIME_MS, HOSTILE_OUTPUT_BYTES),
             control,
         )
         .expect("bind output qualification supervisor");
+        let mut stdout = require_readiness_line(stdout, &mut supervisor, "OUTPUT_FLOOD_READY=YES");
 
-        let mut buffer = [0_u8; 128];
-        let mut limit_observed = false;
-        for _ in 0..128 {
-            let bytes = stdout.read(&mut buffer).expect("read hostile output chunk");
-            if bytes == 0 {
-                break;
-            }
-            let evidence = supervisor
-                .account_output_bytes(bytes as u64)
-                .expect("enforce combined output qualification bound");
-            if evidence.limit_exceeded {
-                if !evidence.termination_request_dispatched
-                    || evidence.accepted_output_bytes > HOSTILE_OUTPUT_BYTES
-                {
-                    eprintln!("output limit evidence is incomplete");
-                    std::process::exit(26);
-                }
-                limit_observed = true;
-                break;
-            }
+        let mut stdout_flood = [0_u8; HOSTILE_STDOUT_FLOOD_BYTES];
+        stdout
+            .read_exact(&mut stdout_flood)
+            .expect("read hostile stdout contribution");
+        let stdout_evidence = supervisor
+            .account_output_bytes(HOSTILE_STDOUT_FLOOD_BYTES as u64)
+            .expect("account hostile stdout contribution");
+        if stdout_evidence.limit_exceeded {
+            eprintln!("stdout alone exceeded the combined qualification budget unexpectedly");
+            std::process::exit(26);
         }
-        if !limit_observed {
-            eprintln!("hostile output did not trigger the combined output bound");
+
+        let mut stderr_flood = [0_u8; HOSTILE_STDERR_FLOOD_BYTES];
+        stderr
+            .read_exact(&mut stderr_flood)
+            .expect("read hostile stderr contribution");
+        let combined_evidence = supervisor
+            .account_output_bytes(HOSTILE_STDERR_FLOOD_BYTES as u64)
+            .expect("account hostile stderr contribution");
+        if !combined_evidence.limit_exceeded
+            || !combined_evidence.termination_request_dispatched
+            || combined_evidence.accepted_output_bytes > HOSTILE_OUTPUT_BYTES
+        {
+            eprintln!("combined stdout/stderr limit evidence is incomplete");
             std::process::exit(27);
         }
 
         require_terminal(&mut supervisor);
         println!("SUPERVISOR_OUTPUT_LIMIT_ENFORCED=YES");
+        println!("SUPERVISOR_OUTPUT_COMBINED_STDOUT_STDERR=YES");
         println!(
             "SUPERVISOR_OUTPUT_ACCEPTED_BYTES={}",
             supervisor.accepted_output_bytes()
