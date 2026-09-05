@@ -18,7 +18,7 @@ jobs:
           fetch-depth: 0
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt
-      - name: Repair exact seccompiler conversion binding
+      - name: Repair exact seccompiler backend binding
         shell: bash
         run: |
           set -euo pipefail
@@ -27,7 +27,7 @@ jobs:
           path = Path('crates/golamd/src/native_containment.rs')
           text = path.read_text()
           old = '.map_err(|error: seccompiler::Error| NativeContainmentError::Seccomp(error.to_string()))'
-          new = '.map_err(|error| NativeContainmentError::Seccomp(error.to_string()))'
+          new = '.map_err(|error: seccompiler::BackendError| NativeContainmentError::Seccomp(error.to_string()))'
           if text.count(old) != 1:
               raise SystemExit('expected exactly one seccompiler conversion annotation')
           path.write_text(text.replace(old, new))
@@ -46,7 +46,7 @@ jobs:
           test "${changed[1]}" = "crates/golamd/src/native_containment.rs"
           grep -q '^name = "golamd"$' Cargo.lock
           grep -q '^name = "nix"$' Cargo.lock
-          ! grep -q 'error: seccompiler::Error' crates/golamd/src/native_containment.rs
+          grep -q 'error: seccompiler::BackendError' crates/golamd/src/native_containment.rs
       - name: Guard expected head and push repair
         shell: bash
         env:
