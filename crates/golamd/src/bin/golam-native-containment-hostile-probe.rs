@@ -114,6 +114,9 @@ fn main() {
 
 #[cfg(not(all(target_os = "linux", target_arch = "x86_64")))]
 fn main() {
-    eprintln!("native containment hostile qualification is unsupported on this platform");
+    eprintln!(
+        "native containment hostile qualification is unsupported on this platform: profile={}",
+        native_containment::PROFILE_TOKEN
+    );
     std::process::exit(77);
 }
