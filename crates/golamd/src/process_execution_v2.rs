@@ -18,7 +18,7 @@ use golam_core::tool_request::{BindingDigest, PreparedToolRequest, RequestedOper
 use golam_core::{CanonicalEncoder, CoreError, EffectId, SessionId};
 use golam_kernel::{
     AuthorizationPolicy, CompleteToolEffect, KernelApi, PrepareToolEffect, Principal,
-    ToolEffectError, ToolExecutionCompletion,
+    ProtectedResourceError, ToolEffectError, ToolExecutionCompletion,
 };
 
 use crate::local_fs::{LocalFsResolutionError, LocalFsResolver};
@@ -31,6 +31,7 @@ const PROCESS_STAGE_HANDLER_VERSION: &str = "2";
 const STAGE_PRECONDITION_DOMAIN: &[u8] = b"golam:process-stage-preconditions:v2";
 const STAGE_RECEIPT_DOMAIN: &[u8] = b"golam:process-stage-receipt:v2";
 const STAGED_PERMISSION_BITS: u32 = 0o500;
+const STAGING_PARENT_PERMISSION_BITS: u32 = 0o700;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StagedExecutableV2 {
@@ -58,6 +59,7 @@ pub enum ProcessStageError {
     Core(CoreError),
     Io(io::Error),
     Effect(ToolEffectError),
+    ProtectedResource(ProtectedResourceError),
     SourceTooLarge,
     SourceIdentityChanged,
     SourceContentChanged,
@@ -88,6 +90,9 @@ impl fmt::Display for ProcessStageError {
             Self::Core(error) => write!(f, "process staging canonical encoding failed: {error}"),
             Self::Io(error) => write!(f, "process staging I/O failed: {error}"),
             Self::Effect(error) => write!(f, "process staging Effect Gate failed: {error}"),
+            Self::ProtectedResource(error) => {
+                write!(f, "process staging parent is outside the admitted runtime boundary: {error}")
+            }
             Self::SourceTooLarge => {
                 f.write_str("process staging source exceeds the executable byte bound")
             }
@@ -134,6 +139,7 @@ impl Error for ProcessStageError {
             Self::Core(error) => Some(error),
             Self::Io(error) => Some(error),
             Self::Effect(error) => Some(error),
+            Self::ProtectedResource(error) => Some(error),
             _ => None,
         }
     }
@@ -166,6 +172,12 @@ impl From<io::Error> for ProcessStageError {
 impl From<ToolEffectError> for ProcessStageError {
     fn from(value: ToolEffectError) -> Self {
         Self::Effect(value)
+    }
+}
+
+impl From<ProtectedResourceError> for ProcessStageError {
+    fn from(value: ProtectedResourceError) -> Self {
+        Self::ProtectedResource(value)
     }
 }
 
@@ -294,7 +306,9 @@ fn stage_linux_x86_64<P: AuthorizationPolicy>(
         return Err(ProcessStageError::SourceIdentityChanged);
     }
 
-    let parent = canonical_staging_parent(input.staging_parent)?;
+    let admitted_parent = kernel.admit_unprivileged_path(input.staging_parent)?;
+    let parent = canonical_staging_parent(admitted_parent.as_path())?;
+    kernel.admit_unprivileged_path(&parent)?;
     let parent_metadata = fs::metadata(&parent)?;
     validate_staging_parent_metadata(&parent_metadata)?;
     let parent_binding = staging_parent_binding(&parent, &parent_metadata)?;
@@ -557,7 +571,7 @@ fn canonical_staging_parent(path: &Path) -> Result<PathBuf, ProcessStageError> {
 fn validate_staging_parent_metadata(metadata: &fs::Metadata) -> Result<(), ProcessStageError> {
     use std::os::unix::fs::MetadataExt;
 
-    if !metadata.is_dir() || metadata.mode() & 0o077 != 0 {
+    if !metadata.is_dir() || metadata.mode() & 0o7777 != STAGING_PARENT_PERMISSION_BITS {
         return Err(ProcessStageError::InvalidStagingParent);
     }
     Ok(())
