@@ -4,10 +4,6 @@
 extern crate self as nix;
 
 #[cfg(unix)]
-mod errno {
-    pub use golam_core::unix_fs::Errno;
-}
-#[cfg(unix)]
 mod fcntl {
     pub use golam_core::unix_fs::{OFlag, openat};
 }
