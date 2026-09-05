@@ -673,7 +673,10 @@ mod linux_x86_64 {
                 libc::SYS_io_uring_enter,
                 libc::SYS_io_uring_register,
             ] {
-                assert!(blocked.contains(&syscall), "missing denied syscall {syscall}");
+                assert!(
+                    blocked.contains(&syscall),
+                    "missing denied syscall {syscall}"
+                );
             }
         }
 
