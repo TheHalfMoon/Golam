@@ -718,7 +718,8 @@ mod linux_x86_64 {
                 Err(NativeContainmentError::InvalidCapabilityStatus(_))
             ));
 
-            let missing = "CapInh:\t0000000000000000\nCapPrm:\t0000000000000000\nCapEff:\t0000000000000000\n";
+            let missing =
+                "CapInh:\t0000000000000000\nCapPrm:\t0000000000000000\nCapEff:\t0000000000000000\n";
             assert!(matches!(
                 validate_capability_status(missing),
                 Err(NativeContainmentError::InvalidCapabilityStatus(_))
