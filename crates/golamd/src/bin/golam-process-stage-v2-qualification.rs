@@ -1,4 +1,6 @@
 #![forbid(unsafe_code)]
+#![allow(dead_code)]
+#![allow(clippy::redundant_guards)]
 
 #[cfg(unix)]
 extern crate self as nix;
