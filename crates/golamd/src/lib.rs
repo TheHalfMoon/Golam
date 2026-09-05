@@ -1,5 +1,26 @@
 #![forbid(unsafe_code)]
 
+#[cfg(unix)]
+mod fcntl {
+    pub use golam_core::unix_fs::{OFlag, openat};
+}
+#[cfg(unix)]
+mod sys {
+    pub mod stat {
+        pub use golam_core::unix_fs::Mode;
+    }
+}
+
+pub mod local_fs;
+pub mod native_containment_v2;
+pub mod native_process_supervisor_v2;
+#[allow(dead_code)]
+pub mod process_dispatch_v2;
+#[allow(clippy::redundant_guards)]
+pub mod process_execution_v2;
+pub mod process_secret_evidence;
+pub mod static_elf_v2;
+
 use golam_core::{EffectId, SessionId};
 use golam_effects::simulators::{
     AtMostOnceWriteHandler, CompensatableWriteHandler, IdempotentWriteHandler,
