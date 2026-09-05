@@ -233,9 +233,7 @@ mod linux_x86_64 {
             let flag = flag
                 .to_str()
                 .ok_or_else(|| "helper flag is not canonical UTF-8".to_owned())?;
-            let value = |
-                args: &mut std::iter::Peekable<std::iter::Skip<std::env::ArgsOs>>,
-            | {
+            let value = |args: &mut std::iter::Peekable<std::iter::Skip<std::env::ArgsOs>>| {
                 args.next()
                     .ok_or_else(|| format!("missing value for {flag}"))
             };
