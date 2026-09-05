@@ -369,8 +369,7 @@ mod linux_x86_64 {
         assert_eq!(success.observed_descendant_count, 0);
         assert_eq!(success.stdout, b"SUCCESS\n");
 
-        let isolation =
-            fixture.execute(101, (0x7200, 0x7300), &[b"isolation"], 2_000, 4096, false);
+        let isolation = fixture.execute(101, (0x7200, 0x7300), &[b"isolation"], 2_000, 4096, false);
         assert_eq!(isolation.status, ProcessExecutionStatusV2::Succeeded);
         assert_eq!(
             isolation.stdout,
