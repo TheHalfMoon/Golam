@@ -1,0 +1,34 @@
+name: spec005-process-qualification-patch
+
+on:
+  push:
+    branches:
+      - impl/005-local-tools-context-memory
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/005-local-tools-context-memory
+          fetch-depth: 1
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+      - name: Format and compile qualification harness
+        run: |
+          cargo +1.98.0 fmt --all
+          cargo +1.98.0 check --workspace --all-targets
+          rm .github/workflows/spec005-process-qualification-patch.yml
+          git diff --check
+      - name: Commit only compiled forward repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/golamd/tests/process_v2_qualification.rs Cargo.lock .github/workflows/spec005-process-qualification-patch.yml
+          git commit -m "test(005): qualify process harness compilation"
+          git push origin HEAD:impl/005-local-tools-context-memory
