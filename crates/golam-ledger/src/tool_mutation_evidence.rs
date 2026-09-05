@@ -98,7 +98,11 @@ impl fmt::Display for ToolMutationEvidenceError {
                 effect_id.0
             ),
             Self::MissingIntent(effect_id) => {
-                write!(f, "tool mutation intent is missing for effect {}", effect_id.0)
+                write!(
+                    f,
+                    "tool mutation intent is missing for effect {}",
+                    effect_id.0
+                )
             }
             Self::ReceiptBindingMismatch(effect_id) => write!(
                 f,
@@ -277,7 +281,7 @@ impl ToolMutationEvidenceStore {
             (Some(status), Some(bytes), Some(hash))
                 if status == input.verified_status.code()
                     && bytes == input.receipt_bytes
-                    && hash.as_slice() == integrity_hash => {}
+                    && hash.as_slice() == integrity_hash.as_slice() => {}
             _ => {
                 return Err(ToolMutationEvidenceError::ReceiptAlreadyRecorded(
                     input.effect_id,
@@ -469,7 +473,9 @@ mod tests {
         let _ = std::fs::remove_file(&root);
         let effect_id = EffectId(10);
         let mut store = ToolMutationEvidenceStore::open(&root).unwrap();
-        let intent_hash = store.record_intent(intent(effect_id, b"branch:candidate")).unwrap();
+        let intent_hash = store
+            .record_intent(intent(effect_id, b"branch:candidate"))
+            .unwrap();
         assert_ne!(intent_hash, [0; 32]);
         let receipt_hash = store
             .record_verified_receipt(RecordToolMutationReceipt {
@@ -488,7 +494,10 @@ mod tests {
         let store = ToolMutationEvidenceStore::open(&root).unwrap();
         let loaded = store.load(effect_id).unwrap().unwrap();
         assert_eq!(loaded.intent_bytes, b"branch:candidate");
-        assert_eq!(loaded.verified_status, Some(ToolMutationVerifiedStatus::Succeeded));
+        assert_eq!(
+            loaded.verified_status,
+            Some(ToolMutationVerifiedStatus::Succeeded)
+        );
         assert_eq!(loaded.receipt_integrity_hash, Some(receipt_hash));
         drop(store);
         let _ = std::fs::remove_file(root);
