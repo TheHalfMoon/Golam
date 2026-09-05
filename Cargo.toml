@@ -26,7 +26,7 @@ interprocess = { version = "=2.4.3", default-features = false }
 keyring-core = { version = "=1.0.0", default-features = false }
 landlock = { version = "=0.4.7", default-features = false }
 libc = "=0.2.189"
-nix = { version = "=0.31.3", default-features = false, features = ["fs", "resource", "socket", "user"] }
+nix = { version = "=0.31.3", default-features = false, features = ["fs", "resource", "signal", "socket", "user"] }
 rusqlite = { version = "=0.40.2", features = ["bundled"] }
 seccompiler = { version = "=0.5.0", default-features = false }
 widestring = "=1.2.1"
