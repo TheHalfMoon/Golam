@@ -1,0 +1,46 @@
+name: t005-072-resource-lock-repair
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair-lock:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'impl/005-local-tools-context-memory'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal
+      - name: Resolve exact lock metadata
+        run: cargo +1.98.0 check -p golamd
+      - name: Verify bounded lockfile delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed="$(git diff --name-only)"
+          test "$changed" = "Cargo.lock"
+          grep -q '^name = "golamd"$' Cargo.lock
+          grep -q '^name = "nix"$' Cargo.lock
+          grep -q '^version = "0.31.3"$' Cargo.lock
+      - name: Guard expected head and push repair
+        shell: bash
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          git fetch origin "$BRANCH"
+          test "$(git rev-parse "origin/$BRANCH")" = "$EXPECTED_HEAD"
+          rm .github/workflows/t005-072-resource-lock-repair.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.lock .github/workflows/t005-072-resource-lock-repair.yml
+          git commit -m "build(005): reconcile resource lock metadata"
+          git push origin "HEAD:$BRANCH"
