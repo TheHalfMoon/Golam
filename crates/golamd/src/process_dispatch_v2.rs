@@ -22,7 +22,7 @@ use golam_kernel::{
     KernelApi, KernelError, Principal, ToolEffectError,
 };
 
-use crate::process_execution_v2::{PROCESS_EXECUTE_ACTION, StagedExecutableV2};
+use crate::process_execution_v2::StagedExecutableV2;
 
 const EXECUTE_HANDLER_ID: &str = "golam-native-exec-linux-x86_64";
 const EXECUTE_HANDLER_VERSION: &str = "2";
@@ -150,10 +150,14 @@ impl fmt::Display for ProcessExecutionV2Error {
             Self::UnsupportedPlatform => {
                 f.write_str("process execution v2 is supported only on Linux x86_64")
             }
-            Self::InvalidBinding(reason) => write!(f, "process execution binding invalid: {reason}"),
+            Self::InvalidBinding(reason) => {
+                write!(f, "process execution binding invalid: {reason}")
+            }
             Self::Core(error) => write!(f, "process execution canonical encoding failed: {error}"),
             Self::Io(error) => write!(f, "process execution I/O failed: {error}"),
-            Self::Kernel(error) => write!(f, "process execution kernel authorization failed: {error}"),
+            Self::Kernel(error) => {
+                write!(f, "process execution kernel authorization failed: {error}")
+            }
             Self::Lease(error) => write!(f, "process execution capability lease failed: {error}"),
             Self::Effect(error) => write!(f, "process execution Effect Gate failed: {error}"),
             Self::HelperIdentityChanged => {
@@ -218,10 +222,7 @@ impl From<ToolEffectError> for ProcessExecutionV2Error {
 }
 
 pub fn process_execute_resource_v2(request: &PreparedToolRequest) -> String {
-    format!(
-        "process-request:{}",
-        request.request().request_id.as_u128()
-    )
+    format!("process-request:{}", request.request().request_id.as_u128())
 }
 
 pub fn capability_context_ref_v2(
@@ -268,10 +269,10 @@ mod linux_x86_64 {
     use std::process::{Child, ChildStderr, ChildStdout, Command, ExitStatus, Stdio};
     use std::sync::atomic::Ordering;
     use std::sync::mpsc::{self, Receiver, SyncSender};
+    use std::sync::{Arc, Mutex};
     use std::thread;
     use std::time::{Duration, Instant};
 
-    use golam_core::tool_request::BindingDigest;
     use golam_kernel::{
         AuthorizationContext, AuthorizationDecision, AuthorizationRequest, CompleteToolEffect,
         PrepareToolEffect, ToolExecutionCompletion,
@@ -287,7 +288,7 @@ mod linux_x86_64 {
         ProcessTreeReconciliation, ProcessTreeTerminalEvidence, RootContainmentBinding,
         RootProcessControl, RootProcessSupervisor, RootTerminationKind,
     };
-    use crate::process_execution_v2::{stage_receipt_digest, PROCESS_EXECUTE_ACTION};
+    use crate::process_execution_v2::{PROCESS_EXECUTE_ACTION, stage_receipt_digest};
     use crate::static_elf_v2::{MAX_STATIC_EXECUTABLE_BYTES, validate_static_elf_v2};
 
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -308,12 +309,12 @@ mod linux_x86_64 {
     }
 
     struct ChildControl {
-        child: Child,
+        child: Arc<Mutex<Child>>,
         terminal: Option<crate::native_process_supervisor_v2::RootTerminalObservation>,
     }
 
     impl ChildControl {
-        fn new(child: Child) -> Self {
+        fn new(child: Arc<Mutex<Child>>) -> Self {
             Self {
                 child,
                 terminal: None,
@@ -323,16 +324,19 @@ mod linux_x86_64 {
 
     impl RootProcessControl for ChildControl {
         fn request_termination(&mut self, root_pid: u32) -> Result<(), String> {
-            if self.child.id() != root_pid {
+            let mut child = self
+                .child
+                .lock()
+                .map_err(|_| "child control mutex poisoned".to_owned())?;
+            if child.id() != root_pid {
                 return Err("child control root pid changed".to_owned());
             }
-            match self.child.try_wait() {
+            match child.try_wait() {
                 Ok(Some(status)) => {
                     self.terminal = Some(terminal_observation(root_pid, status));
                     Ok(())
                 }
-                Ok(None) => self
-                    .child
+                Ok(None) => child
                     .kill()
                     .map_err(|error| format!("kill root process: {error}")),
                 Err(error) => Err(format!("observe root before termination: {error}")),
@@ -344,13 +348,17 @@ mod linux_x86_64 {
             root_pid: u32,
         ) -> Result<Option<crate::native_process_supervisor_v2::RootTerminalObservation>, String>
         {
-            if self.child.id() != root_pid {
+            let mut child = self
+                .child
+                .lock()
+                .map_err(|_| "child control mutex poisoned".to_owned())?;
+            if child.id() != root_pid {
                 return Err("child control root pid changed".to_owned());
             }
             if let Some(terminal) = self.terminal {
                 return Ok(Some(terminal));
             }
-            match self.child.try_wait() {
+            match child.try_wait() {
                 Ok(Some(status)) => {
                     let terminal = terminal_observation(root_pid, status);
                     self.terminal = Some(terminal);
@@ -378,7 +386,13 @@ mod linux_x86_64 {
             .map_err(|error| ProcessExecutionV2Error::NativeContainment(error.to_string()))?;
         let read_roots = observe_roots(input.filesystem_read_paths)?;
         let write_roots = observe_roots(input.filesystem_write_paths)?;
-        validate_parent_containment_plan(input.staged, &cwd, &read_roots, &write_roots, input.limits)?;
+        validate_parent_containment_plan(
+            input.staged,
+            &cwd,
+            &read_roots,
+            &write_roots,
+            input.limits,
+        )?;
 
         let resource = process_execute_resource_v2(input.request);
         let lease_evidence = kernel.validate_capability_lease_use(
@@ -491,11 +505,15 @@ mod linux_x86_64 {
         let stdout = child
             .stdout
             .take()
-            .ok_or(ProcessExecutionV2Error::HelperProtocol("stdout pipe missing"))?;
+            .ok_or(ProcessExecutionV2Error::HelperProtocol(
+                "stdout pipe missing",
+            ))?;
         let stderr = child
             .stderr
             .take()
-            .ok_or(ProcessExecutionV2Error::HelperProtocol("stderr pipe missing"))?;
+            .ok_or(ProcessExecutionV2Error::HelperProtocol(
+                "stderr pipe missing",
+            ))?;
         let (sender, receiver) = mpsc::sync_channel(STREAM_CHANNEL_DEPTH);
         spawn_stdout_reader(stdout, sender.clone());
         spawn_stderr_reader(stderr, sender);
@@ -545,7 +563,8 @@ mod linux_x86_64 {
             wall_time_limit_ms: input.limits.wall_time_ms,
             max_stdout_stderr_bytes: input.limits.max_stdout_stderr_bytes,
         };
-        let control = ChildControl::new(child);
+        let shared_child = Arc::new(Mutex::new(child));
+        let control = ChildControl::new(Arc::clone(&shared_child));
         let supervisor = RootProcessSupervisor::new(binding, control)
             .map_err(|error| ProcessExecutionV2Error::Supervisor(error.to_string()))?;
         supervise(
@@ -555,6 +574,7 @@ mod linux_x86_64 {
             input,
             scope,
             supervisor,
+            shared_child,
             receiver,
             started,
             capability_context_digest,
@@ -569,7 +589,9 @@ mod linux_x86_64 {
     ) -> Result<(), ProcessExecutionV2Error> {
         let request = input.request.request();
         if request.initiating_principal.as_str() != principal.subject {
-            return Err(ProcessExecutionV2Error::InvalidBinding("principal mismatch"));
+            return Err(ProcessExecutionV2Error::InvalidBinding(
+                "principal mismatch",
+            ));
         }
         if request.requested_operation.as_str() != PROCESS_EXECUTE_ACTION {
             return Err(ProcessExecutionV2Error::InvalidBinding(
@@ -586,7 +608,9 @@ mod linux_x86_64 {
                 "stage and execute Effects must be distinct",
             ));
         }
-        if input.started_at.is_empty() || input.dispatch_at.is_empty() || input.finished_at.is_empty()
+        if input.started_at.is_empty()
+            || input.dispatch_at.is_empty()
+            || input.finished_at.is_empty()
         {
             return Err(ProcessExecutionV2Error::InvalidBinding(
                 "execution timestamps must be non-empty",
@@ -629,7 +653,9 @@ mod linux_x86_64 {
         Ok(())
     }
 
-    fn observe_roots(paths: &[PathBuf]) -> Result<Vec<NativeObjectIdentity>, ProcessExecutionV2Error> {
+    fn observe_roots(
+        paths: &[PathBuf],
+    ) -> Result<Vec<NativeObjectIdentity>, ProcessExecutionV2Error> {
         paths
             .iter()
             .map(|path| {
@@ -707,11 +733,12 @@ mod linux_x86_64 {
         helper_path: &Path,
     ) -> Result<TrustedNativeExecHelperV2, ProcessExecutionV2Error> {
         let current_exe = fs::canonicalize(std::env::current_exe()?)?;
-        let expected_parent = current_exe
-            .parent()
-            .ok_or(ProcessExecutionV2Error::InvalidBinding(
-                "current executable has no parent directory",
-            ))?;
+        let expected_parent =
+            current_exe
+                .parent()
+                .ok_or(ProcessExecutionV2Error::InvalidBinding(
+                    "current executable has no parent directory",
+                ))?;
         if helper_path.file_name().and_then(|value| value.to_str()) != Some(TRUSTED_HELPER_NAME) {
             return Err(ProcessExecutionV2Error::InvalidBinding(
                 "helper filename is not the admitted helper identity",
@@ -729,7 +756,7 @@ mod linux_x86_64 {
                 "helper must be the exact sibling of the running Golam executable",
             ));
         }
-        let mut file = File::open(&canonical_path)?;
+        let file = File::open(&canonical_path)?;
         let metadata = file.metadata()?;
         if !metadata.is_file()
             || metadata.uid() != geteuid().as_raw()
@@ -810,7 +837,7 @@ mod linux_x86_64 {
         encoder.push_bytes(&staged.content_digest)?;
         encoder.push_u64(staged.byte_len);
         push_argv(&mut encoder, argv)?;
-        encoder.push_u64(0); // Explicit environment count: empty-only profile.
+        encoder.push_u64(0);
         Ok(sha256(&encoder.finish()))
     }
 
@@ -840,12 +867,12 @@ mod linux_x86_64 {
         push_native_objects(&mut encoder, read_roots)?;
         push_native_objects(&mut encoder, write_roots)?;
         push_argv(&mut encoder, input.argv)?;
-        encoder.push_u64(0); // Explicit environment is exactly empty.
-        encoder.push_u8(1); // strict-local network denial
-        encoder.push_u64(0); // device rights
-        encoder.push_u64(0); // IPC rights
-        encoder.push_u64(0); // inherited-handle rights
-        encoder.push_u64(0); // secret-handle / fallback references in the first execution profile
+        encoder.push_u64(0);
+        encoder.push_u8(1);
+        encoder.push_u64(0);
+        encoder.push_u64(0);
+        encoder.push_u64(0);
+        encoder.push_u64(0);
         push_limits(&mut encoder, input.limits);
         encoder.push_bytes(b"cancel:bounded-root-kill-then-terminal-reconcile:v2")?;
         encoder.push_bytes(b"reconcile:root-and-zero-descendants-or-unknown:v2")?;
@@ -884,7 +911,9 @@ mod linux_x86_64 {
             .arg("--executable-sha256")
             .arg(encode_hex(&staged.content_digest))
             .arg("--cwd-path-hex")
-            .arg(encode_hex(cwd.canonical_path.as_os_str().as_encoded_bytes()))
+            .arg(encode_hex(
+                cwd.canonical_path.as_os_str().as_encoded_bytes(),
+            ))
             .arg("--cwd-device")
             .arg(cwd.device.to_string())
             .arg("--cwd-inode")
@@ -981,6 +1010,23 @@ mod linux_x86_64 {
         }
     }
 
+    fn best_effort_terminate_unknown(child: &Arc<Mutex<Child>>) {
+        let Ok(mut child) = child.lock() else {
+            return;
+        };
+        match child.try_wait() {
+            Ok(Some(_)) => {}
+            Ok(None) => {
+                if child.kill().is_ok() {
+                    let _ = child.wait();
+                }
+            }
+            Err(_) => {
+                let _ = child.kill();
+            }
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn supervise<P: AuthorizationPolicy>(
         kernel: &mut KernelApi<P>,
@@ -989,6 +1035,7 @@ mod linux_x86_64 {
         input: ExecuteStagedProcessV2<'_>,
         scope: &str,
         mut supervisor: RootProcessSupervisor<ChildControl>,
+        emergency_child: Arc<Mutex<Child>>,
         receiver: Receiver<StreamEvent>,
         started: Instant,
         capability_context_digest: [u8; 32],
@@ -1018,10 +1065,7 @@ mod linux_x86_64 {
                     forced = Some(ForcedTermination::WallTime);
                 }
                 Ok(_) => {}
-                Err(error) => {
-                    ambiguous = true;
-                    let _ = error;
-                }
+                Err(_) => ambiguous = true,
             }
 
             match receiver.recv_timeout(Duration::from_millis(SUPERVISOR_POLL_MS)) {
@@ -1071,6 +1115,7 @@ mod linux_x86_64 {
                     Ok(ProcessTreeReconciliation::Unresolved { .. }) => {}
                     Err(_) => {
                         ambiguous = true;
+                        best_effort_terminate_unknown(&emergency_child);
                         break;
                     }
                 }
@@ -1079,15 +1124,16 @@ mod linux_x86_64 {
             if terminal.is_some() && stdout_eof && stderr_eof {
                 break;
             }
-            if terminal_seen_at.is_some_and(|seen| {
-                seen.elapsed() >= Duration::from_millis(TERMINAL_DRAIN_MS)
-            }) {
+            if terminal_seen_at
+                .is_some_and(|seen| seen.elapsed() >= Duration::from_millis(TERMINAL_DRAIN_MS))
+            {
                 ambiguous = true;
                 break;
             }
         }
 
         if ambiguous || terminal.is_none() {
+            best_effort_terminate_unknown(&emergency_child);
             let evidence = unknown_receipt_seed(
                 input.execute_effect_id,
                 execution_binding_digest,
@@ -1192,7 +1238,12 @@ mod linux_x86_64 {
     fn classify_terminal(
         terminal: ProcessTreeTerminalEvidence,
         forced: Option<ForcedTermination>,
-    ) -> (ProcessExecutionStatusV2, Option<i32>, Option<i32>, &'static str) {
+    ) -> (
+        ProcessExecutionStatusV2,
+        Option<i32>,
+        Option<i32>,
+        &'static str,
+    ) {
         let (exit_code, signal) = match terminal.termination {
             RootTerminationKind::Exited(code) => (Some(code), None),
             RootTerminationKind::Signaled(signal) => (None, Some(signal)),
@@ -1442,13 +1493,8 @@ mod tests {
     use golam_kernel::CapabilityLeaseUseEvidence;
 
     #[test]
-    fn process_resource_is_request_specific() {
-        // The exact request constructor is qualified in golam-core; this unit protects only the
-        // resource domain used by capability leases and the Execute Effect.
-        assert_eq!(
-            format!("process-request:{}", 17_u128),
-            "process-request:17"
-        );
+    fn process_resource_domain_is_stable() {
+        assert_eq!(format!("process-request:{}", 17_u128), "process-request:17");
     }
 
     #[test]
@@ -1461,7 +1507,10 @@ mod tests {
             ProcessExecutionStatusV2::OutputLimitExceeded,
             ProcessExecutionStatusV2::UnknownOutcome,
         ];
-        let mut codes = statuses.map(ProcessExecutionStatusV2::code);
+        let mut codes = statuses
+            .into_iter()
+            .map(ProcessExecutionStatusV2::code)
+            .collect::<Vec<_>>();
         codes.sort_unstable();
         codes.dedup();
         assert_eq!(codes.len(), statuses.len());
