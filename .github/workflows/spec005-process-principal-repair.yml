@@ -1,0 +1,92 @@
+name: spec005-process-principal-repair
+
+on:
+  push:
+    branches:
+      - impl/005-local-tools-context-memory
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/005-local-tools-context-memory
+          fetch-depth: 1
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+      - name: Repair canonical principal lease boundary
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path_s, old, new):
+              path = Path(path_s)
+              text = path.read_text()
+              if text.count(old) != 1:
+                  raise SystemExit(f'expected pattern exactly once in {path_s}: {old!r}')
+              path.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              'crates/golam-kernel/src/authorization.rs',
+              '    fn audit_subject(self) -> String {\n',
+              '    pub(crate) fn audit_subject(self) -> String {\n',
+          )
+
+          marker = '''    pub fn enroll_generated_client(\n'''
+          insertion = '''    /// Revalidates a sealed capability lease for a typed authenticated principal.\n    /// Canonical authority identity remains kernel-owned so adapters cannot accidentally\n    /// substitute a raw subject for the principal class/client binding.\n    pub fn validate_principal_capability_lease_use(\n        &self,\n        lease: &CapabilityLease,\n        principal: Principal<'_>,\n        action: &str,\n        resource: &str,\n        context_constraints: &[&str],\n        observed_at: &str,\n    ) -> Result<CapabilityLeaseUseEvidence, CapabilityLeaseUseError> {\n        let principal_id = principal.audit_subject();\n        capability_lease::validate_capability_lease_use(\n            &self.authority,\n            lease,\n            &principal_id,\n            action,\n            resource,\n            context_constraints,\n            observed_at,\n        )\n    }\n\n'''
+          replace_once('crates/golam-kernel/src/lib.rs', marker, insertion + marker)
+
+          old_call = '''kernel.validate_capability_lease_use(\n            input.lease,\n            principal.subject,\n'''
+          new_call = '''kernel.validate_principal_capability_lease_use(\n            input.lease,\n            principal,\n'''
+          path = Path('crates/golamd/src/process_dispatch_v2.rs')
+          text = path.read_text()
+          if text.count(old_call) != 2:
+              raise SystemExit('expected exactly two process lease revalidation calls')
+          path.write_text(text.replace(old_call, new_call))
+
+          path = Path('crates/golamd/tests/process_v2_qualification.rs')
+          text = path.read_text()
+          const_marker = '''    const OBSERVED_MS: u64 = 1_787_000_000_000;\n'''
+          if text.count(const_marker) != 1:
+              raise SystemExit('expected process qualification constant marker exactly once')
+          text = text.replace(
+              const_marker,
+              const_marker + '    const EXECUTOR_PRINCIPAL_ID: &str = "owner:executor";\n',
+              1,
+          )
+          old_test_call = '''                .validate_capability_lease_use(\n                    &self.lease,\n                    "executor",\n'''
+          new_test_call = '''                .validate_principal_capability_lease_use(\n                    &self.lease,\n                    Principal::local_owner("executor"),\n'''
+          if text.count(old_test_call) != 1:
+              raise SystemExit('expected qualification lease use call exactly once')
+          text = text.replace(old_test_call, new_test_call, 1)
+          if text.count('beneficiary_principal_id: "executor",') != 1:
+              raise SystemExit('expected beneficiary principal pattern exactly once')
+          text = text.replace(
+              'beneficiary_principal_id: "executor",',
+              'beneficiary_principal_id: EXECUTOR_PRINCIPAL_ID,',
+              1,
+          )
+          old_issue = '''            .issue_capability_lease(\n                "executor",\n'''
+          new_issue = '''            .issue_capability_lease(\n                EXECUTOR_PRINCIPAL_ID,\n'''
+          if text.count(old_issue) != 1:
+              raise SystemExit('expected qualification lease issue principal exactly once')
+          text = text.replace(old_issue, new_issue, 1)
+          path.write_text(text)
+          PY
+          cargo +1.98.0 fmt --all
+          cargo +1.98.0 clippy --locked -p golam-kernel -p golamd --all-targets -- -D warnings
+          cargo +1.98.0 test --locked -p golamd --test process_v2_qualification
+          rm .github/workflows/spec005-process-principal-repair.yml
+          git diff --check
+      - name: Commit forward-only principal repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/golam-kernel/src/authorization.rs crates/golam-kernel/src/lib.rs crates/golamd/src/process_dispatch_v2.rs crates/golamd/tests/process_v2_qualification.rs .github/workflows/spec005-process-principal-repair.yml
+          git commit -m "fix(005): bind process leases to canonical principals"
+          git push origin HEAD:impl/005-local-tools-context-memory
