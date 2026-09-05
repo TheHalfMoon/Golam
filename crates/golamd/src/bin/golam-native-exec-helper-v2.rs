@@ -228,8 +228,7 @@ mod linux_x86_64 {
             .try_clone()
             .map_err(|error| format!("clone staged executable descriptor: {error}"))?;
         let mut bytes = Vec::with_capacity(usize::try_from(metadata.len()).unwrap_or(0));
-        reader
-            .by_ref()
+        std::io::Read::by_ref(&mut reader)
             .take((MAX_STATIC_EXECUTABLE_BYTES + 1) as u64)
             .read_to_end(&mut bytes)
             .map_err(|error| format!("read staged executable: {error}"))?;
