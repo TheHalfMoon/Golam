@@ -75,6 +75,7 @@ mod linux_x86_64 {
         pub spawn_denied: bool,
         pub strict_local: bool,
         pub inherited_non_stdio_handles_observed: bool,
+        pub linux_capability_sets_empty: bool,
         pub identity_bound_regular_file_roots: bool,
         pub ipc_creation_denied: bool,
         pub cross_process_control_denied: bool,
@@ -97,6 +98,8 @@ mod linux_x86_64 {
         InheritedSocket(u32),
         InheritedHandle(u32),
         ProcFdInspection(std::io::Error),
+        ProcStatusInspection(std::io::Error),
+        InvalidCapabilityStatus(&'static str),
         Resource(nix::errno::Errno),
         Landlock(String),
         LandlockNotFullyEnforced,
@@ -144,6 +147,14 @@ mod linux_x86_64 {
                     f,
                     "native containment v2 descriptor inspection failed: {error}"
                 ),
+                Self::ProcStatusInspection(error) => write!(
+                    f,
+                    "native containment v2 capability status inspection failed: {error}"
+                ),
+                Self::InvalidCapabilityStatus(reason) => write!(
+                    f,
+                    "native containment v2 Linux capability posture is invalid: {reason}"
+                ),
                 Self::Resource(error) => {
                     write!(f, "native containment v2 resource limit failed: {error}")
                 }
@@ -164,7 +175,7 @@ mod linux_x86_64 {
         fn source(&self) -> Option<&(dyn Error + 'static)> {
             match self {
                 Self::PathResolution { source, .. } => Some(source),
-                Self::ProcFdInspection(error) => Some(error),
+                Self::ProcFdInspection(error) | Self::ProcStatusInspection(error) => Some(error),
                 _ => None,
             }
         }
@@ -280,6 +291,7 @@ mod linux_x86_64 {
             return Err(NativeContainmentError::AmbientEnvironmentPresent);
         }
         verify_descriptor_hygiene()?;
+        verify_capability_hygiene()?;
 
         revalidate_identity(&plan.executable)?;
         revalidate_identity(&plan.cwd)?;
@@ -305,6 +317,7 @@ mod linux_x86_64 {
             spawn_denied: true,
             strict_local: true,
             inherited_non_stdio_handles_observed: false,
+            linux_capability_sets_empty: true,
             identity_bound_regular_file_roots: true,
             ipc_creation_denied: true,
             cross_process_control_denied: true,
@@ -578,6 +591,36 @@ mod linux_x86_64 {
         Ok(())
     }
 
+    fn verify_capability_hygiene() -> Result<(), NativeContainmentError> {
+        let status = fs::read_to_string("/proc/self/status")
+            .map_err(NativeContainmentError::ProcStatusInspection)?;
+        validate_capability_status(&status)
+    }
+
+    fn validate_capability_status(status: &str) -> Result<(), NativeContainmentError> {
+        for field in ["CapInh", "CapPrm", "CapEff", "CapAmb"] {
+            let prefix = format!("{field}:");
+            let value = status
+                .lines()
+                .find_map(|line| line.strip_prefix(&prefix))
+                .ok_or(NativeContainmentError::InvalidCapabilityStatus(
+                    "required capability field is missing",
+                ))?
+                .trim();
+            if value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                return Err(NativeContainmentError::InvalidCapabilityStatus(
+                    "capability field is not canonical hexadecimal",
+                ));
+            }
+            if value.bytes().any(|byte| byte != b'0') {
+                return Err(NativeContainmentError::InvalidCapabilityStatus(
+                    "inherited, permitted, effective and ambient capability sets must be empty",
+                ));
+            }
+        }
+        Ok(())
+    }
+
     fn verify_descriptor_hygiene() -> Result<(), NativeContainmentError> {
         for fd in 0_u32..=2 {
             let target = fs::read_link(format!("/proc/self/fd/{fd}"))
@@ -661,6 +704,24 @@ mod linux_x86_64 {
             assert!(matches!(
                 validate_plan(&remote),
                 Err(NativeContainmentError::InvalidPlan(_))
+            ));
+        }
+
+        #[test]
+        fn capability_status_requires_empty_inherited_permitted_effective_and_ambient_sets() {
+            let empty = "CapInh:\t0000000000000000\nCapPrm:\t0000000000000000\nCapEff:\t0000000000000000\nCapAmb:\t0000000000000000\n";
+            validate_capability_status(empty).unwrap();
+
+            let nonzero = "CapInh:\t0000000000000000\nCapPrm:\t0000000000000000\nCapEff:\t0000000000000400\nCapAmb:\t0000000000000000\n";
+            assert!(matches!(
+                validate_capability_status(nonzero),
+                Err(NativeContainmentError::InvalidCapabilityStatus(_))
+            ));
+
+            let missing = "CapInh:\t0000000000000000\nCapPrm:\t0000000000000000\nCapEff:\t0000000000000000\n";
+            assert!(matches!(
+                validate_capability_status(missing),
+                Err(NativeContainmentError::InvalidCapabilityStatus(_))
             ));
         }
 
