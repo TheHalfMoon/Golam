@@ -80,9 +80,7 @@ pub use tool_effect::{
     CompleteToolEffect, PrepareToolEffect, PreparedToolEffect, ToolEffectError,
     ToolExecutionCompletion,
 };
-pub use tool_mutation_evidence::{
-    ToolMutationEvidenceKernelError, ToolMutationVerifiedStatus,
-};
+pub use tool_mutation_evidence::{ToolMutationEvidenceKernelError, ToolMutationVerifiedStatus};
 
 use authorization::AuthorizationEngine;
 use client_auth::ClientAuthority;
