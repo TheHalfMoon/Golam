@@ -880,6 +880,7 @@ mod linux_x86_64 {
         Ok(sha256(&encoder.finish()))
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn spawn_helper(
         helper: &TrustedNativeExecHelperV2,
         staged: &StagedExecutableV2,
@@ -1517,6 +1518,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::assertions_on_constants)]
     fn first_profile_keeps_finite_parent_output_and_wall_bounds() {
         assert!(MAX_COMBINED_OUTPUT_BYTES > 0);
         assert!(MAX_WALL_TIME_MS > 0);
