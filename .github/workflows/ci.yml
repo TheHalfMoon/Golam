@@ -51,6 +51,11 @@ jobs:
           cargo +1.98.0 test --locked -p golam-ipc --test adversarial
           cargo +1.98.0 test --locked -p golam-kernel --test hostile_adapter
           cargo +1.98.0 test --locked -p golam-kernel client_auth::tests::
+      - name: Native containment hostile qualification (Linux x86_64)
+        if: runner.os == 'Linux' && runner.arch == 'X64'
+        run: |
+          cargo +1.98.0 build --locked -p golamd --bin golam-native-containment-hostile-probe
+          bash scripts/qualification/native-containment-hostile.sh target/debug/golam-native-containment-hostile-probe
       - name: Build daemon for external locality observation
         run: cargo +1.98.0 build --locked -p golamd --bin golamd
       - name: Strict-local external network observation (Unix)
