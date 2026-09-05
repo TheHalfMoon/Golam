@@ -195,6 +195,7 @@ fn prepared_branch_effect_cannot_be_rebound_to_another_branch() {
 #[test]
 fn generic_git_authorized_root_cannot_overlap_protected_golam_state() {
     let base = unique_root();
+    fs::create_dir_all(&base).unwrap();
     let runtime = RuntimeLayout::initialize(base.join("runtime")).unwrap();
     let mut operations = vec![
         RequestedOperationId::new("git.add").unwrap(),
