@@ -251,15 +251,15 @@ fn validate_local_binding(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mcp_protocol::McpReviewRequest;
     use golam_core::skills_protocol::{McpLifecycleState, McpVersionLock, ProtocolFeatureId};
     use golam_core::taint::TaintSet;
-    use crate::mcp_protocol::McpReviewRequest;
 
     fn digest(value: u8) -> BindingDigest {
         BindingDigest::new([value; 32])
     }
 
-    fn lifecycle(transport: McpTransport, profile: BindingDigest) -> McpLifecycle {
+    fn active_lifecycle(transport: McpTransport, profile: BindingDigest) -> McpLifecycle {
         let mut lifecycle = McpLifecycle::review(McpReviewRequest {
             binding_id: digest(1),
             server_identity: digest(2),
@@ -291,13 +291,16 @@ mod tests {
 
     #[test]
     fn local_binding_requires_exact_admitted_profile() {
-        let lifecycle = lifecycle(McpTransport::LocalStdio, admitted_local_mcp_profile_ref());
+        let lifecycle = active_lifecycle(
+            McpTransport::LocalStdio,
+            admitted_local_mcp_profile_ref(),
+        );
         let dispatch = lifecycle
             .bind_dispatch(digest(7), digest(8), digest(9))
             .unwrap();
         assert!(validate_local_binding(&lifecycle, &dispatch).is_ok());
 
-        let wrong = lifecycle(McpTransport::LocalStdio, digest(99));
+        let wrong = active_lifecycle(McpTransport::LocalStdio, digest(99));
         let wrong_dispatch = wrong
             .bind_dispatch(digest(7), digest(8), digest(9))
             .unwrap();
@@ -309,7 +312,7 @@ mod tests {
 
     #[test]
     fn remote_and_revoked_bindings_fail_before_process_dispatch() {
-        let remote = lifecycle(McpTransport::RemoteHttp, digest(10));
+        let remote = active_lifecycle(McpTransport::RemoteHttp, digest(10));
         let remote_dispatch = remote
             .bind_dispatch(digest(7), digest(8), digest(9))
             .unwrap();
@@ -318,7 +321,10 @@ mod tests {
             Err(McpLocalProcessV2Error::InvalidTransport)
         ));
 
-        let mut revoked = lifecycle(McpTransport::LocalStdio, admitted_local_mcp_profile_ref());
+        let mut revoked = active_lifecycle(
+            McpTransport::LocalStdio,
+            admitted_local_mcp_profile_ref(),
+        );
         let stale = revoked
             .bind_dispatch(digest(7), digest(8), digest(9))
             .unwrap();
