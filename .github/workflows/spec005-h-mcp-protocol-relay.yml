@@ -84,38 +84,35 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           path = Path('crates/golamd/src/mcp_protocol.rs')
-          text = path.read_text()
-          old = '''    if kind == McpAdvertisementKind::Prompt {
-              if let Some(arguments) = object.get("arguments") {
-                  let arguments = arguments
-                      .as_array()
-                      .ok_or(McpProtocolError::InvalidFieldType("arguments"))?;
-                  if arguments.len() > MAX_MCP_CONTAINER_ITEMS || arguments.iter().any(|value| !value.is_object()) {
-                      return Err(McpProtocolError::ContainerTooLarge);
-                  }
-              }
-          }
-          '''
-          new = '''    if kind == McpAdvertisementKind::Prompt
-              && let Some(arguments) = object.get("arguments")
-          {
-              let arguments = arguments
-                  .as_array()
-                  .ok_or(McpProtocolError::InvalidFieldType("arguments"))?;
-              if arguments.len() > MAX_MCP_CONTAINER_ITEMS
-                  || arguments.iter().any(|value| !value.is_object())
-              {
-                  return Err(McpProtocolError::ContainerTooLarge);
-              }
-          }
-          '''
-          if text.count(old) != 1:
-              raise SystemExit('expected exact MCP prompt argument lint anchor')
-          text = text.replace(old, new, 1)
-          if text.count('        deep.push_str("0");') != 1:
-              raise SystemExit('expected exact MCP deep-json lint anchor')
-          text = text.replace('        deep.push_str("0");', "        deep.push('0');", 1)
-          path.write_text(text)
+          lines = path.read_text().splitlines()
+          start = next((i for i, line in enumerate(lines) if line.strip() == 'if kind == McpAdvertisementKind::Prompt {'), None)
+          end = next((i for i, line in enumerate(lines) if start is not None and i > start and line.strip().startswith('let protocol_payload_ref = ')), None)
+          if start is None or end is None:
+              raise SystemExit('expected MCP prompt argument block markers')
+          indent = lines[start][:len(lines[start]) - len(lines[start].lstrip())]
+          replacement = [
+              indent + 'if kind == McpAdvertisementKind::Prompt',
+              indent + '    && let Some(arguments) = object.get("arguments")',
+              indent + '{',
+              indent + '    let arguments = arguments',
+              indent + '        .as_array()',
+              indent + '        .ok_or(McpProtocolError::InvalidFieldType("arguments"))?;',
+              indent + '    if arguments.len() > MAX_MCP_CONTAINER_ITEMS',
+              indent + '        || arguments.iter().any(|value| !value.is_object())',
+              indent + '    {',
+              indent + '        return Err(McpProtocolError::ContainerTooLarge);',
+              indent + '    }',
+              indent + '}',
+              '',
+          ]
+          lines[start:end] = replacement
+          matches = [i for i, line in enumerate(lines) if line.strip() == 'deep.push_str("0");']
+          if len(matches) != 1:
+              raise SystemExit('expected exact MCP deep-json lint line')
+          i = matches[0]
+          indent = lines[i][:len(lines[i]) - len(lines[i].lstrip())]
+          lines[i] = indent + "deep.push('0');"
+          path.write_text('\n'.join(lines) + '\n')
           PY
           cargo +1.98.0 check -p golamd
           python3 - <<'PY'
