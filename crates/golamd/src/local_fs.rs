@@ -192,6 +192,10 @@ impl LocalFsResolver {
         &self.contract
     }
 
+    pub fn root_path(&self) -> &Path {
+        &self.root_path
+    }
+
     pub fn resolve_read_target(
         &self,
         requested: &RequestedTarget,

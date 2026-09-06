@@ -72,6 +72,13 @@ pub struct SkillPackageFileEvidence {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExecutableSkillTarget {
+    pub relative_path: String,
+    pub byte_len: u64,
+    pub content_digest: BindingDigest,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReviewedInstructionSkill {
     canonical_root: PathBuf,
     descriptor: SkillDescriptor,
@@ -263,6 +270,34 @@ impl SkillLifecycle {
         binding.dispatch_kind = SkillDispatchKind::ExecutableDispatch;
         Ok(binding)
     }
+
+    pub fn revalidate_executable_target(
+        &self,
+        binding: &SkillDispatchBinding,
+        relative_path: &str,
+    ) -> Result<ExecutableSkillTarget, SkillPackageError> {
+        if binding.dispatch_kind != SkillDispatchKind::ExecutableDispatch {
+            return Err(SkillPackageError::WrongDispatchKind);
+        }
+        let live = self.reviewed.rediscover_live()?;
+        if !self.reviewed.same_reviewed_identity(&live) {
+            return Err(SkillPackageError::LivePackageChanged);
+        }
+        let current = self.reviewed.current_state(self.state)?;
+        binding.revalidate(&current)?;
+        let relative_path = normalized_relative_path(Path::new(relative_path))?;
+        let file = self
+            .reviewed
+            .files
+            .iter()
+            .find(|file| file.relative_path == relative_path && file.script_candidate)
+            .ok_or(SkillPackageError::ExecutableTargetNotReviewed)?;
+        Ok(ExecutableSkillTarget {
+            relative_path,
+            byte_len: file.byte_len,
+            content_digest: file.content_digest,
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -304,6 +339,7 @@ pub enum SkillPackageError {
     WrongDispatchKind,
     LivePackageChanged,
     ExecutableSkillNotAdmitted,
+    ExecutableTargetNotReviewed,
 }
 
 impl fmt::Display for SkillPackageError {
@@ -380,6 +416,9 @@ impl fmt::Display for SkillPackageError {
             }
             Self::ExecutableSkillNotAdmitted => {
                 f.write_str("skill executable dispatch is not independently admitted")
+            }
+            Self::ExecutableTargetNotReviewed => {
+                f.write_str("skill executable target is not an exact reviewed scripts/ file")
             }
         }
     }
@@ -1128,6 +1167,39 @@ mod tests {
         assert!(matches!(
             lifecycle.transition(SkillAdmissionState::InstructionAdmitted),
             Err(SkillPackageError::InvalidLifecycleTransition { .. })
+        ));
+    }
+
+    #[test]
+    fn executable_target_revalidation_rejects_non_script_and_live_drift() {
+        let skill = TempSkill::new(
+            "exec-skill",
+            "# Exec Skill\nRun the reviewed executable.",
+            &[
+                ("scripts/run.bin", b"reviewed executable bytes"),
+                ("data.txt", b"data"),
+            ],
+        );
+        let reviewed = discover(&skill);
+        let mut lifecycle = SkillLifecycle::new(reviewed);
+        lifecycle
+            .transition(SkillAdmissionState::ExecutableAdmitted)
+            .unwrap();
+        let binding = lifecycle
+            .bind_executable_dispatch(digest(40), digest(41), digest(42))
+            .unwrap();
+        let target = lifecycle
+            .revalidate_executable_target(&binding, "scripts/run.bin")
+            .unwrap();
+        assert_eq!(target.relative_path, "scripts/run.bin");
+        assert!(matches!(
+            lifecycle.revalidate_executable_target(&binding, "data.txt"),
+            Err(SkillPackageError::ExecutableTargetNotReviewed)
+        ));
+        fs::write(skill.root.join("scripts/run.bin"), b"changed bytes").unwrap();
+        assert!(matches!(
+            lifecycle.revalidate_executable_target(&binding, "scripts/run.bin"),
+            Err(SkillPackageError::LivePackageChanged)
         ));
     }
 
