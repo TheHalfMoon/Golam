@@ -26,6 +26,7 @@ use crate::{
 
 const ACTION_RECEIPT_DOMAIN: &[u8] = b"golam:desktop-action-receipt:v1";
 const LEASE_BINDING_DOMAIN: &[u8] = b"golam:desktop-prepared-lease-binding:v1";
+const ACTION_PROVIDER_ID: &str = "golam-desktop-action-v1";
 
 pub struct DispatchDesktopAction<'a, B: DesktopBackend> {
     pub prepared: &'a PreparedDesktopKernelAction,
@@ -127,6 +128,20 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
                 return Err(DesktopDispatchError::Revalidation(error));
             }
         };
+
+        let intent_bytes = input
+            .prepared
+            .intent()
+            .canonical_bytes()
+            .map_err(crate::DesktopKernelError::from)?;
+        self.record_tool_mutation_intent(
+            principal,
+            input.prepared.effect(),
+            ACTION_PROVIDER_ID,
+            &intent_bytes,
+            scope,
+        )
+        .map_err(ToolEffectError::MutationEvidence)?;
 
         let receipt = match input.backend.dispatch_action(validated) {
             Ok(receipt) => receipt,
