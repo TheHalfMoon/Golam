@@ -1,0 +1,176 @@
+name: spec005-h-mcp-protocol-relay
+
+on:
+  push:
+    branches:
+      - impl/005-local-tools-context-memory
+    paths:
+      - .github/workflows/spec005-h-mcp-protocol-relay.yml
+
+permissions:
+  contents: write
+
+jobs:
+  qualify-and-commit:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+      - name: Snapshot exact external dependency closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          def external_packages(path):
+              records = []
+              current = None
+              for raw in Path(path).read_text().splitlines():
+                  line = raw.strip()
+                  if line == '[[package]]':
+                      if current is not None and current.get('source') is not None:
+                          records.append([
+                              current.get('name'), current.get('version'),
+                              current.get('source'), current.get('checksum'),
+                          ])
+                      current = {}
+                      continue
+                  if current is None or ' = ' not in line:
+                      continue
+                  key, value = line.split(' = ', 1)
+                  if key in {'name', 'version', 'source', 'checksum'} and value.startswith('"'):
+                      current[key] = json.loads(value)
+              if current is not None and current.get('source') is not None:
+                  records.append([
+                      current.get('name'), current.get('version'),
+                      current.get('source'), current.get('checksum'),
+                  ])
+              return sorted(records)
+
+          Path('/tmp/spec005-external-lock.json').write_text(
+              json.dumps(external_packages('Cargo.lock'), separators=(',', ':'))
+          )
+          PY
+      - name: Apply and qualify bounded MCP normalization
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/qualification/spec005_h_mcp_protocol_repair.py')
+          text = path.read_text()
+
+          old = '''replace_once(
+              "crates/golamd/src/lib.rs",
+              "pub mod memory_writer;\\n",
+              "pub mod memory_writer;\\npub mod mcp_protocol;\\n",
+          )
+          '''
+          new = '''replace_once(
+              "crates/golamd/src/lib.rs",
+              "pub mod skill_process_v2;\\n",
+              "pub mod skill_process_v2;\\npub mod mcp_protocol;\\n",
+          )
+          '''
+          if text.count(old) != 1:
+              raise SystemExit('MCP repair script library anchor is not the expected stale form')
+          text = text.replace(old, new, 1)
+
+          old = '''    if kind == McpAdvertisementKind::Prompt {
+              if let Some(arguments) = object.get("arguments") {
+                  let arguments = arguments
+                      .as_array()
+                      .ok_or(McpProtocolError::InvalidFieldType("arguments"))?;
+                  if arguments.len() > MAX_MCP_CONTAINER_ITEMS || arguments.iter().any(|value| !value.is_object()) {
+                      return Err(McpProtocolError::ContainerTooLarge);
+                  }
+              }
+          }
+          '''
+          new = '''    if kind == McpAdvertisementKind::Prompt
+              && let Some(arguments) = object.get("arguments")
+          {
+              let arguments = arguments
+                  .as_array()
+                  .ok_or(McpProtocolError::InvalidFieldType("arguments"))?;
+              if arguments.len() > MAX_MCP_CONTAINER_ITEMS || arguments.iter().any(|value| !value.is_object()) {
+                  return Err(McpProtocolError::ContainerTooLarge);
+              }
+          }
+          '''
+          if text.count(old) != 1:
+              raise SystemExit('MCP repair script prompt anchor is not the expected Clippy form')
+          text = text.replace(old, new, 1)
+
+          old = '        deep.push_str("0");\n'
+          new = "        deep.push('0');\n"
+          if text.count(old) != 1:
+              raise SystemExit('MCP repair script deep JSON anchor is not the expected Clippy form')
+          text = text.replace(old, new, 1)
+
+          path.write_text(text)
+          PY
+          python3 scripts/qualification/spec005_h_mcp_protocol_repair.py
+          cargo +1.98.0 check -p golamd
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          def external_packages(path):
+              records = []
+              current = None
+              for raw in Path(path).read_text().splitlines():
+                  line = raw.strip()
+                  if line == '[[package]]':
+                      if current is not None and current.get('source') is not None:
+                          records.append([
+                              current.get('name'), current.get('version'),
+                              current.get('source'), current.get('checksum'),
+                          ])
+                      current = {}
+                      continue
+                  if current is None or ' = ' not in line:
+                      continue
+                  key, value = line.split(' = ', 1)
+                  if key in {'name', 'version', 'source', 'checksum'} and value.startswith('"'):
+                      current[key] = json.loads(value)
+              if current is not None and current.get('source') is not None:
+                  records.append([
+                      current.get('name'), current.get('version'),
+                      current.get('source'), current.get('checksum'),
+                  ])
+              return sorted(records)
+
+          before = json.loads(Path('/tmp/spec005-external-lock.json').read_text())
+          after = external_packages('Cargo.lock')
+          if before != after:
+              raise SystemExit('external Cargo.lock package/version/source/checksum closure changed')
+          matches = [p for p in after if p[0] == 'serde_json' and p[1] == '1.0.151']
+          if len(matches) != 1:
+              raise SystemExit('expected exact serde_json 1.0.151 lock entry')
+          if matches[0][3] != 'c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14':
+              raise SystemExit('serde_json checksum drift')
+          PY
+          cargo +1.98.0 fmt --all
+          cargo +1.98.0 fmt --all -- --check
+          cargo +1.98.0 clippy --locked -p golam-core -p golamd --all-targets -- -D warnings
+          cargo +1.98.0 test --locked -p golam-core skills_protocol::
+          cargo +1.98.0 test --locked -p golamd mcp_protocol::
+          cargo +1.98.0 test --locked -p golamd --lib
+      - name: Commit exact qualified T005-089 unit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin impl/005-local-tools-context-memory
+          test "$(git rev-parse origin/impl/005-local-tools-context-memory)" = "$GITHUB_SHA"
+          git rm .github/workflows/spec005-h-mcp-protocol-relay.yml scripts/qualification/spec005_h_mcp_protocol_repair.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Cargo.toml Cargo.lock crates/golamd/Cargo.toml crates/golamd/src/lib.rs crates/golamd/src/mcp_protocol.rs
+          git commit -m 'feat(005): normalize reviewed MCP advertisements'
+          git push origin HEAD:impl/005-local-tools-context-memory
