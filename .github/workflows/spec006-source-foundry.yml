@@ -1,0 +1,268 @@
+name: spec006-source-foundry
+
+on:
+  push:
+    branches: [impl/006-desktop-computer-control]
+    paths:
+      - .github/workflows/spec006-source-foundry.yml
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    name: qualify-exact-desktop-dependency-closure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal
+
+      - name: Resolve and inventory exact Tauri Rust closure in isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/golam-spec006-cargo
+          mkdir -p /tmp/golam-spec006-cargo/src
+          cat >/tmp/golam-spec006-cargo/Cargo.toml <<'EOF'
+          [package]
+          name = "golam-spec006-source-foundry"
+          version = "0.0.0"
+          edition = "2024"
+          rust-version = "1.98"
+          publish = false
+
+          [dependencies]
+          tauri = { version = "=2.11.1", default-features = false, features = ["wry"] }
+
+          [build-dependencies]
+          tauri-build = { version = "=2.6.1", default-features = false }
+          EOF
+          printf 'fn main() {}\n' >/tmp/golam-spec006-cargo/src/main.rs
+          cd /tmp/golam-spec006-cargo
+          cargo +1.98.0 generate-lockfile
+          cargo +1.98.0 fetch --locked
+          cargo +1.98.0 metadata --locked --format-version 1 >cargo-metadata.json
+          echo '=== CARGO_LOCK_SHA256 ==='
+          sha256sum Cargo.lock
+          echo '=== CARGO_DIRECT_TREE ==='
+          cargo +1.98.0 tree --locked --edges normal,build
+          echo '=== CARGO_FEATURE_TREE ==='
+          cargo +1.98.0 tree --locked --edges normal,build,features
+          echo '=== CARGO_LOCK_PACKAGES ==='
+          python3 - <<'PY'
+          import tomllib
+          data = tomllib.load(open('Cargo.lock','rb'))
+          packages = data.get('package', [])
+          print(f'package_count={len(packages)}')
+          for p in sorted(packages, key=lambda x:(x['name'],x['version'],x.get('source',''))):
+              print('|'.join([p['name'], p['version'], p.get('source','workspace'), p.get('checksum','')]))
+          PY
+          echo '=== CARGO_LICENSE_NOTICE_BUILD_INVENTORY ==='
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          metadata = json.load(open('cargo-metadata.json', encoding='utf-8'))
+          permissive = {
+              '0BSD','Apache-2.0','Apache-2.0 WITH LLVM-exception','BSD-2-Clause',
+              'BSD-3-Clause','BSL-1.0','CC0-1.0','ISC','MIT','MIT-0','Unlicense',
+              'Unicode-3.0','Zlib'
+          }
+          reciprocal_markers = (
+              'AGPL','GPL','LGPL','MPL','EPL','CDDL','EUPL','OSL','SSPL',
+              'BUSL','Commons-Clause'
+          )
+
+          def disposition(expr):
+              if not expr:
+                  return 'REVIEW_REQUIRED_MISSING_LICENSE_METADATA'
+              if any(marker.lower() in expr.lower() for marker in reciprocal_markers):
+                  return 'REVIEW_REQUIRED_RECIPROCAL_OR_NONPERMISSIVE'
+              normalized = expr.replace('(', ' ').replace(')', ' ')
+              parts = [p.strip() for p in re.split(r'\s+(?:OR|AND)\s+', normalized) if p.strip()]
+              if parts and all(p in permissive for p in parts):
+                  return 'PERMISSIVE_DECLARED'
+              return 'REVIEW_REQUIRED_UNCLASSIFIED_EXPRESSION'
+
+          external = [p for p in metadata['packages'] if p.get('source')]
+          review_required = []
+          custom_build = []
+          native_links = []
+          print(f'external_package_count={len(external)}')
+          for package in sorted(external, key=lambda p:(p['name'],p['version'],p.get('source',''))):
+              root = Path(package['manifest_path']).parent
+              notice_files = []
+              try:
+                  for child in root.iterdir():
+                      if child.is_file() and re.match(r'(?i)^(license|licence|notice|copying|copyright)([._-].*)?$', child.name):
+                          notice_files.append(child.name)
+              except OSError:
+                  pass
+              kinds = sorted({kind for target in package.get('targets', []) for kind in target.get('kind', [])})
+              has_custom_build = 'custom-build' in kinds
+              links = package.get('links') or ''
+              status = disposition(package.get('license'))
+              if status.startswith('REVIEW_REQUIRED'):
+                  review_required.append((package['name'], package['version'], status, package.get('license') or ''))
+              if has_custom_build:
+                  custom_build.append((package['name'], package['version']))
+              if links:
+                  native_links.append((package['name'], package['version'], links))
+              print('|'.join([
+                  package['name'], package['version'], package.get('source',''),
+                  package.get('license') or 'MISSING', package.get('license_file') or '',
+                  status, ','.join(notice_files) if notice_files else 'NO_TOP_LEVEL_NOTICE_FILE_OBSERVED',
+                  'CUSTOM_BUILD' if has_custom_build else 'NO_CUSTOM_BUILD',
+                  links or 'NO_NATIVE_LINKS', package.get('repository') or ''
+              ]))
+          print('=== CARGO_REVIEW_REQUIRED_LICENSES ===')
+          print(f'count={len(review_required)}')
+          for row in review_required:
+              print('|'.join(row))
+          print('=== CARGO_CUSTOM_BUILD_PACKAGES ===')
+          print(f'count={len(custom_build)}')
+          for row in custom_build:
+              print('|'.join(row))
+          print('=== CARGO_NATIVE_LINK_PACKAGES ===')
+          print(f'count={len(native_links)}')
+          for row in native_links:
+              print('|'.join(row))
+          PY
+
+      - name: Resolve and inventory exact Tauri React frontend closure in isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/golam-spec006-js
+          mkdir -p /tmp/golam-spec006-js
+          cd /tmp/golam-spec006-js
+          cat >package.json <<'EOF'
+          {
+            "name": "golam-spec006-source-foundry",
+            "private": true,
+            "version": "0.0.0",
+            "dependencies": {
+              "@tauri-apps/api": "2.11.1",
+              "react": "19.2.8",
+              "react-dom": "19.2.8"
+            },
+            "devDependencies": {
+              "@tauri-apps/cli": "2.11.4",
+              "@vitejs/plugin-react": "6.1.1",
+              "typescript": "6.0.3",
+              "vite": "8.2.2"
+            }
+          }
+          EOF
+          npm install --ignore-scripts --no-audit --no-fund
+          echo '=== NPM_LOCK_SHA256 ==='
+          sha256sum package-lock.json
+          echo '=== NPM_LOCK_PACKAGES ==='
+          node <<'NODE'
+          const fs = require('fs');
+          const lock = JSON.parse(fs.readFileSync('package-lock.json','utf8'));
+          const entries = Object.entries(lock.packages || {}).filter(([k]) => k !== '');
+          console.log(`package_count=${entries.length}`);
+          for (const [path, meta] of entries.sort((a,b)=>a[0].localeCompare(b[0]))) {
+            console.log([path, meta.version || '', meta.resolved || '', meta.integrity || '', meta.optional ? 'OPTIONAL' : 'REQUIRED', meta.hasInstallScript ? 'HAS_INSTALL_SCRIPT' : 'NO_INSTALL_SCRIPT_FLAG'].join('|'));
+          }
+          NODE
+          echo '=== NPM_FULL_LICENSE_NOTICE_LIFECYCLE_INVENTORY ==='
+          node <<'NODE'
+          const fs = require('fs');
+          const cp = require('child_process');
+          const path = require('path');
+          const lock = JSON.parse(fs.readFileSync('package-lock.json','utf8'));
+          const entries = Object.entries(lock.packages || {}).filter(([k]) => k !== '');
+          const permissive = new Set(['0BSD','Apache-2.0','BSD-2-Clause','BSD-3-Clause','BSL-1.0','CC0-1.0','ISC','MIT','MIT-0','Unlicense','Unicode-3.0','Zlib']);
+          const reciprocal = ['AGPL','GPL','LGPL','MPL','EPL','CDDL','EUPL','OSL','SSPL','BUSL','Commons-Clause'];
+          const lifecycleKeys = new Set(['preinstall','install','postinstall','preprepare','prepare','postprepare','prerebuild','rebuild','postrebuild','prebuild','build','postbuild']);
+          const riskPattern = /(https?:|curl\b|wget\b|download|fetch\b|node-gyp|prebuild|cmake|make\b|cargo\b|powershell|\.exe\b|\.dll\b|\.dylib\b|\.so\b)/i;
+
+          function packageName(packagePath) {
+            return packagePath.split('node_modules/').pop();
+          }
+          function classifyLicense(value) {
+            const text = typeof value === 'string' ? value : '';
+            if (!text) return 'REVIEW_REQUIRED_MISSING_LICENSE_METADATA';
+            if (reciprocal.some(marker => text.toLowerCase().includes(marker.toLowerCase()))) return 'REVIEW_REQUIRED_RECIPROCAL_OR_NONPERMISSIVE';
+            const parts = text.replace(/[()]/g, ' ').split(/\s+(?:OR|AND)\s+/).map(v => v.trim()).filter(Boolean);
+            if (parts.length && parts.every(v => permissive.has(v))) return 'PERMISSIVE_DECLARED';
+            return 'REVIEW_REQUIRED_UNCLASSIFIED_EXPRESSION';
+          }
+          function viewJson(spec, field) {
+            try {
+              const raw = cp.execFileSync('npm', ['view', spec, field, '--json'], {encoding:'utf8', stdio:['ignore','pipe','pipe']}).trim();
+              return raw ? JSON.parse(raw) : null;
+            } catch (error) {
+              return {__lookup_error: String(error.status ?? 'unknown')};
+            }
+          }
+          function noticeFiles(packagePath) {
+            const root = path.resolve(packagePath);
+            try {
+              return fs.readdirSync(root).filter(name => /^(license|licence|notice|copying|copyright)([._-].*)?$/i.test(name)).sort();
+            } catch (_) {
+              return [];
+            }
+          }
+
+          const reviewRequired = [];
+          const lifecycle = [];
+          const lookupErrors = [];
+          console.log(`package_count=${entries.length}`);
+          for (const [packagePath, lockMeta] of entries.sort((a,b)=>a[0].localeCompare(b[0]))) {
+            const name = packageName(packagePath);
+            const version = lockMeta.version;
+            const spec = `${name}@${version}`;
+            const license = viewJson(spec, 'license');
+            const scripts = viewJson(spec, 'scripts') || {};
+            const repository = viewJson(spec, 'repository.url');
+            const engines = viewJson(spec, 'engines');
+            const status = classifyLicense(license);
+            if (status.startsWith('REVIEW_REQUIRED')) reviewRequired.push([name, version, status, JSON.stringify(license)]);
+            if (license && license.__lookup_error) lookupErrors.push([name, version, 'license']);
+            if (scripts && scripts.__lookup_error) lookupErrors.push([name, version, 'scripts']);
+            const relevantScripts = scripts && !scripts.__lookup_error && typeof scripts === 'object'
+              ? Object.entries(scripts).filter(([key]) => lifecycleKeys.has(key))
+              : [];
+            for (const [key, command] of relevantScripts) {
+              lifecycle.push([name, version, key, command, riskPattern.test(command) ? 'NATIVE_DOWNLOAD_NETWORK_REVIEW_REQUIRED' : 'NO_OBVIOUS_NATIVE_DOWNLOAD_NETWORK_KEYWORD']);
+            }
+            const notices = noticeFiles(packagePath);
+            console.log([
+              name, version, lockMeta.optional ? 'OPTIONAL' : 'REQUIRED',
+              typeof license === 'string' ? license : JSON.stringify(license), status,
+              notices.length ? notices.join(',') : 'NO_INSTALLED_TOP_LEVEL_NOTICE_FILE_OBSERVED',
+              relevantScripts.length ? JSON.stringify(Object.fromEntries(relevantScripts)) : '{}',
+              JSON.stringify(repository), JSON.stringify(engines),
+              lockMeta.hasInstallScript ? 'LOCK_HAS_INSTALL_SCRIPT' : 'LOCK_NO_INSTALL_SCRIPT_FLAG'
+            ].join('|'));
+          }
+          console.log('=== NPM_REVIEW_REQUIRED_LICENSES ===');
+          console.log(`count=${reviewRequired.length}`);
+          for (const row of reviewRequired) console.log(row.join('|'));
+          console.log('=== NPM_RELEVANT_LIFECYCLE_SCRIPTS ===');
+          console.log(`count=${lifecycle.length}`);
+          for (const row of lifecycle) console.log(row.join('|'));
+          console.log('=== NPM_METADATA_LOOKUP_ERRORS ===');
+          console.log(`count=${lookupErrors.length}`);
+          for (const row of lookupErrors) console.log(row.join('|'));
+          if (lookupErrors.length) process.exitCode = 1;
+          NODE
+
+      - name: Record qualification-only network boundary
+        shell: bash
+        run: |
+          cat <<'EOF'
+          SOURCE_FOUNDRY_PACKAGE_MANAGER_NETWORK=QUALIFICATION_ONLY
+          PRODUCT_RUNTIME_NETWORK_AUTHORITY=NO
+          PRODUCT_MANIFEST_MUTATION=NO
+          RENDERER_AUTHORITY=NO
+          NATIVE_AUTOMATION_ADMISSION=NO
+          NATIVE_CAPTURE_ADMISSION=NO
+          RAW_INPUT_ADMISSION=NO
+          CLIPBOARD_ADMISSION=NO
+          EOF
