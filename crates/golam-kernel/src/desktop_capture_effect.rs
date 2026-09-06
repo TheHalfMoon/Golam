@@ -12,6 +12,10 @@ use golam_core::desktop_intent::{
 use golam_core::digest::sha256;
 use golam_core::tool_request::{BindingDigest, PreparedToolRequest};
 use golam_core::{CanonicalEncoder, CoreError, EffectId, SessionId};
+use golam_ledger::desktop_control_evidence::{
+    DesktopControlEvidenceError, DesktopControlEvidenceStore, DesktopEffectEvidence,
+    DesktopEvidenceOperation, DesktopEvidenceStatus,
+};
 
 use crate::desktop_effect::effect_binding;
 use crate::{
@@ -59,6 +63,8 @@ pub struct DispatchDesktopCapture<'a, B: DesktopBackend> {
     pub current_request: &'a PreparedToolRequest,
     pub current_authority: AuthorityBindings,
     pub current_source_identity_digest: BindingDigest,
+    /// Caller input can only conservatively add a block. Durable protected
+    /// evidence is authoritative and cannot be cleared by passing `false`.
     pub unresolved_conflicting_unknown_outcome: bool,
     pub now_unix_ms: u64,
     pub finished_at: &'a str,
@@ -69,8 +75,10 @@ struct CompleteDesktopCapture<'a> {
     prepared: &'a PreparedDesktopCapture,
     finished_at: &'a str,
     completion: ToolExecutionCompletion,
+    evidence_status: DesktopEvidenceStatus,
     reason_code: &'a str,
     receipt: Option<&'a [u8]>,
+    recorded_at_unix_ms: u64,
 }
 
 impl<P: AuthorizationPolicy> KernelApi<P> {
@@ -133,8 +141,17 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         if input.finished_at.is_empty() || input.now_unix_ms == 0 {
             return Err(DesktopCaptureError::InvalidDispatchInput);
         }
+        let mut evidence_store = DesktopControlEvidenceStore::open(&self.authority)?;
+        let durable_unknown = evidence_store
+            .has_unresolved_unknown_outcome_for_effect(input.prepared.effect().effect_id())?;
         let capabilities = input.backend.capabilities()?;
         let effect = effect_binding(input.prepared.effect())?;
+        evidence_store.append_effect_evidence(capture_evidence(
+            &evidence_store,
+            input.prepared,
+            DesktopEvidenceStatus::Prepared,
+            input.now_unix_ms,
+        )?)?;
         let context = CaptureDispatchContext {
             intent: input.prepared.intent(),
             now_unix_ms: input.now_unix_ms,
@@ -144,19 +161,23 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             current_authority: input.current_authority,
             current_capabilities: &capabilities,
             current_source_identity_digest: input.current_source_identity_digest,
-            unresolved_conflicting_unknown_outcome: input.unresolved_conflicting_unknown_outcome,
+            unresolved_conflicting_unknown_outcome: durable_unknown
+                || input.unresolved_conflicting_unknown_outcome,
         };
         let validated = match context.authorize() {
             Ok(validated) => validated,
             Err(error) => {
                 self.complete_capture(
+                    &mut evidence_store,
                     principal,
                     CompleteDesktopCapture {
                         prepared: input.prepared,
                         finished_at: input.finished_at,
                         completion: ToolExecutionCompletion::Failed,
+                        evidence_status: DesktopEvidenceStatus::Failed,
                         reason_code: "desktop_capture_revalidation_failed_before_dispatch",
                         receipt: None,
+                        recorded_at_unix_ms: input.now_unix_ms,
                     },
                     scope,
                 )?;
@@ -167,13 +188,16 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             Ok(receipt) => receipt,
             Err(error) => {
                 self.complete_capture(
+                    &mut evidence_store,
                     principal,
                     CompleteDesktopCapture {
                         prepared: input.prepared,
                         finished_at: input.finished_at,
                         completion: ToolExecutionCompletion::UnknownOutcome,
+                        evidence_status: DesktopEvidenceStatus::UnknownOutcome,
                         reason_code: "desktop_capture_adapter_error_after_dispatch_boundary",
                         receipt: None,
+                        recorded_at_unix_ms: input.now_unix_ms,
                     },
                     scope,
                 )?;
@@ -182,19 +206,23 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         };
         let completion = classify_receipt(input.prepared, &receipt);
         let receipt_bytes = capture_receipt_bytes(&receipt)?;
+        let evidence_status = evidence_status_for_receipt(completion, receipt.status);
         let reason_code = match completion {
             ToolExecutionCompletion::Succeeded => "desktop_capture_succeeded",
             ToolExecutionCompletion::Failed => "desktop_capture_terminal_failure",
             ToolExecutionCompletion::UnknownOutcome => "desktop_capture_unknown_outcome",
         };
         self.complete_capture(
+            &mut evidence_store,
             principal,
             CompleteDesktopCapture {
                 prepared: input.prepared,
                 finished_at: input.finished_at,
                 completion,
+                evidence_status,
                 reason_code,
                 receipt: Some(receipt_bytes.as_slice()),
+                recorded_at_unix_ms: input.now_unix_ms,
             },
             scope,
         )?;
@@ -206,6 +234,7 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
 
     fn complete_capture(
         &mut self,
+        evidence_store: &mut DesktopControlEvidenceStore,
         principal: Principal<'_>,
         input: CompleteDesktopCapture<'_>,
         scope: &str,
@@ -222,13 +251,57 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             },
             scope,
         )?;
+        evidence_store.append_effect_evidence(capture_evidence(
+            evidence_store,
+            input.prepared,
+            input.evidence_status,
+            input.recorded_at_unix_ms,
+        )?)?;
         Ok(())
+    }
+}
+
+fn capture_evidence(
+    store: &DesktopControlEvidenceStore,
+    prepared: &PreparedDesktopCapture,
+    status: DesktopEvidenceStatus,
+    recorded_at_unix_ms: u64,
+) -> Result<DesktopEffectEvidence, DesktopCaptureError> {
+    let intent = prepared.intent();
+    Ok(DesktopEffectEvidence {
+        effect_id: prepared.effect().effect_id(),
+        session_id: store.effect_session_id(prepared.effect().effect_id())?,
+        operation: DesktopEvidenceOperation::Capture,
+        request_digest: intent.request.canonical_request_digest,
+        effect_digest: intent.effect.immutable_effect_digest,
+        intent_digest: intent.intent_digest()?,
+        fallback_eligibility_digest: None,
+        control_lease_digest: None,
+        visible_channel_digest: None,
+        permission_session_digest: intent.prepared_permission_session_evidence_ref,
+        target_or_source_digest: intent.selected_source_identity_digest,
+        status,
+        reconciliation_ref: None,
+        recorded_at_unix_ms,
+    })
+}
+
+fn evidence_status_for_receipt(
+    completion: ToolExecutionCompletion,
+    status: DesktopBackendTerminalStatus,
+) -> DesktopEvidenceStatus {
+    match (completion, status) {
+        (_, DesktopBackendTerminalStatus::Interrupted) => DesktopEvidenceStatus::Interrupted,
+        (ToolExecutionCompletion::Succeeded, _) => DesktopEvidenceStatus::Succeeded,
+        (ToolExecutionCompletion::Failed, _) => DesktopEvidenceStatus::Failed,
+        (ToolExecutionCompletion::UnknownOutcome, _) => DesktopEvidenceStatus::UnknownOutcome,
     }
 }
 
 fn validate_prepare(input: &PrepareDesktopCapture<'_>) -> Result<(), DesktopCaptureError> {
     input.limits.validate()?;
     if input.effect_id.0 == 0
+        || input.session_id.0 == 0
         || input.started_at.is_empty()
         || input.expires_at_unix_ms == 0
         || input.selected_source_identity_digest.bytes() == [0; 32]
@@ -319,6 +392,7 @@ pub enum DesktopCaptureError {
     AdapterUncertain(DesktopBackendError),
     UnknownOutcome(CaptureBackendReceipt),
     Backend(DesktopBackendError),
+    Evidence(DesktopControlEvidenceError),
     Kernel(crate::DesktopKernelError),
     Intent(golam_core::desktop_intent::DesktopIntentError),
     Effect(ToolEffectError),
@@ -336,6 +410,7 @@ impl fmt::Display for DesktopCaptureError {
             }
             Self::UnknownOutcome(_) => f.write_str("desktop capture outcome is unknown"),
             Self::Backend(error) => write!(f, "desktop capture backend error: {error}"),
+            Self::Evidence(error) => write!(f, "desktop capture durable evidence error: {error}"),
             Self::Kernel(error) => write!(f, "desktop capture kernel error: {error}"),
             Self::Intent(error) => write!(f, "desktop capture intent error: {error}"),
             Self::Effect(error) => write!(f, "desktop capture effect error: {error}"),
@@ -349,6 +424,12 @@ impl std::error::Error for DesktopCaptureError {}
 impl From<DesktopBackendError> for DesktopCaptureError {
     fn from(value: DesktopBackendError) -> Self {
         Self::Backend(value)
+    }
+}
+
+impl From<DesktopControlEvidenceError> for DesktopCaptureError {
+    fn from(value: DesktopControlEvidenceError) -> Self {
+        Self::Evidence(value)
     }
 }
 
