@@ -69,7 +69,14 @@ Any operation that may have crossed the protected effect boundary but lacks prov
 
 `UNKNOWN_OUTCOME_CONFLICTING_RETRY=BLOCKED_UNTIL_RECONCILIATION`
 
-## Clarification 10 — When is implementation authorized?
+## Clarification 10 — Must autonomous computer control remain visibly indicated?
+
+Yes. Active autonomous computer control requires at least one qualified persistent local visible-control channel exposing immediate pause, stop and takeover. Trusted Rust must track or independently observe channel liveness/visibility; a DOM flag or cached renderer state is insufficient. If every qualified visible-control channel is lost, new autonomous actuation is suspended fail closed. Restoring visibility does not restore stale action authority; ordinary fresh validation still applies.
+
+`AUTONOMOUS_CONTROL_VISIBLE_INDICATOR=REQUIRED`
+`INVISIBLE_AUTONOMOUS_ACTUATION=FAIL_CLOSED_DENIED`
+
+## Clarification 11 — When is implementation authorized?
 
 Only after the planning PR is exact-head qualified, freshly reviewed, reconciled, marked Ready, merged with expected-head protection, and the exact returned merge SHA passes push-triggered canonical-main CI. Until then, no Spec 006 product implementation branch/code is authorized.
 
