@@ -424,14 +424,15 @@ mod tests {
     #[test]
     fn release_requires_human_exclusive_state_and_live_visible_channel() {
         let mut state = ProtectedDesktopControlState::new(lease(), vec![channel()]).unwrap();
-        assert_eq!(
+        assert!(matches!(
             state
-                .apply_human_interrupt(
-                    interrupt(HumanInterruptOperation::ReleaseHumanExclusive, 1,)
-                )
+                .apply_human_interrupt(interrupt(
+                    HumanInterruptOperation::ReleaseHumanExclusive,
+                    1,
+                ))
                 .unwrap_err(),
             DesktopAuthorityError::InvalidInterruptTransition
-        );
+        ));
         state
             .apply_human_interrupt(interrupt(HumanInterruptOperation::Takeover, 2))
             .unwrap();
@@ -441,13 +442,14 @@ mod tests {
         hidden.observed_at_unix_ms = 30;
         hidden.heartbeat_deadline_unix_ms = 2_000;
         state.upsert_visible_channel(hidden).unwrap();
-        assert_eq!(
+        assert!(matches!(
             state
-                .apply_human_interrupt(
-                    interrupt(HumanInterruptOperation::ReleaseHumanExclusive, 3,)
-                )
+                .apply_human_interrupt(interrupt(
+                    HumanInterruptOperation::ReleaseHumanExclusive,
+                    3,
+                ))
                 .unwrap_err(),
             DesktopAuthorityError::NoQualifiedVisibleChannel
-        );
+        ));
     }
 }
