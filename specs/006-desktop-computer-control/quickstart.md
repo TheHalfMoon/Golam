@@ -26,11 +26,19 @@ Never:
 - expose local-client credentials, capability material, native handles or privileged session objects to the renderer;
 - let renderer state decide authority or bypass Rust-side revalidation.
 
+## Visible autonomous-control invariant
+
+Autonomous interactive computer control must have at least one qualified persistent local visible-control channel that communicates active control and exposes immediate `PAUSE`, `STOP` and `TAKEOVER`.
+
+Trusted Rust must know whether a qualified channel is alive/visible; renderer DOM state alone is not sufficient. If every qualified visible-control channel is lost, new autonomous actuation fails closed until a qualified channel is restored and ordinary authority is freshly revalidated.
+
+A renderer crash/reload must never leave invisible autonomous actuation running merely because stale UI state claimed the control indicator was active.
+
 ## Side-effect invariant
 
 For every side-effect-capable path, including semantic action, raw fallback, capture and clipboard, require:
 
-`observation/source selection → exact target/source identity → ToolRequest + canonical request digest → immutable intent → capability/policy/approval → Effect PREPARED + effect binding digest → Kernel/Effect Gate → immediate request/effect/intent/identity/permission/control-lease revalidation → bounded adapter dispatch → durable terminal evidence → reconciliation when terminal truth is uncertain`
+`observation/source selection → exact target/source identity → ToolRequest + canonical request digest → immutable intent → capability/policy/approval → Effect PREPARED + effect binding digest → Kernel/Effect Gate → immediate request/effect/intent/identity/permission/control-lease/visible-channel revalidation → bounded adapter dispatch → durable terminal evidence → reconciliation when terminal truth is uncertain`
 
 A timeout, adapter crash, daemon restart, permission loss, human takeover or other uncertainty after the effect boundary becomes `UNKNOWN_OUTCOME`. Conflicting retry/reuse is blocked until reconciliation establishes terminal truth.
 
@@ -38,7 +46,7 @@ A timeout, adapter crash, daemon restart, permission loss, human takeover or oth
 
 A bounded `PixelTargetHint` may be derived from an explicitly selected authorized capture only as untrusted candidate geometry. It must retain capture/source provenance and expiry. It cannot mint semantic identity or action authority.
 
-Using a pixel hint requires a separate raw-input ToolRequest/effect/capability/policy/approval plus fresh work-surface/focus/session/control-lease revalidation. OCR/text extraction from raw screenshot pixels remains deferred to Spec 007.
+Using a pixel hint requires a separate raw-input ToolRequest/effect/capability/policy/approval plus fresh work-surface/focus/session/control-lease/visible-channel revalidation. OCR/text extraction from raw screenshot pixels remains deferred to Spec 007.
 
 ## Human interrupt invariant
 
@@ -56,7 +64,8 @@ Implementation qualification must measure takeover latency and test stale refere
 
 - use titles/coordinates/screenshots as sole identity;
 - expose native handles or authentication material to frontend;
-- dispatch with missing, mismatched, stale or substituted request/effect/authority/control-lease bindings;
+- dispatch with missing, mismatched, stale or substituted request/effect/authority/control-lease/visible-channel bindings;
+- continue autonomous actuation when no qualified visible-control channel is active;
 - silently escalate semantic failure to raw input;
 - let a pixel hint authorize an action;
 - capture microphone/camera;
@@ -74,7 +83,8 @@ Implementation qualification must measure takeover latency and test stale refere
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`
 - `cargo test --workspace --all-targets --all-features`
 - authenticated Tauri-host/`golamd` local-client tests proving the renderer holds no auth material
-- fake-backend adversarial tests that reject missing/mismatched/stale request/effect/authority/control-lease bindings
+- visible-control-channel liveness/loss/recovery tests proving invisible autonomous actuation is suspended fail closed
+- fake-backend adversarial tests that reject missing/mismatched/stale request/effect/authority/control-lease/visible-channel bindings
 - pixel-hint tests proving capture/pixel evidence cannot authorize raw input or survive stale source/work-surface generations
 - capture/clipboard permission-loss and uncertain-completion tests
 - human pause/stop/takeover latency, stale-generation, wrong-window and restart/reconnect tests
