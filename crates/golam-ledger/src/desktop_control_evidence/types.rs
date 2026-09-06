@@ -78,7 +78,10 @@ impl DesktopEvidenceStatus {
     }
 
     pub const fn unresolved(self) -> bool {
-        matches!(self, Self::UnknownOutcome | Self::Reconciling)
+        matches!(
+            self,
+            Self::Prepared | Self::UnknownOutcome | Self::Reconciling
+        )
     }
 }
 
