@@ -426,10 +426,9 @@ mod tests {
         let mut state = ProtectedDesktopControlState::new(lease(), vec![channel()]).unwrap();
         assert!(matches!(
             state
-                .apply_human_interrupt(interrupt(
-                    HumanInterruptOperation::ReleaseHumanExclusive,
-                    1,
-                ))
+                .apply_human_interrupt(
+                    interrupt(HumanInterruptOperation::ReleaseHumanExclusive, 1,)
+                )
                 .unwrap_err(),
             DesktopAuthorityError::InvalidInterruptTransition
         ));
@@ -444,10 +443,9 @@ mod tests {
         state.upsert_visible_channel(hidden).unwrap();
         assert!(matches!(
             state
-                .apply_human_interrupt(interrupt(
-                    HumanInterruptOperation::ReleaseHumanExclusive,
-                    3,
-                ))
+                .apply_human_interrupt(
+                    interrupt(HumanInterruptOperation::ReleaseHumanExclusive, 3,)
+                )
                 .unwrap_err(),
             DesktopAuthorityError::NoQualifiedVisibleChannel
         ));
