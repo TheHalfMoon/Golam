@@ -1,0 +1,57 @@
+name: spec005-h-mcp-adversarial-relay
+
+on:
+  push:
+    branches:
+      - impl/005-local-tools-context-memory
+    paths:
+      - .github/workflows/spec005-h-mcp-adversarial-relay.yml
+
+permissions:
+  contents: write
+
+jobs:
+  qualify-and-commit:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+      - name: Wire and qualify MCP adversarial boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('crates/golamd/src/lib.rs')
+          text = path.read_text()
+          anchor = 'pub mod mcp_remote_gate;\n'
+          replacement = 'pub mod mcp_remote_gate;\n#[cfg(test)]\nmod mcp_phase_h_adversarial_tests;\n'
+          if text.count(anchor) != 1:
+              raise SystemExit('expected exact mcp_remote_gate module anchor')
+          if 'mod mcp_phase_h_adversarial_tests;' in text:
+              raise SystemExit('MCP adversarial test module already wired')
+          path.write_text(text.replace(anchor, replacement, 1))
+          PY
+          cargo +1.98.0 fmt --all
+          cargo +1.98.0 fmt --all -- --check
+          cargo +1.98.0 clippy --locked -p golam-core -p golamd --all-targets -- -D warnings
+          cargo +1.98.0 test --locked -p golamd mcp_phase_h_adversarial_tests::
+          cargo +1.98.0 test --locked -p golamd mcp_protocol::
+          cargo +1.98.0 test --locked -p golamd mcp_local_process_v2::
+          cargo +1.98.0 test --locked -p golamd mcp_remote_gate::
+          cargo +1.98.0 test --locked -p golamd --lib
+      - name: Commit exact qualified T005-092 unit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin impl/005-local-tools-context-memory
+          test "$(git rev-parse origin/impl/005-local-tools-context-memory)" = "$GITHUB_SHA"
+          git rm .github/workflows/spec005-h-mcp-adversarial-relay.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/golamd/src/lib.rs crates/golamd/src/mcp_phase_h_adversarial_tests.rs
+          git commit -m 'test(005): qualify MCP authority boundaries'
+          git push origin HEAD:impl/005-local-tools-context-memory
