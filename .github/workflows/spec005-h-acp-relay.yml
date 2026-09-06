@@ -25,66 +25,61 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-
           lifecycle = Path('crates/golam-ipc/src/lifecycle.rs')
           text = lifecycle.read_text()
           enum_anchor = '#[derive(Clone, Copy, Debug, Eq, PartialEq)]\npub enum ShutdownReason {'
-          token = '''#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct AuthenticatedLocalClient {
-    client_id: ClientId,
-    connection_id: ConnectionId,
-    server_epoch: u64,
-    limits: ResourceLimits,
-}
-
-impl AuthenticatedLocalClient {
-    pub const fn client_id(self) -> ClientId {
-        self.client_id
-    }
-
-    pub const fn connection_id(self) -> ConnectionId {
-        self.connection_id
-    }
-
-    pub const fn server_epoch(self) -> u64 {
-        self.server_epoch
-    }
-
-    pub const fn limits(self) -> ResourceLimits {
-        self.limits
-    }
-}
-
-'''
+          token = (
+              '#[derive(Clone, Copy, Debug, Eq, PartialEq)]\n'
+              'pub struct AuthenticatedLocalClient {\n'
+              '    client_id: ClientId,\n'
+              '    connection_id: ConnectionId,\n'
+              '    server_epoch: u64,\n'
+              '    limits: ResourceLimits,\n'
+              '}\n\n'
+              'impl AuthenticatedLocalClient {\n'
+              '    pub const fn client_id(self) -> ClientId {\n'
+              '        self.client_id\n'
+              '    }\n\n'
+              '    pub const fn connection_id(self) -> ConnectionId {\n'
+              '        self.connection_id\n'
+              '    }\n\n'
+              '    pub const fn server_epoch(self) -> u64 {\n'
+              '        self.server_epoch\n'
+              '    }\n\n'
+              '    pub const fn limits(self) -> ResourceLimits {\n'
+              '        self.limits\n'
+              '    }\n'
+              '}\n\n'
+          )
           if text.count(enum_anchor) != 1:
               raise SystemExit('expected exact ShutdownReason anchor')
           if 'pub struct AuthenticatedLocalClient' in text:
               raise SystemExit('authenticated local client token already exists')
           text = text.replace(enum_anchor, token + enum_anchor, 1)
-
-          method_anchor = '''    pub const fn authenticated_client(&self) -> Option<ClientId> {
-        self.authenticated_client
-    }
-'''
-          method = method_anchor + '''
-    pub fn authenticated_local_client(&self) -> Option<AuthenticatedLocalClient> {
-        if self.phase != LifecyclePhase::Ready {
-            return None;
-        }
-        let client_id = self.authenticated_client?;
-        Some(AuthenticatedLocalClient {
-            client_id,
-            connection_id: self.connection_id,
-            server_epoch: self.server_epoch,
-            limits: self.limits,
-        })
-    }
-'''
+          method_anchor = (
+              '    pub const fn authenticated_client(&self) -> Option<ClientId> {\n'
+              '        self.authenticated_client\n'
+              '    }\n'
+          )
+          method = method_anchor + (
+              '\n'
+              '    pub fn authenticated_local_client(&self) -> Option<AuthenticatedLocalClient> {\n'
+              '        if self.phase != LifecyclePhase::Ready {\n'
+              '            return None;\n'
+              '        }\n'
+              '        let client_id = self.authenticated_client?;\n'
+              '        Some(AuthenticatedLocalClient {\n'
+              '            client_id,\n'
+              '            connection_id: self.connection_id,\n'
+              '            server_epoch: self.server_epoch,\n'
+              '            limits: self.limits,\n'
+              '        })\n'
+              '    }\n'
+          )
           if text.count(method_anchor) != 1:
               raise SystemExit('expected exact authenticated_client anchor')
           text = text.replace(method_anchor, method, 1)
           lifecycle.write_text(text)
-
           lib = Path('crates/golamd/src/lib.rs')
           lib_text = lib.read_text()
           lib_anchor = 'pub mod local_fs;\n'
