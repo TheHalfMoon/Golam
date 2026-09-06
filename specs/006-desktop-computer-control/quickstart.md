@@ -12,18 +12,22 @@
 
 ## Implementation invariant
 
-For any action-capable path, require:
+For every side-effect-capable path, including semantic action, raw fallback, capture and clipboard, require:
 
-`observation → exact target identity → explicit intent → capability/policy/approval → Effect PREPARED → immediate revalidation → adapter dispatch → post-action evidence → terminal reconciliation`
+`observation/source selection → exact target/source identity → ToolRequest + canonical request digest → immutable intent → capability/policy/approval → Effect PREPARED + effect binding digest → Kernel/Effect Gate → immediate request/effect/intent/identity/permission revalidation → bounded adapter dispatch → durable terminal evidence → reconciliation when terminal truth is uncertain`
+
+A timeout, adapter crash, daemon restart, permission loss or other uncertainty after the effect boundary becomes `UNKNOWN_OUTCOME`. Conflicting retry/reuse is blocked until reconciliation establishes terminal truth.
 
 Do not:
 - use titles/coordinates/screenshots as sole identity;
 - expose native handles to frontend;
+- dispatch with missing, mismatched, stale or substituted request/effect/authority bindings;
 - silently escalate semantic failure to raw input;
 - capture microphone/camera;
 - run OCR on screenshots;
 - silently inspect clipboard;
 - persist raw capture/clipboard content by default;
+- retry an uncertain side effect before reconciliation;
 - add remote/cloud fallback.
 
 ## Suggested implementation verification
@@ -31,6 +35,9 @@ Do not:
 - `cargo fmt --all -- --check`
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`
 - `cargo test --workspace --all-targets --all-features`
+- fake-backend adversarial tests that reject missing/mismatched/stale request/effect/authority bindings
+- capture/clipboard permission-loss and uncertain-completion tests
+- restart tests proving `UNKNOWN_OUTCOME` survives and blocks conflicting retry until reconciliation
 - fake backend adversarial suites on all CI platforms
 - native platform tests only where the runner actually supports the relevant OS facility; unsupported/permission-limited paths must be explicit and deterministic
 
