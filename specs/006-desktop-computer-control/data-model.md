@@ -1,6 +1,6 @@
 # Data Model: Spec 006 Desktop Computer Control
 
-All authority-relevant structures use deterministic versioned validation and canonical binding digests. Native handles are runtime-private and never serialized into frontend DTOs.
+All authority-relevant structures use deterministic versioned validation and canonical binding digests. Native handles and local-client authentication material are runtime-private and never serialized into frontend DTOs.
 
 ## DesktopCapabilitySet
 
@@ -12,7 +12,9 @@ Fields:
 - supported semantic action kinds
 - supported capture source kinds
 - raw-fallback support flag
+- bounded pixel-hint support flag
 - clipboard support flags
+- human interrupt/takeover support state
 - permission/session evidence reference
 
 Rules: capability discovery describes support only; it grants no authority.
@@ -54,6 +56,20 @@ Fields:
 
 Rules: observation is read-only evidence and does not imply action authority.
 
+## DesktopControlLeaseState
+
+Fields:
+- protected lease id
+- lease generation
+- controlling principal/ref
+- mode (`AGENT_ALLOWED`, `PAUSED`, `HUMAN_EXCLUSIVE`, `REVOKED`)
+- issued/updated/expiry timestamps
+- parent capability/policy refs
+- interrupt/takeover cause and attributable evidence ref
+- canonical state digest
+
+Rules: only the privileged control/authority path may mutate this state. Human pause/stop/takeover advances, suspends or revokes the conflicting agent input generation. Stale model, renderer, worker or adapter state cannot restore a prior generation. Every prepared input action binds the exact generation that was current when prepared and must revalidate it immediately before dispatch.
+
 ## PreparedDesktopAction
 
 Fields:
@@ -61,14 +77,16 @@ Fields:
 - effect id + immutable effect binding digest
 - operation kind (`SEMANTIC_ACTION`, `RAW_INPUT_FALLBACK`, `FOCUS`, `CLIPBOARD_WRITE`, etc.)
 - exact target identity digest
+- optional bounded pixel-hint digest for raw fallback only
 - action payload digest
 - capability/policy/approval refs
+- control lease id + generation for side-effecting input/focus operations
 - prepared permission/session evidence ref
 - prepared observation digest
 - expiration/deadline
 - canonical intent digest
 
-Rules: request and effect bindings are distinct, immutable after `Effect PREPARED`, and revalidated immediately before dispatch. Missing, mismatched, stale or substituted bindings fail closed.
+Rules: request and effect bindings are distinct, immutable after `Effect PREPARED`, and revalidated immediately before dispatch. Missing, mismatched, stale or substituted bindings, including a superseded/revoked control-lease generation, fail closed.
 
 ## CaptureIntent
 
@@ -100,6 +118,21 @@ Fields:
 
 Rules: raw bytes are not included in ordinary durable record; payload digest is not action authority. If capture may have crossed the effect boundary but terminal truth is uncertain, durable status is `UNKNOWN_OUTCOME` and conflicting retry/reuse is blocked until reconciliation.
 
+## PixelTargetHint
+
+Fields:
+- schema version
+- originating capture/source identity digest
+- capture observation/payload digest
+- bounded region or coordinate in the captured source coordinate space
+- coordinate-space/bounds metadata digest
+- producer/provenance reference
+- optional confidence/score as non-authoritative metadata
+- creation timestamp + expiration
+- canonical hint digest
+
+Rules: a pixel hint is untrusted evidence only. It cannot contain a native handle, capability, policy decision, approval or semantic identity; it cannot authorize input; it cannot be used after its capture/source/work-surface generation is stale; it does not permit OCR/text extraction in Spec 006. A raw fallback using a hint must independently bind a fresh exact work-surface/focus/session identity plus a dedicated raw-input ToolRequest/effect/capability/policy/approval and current control-lease generation.
+
 ## ClipboardIntent
 
 Fields:
@@ -119,19 +152,37 @@ Rules: immutable after `Effect PREPARED`; no polling/background inspection; read
 Fields:
 - request digest + effect id/effect binding digest + intent digest
 - attempted target digest
-- status (`DENIED`, `COMMITTED`, `FAILED_BEFORE_EFFECT`, `UNKNOWN_OUTCOME`, `STALE_TARGET`, `PERMISSION_REVOKED`, `NOT_SUPPORTED`)
+- control lease id/generation where applicable
+- pixel-hint digest where applicable
+- status (`DENIED`, `COMMITTED`, `FAILED_BEFORE_EFFECT`, `UNKNOWN_OUTCOME`, `STALE_TARGET`, `PERMISSION_REVOKED`, `INTERRUPTED`, `NOT_SUPPORTED`)
 - post-action observation/evidence ref when available
 - reconciliation evidence ref when applicable
 - platform error class sanitized
 - timing/limit metadata
 
-Rules: post-boundary uncertainty becomes `UNKNOWN_OUTCOME`; conflicting follow-up fails closed until reconciliation.
+Rules: post-boundary uncertainty becomes `UNKNOWN_OUTCOME`; conflicting follow-up fails closed until reconciliation. Human takeover cannot rewrite an already-crossed outcome; it blocks new conflicting dispatch while any uncertain outcome is reconciled.
+
+## HumanInterruptEvidence
+
+Fields:
+- interrupt id
+- authenticated/attributed local source ref
+- operation (`PAUSE`, `STOP`, `TAKEOVER`, `RELEASE_HUMAN_EXCLUSIVE`)
+- prior lease id/generation + resulting lease id/generation
+- accepted timestamp
+- input-authority revoked/suspended timestamp
+- measured takeover latency
+- affected queued/prepared operation refs
+- cancellation/reconciliation refs
+- canonical evidence digest
+
+Rules: renderer-only state is insufficient to create this evidence. A stale interrupt release cannot re-enable a superseded agent generation.
 
 ## SanitizedDesktopDto
 
 Frontend-only projection:
-- opaque observation/action refs
+- opaque observation/action/control-state refs
 - human-readable labels/state
-- sanitized capability/permission status
+- sanitized capability, permission, stale/unsupported, pause/takeover and terminal-status states
 - bounded geometry and action menu
-- no raw handles, pointers, access tokens, portal file descriptors or privileged session objects
+- no raw handles, pointers, access tokens, IPC authentication material, capability tokens, portal file descriptors or privileged session objects
