@@ -17,6 +17,11 @@ use crate::tool_request::BindingDigest;
 const FAKE_CAPTURE_DOMAIN: &[u8] = b"golam:desktop-fake-capture:v1";
 const FAKE_CLIPBOARD_DOMAIN: &[u8] = b"golam:desktop-fake-clipboard:v1";
 
+type ObservationResult = Result<DesktopObservation, DesktopBackendError>;
+type ActionReceiptResult = Result<DesktopActionReceipt, DesktopBackendError>;
+type CaptureReceiptResult = Result<CaptureBackendReceipt, DesktopBackendError>;
+type ClipboardReceiptResult = Result<ClipboardBackendReceipt, DesktopBackendError>;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct DesktopActionDispatchContext<'a> {
     pub action: &'a PreparedDesktopAction,
@@ -76,7 +81,6 @@ impl<'a> DesktopActionDispatchContext<'a> {
         if self.unresolved_conflicting_unknown_outcome {
             return Err(DesktopBackendError::UnknownOutcomeBlocksDispatch);
         }
-
         match self.action.operation_kind {
             DesktopActionKind::RawInputFallback => {
                 let evidence = self
@@ -92,7 +96,6 @@ impl<'a> DesktopActionDispatchContext<'a> {
                 }
             }
         }
-
         Ok(ValidatedDesktopAction {
             action: self.action,
         })
@@ -265,32 +268,14 @@ pub struct ClipboardBackendReceipt {
     pub payload_bytes: u32,
 }
 
-/// Platform adapters are intentionally untrusted executors. They receive only
-/// dispatch values that have already passed exact core binding validation.
-/// Route selection, fallback eligibility, authority, control-lease state and
-/// visible-control-channel safety remain above this interface.
+/// Platform adapters are untrusted executors. They receive only values that
+/// already passed exact binding and safety-state validation in trusted code.
 pub trait DesktopBackend {
     fn capabilities(&mut self) -> Result<DesktopCapabilitySet, DesktopBackendError>;
-
-    fn observe(
-        &mut self,
-        limits: DesktopLimits,
-    ) -> Result<DesktopObservation, DesktopBackendError>;
-
-    fn dispatch_action(
-        &mut self,
-        action: ValidatedDesktopAction<'_>,
-    ) -> Result<DesktopActionReceipt, DesktopBackendError>;
-
-    fn capture(
-        &mut self,
-        intent: ValidatedCaptureIntent<'_>,
-    ) -> Result<CaptureBackendReceipt, DesktopBackendError>;
-
-    fn clipboard(
-        &mut self,
-        intent: ValidatedClipboardIntent<'_>,
-    ) -> Result<ClipboardBackendReceipt, DesktopBackendError>;
+    fn observe(&mut self, limits: DesktopLimits) -> ObservationResult;
+    fn dispatch_action(&mut self, action: ValidatedDesktopAction<'_>) -> ActionReceiptResult;
+    fn capture(&mut self, intent: ValidatedCaptureIntent<'_>) -> CaptureReceiptResult;
+    fn clipboard(&mut self, intent: ValidatedClipboardIntent<'_>) -> ClipboardReceiptResult;
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -346,17 +331,17 @@ impl FakeDesktopBackend {
         self.dispatch_count
     }
 
-    fn terminal_status(&mut self) -> DesktopBackendTerminalStatus {
-        self.next_terminal_status
-            .take()
-            .unwrap_or(DesktopBackendTerminalStatus::Committed)
-    }
-
     fn require_permission(&self) -> Result<(), DesktopBackendError> {
         if !self.permission_granted {
             return Err(DesktopBackendError::PermissionOrSessionDrift);
         }
         Ok(())
+    }
+
+    fn terminal_status(&mut self) -> DesktopBackendTerminalStatus {
+        self.next_terminal_status
+            .take()
+            .unwrap_or(DesktopBackendTerminalStatus::Committed)
     }
 }
 
@@ -366,10 +351,7 @@ impl DesktopBackend for FakeDesktopBackend {
         Ok(self.capabilities)
     }
 
-    fn observe(
-        &mut self,
-        limits: DesktopLimits,
-    ) -> Result<DesktopObservation, DesktopBackendError> {
+    fn observe(&mut self, limits: DesktopLimits) -> ObservationResult {
         self.require_permission()?;
         limits.validate()?;
         self.observation.validate()?;
@@ -379,55 +361,40 @@ impl DesktopBackend for FakeDesktopBackend {
         Ok(self.observation.clone())
     }
 
-    fn dispatch_action(
-        &mut self,
-        action: ValidatedDesktopAction<'_>,
-    ) -> Result<DesktopActionReceipt, DesktopBackendError> {
+    fn dispatch_action(&mut self, action: ValidatedDesktopAction<'_>) -> ActionReceiptResult {
         self.require_permission()?;
         action.action().validate()?;
         self.dispatch_count = self.dispatch_count.saturating_add(1);
         let status = self.terminal_status();
-        let post_observation_digest = if status == DesktopBackendTerminalStatus::Committed {
-            Some(self.observation.binding_digest()?)
-        } else {
-            None
-        };
         Ok(DesktopActionReceipt {
             status,
             observed_target_digest: action.action().exact_target_identity_digest,
-            post_observation_digest,
+            post_observation_digest: (status == DesktopBackendTerminalStatus::Committed)
+                .then_some(self.observation.binding_digest()?),
             sanitized_error_class: None,
         })
     }
 
-    fn capture(
-        &mut self,
-        intent: ValidatedCaptureIntent<'_>,
-    ) -> Result<CaptureBackendReceipt, DesktopBackendError> {
+    fn capture(&mut self, intent: ValidatedCaptureIntent<'_>) -> CaptureReceiptResult {
         self.require_permission()?;
         intent.intent().validate()?;
         self.dispatch_count = self.dispatch_count.saturating_add(1);
-        let status = self.terminal_status();
         let canonical = intent.intent().canonical_bytes()?;
         let payload_digest = BindingDigest::new(sha256(
             &[FAKE_CAPTURE_DOMAIN, canonical.as_slice()].concat(),
         ));
         Ok(CaptureBackendReceipt {
-            status,
+            status: self.terminal_status(),
             source_identity_digest: intent.intent().selected_source_identity_digest,
             payload_digest,
             payload_bytes: intent.intent().limits.max_frame_bytes.min(4_096),
         })
     }
 
-    fn clipboard(
-        &mut self,
-        intent: ValidatedClipboardIntent<'_>,
-    ) -> Result<ClipboardBackendReceipt, DesktopBackendError> {
+    fn clipboard(&mut self, intent: ValidatedClipboardIntent<'_>) -> ClipboardReceiptResult {
         self.require_permission()?;
         intent.intent().validate()?;
         self.dispatch_count = self.dispatch_count.saturating_add(1);
-        let status = self.terminal_status();
         let content_digest = match intent.intent().operation {
             ClipboardOperation::Read => {
                 let canonical = intent.intent().canonical_bytes()?;
@@ -438,7 +405,7 @@ impl DesktopBackend for FakeDesktopBackend {
             ClipboardOperation::Write => intent.intent().content_digest,
         };
         Ok(ClipboardBackendReceipt {
-            status,
+            status: self.terminal_status(),
             content_digest,
             payload_bytes: intent.intent().max_bytes.min(256),
         })
@@ -472,54 +439,24 @@ pub enum DesktopBackendError {
 impl fmt::Display for DesktopBackendError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidRequestBinding => {
-                f.write_str("desktop request binding is stale or substituted")
-            }
-            Self::InvalidEffectBinding => {
-                f.write_str("desktop effect binding is stale or substituted")
-            }
-            Self::MissingGateAuthorization => {
-                f.write_str("desktop Kernel/Effect Gate authorization is missing")
-            }
-            Self::GateAuthorizationMismatch => {
-                f.write_str("desktop Kernel/Effect Gate authorization is stale or substituted")
-            }
-            Self::AuthorityBindingMismatch => {
-                f.write_str("desktop capability/policy/approval bindings are stale or substituted")
-            }
-            Self::PermissionOrSessionDrift => {
-                f.write_str("desktop permission or session evidence changed after prepare")
-            }
-            Self::ObservationDrift => f.write_str("desktop observation changed after prepare"),
-            Self::StaleOrSubstitutedTarget => {
-                f.write_str("desktop target identity is stale or substituted")
-            }
-            Self::StaleOrSupersededLease => {
-                f.write_str("desktop control lease is stale, superseded, paused, or revoked")
-            }
-            Self::AutonomousActuationSuspended => {
-                f.write_str("no qualified visible control channel permits autonomous actuation")
-            }
-            Self::MissingFallbackEligibility => {
-                f.write_str("raw fallback requires canonical fallback eligibility")
-            }
-            Self::UnexpectedFallbackEvidence => {
-                f.write_str("semantic or focus dispatch cannot carry fallback evidence")
-            }
-            Self::StalePixelHint => f.write_str("pixel hint is stale or invalid"),
-            Self::PixelHintBindingMismatch => {
-                f.write_str("pixel hint binding is stale or substituted")
-            }
-            Self::UnknownOutcomeBlocksDispatch => {
-                f.write_str("unreconciled UNKNOWN_OUTCOME blocks conflicting desktop dispatch")
-            }
-            Self::ExpiredIntent => f.write_str("desktop prepared intent expired before dispatch"),
-            Self::ObservationLimitExceeded => {
-                f.write_str("desktop observation exceeds requested bounds")
-            }
-            Self::ClipboardDenied => {
-                f.write_str("clipboard operation is not supported by current capabilities")
-            }
+            Self::InvalidRequestBinding => f.write_str("desktop request binding changed"),
+            Self::InvalidEffectBinding => f.write_str("desktop effect binding changed"),
+            Self::MissingGateAuthorization => f.write_str("desktop Gate authorization is missing"),
+            Self::GateAuthorizationMismatch => f.write_str("desktop Gate authorization changed"),
+            Self::AuthorityBindingMismatch => f.write_str("desktop authority binding changed"),
+            Self::PermissionOrSessionDrift => f.write_str("desktop permission/session changed"),
+            Self::ObservationDrift => f.write_str("desktop observation changed"),
+            Self::StaleOrSubstitutedTarget => f.write_str("desktop target changed"),
+            Self::StaleOrSupersededLease => f.write_str("desktop control lease is stale"),
+            Self::AutonomousActuationSuspended => f.write_str("visible control channel unavailable"),
+            Self::MissingFallbackEligibility => f.write_str("fallback eligibility is missing"),
+            Self::UnexpectedFallbackEvidence => f.write_str("unexpected fallback evidence"),
+            Self::StalePixelHint => f.write_str("pixel hint is stale"),
+            Self::PixelHintBindingMismatch => f.write_str("pixel hint binding changed"),
+            Self::UnknownOutcomeBlocksDispatch => f.write_str("UNKNOWN_OUTCOME blocks dispatch"),
+            Self::ExpiredIntent => f.write_str("desktop intent expired"),
+            Self::ObservationLimitExceeded => f.write_str("desktop observation exceeds limits"),
+            Self::ClipboardDenied => f.write_str("clipboard operation denied"),
             Self::DesktopControl(error) => write!(f, "desktop control error: {error}"),
             Self::DesktopIntent(error) => write!(f, "desktop intent error: {error}"),
         }
@@ -541,23 +478,23 @@ impl From<DesktopIntentError> for DesktopBackendError {
 }
 
 fn validate_request_effect_gate(
-    prepared_request_digest: BindingDigest,
-    prepared_effect_digest: BindingDigest,
-    prepared_gate_digest: BindingDigest,
-    current_request_digest: BindingDigest,
-    current_effect_digest: BindingDigest,
-    current_gate_digest: BindingDigest,
+    prepared_request: BindingDigest,
+    prepared_effect: BindingDigest,
+    prepared_gate: BindingDigest,
+    current_request: BindingDigest,
+    current_effect: BindingDigest,
+    current_gate: BindingDigest,
 ) -> Result<(), DesktopBackendError> {
-    if prepared_request_digest != current_request_digest {
+    if prepared_request != current_request {
         return Err(DesktopBackendError::InvalidRequestBinding);
     }
-    if prepared_effect_digest != current_effect_digest {
+    if prepared_effect != current_effect {
         return Err(DesktopBackendError::InvalidEffectBinding);
     }
-    if current_gate_digest.bytes() == [0; 32] {
+    if current_gate.bytes() == [0; 32] {
         return Err(DesktopBackendError::MissingGateAuthorization);
     }
-    if prepared_gate_digest != current_gate_digest {
+    if prepared_gate != current_gate {
         return Err(DesktopBackendError::GateAuthorizationMismatch);
     }
     Ok(())
@@ -565,26 +502,23 @@ fn validate_request_effect_gate(
 
 fn validate_interactive_authority(
     action: &PreparedDesktopAction,
-    current_lease: &DesktopControlLeaseState,
-    current_visible_channel: &VisibleControlChannelState,
+    lease: &DesktopControlLeaseState,
+    channel: &VisibleControlChannelState,
     now_unix_ms: u64,
 ) -> Result<(), DesktopBackendError> {
-    current_lease.validate()?;
-    if current_lease.lease_id != action.interactive_authority.lease_id
-        || current_lease.generation != action.interactive_authority.lease_generation
-        || current_lease.mode != DesktopControlMode::AgentAllowed
-        || !current_lease.allows_agent_input(now_unix_ms)
+    lease.validate()?;
+    if lease.lease_id != action.interactive_authority.lease_id
+        || lease.generation != action.interactive_authority.lease_generation
+        || lease.mode != DesktopControlMode::AgentAllowed
+        || !lease.allows_agent_input(now_unix_ms)
     {
         return Err(DesktopBackendError::StaleOrSupersededLease);
     }
-
-    current_visible_channel.validate()?;
-    if current_visible_channel.channel_id != action.interactive_authority.visible_channel_id
-        || current_visible_channel.generation
-            != action.interactive_authority.visible_channel_generation
-        || current_visible_channel.binding_digest()?
-            != action.interactive_authority.visible_channel_state_digest
-        || !current_visible_channel.qualifies_for_autonomous_actuation(now_unix_ms)
+    channel.validate()?;
+    if channel.channel_id != action.interactive_authority.visible_channel_id
+        || channel.generation != action.interactive_authority.visible_channel_generation
+        || channel.binding_digest()? != action.interactive_authority.visible_channel_state_digest
+        || !channel.qualifies_for_autonomous_actuation(now_unix_ms)
     {
         return Err(DesktopBackendError::AutonomousActuationSuspended);
     }
@@ -593,10 +527,10 @@ fn validate_interactive_authority(
 
 fn validate_pixel_hint_binding(
     action: &PreparedDesktopAction,
-    pixel_hint: Option<&PixelTargetHint>,
+    hint: Option<&PixelTargetHint>,
     now_unix_ms: u64,
 ) -> Result<(), DesktopBackendError> {
-    match (action.pixel_hint_digest, pixel_hint) {
+    match (action.pixel_hint_digest, hint) {
         (None, None) => Ok(()),
         (Some(expected), Some(actual)) => {
             actual.validate()?;
@@ -742,10 +676,7 @@ mod tests {
         }
     }
 
-    fn action(
-        kind: DesktopActionKind,
-        fallback_ref: Option<BindingDigest>,
-    ) -> PreparedDesktopAction {
+    fn action(kind: DesktopActionKind, fallback_ref: Option<BindingDigest>) -> PreparedDesktopAction {
         PreparedDesktopAction {
             schema_version: DESKTOP_CONTROL_SCHEMA_VERSION,
             request: RequestBinding {
@@ -776,13 +707,13 @@ mod tests {
         }
     }
 
-    fn action_context<'a>(
+    fn context<'a>(
         action: &'a PreparedDesktopAction,
         caps: &'a DesktopCapabilitySet,
-        observation: &'a DesktopObservation,
-        lease: &'a DesktopControlLeaseState,
-        channel: &'a VisibleControlChannelState,
-        fallback: Option<&'a FallbackEligibilityEvidence>,
+        observed: &'a DesktopObservation,
+        current_lease: &'a DesktopControlLeaseState,
+        current_channel: &'a VisibleControlChannelState,
+        fallback_evidence: Option<&'a FallbackEligibilityEvidence>,
     ) -> DesktopActionDispatchContext<'a> {
         DesktopActionDispatchContext {
             action,
@@ -792,47 +723,48 @@ mod tests {
             current_gate_authorization_digest: digest(3),
             current_authority: authority(),
             current_capabilities: caps,
-            current_observation: observation,
+            current_observation: observed,
             current_target_identity_digest: digest(30),
-            current_lease: lease,
-            current_visible_channel: channel,
-            fallback_evidence: fallback,
+            current_lease,
+            current_visible_channel: current_channel,
+            fallback_evidence,
             pixel_hint: None,
             unresolved_conflicting_unknown_outcome: false,
         }
     }
 
     #[test]
-    fn semantic_action_dispatch_requires_exact_gate_and_interactive_state() {
+    fn semantic_and_focus_require_exact_gate_and_safety_state() {
+        let caps = capabilities();
+        let observed = observation();
+        let current_lease = lease();
+        let current_channel = channel();
+        for kind in [DesktopActionKind::SemanticAction, DesktopActionKind::Focus] {
+            let prepared = action(kind, None);
+            assert!(
+                context(
+                    &prepared,
+                    &caps,
+                    &observed,
+                    &current_lease,
+                    &current_channel,
+                    None,
+                )
+                .authorize()
+                .is_ok()
+            );
+        }
+    }
+
+    #[test]
+    fn stale_bindings_permission_target_lease_and_channel_fail_closed() {
         let caps = capabilities();
         let observed = observation();
         let current_lease = lease();
         let current_channel = channel();
         let prepared = action(DesktopActionKind::SemanticAction, None);
-        let validated = action_context(
-            &prepared,
-            &caps,
-            &observed,
-            &current_lease,
-            &current_channel,
-            None,
-        )
-        .authorize()
-        .unwrap();
-        let mut backend = FakeDesktopBackend::new(caps, observed).unwrap();
-        let receipt = backend.dispatch_action(validated).unwrap();
-        assert_eq!(receipt.status, DesktopBackendTerminalStatus::Committed);
-        assert_eq!(backend.dispatch_count(), 1);
-    }
 
-    #[test]
-    fn missing_or_substituted_gate_fails_before_backend_dispatch() {
-        let caps = capabilities();
-        let observed = observation();
-        let current_lease = lease();
-        let current_channel = channel();
-        let prepared = action(DesktopActionKind::Focus, None);
-        let mut context = action_context(
+        let mut request_drift = context(
             &prepared,
             &caps,
             &observed,
@@ -840,50 +772,34 @@ mod tests {
             &current_channel,
             None,
         );
-        context.current_gate_authorization_digest = BindingDigest::new([0; 32]);
+        request_drift.current_request_digest = digest(99);
         assert_eq!(
-            context.authorize().unwrap_err(),
+            request_drift.authorize().unwrap_err(),
+            DesktopBackendError::InvalidRequestBinding
+        );
+
+        let mut missing_gate = context(
+            &prepared,
+            &caps,
+            &observed,
+            &current_lease,
+            &current_channel,
+            None,
+        );
+        missing_gate.current_gate_authorization_digest = BindingDigest::new([0; 32]);
+        assert_eq!(
+            missing_gate.authorize().unwrap_err(),
             DesktopBackendError::MissingGateAuthorization
         );
-    }
 
-    #[test]
-    fn permission_observation_target_and_authority_drift_fail_closed() {
-        let mut caps = capabilities();
-        let observed = observation();
-        let current_lease = lease();
-        let current_channel = channel();
-        let prepared = action(DesktopActionKind::SemanticAction, None);
-        caps.permission_session_evidence = digest(99);
+        let mut stale_lease = current_lease;
+        stale_lease.generation += 1;
         assert_eq!(
-            action_context(
+            context(
                 &prepared,
                 &caps,
                 &observed,
-                &current_lease,
-                &current_channel,
-                None,
-            )
-            .authorize()
-            .unwrap_err(),
-            DesktopBackendError::PermissionOrSessionDrift
-        );
-    }
-
-    #[test]
-    fn stale_lease_and_visible_channel_loss_suspend_actuation() {
-        let caps = capabilities();
-        let observed = observation();
-        let mut current_lease = lease();
-        let mut current_channel = channel();
-        let prepared = action(DesktopActionKind::SemanticAction, None);
-        current_lease.generation = 4;
-        assert_eq!(
-            action_context(
-                &prepared,
-                &caps,
-                &observed,
-                &current_lease,
+                &stale_lease,
                 &current_channel,
                 None,
             )
@@ -891,15 +807,16 @@ mod tests {
             .unwrap_err(),
             DesktopBackendError::StaleOrSupersededLease
         );
-        current_lease = lease();
-        current_channel.live = false;
+
+        let mut invisible = current_channel;
+        invisible.visible = false;
         assert_eq!(
-            action_context(
+            context(
                 &prepared,
                 &caps,
                 &observed,
                 &current_lease,
-                &current_channel,
+                &invisible,
                 None,
             )
             .authorize()
@@ -909,7 +826,7 @@ mod tests {
     }
 
     #[test]
-    fn raw_fallback_requires_fresh_canonical_eligibility_and_no_unknown_outcome() {
+    fn raw_fallback_requires_eligibility_and_unknown_outcome_blocks() {
         let caps = capabilities();
         let observed = observation();
         let current_lease = lease();
@@ -920,7 +837,7 @@ mod tests {
             Some(evidence.binding_digest().unwrap()),
         );
         assert!(
-            action_context(
+            context(
                 &prepared,
                 &caps,
                 &observed,
@@ -931,7 +848,7 @@ mod tests {
             .authorize()
             .is_ok()
         );
-        let mut context = action_context(
+        let mut blocked = context(
             &prepared,
             &caps,
             &observed,
@@ -939,34 +856,35 @@ mod tests {
             &current_channel,
             Some(&evidence),
         );
-        context.unresolved_conflicting_unknown_outcome = true;
+        blocked.unresolved_conflicting_unknown_outcome = true;
         assert_eq!(
-            context.authorize().unwrap_err(),
+            blocked.authorize().unwrap_err(),
             DesktopBackendError::UnknownOutcomeBlocksDispatch
         );
     }
 
     #[test]
-    fn stronger_route_unknown_outcome_cannot_mint_weaker_eligibility() {
+    fn stronger_route_unknown_outcome_rejects_weaker_eligibility() {
         let mut evidence = fallback();
         evidence.route_evaluations[1].disposition = RouteDisposition::UnknownOutcome;
         assert!(evidence.validate().is_err());
     }
 
     #[test]
-    fn observation_bounds_are_enforced_by_fake_backend() {
+    fn fake_backend_enforces_observation_and_permission_bounds() {
         let caps = capabilities();
         let observed = observation();
         let mut backend = FakeDesktopBackend::new(caps, observed).unwrap();
-        let mut limits = DesktopLimits::default();
-        limits.max_work_surfaces = 1;
-        assert!(backend.observe(limits).is_ok());
-        limits.max_work_surfaces = 0;
-        assert!(backend.observe(limits).is_err());
+        assert!(backend.observe(DesktopLimits::default()).is_ok());
+        backend.set_permission_granted(false);
+        assert_eq!(
+            backend.observe(DesktopLimits::default()).unwrap_err(),
+            DesktopBackendError::PermissionOrSessionDrift
+        );
     }
 
     #[test]
-    fn capture_and_clipboard_require_exact_bindings_and_current_support() {
+    fn capture_and_clipboard_require_exact_current_authority() {
         let caps = capabilities();
         let capture = CaptureIntent {
             schema_version: DESKTOP_CONTROL_SCHEMA_VERSION,
@@ -993,25 +911,24 @@ mod tests {
             retention_policy: CaptureRetentionPolicy::EphemeralOnly,
             expires_at_unix_ms: 500,
         };
-        let validated_capture = CaptureDispatchContext {
-            intent: &capture,
-            now_unix_ms: 110,
-            current_request_digest: digest(10),
-            current_effect_digest: digest(11),
-            current_gate_authorization_digest: digest(12),
-            current_authority: authority(),
-            current_capabilities: &caps,
-            current_source_identity_digest: digest(30),
-            unresolved_conflicting_unknown_outcome: false,
-        }
-        .authorize()
-        .unwrap();
-        let mut backend = FakeDesktopBackend::new(caps, observation()).unwrap();
-        assert_eq!(
-            backend.capture(validated_capture).unwrap().status,
-            DesktopBackendTerminalStatus::Committed
+        assert!(
+            CaptureDispatchContext {
+                intent: &capture,
+                now_unix_ms: 110,
+                current_request_digest: digest(10),
+                current_effect_digest: digest(11),
+                current_gate_authorization_digest: digest(12),
+                current_authority: authority(),
+                current_capabilities: &caps,
+                current_source_identity_digest: digest(30),
+                unresolved_conflicting_unknown_outcome: false,
+            }
+            .authorize()
+            .is_ok()
         );
 
+        let mut denied_caps = caps;
+        denied_caps.clipboard_read_supported = false;
         let clipboard = ClipboardIntent {
             schema_version: DESKTOP_CONTROL_SCHEMA_VERSION,
             request: RequestBinding {
@@ -1030,21 +947,20 @@ mod tests {
             prepared_permission_session_evidence_ref: digest(20),
             expires_at_unix_ms: 500,
         };
-        let validated_clipboard = ClipboardDispatchContext {
-            intent: &clipboard,
-            now_unix_ms: 110,
-            current_request_digest: digest(21),
-            current_effect_digest: digest(22),
-            current_gate_authorization_digest: digest(23),
-            current_authority: authority(),
-            current_capabilities: &caps,
-            unresolved_conflicting_unknown_outcome: false,
-        }
-        .authorize()
-        .unwrap();
         assert_eq!(
-            backend.clipboard(validated_clipboard).unwrap().status,
-            DesktopBackendTerminalStatus::Committed
+            ClipboardDispatchContext {
+                intent: &clipboard,
+                now_unix_ms: 110,
+                current_request_digest: digest(21),
+                current_effect_digest: digest(22),
+                current_gate_authorization_digest: digest(23),
+                current_authority: authority(),
+                current_capabilities: &denied_caps,
+                unresolved_conflicting_unknown_outcome: false,
+            }
+            .authorize()
+            .unwrap_err(),
+            DesktopBackendError::ClipboardDenied
         );
     }
 }
