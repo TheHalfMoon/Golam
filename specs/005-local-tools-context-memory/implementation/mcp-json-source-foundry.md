@@ -43,13 +43,13 @@ The parser is never authority. Parsed field names, schemas, descriptions, annota
 
 The exact upstream manifest declares the selected `std` surface over the normal pure-Rust JSON dependencies (`itoa`, `memchr`, `serde_core`, `zmij`). `indexmap` is optional upstream and is not required by Golam's selected MCP parser feature set.
 
-Golam's current pre-T005-088 lockfile already resolves `serde_json 1.0.151` and records `indexmap 2.14.0`, `itoa`, `memchr`, `serde`, `serde_core` and `zmij` in the existing workspace graph. Therefore the implementation gate requires that adding the direct Golam dependency does not change `Cargo.lock`; any lockfile delta reopens this admission decision.
+Golam's current pre-T005-088 lockfile already resolves `serde_json 1.0.151` with checksum `c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14`. Adding a direct dependency may legitimately update only the dependency list of Golam's local workspace package record in `Cargo.lock`. It MUST NOT introduce, remove, upgrade or downgrade any external package, version, source or checksum. T005-089 qualification must compare the pre/post lockfile and fail if the external package set changes.
 
 The exact upstream `build.rs` reads Cargo target architecture/pointer-width environment supplied by Cargo and emits compile cfg values only. It contains no network access, subprocess launch, generated source download, credential handling or device/runtime initialization.
 
 ## Unsafe/native/process posture
 
-`serde_json` contains internal Rust `unsafe` implementation sites in its source tree. This admission does not claim a safe-only dependency. The crate is already present and compiled in Golam's existing dependency graph before T005-088, so adding the direct parser edge must not introduce a new crate/native/FFI/process dependency into the resolved build.
+`serde_json` contains internal Rust `unsafe` implementation sites in its source tree. This admission does not claim a safe-only dependency. The crate is already present and compiled in Golam's existing dependency graph before T005-088, so adding the direct parser edge must not introduce a new external crate/native/FFI/process dependency into the resolved build.
 
 Golam's MCP normalizer itself remains `#![forbid(unsafe_code)]`. No parser output may enter Kernel authority types without Golam-owned bounded validation and mapping.
 
@@ -104,7 +104,7 @@ Server-advertised capability, approval, network, filesystem, secret, sandbox or 
 T005-088 authorizes only the following next step:
 
 1. add the exact direct `serde_json 1.0.151` `std` dependency with `default-features = false`;
-2. require `Cargo.lock` to remain byte-identical;
+2. permit only the local-workspace dependency-edge lockfile delta required by Cargo and prove that the external package/version/source/checksum set remains unchanged;
 3. implement Golam-owned bounded MCP advertisement normalization and binding lifecycle validation;
 4. keep local/remote transport execution separately gated by T005-090/T005-091;
 5. run focused fmt/Clippy/tests before any permanent implementation commit.
@@ -114,7 +114,8 @@ T005_088=PASS
 DECISION=ADMIT_MINIMAL_IN_PROCESS_PARSER_ONLY
 SERDE_JSON_VERSION=1.0.151
 SERDE_JSON_UPSTREAM_COMMIT=de8500740cdcabffb9734f503e4889def823cf10
-CARGO_LOCK_CHANGE_ALLOWED=NO
+CARGO_LOCK_EXTERNAL_PACKAGE_DELTA_ALLOWED=NO
+LOCAL_WORKSPACE_DEPENDENCY_EDGE_DELTA_ALLOWED=YES
 MCP_RUST_SDK_ADMITTED=NO
 NETWORK_WIDENING=NO
 PROCESS_WIDENING=NO
