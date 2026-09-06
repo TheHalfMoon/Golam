@@ -65,7 +65,10 @@ fn kernel_with_session(runtime: &RuntimeLayout) -> KernelApi<AllowDesktop> {
     kernel
 }
 
-fn prepare(kernel: &mut KernelApi<AllowDesktop>, effect_id: EffectId) -> golam_kernel::PreparedToolEffect {
+fn prepare(
+    kernel: &mut KernelApi<AllowDesktop>,
+    effect_id: EffectId,
+) -> golam_kernel::PreparedToolEffect {
     kernel
         .prepare_tool_effect(
             Principal::test("desktop-restart"),
