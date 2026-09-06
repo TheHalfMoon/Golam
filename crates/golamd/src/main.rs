@@ -116,6 +116,8 @@ pub mod memory_commit;
 mod memory_reconcile;
 #[cfg(test)]
 mod spec004_compaction_tests;
+#[cfg(all(test, unix))]
+mod spec005_core_alpha_tests;
 
 use std::error::Error;
 use std::io::{self, Write};
