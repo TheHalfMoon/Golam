@@ -116,6 +116,51 @@ impl super::DesktopControlEvidenceStore {
         reconciliation_ref: BindingDigest,
         recorded_at_unix_ms: u64,
     ) -> Result<DesktopEffectEvidence, DesktopControlEvidenceError> {
+        self.binding_evidence(
+            effect_id,
+            status,
+            Some(reconciliation_ref),
+            recorded_at_unix_ms,
+        )
+    }
+
+    pub fn recovered_unknown_evidence(
+        &self,
+        effect_id: EffectId,
+        recorded_at_unix_ms: u64,
+    ) -> Result<DesktopEffectEvidence, DesktopControlEvidenceError> {
+        self.binding_evidence(
+            effect_id,
+            DesktopEvidenceStatus::UnknownOutcome,
+            None,
+            recorded_at_unix_ms,
+        )
+    }
+
+    pub fn latest_effect_reconciliation_ref(
+        &self,
+        effect_id: EffectId,
+    ) -> Result<Option<BindingDigest>, DesktopControlEvidenceError> {
+        self.connection
+            .query_row(
+                "SELECT reconciliation_ref FROM desktop_effect_evidence \
+                 WHERE effect_id = ?1 ORDER BY sequence DESC LIMIT 1",
+                params![id_bytes(effect_id.0)],
+                |row| row.get::<_, Option<Vec<u8>>>(0),
+            )
+            .optional()?
+            .flatten()
+            .map(|value| digest(value, "desktop reconciliation ref"))
+            .transpose()
+    }
+
+    fn binding_evidence(
+        &self,
+        effect_id: EffectId,
+        status: DesktopEvidenceStatus,
+        reconciliation_ref: Option<BindingDigest>,
+        recorded_at_unix_ms: u64,
+    ) -> Result<DesktopEffectEvidence, DesktopControlEvidenceError> {
         let row = self
             .connection
             .query_row(
@@ -160,56 +205,20 @@ impl super::DesktopControlEvidenceStore {
                 row.7,
                 "desktop binding visible channel digest",
             )?,
-            permission_session_digest: digest(
-                row.8,
-                "desktop binding permission session digest",
-            )?,
+            permission_session_digest: digest(row.8, "desktop binding permission session digest")?,
             target_or_source_digest: digest(row.9, "desktop binding target/source digest")?,
             status,
-            reconciliation_ref: Some(reconciliation_ref),
+            reconciliation_ref,
             recorded_at_unix_ms,
         };
         evidence.validate()?;
         Ok(evidence)
     }
-
-    pub fn recovered_unknown_evidence(
-        &self,
-        effect_id: EffectId,
-        recorded_at_unix_ms: u64,
-    ) -> Result<DesktopEffectEvidence, DesktopControlEvidenceError> {
-        let reconciliation_ref = BindingDigest::new([1; 32]);
-        let mut evidence = self.reconciliation_evidence(
-            effect_id,
-            DesktopEvidenceStatus::Reconciling,
-            reconciliation_ref,
-            recorded_at_unix_ms,
-        )?;
-        evidence.status = DesktopEvidenceStatus::UnknownOutcome;
-        evidence.reconciliation_ref = None;
-        evidence.validate()?;
-        Ok(evidence)
-    }
-
-    pub fn latest_effect_reconciliation_ref(
-        &self,
-        effect_id: EffectId,
-    ) -> Result<Option<BindingDigest>, DesktopControlEvidenceError> {
-        self.connection
-            .query_row(
-                "SELECT reconciliation_ref FROM desktop_effect_evidence \
-                 WHERE effect_id = ?1 ORDER BY sequence DESC LIMIT 1",
-                params![id_bytes(effect_id.0)],
-                |row| row.get::<_, Option<Vec<u8>>>(0),
-            )
-            .optional()?
-            .flatten()
-            .map(|value| digest(value, "desktop reconciliation ref"))
-            .transpose()
-    }
 }
 
-fn operation_from_code(value: i64) -> Result<DesktopEvidenceOperation, DesktopControlEvidenceError> {
+fn operation_from_code(
+    value: i64,
+) -> Result<DesktopEvidenceOperation, DesktopControlEvidenceError> {
     match value {
         1 => Ok(DesktopEvidenceOperation::SemanticAction),
         2 => Ok(DesktopEvidenceOperation::Focus),
