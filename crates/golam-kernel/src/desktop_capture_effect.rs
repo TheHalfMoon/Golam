@@ -271,9 +271,7 @@ fn classify_receipt(
     }
 }
 
-fn capture_receipt_bytes(
-    receipt: &CaptureBackendReceipt,
-) -> Result<Vec<u8>, DesktopCaptureError> {
+fn capture_receipt_bytes(receipt: &CaptureBackendReceipt) -> Result<Vec<u8>, DesktopCaptureError> {
     let mut encoder = CanonicalEncoder::new();
     encoder.push_bytes(CAPTURE_RECEIPT_DOMAIN)?;
     encoder.push_u8(status_code(receipt.status));
