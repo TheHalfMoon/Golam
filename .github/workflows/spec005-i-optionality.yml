@@ -1,5 +1,6 @@
 name: spec005-i-optionality
 
+# Retrigger after rustfmt-only repair.
 on:
   push:
     branches:
