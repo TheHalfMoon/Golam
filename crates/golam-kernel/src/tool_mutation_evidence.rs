@@ -195,9 +195,10 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
                 effect_id,
             ));
         }
-        let preconditions_hash: [u8; 32] = snapshot.preconditions.try_into().map_err(|_| {
-            ToolMutationEvidenceKernelError::InvalidStoredPreconditions(effect_id)
-        })?;
+        let preconditions_hash: [u8; 32] = snapshot
+            .preconditions
+            .try_into()
+            .map_err(|_| ToolMutationEvidenceKernelError::InvalidStoredPreconditions(effect_id))?;
         self.require_authority(&AuthorizationRequest {
             principal,
             action: &snapshot.action,
