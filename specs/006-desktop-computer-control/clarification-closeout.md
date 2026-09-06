@@ -6,20 +6,27 @@
 
 This record closes the Spec Kit clarification stage for the planning package. It does not authorize product implementation. Implementation remains blocked until the full planning lifecycle closes canonical on `main` after exact-head CI, fresh independent review, guarded merge and post-merge CI.
 
-## Clarification 1 — What does semantic-first mean?
+## Clarification 1 — What does semantic-first mean and how is fallback selected?
 
-Decision: Golam follows the constitutional ordering from stronger semantic authority toward weaker fallbacks. Domain/application APIs and native semantic/accessibility surfaces are preferred. Deterministic raw pointer/keyboard control is a distinct, explicitly authorized fallback. Vision/pixel evidence is a final bounded hinting mechanism and is never authority.
+Decision: Golam preserves the constitutional ordering exactly:
 
-`SEMANTIC_FIRST=YES`
+`domain/application API → native OS automation API → accessibility/semantic tree → browser DOM/protocol → deterministic keyboard/mouse control → vision/pixel fallback`
+
+Spec 006 owns desktop-control routes but cannot use its weaker fallbacks to bypass a stronger applicable route elsewhere in Golam. Before deterministic raw input or vision/pixel fallback is prepared, trusted orchestration creates canonical `FallbackEligibilityEvidence` showing the disposition of each applicable stronger route. A weaker route is denied while a stronger route remains available/authorized. An unreconciled `UNKNOWN_OUTCOME` blocks conflicting fallback escalation. Raw adapters and pixel-hint producers cannot self-mint fallback eligibility.
+
+`CONTROL_ROUTE_ORDER=CONSTITUTIONAL_ORDER_REQUIRED`
 `RAW_INPUT_FALLBACK=EXPLICIT_ONLY`
+`FALLBACK_ELIGIBILITY_EVIDENCE=REQUIRED`
+`UNKNOWN_OUTCOME_ALLOWS_WEAKER_FALLBACK=NO`
 `VISION_PIXEL_FALLBACK=BOUNDED_UNTRUSTED_HINT_ONLY`
 
 ## Clarification 2 — Does Spec 006 perform screenshot OCR or infer semantic text from pixels?
 
-No. Raw screenshot OCR/text extraction remains deferred to Spec 007. Spec 006 may carry a bounded `PixelTargetHint` containing a region/coordinate plus capture/source provenance as untrusted evidence for a separately governed raw-input action. The hint cannot mint capability, approval, semantic identity or target authority.
+No. Raw screenshot OCR/text extraction remains deferred to Spec 007. Spec 006 may carry a bounded `PixelTargetHint` containing a region/coordinate plus capture/source provenance as untrusted evidence for a separately governed raw-input action. The hint cannot mint capability, approval, semantic identity, target authority or fallback eligibility.
 
 `RAW_SCREENSHOT_TEXT_EXTRACTION=DEFER_TO_SPEC_007`
 `PIXEL_HINT_CAN_MINT_AUTHORITY=NO`
+`PIXEL_HINT_CAN_MINT_FALLBACK_ELIGIBILITY=NO`
 
 ## Clarification 3 — How does the Tauri desktop shell trust `golamd`?
 
@@ -65,7 +72,7 @@ Planning selects platform/API direction but does not admit implementation depend
 
 ## Clarification 9 — What happens after ambiguous completion or human takeover?
 
-Any operation that may have crossed the protected effect boundary but lacks proven terminal truth records `UNKNOWN_OUTCOME`. A timeout, restart, permission transition or takeover does not authorize retry. Conflicting follow-up stays blocked until reconciliation establishes terminal truth.
+Any operation that may have crossed the protected effect boundary but lacks proven terminal truth records `UNKNOWN_OUTCOME`. A timeout, restart, permission transition or takeover does not authorize retry or fallback escalation. Conflicting follow-up stays blocked until reconciliation establishes terminal truth.
 
 `UNKNOWN_OUTCOME_CONFLICTING_RETRY=BLOCKED_UNTIL_RECONCILIATION`
 
