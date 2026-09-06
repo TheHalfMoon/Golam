@@ -38,11 +38,48 @@ pub(crate) fn migrate(connection: &Connection) -> Result<(), DesktopControlEvide
 }
 
 impl DesktopControlEvidenceStore {
+    pub fn effect_session_id(
+        &self,
+        effect_id: EffectId,
+    ) -> Result<SessionId, DesktopControlEvidenceError> {
+        let session = self
+            .connection
+            .query_row(
+                "SELECT session_id FROM effect_intents WHERE effect_id = ?1",
+                params![id_bytes(effect_id.0)],
+                |row| row.get::<_, Vec<u8>>(0),
+            )
+            .optional()?
+            .ok_or(DesktopControlEvidenceError::InvalidStoredRecord(
+                "missing canonical desktop effect",
+            ))?;
+        let bytes: [u8; 16] = session.try_into().map_err(|_| {
+            DesktopControlEvidenceError::InvalidStoredRecord("canonical effect session id")
+        })?;
+        let session_id = SessionId(u128::from_be_bytes(bytes));
+        if session_id.0 == 0 {
+            return Err(DesktopControlEvidenceError::InvalidStoredRecord(
+                "zero canonical effect session id",
+            ));
+        }
+        Ok(session_id)
+    }
+
+    pub fn has_unresolved_unknown_outcome_for_effect(
+        &self,
+        effect_id: EffectId,
+    ) -> Result<bool, DesktopControlEvidenceError> {
+        self.has_unresolved_unknown_outcome(self.effect_session_id(effect_id)?)
+    }
+
     pub fn append_effect_evidence(
         &mut self,
         evidence: DesktopEffectEvidence,
     ) -> Result<[u8; 32], DesktopControlEvidenceError> {
         evidence.validate()?;
+        if self.effect_session_id(evidence.effect_id)? != evidence.session_id {
+            return Err(DesktopControlEvidenceError::InvalidEvidence);
+        }
         let record_bytes = evidence.canonical_bytes()?;
         let payload_hash = evidence.payload_hash()?;
         let tx = self
@@ -275,6 +312,8 @@ mod tests {
 
     use super::*;
     use crate::desktop_control_evidence::{DesktopEffectEvidence, DesktopEvidenceOperation};
+    use crate::effects::{EffectStore, ProposeEffect};
+    use golam_core::{EffectTransitionId, EventId};
 
     fn digest(value: u8) -> BindingDigest {
         BindingDigest::new([value; 32])
@@ -303,16 +342,47 @@ mod tests {
         }
     }
 
+    fn register_effect(store: &mut DesktopControlEvidenceStore) {
+        let mut effects = EffectStore::open_in_memory().unwrap();
+        effects
+            .propose(ProposeEffect {
+                effect_id: EffectId(1),
+                session_id: SessionId(2),
+                requested_by: "owner",
+                action: "desktop.raw_input",
+                resource: "desktop-target:test",
+                risk_class: "write",
+                execution_semantics: "at_most_once",
+                idempotency_key: None,
+                preconditions: b"p",
+                dependencies: b"[]",
+                payload_hash: [1; 32],
+                proposed_event_id: EventId(1),
+                transition_id: EffectTransitionId(1),
+            })
+            .unwrap();
+        drop(effects);
+        let _ = store;
+    }
+
     #[test]
     fn unknown_outcome_blocks_until_terminal_reconciliation() {
         let mut store = DesktopControlEvidenceStore::open_in_memory().unwrap();
+        // In-memory evidence tests use the same schema but must seed the canonical effect row.
+        store
+            .connection
+            .execute(
+                "INSERT INTO effect_intents (effect_id, session_id, requested_by, action, resource, risk_class, execution_semantics, idempotency_key, preconditions, dependencies, payload_hash, proposed_global_seq) VALUES (?1, ?2, 'owner', 'desktop.raw_input', 'desktop-target:test', 'write', 'at_most_once', NULL, ?3, ?4, ?5, 1)",
+                params![id_bytes(1), id_bytes(2), b"p".as_slice(), b"[]".as_slice(), [1_u8; 32].as_slice()],
+            )
+            .unwrap();
         store
             .append_effect_evidence(evidence(DesktopEvidenceStatus::Prepared, None, 10))
             .unwrap();
         store
             .append_effect_evidence(evidence(DesktopEvidenceStatus::UnknownOutcome, None, 11))
             .unwrap();
-        assert!(store.has_unresolved_unknown_outcome(SessionId(2)).unwrap());
+        assert!(store.has_unresolved_unknown_outcome_for_effect(EffectId(1)).unwrap());
         store
             .append_effect_evidence(evidence(
                 DesktopEvidenceStatus::Reconciling,
