@@ -2,39 +2,45 @@
 
 ## Summary
 
-Build a Rust-owned semantic-first desktop-control subsystem and a least-privilege Tauri 2 client boundary. The common contract must model observation, target identity, permission/session state, bounded capture, semantic action, explicit raw-input fallback and clipboard operations. Native adapters are admitted only after fake-backend contract qualification and platform-specific permission/race testing.
+Build a Rust-owned semantic-first desktop-control subsystem and a least-privilege Tauri 2 client boundary. The common contract must model observation, target identity, permission/session state, bounded capture, semantic action, explicit raw-input fallback, bounded untrusted pixel hints, clipboard operations and immediate human pause/stop/takeover. Native adapters are admitted only after fake-backend contract qualification, Source Foundry admission for any introduced dependency/runtime primitive, and platform-specific permission/race testing.
 
 ## Technical context
 
 - Trusted core/runtime: Rust workspace (`golam-core`, `golam-kernel`, `golam-ledger`, `golamd`).
-- Desktop shell: Tauri 2 + React + TypeScript, with narrow capability files and typed sanitized RPC DTOs.
-- Windows: Microsoft UI Automation for semantic tree/actions; Windows.Graphics.Capture for selected display/window capture; raw input fallback only through explicitly governed `SendInput`; secure desktop denied.
+- Desktop shell: Tauri 2 + React + TypeScript, with narrow capability files and typed sanitized RPC DTOs. The native Rust host is an authenticated local client of `golamd` through the existing authenticated IPC/client-enrollment boundary; renderer/webview code never owns authentication material or authorization state.
+- Windows: Microsoft UI Automation for semantic tree/actions; Windows.Graphics.Capture for selected display/window capture; raw input fallback only through explicitly governed `SendInput`; locked desktop, UAC/secure desktop and interactive-session drift fail closed.
 - macOS: AXUIElement/Accessibility for semantic observation/action; ScreenCaptureKit under system Screen Recording permission; TCC state treated as external authority state.
 - Linux: AT-SPI semantic layer; X11 raw facilities only for identified X11 sessions; Wayland ScreenCast/RemoteDesktop portals plus compositor-provided EIS/libei for granted control.
-- Persistence: immutable request/effect/intent/authority bindings, terminal status, reconciliation metadata and payload digests only by default; raw captures/clipboard payloads are not ordinary durable evidence.
+- Persistence: immutable request/effect/intent/authority/lease-generation bindings, terminal status, reconciliation metadata and payload digests only by default; raw captures/clipboard payloads are not ordinary durable evidence.
+- Vision/pixel boundary: Spec 006 may consume a bounded pixel-region/coordinate candidate derived from an explicitly selected capture only as untrusted evidence for a separately governed raw fallback. No raw-screenshot OCR/text extraction or pixel-derived authority is admitted.
+- Supply chain: official platform documentation selects architecture direction only. Any crate, package, native library, helper or copied donor implementation requires an exact Source Foundry admission record before code/dependency admission.
 
 ## Constitution check
 
 - **Spec before implementation**: PASS — this planning PR contains no product implementation.
 - **Local-first / strict-local**: PASS — no remote fallback or hidden network dependency.
-- **Least authority**: PASS — observation/capture/semantic action/raw input/clipboard are distinct authority surfaces.
+- **Least authority**: PASS — observation/capture/semantic action/raw input/pixel hint/clipboard are distinct authority or evidence surfaces.
 - **Effect governance**: PASS — every side effect uses a distinct request binding, `Effect PREPARED`, Kernel/Effect Gate dispatch and terminal reconciliation.
-- **Evidence integrity**: PASS — prepared intents and outcomes bind canonical request, effect, target and authority state.
+- **Evidence integrity**: PASS — prepared intents and outcomes bind canonical request, effect, target, authority and lease-generation state.
 - **Secrets/privacy**: PASS — raw capture and clipboard content excluded from logs/evidence by default.
+- **Human interruptibility**: PASS — pause/stop/takeover is enforced at protected lease/input authority, not renderer convention.
+- **Authenticated client boundary**: PASS — Tauri native host reuses authenticated `golamd` IPC; renderer cannot become a principal by location or UI state.
 - **Cross-platform honesty**: PASS — capability discovery + explicit unsupported states replace fake parity.
 - **Donor discipline**: PASS — Golam-research is behavioral reference only and cannot define trusted architecture or authority.
+- **Source Foundry**: PASS — no dependency/code source is admitted by planning; exact admission is a precondition for any implementation dependency or reused code.
 
 ## Architecture
 
-1. **Pure contracts** in `golam-core`: identities, observations, action/capture/clipboard intents, immutable request/effect bindings, capability descriptions, errors and canonical digests.
-2. **Authority orchestration** in `golam-kernel`: prepare/revalidate/dispatch/finalize lifecycle bound to capability/policy/approval/effect records.
-3. **Durable evidence** in `golam-ledger`: prepared request/effect/intent bindings, terminal outcome, permission/session observation and reconciliation metadata without raw sensitive payloads.
+1. **Pure contracts** in `golam-core`: identities, observations, action/capture/clipboard intents, bounded `PixelTargetHint`, `DesktopControlLeaseState`, immutable request/effect bindings, capability descriptions, errors and canonical digests.
+2. **Authority orchestration** in `golam-kernel`: prepare/revalidate/dispatch/finalize lifecycle bound to capability/policy/approval/effect records and current control-lease generation; protected human pause/stop/takeover invalidates conflicting agent input authority.
+3. **Durable evidence** in `golam-ledger`: prepared request/effect/intent/lease-generation bindings, terminal outcome, permission/session observation and reconciliation metadata without raw sensitive payloads.
 4. **Adapter interface** in `golamd`: fake backend plus Windows/macOS/Linux implementations behind a common trait.
-5. **Tauri boundary**: sanitized commands only; frontend cannot hold raw platform handles or invoke adapters directly.
+5. **Authenticated Tauri host**: the native Rust application enrolls/authenticates as a local `golamd` client using the existing IPC trust boundary. It forwards only narrow typed requests; client credentials and authority-bearing tokens never enter the webview.
+6. **Tauri renderer boundary**: sanitized commands/state only; frontend cannot hold raw platform handles, authenticate itself, mint capabilities or invoke adapters directly.
 
 ## Action lifecycle
 
-`observe → select target → create ToolRequest → prepare immutable intent → capability/policy/approval → Effect PREPARED → Kernel/Effect Gate → immediate identity/permission/binding revalidation → platform dispatch → post-action observation → Effect terminal/reconciliation`
+`observe → select target → create ToolRequest → prepare immutable intent bound to current control-lease generation → capability/policy/approval → Effect PREPARED → Kernel/Effect Gate → immediate identity/permission/binding/lease-generation revalidation → platform dispatch → post-action observation → Effect terminal/reconciliation`
 
 If execution may have crossed the side-effect boundary and terminal truth is uncertain, the result is `UNKNOWN_OUTCOME` and blocks conflicting follow-up until reconciliation.
 
@@ -44,20 +50,47 @@ If execution may have crossed the side-effect boundary and terminal truth is unc
 
 If capture may have crossed the effect boundary but terminal truth is uncertain, persist `UNKNOWN_OUTCOME`; block conflicting retry or reuse until reconciliation determines terminal truth. No OCR or screenshot-derived semantic authority exists in Spec 006.
 
+## Vision/pixel fallback lifecycle
+
+The constitutional last-resort vision/pixel path is intentionally narrower than a semantic vision subsystem:
+
+`bounded explicitly authorized capture → local consumer proposes bounded PixelTargetHint(region/coordinate + capture/source provenance) → treat hint as untrusted evidence only → fresh work-surface/focus/session observation → create separate RAW_INPUT_FALLBACK ToolRequest → explicit fallback capability/policy/approval → Effect PREPARED → immediate hint/source/target/lease-generation/permission revalidation → bounded raw dispatch → post-action evidence/reconciliation`
+
+Rules:
+- semantic/native/accessibility paths remain preferred;
+- the hint cannot contain or manufacture an OS handle, capability, approval or semantic identity;
+- OCR/text extraction from raw pixels remains deferred to Spec 007;
+- the hint alone is never sufficient target identity and never authorizes raw input;
+- capture authority never implies raw-input authority.
+
 ## Clipboard lifecycle
 
 `create explicit read/write ToolRequest → bind immutable request/effect/intent + capability/policy/approval → Effect PREPARED → immediate binding/permission revalidation → one bounded clipboard operation → terminal evidence/reconciliation → discard read payload unless separately authorized`
 
 Clipboard polling/background inspection is never an implementation path.
 
-## Platform admission sequence
+## Human pause/stop/takeover lifecycle
 
-1. Fake backend contract and adversarial suite, including rejection of missing/mismatched/stale request/effect/authority bindings.
-2. Windows semantic observation/action + selected capture + permission/identity tests.
-3. macOS accessibility + ScreenCaptureKit permission/session tests.
-4. Linux AT-SPI + explicit X11 capability + Wayland portal/EIS capability/session tests.
-5. Cross-platform unsupported-state, permission-loss, uncertain-completion, stale/focus race and reconciliation tests.
+Human interrupt is protected control-plane authority, not a renderer flag:
+
+`local human interrupt → authenticate/attribute interrupt source → atomically advance/revoke/suspend agent input lease generation → block new conflicting prepare/dispatch → invalidate queued/prepared actions bound to prior generation → cancel adapter work where cancellation is safe → preserve terminal/UNKNOWN_OUTCOME reconciliation for already-crossed effects → expose human-exclusive or paused state`
+
+Requirements:
+- stale model/UI requests cannot restore a revoked generation;
+- takeover remains effective across daemon/client reconnect until explicitly released through protected policy;
+- takeover latency is measured from accepted protected interrupt to conflicting input-authority revocation/suspension;
+- wrong-window, focus theft, stale refs and session transitions remain fail closed during takeover transitions.
+
+## Dependency and platform admission sequence
+
+1. Pure/fake-backend contracts use existing admitted primitives where possible; any new dependency requires exact Source Foundry qualification before manifest mutation.
+2. Before Tauri/React/TypeScript dependency introduction, qualify exact selected versions, dependency closure, permissions, network/build behavior and notices through Source Foundry.
+3. Windows semantic/capture/raw adapters may introduce only exact qualified platform crates/libraries after Source Foundry admission; qualify locked/UAC/secure-desktop and session-transition fail-closed behavior.
+4. macOS accessibility/capture/raw adapters may introduce only exact qualified bindings/libraries after Source Foundry admission; qualify TCC permission changes and stale element/session behavior.
+5. Linux AT-SPI/X11/Wayland portal/EIS adapters may introduce only exact qualified bindings/libraries after Source Foundry admission; qualify compositor/portal/session termination behavior.
+6. Cross-platform fake/native qualification covers unsupported-state, permission-loss, uncertain-completion, stale/focus race, pixel-hint non-authority, human takeover and reconciliation.
+7. Donor behavioral evidence remains reference-only unless a later bounded source is separately admitted through Source Foundry; no donor runtime or architecture is implicitly admitted.
 
 ## Final convergence
 
-Exact-head format/Clippy/tests/property/fuzz/security/platform qualification → fresh independent semantic/security review on unchanged SHA → finding reconciliation → Ready → expected-head guarded merge → push-triggered CI on merge SHA → canonical closeout.
+Cross-artifact analysis with no unresolved material contradiction → exact-head format/Clippy/tests/property/fuzz/security/platform qualification → fresh independent semantic/security/governance review on unchanged SHA → finding reconciliation → Ready → expected-head guarded merge → push-triggered CI on merge SHA → canonical closeout → successor-authority re-read.
