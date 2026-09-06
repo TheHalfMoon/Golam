@@ -85,6 +85,20 @@ Fields:
 
 Rules: at least one qualified channel must be trusted-visible and capable of immediate local interrupt before new autonomous actuation dispatch. Renderer-only DOM state is not sufficient. Loss/expiry of all qualified channels moves the protected control state into an actuation-suspended fail-closed condition until a qualified visible channel is restored. A stale UI message cannot fabricate channel liveness.
 
+## FallbackEligibilityEvidence
+
+Fields:
+- schema version
+- target/task scope digest
+- evaluated route sequence
+- per-route disposition for applicable routes (`SELECTED`, `INAPPLICABLE`, `UNAVAILABLE`, `NOT_SUPPORTED`, `AUTHORITY_DENIED`, `PERMISSION_DENIED`, `FAILED_BEFORE_EFFECT`, `UNKNOWN_OUTCOME`)
+- evidence refs for each disposition
+- highest eligible route selected
+- creation timestamp + expiration
+- canonical evidence digest
+
+Rules: evaluation follows the constitutional order `domain/application API → native OS automation API → accessibility/semantic tree → browser DOM/protocol → deterministic keyboard/mouse control → vision/pixel fallback`. A weaker route cannot be selected while an applicable stronger route remains available and authorized. `UNKNOWN_OUTCOME` does not establish safe fallback eligibility; it blocks conflicting escalation until reconciliation. The raw adapter and pixel-hint producer cannot mint or self-approve this evidence.
+
 ## PreparedDesktopAction
 
 Fields:
@@ -93,6 +107,7 @@ Fields:
 - operation kind (`SEMANTIC_ACTION`, `RAW_INPUT_FALLBACK`, `FOCUS`, `CLIPBOARD_WRITE`, etc.)
 - exact target identity digest
 - optional bounded pixel-hint digest for raw fallback only
+- required `fallback_eligibility_evidence_digest` for raw/vision fallback paths
 - action payload digest
 - capability/policy/approval refs
 - control lease id + generation for side-effecting input/focus operations
@@ -102,7 +117,7 @@ Fields:
 - expiration/deadline
 - canonical intent digest
 
-Rules: request and effect bindings are distinct, immutable after `Effect PREPARED`, and revalidated immediately before dispatch. Missing, mismatched, stale or substituted bindings, including a superseded/revoked control-lease generation or loss of every qualified visible-control channel for autonomous actuation, fail closed.
+Rules: request and effect bindings are distinct, immutable after `Effect PREPARED`, and revalidated immediately before dispatch. Missing, mismatched, stale or substituted bindings, including fallback-eligibility evidence, a superseded/revoked control-lease generation or loss of every qualified visible-control channel for autonomous actuation, fail closed.
 
 ## CaptureIntent
 
@@ -147,7 +162,7 @@ Fields:
 - creation timestamp + expiration
 - canonical hint digest
 
-Rules: a pixel hint is untrusted evidence only. It cannot contain a native handle, capability, policy decision, approval or semantic identity; it cannot authorize input; it cannot be used after its capture/source/work-surface generation is stale; it does not permit OCR/text extraction in Spec 006. A raw fallback using a hint must independently bind a fresh exact work-surface/focus/session identity plus a dedicated raw-input ToolRequest/effect/capability/policy/approval and current control-lease generation.
+Rules: a pixel hint is untrusted evidence only. It cannot contain a native handle, capability, policy decision, approval, semantic identity or fallback-eligibility decision; it cannot authorize input; it cannot be used after its capture/source/work-surface generation is stale; it does not permit OCR/text extraction in Spec 006. A raw fallback using a hint must independently bind fresh `FallbackEligibilityEvidence`, a fresh exact work-surface/focus/session identity, a dedicated raw-input ToolRequest/effect/capability/policy/approval, current control-lease generation and qualified visible-control-channel state.
 
 ## ClipboardIntent
 
@@ -168,6 +183,7 @@ Rules: immutable after `Effect PREPARED`; no polling/background inspection; read
 Fields:
 - request digest + effect id/effect binding digest + intent digest
 - attempted target digest
+- fallback-eligibility evidence digest where applicable
 - control lease id/generation where applicable
 - visible-control-channel state digest/generation where applicable
 - pixel-hint digest where applicable
