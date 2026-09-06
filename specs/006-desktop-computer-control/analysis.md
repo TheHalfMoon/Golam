@@ -40,9 +40,13 @@ PASS. Observation, capture, semantic action, raw fallback, clipboard and protect
 
 PASS. Side-effect paths require immutable request/effect/intent bindings, capability/policy/approval, `Effect PREPARED`, Kernel/Effect Gate, immediate revalidation, terminal evidence and `UNKNOWN_OUTCOME` reconciliation.
 
-### Computer-control ordering and human interruptibility
+### Visible computer control and human interruptibility
 
-PASS after forward repair. Semantic/native/accessibility paths are primary. Deterministic raw input is separately authorized. Pixel/vision fallback is bounded and non-authoritative. Human pause/stop/takeover is enforced at protected lease/input authority and invalidates stale generations.
+PASS after forward repair. Active autonomous computer control requires at least one qualified persistent local visible-control channel with immediate pause/stop/takeover. Trusted Rust tracks channel state rather than trusting DOM visibility. Loss of all qualified visible channels suspends new autonomous actuation fail closed. Human pause/stop/takeover is enforced at protected lease/input authority and invalidates stale generations.
+
+### Computer-control ordering
+
+PASS after forward repair. Semantic/native/accessibility paths are primary. Deterministic raw input is separately authorized. Pixel/vision fallback is bounded and non-authoritative. Capture/pixel evidence cannot authorize action.
 
 ### Source permission / Source Foundry
 
@@ -51,29 +55,30 @@ PASS as a planning constraint. Donor behavioral evidence remains reference-only.
 ## Cross-artifact invariants
 
 1. **No authority from observation** — consistent across spec, data model and controller/observation contracts.
-2. **No authority from pixels** — `PixelTargetHint` carries provenance and bounded geometry only; raw fallback requires independent authority and fresh target/focus/session/lease validation.
+2. **No authority from pixels** — `PixelTargetHint` carries provenance and bounded geometry only; raw fallback requires independent authority and fresh target/focus/session/lease/visible-channel validation.
 3. **No OCR in Spec 006** — raw screenshot text extraction remains deferred to Spec 007 across spec, research, plan, capture contract and clarification closeout.
 4. **No renderer authority** — UI RPC exposes sanitized/opaque refs only; renderer cannot receive native handles or client authentication material.
-5. **No automatic raw fallback** — semantic failure never silently escalates.
-6. **Human takeover is kernel/lease state** — stale UI/model state cannot re-enable a revoked generation.
-7. **Ambiguity never permits replay** — `UNKNOWN_OUTCOME` blocks conflicting retry until reconciliation, including across restart/takeover.
-8. **Platform permissions remain external mutable state** — they are prerequisites, not Golam grants.
-9. **Windows protected desktop boundaries are not bypassed** — locked/UAC/secure-desktop transitions fail closed.
-10. **Dependencies remain unadmitted until Source Foundry** — no planning research URL or donor reference is treated as implementation admission.
+5. **Autonomous control stays visible** — at least one qualified persistent local visible-control channel must remain active; losing all such channels suspends new actuation and cached renderer state cannot satisfy visibility.
+6. **No automatic raw fallback** — semantic failure never silently escalates.
+7. **Human takeover is kernel/lease state** — stale UI/model state cannot re-enable a revoked generation.
+8. **Ambiguity never permits replay** — `UNKNOWN_OUTCOME` blocks conflicting retry until reconciliation, including across restart/takeover.
+9. **Platform permissions remain external mutable state** — they are prerequisites, not Golam grants.
+10. **Windows protected desktop boundaries are not bypassed** — locked/UAC/secure-desktop transitions fail closed.
+11. **Dependencies remain unadmitted until Source Foundry** — no planning research URL or donor reference is treated as implementation admission.
 
 ## Requirement-to-implementation-phase coverage
 
 | Requirement family | Planned phase(s) |
 | --- | --- |
-| Core identities/digests/capabilities/pixel hint/control lease | A |
-| Effect/authority/reconciliation/takeover generation | B |
-| Authenticated Tauri client + sanitized renderer RPC | C |
+| Core identities/digests/capabilities/pixel hint/control lease/visible-control channel | A |
+| Effect/authority/reconciliation/takeover generation/visible-channel suspension | B |
+| Authenticated Tauri client + persistent visible control surface + sanitized renderer RPC | C |
 | Semantic observation/focus/identity | D |
 | Bounded capture | E |
 | Native semantic actuation | F |
 | Raw input, pixel hint fallback, clipboard, takeover adversarial behavior | G/H |
-| Platform/security/session transition qualification | H |
-| End-to-end semantic/capture/fallback/takeover/authentication scenarios | I |
+| Platform/security/session/visible-channel qualification | H |
+| End-to-end semantic/capture/fallback/takeover/authentication/visibility scenarios | I |
 | Cross-artifact audit, exact-head CI/review/merge/post-merge closeout | J |
 
 ## Planning gaps found and repaired forward-only
@@ -86,7 +91,11 @@ The canonical re-read after initial exact-head CI found five material omissions 
 4. locked/UAC/session-transition Windows qualification was underspecified relative to T064;
 5. the explicit Spec Kit clarification/analyze artifacts and dependency Source Foundry preconditions were not complete.
 
-These are planning defects, not authorization to implement product code. They invalidate qualification use of the pre-repair exact-head CI/review request. The repaired planning head must receive fresh exact-head CI and fresh independent substantive review.
+A subsequent Constitution-focused audit found a sixth material planning omission before final candidate freeze:
+
+6. active autonomous computer control visibility and the fail-closed behavior when every qualified visible-control channel is lost were not explicit enough.
+
+All six planning omissions were repaired forward-only before final qualification. These are planning defects, not authorization to implement product code. They invalidate qualification use of every pre-repair exact-head CI/review request. The final repaired planning head must receive fresh exact-head CI and fresh independent substantive review.
 
 ## Remaining planning gates
 
