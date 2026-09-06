@@ -3,8 +3,8 @@
 use core::fmt;
 
 use golam_core::desktop_control::{
-    ControlRoute, DESKTOP_CONTROL_SCHEMA_VERSION, DesktopControlLeaseId, FallbackEligibilityEvidence,
-    RouteDisposition, RouteEvaluation, VisibleControlChannelId,
+    ControlRoute, DESKTOP_CONTROL_SCHEMA_VERSION, DesktopControlLeaseId,
+    FallbackEligibilityEvidence, RouteDisposition, RouteEvaluation, VisibleControlChannelId,
 };
 use golam_core::desktop_intent::{
     AuthorityBindings, DesktopActionKind, EffectBinding, InteractiveAuthorityBinding,
@@ -15,7 +15,8 @@ use golam_core::tool_request::{BindingDigest, PreparedToolRequest};
 use golam_core::{CanonicalEncoder, CoreError, EffectId, SessionId};
 
 use crate::{
-    AuthorizationPolicy, KernelApi, PrepareToolEffect, PreparedToolEffect, Principal, ToolEffectError,
+    AuthorizationPolicy, KernelApi, PrepareToolEffect, PreparedToolEffect, Principal,
+    ToolEffectError,
 };
 
 const ROUTE_SCOPE_DOMAIN: &[u8] = b"golam:desktop-route-scope:v1";
