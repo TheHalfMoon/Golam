@@ -1,0 +1,117 @@
+name: spec006-source-foundry
+
+on:
+  push:
+    branches: [impl/006-desktop-computer-control]
+    paths:
+      - .github/workflows/spec006-source-foundry.yml
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    name: qualify-exact-desktop-dependency-closure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal
+
+      - name: Resolve exact Tauri Rust closure in isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/golam-spec006-cargo
+          mkdir -p /tmp/golam-spec006-cargo/src
+          cat >/tmp/golam-spec006-cargo/Cargo.toml <<'EOF'
+          [package]
+          name = "golam-spec006-source-foundry"
+          version = "0.0.0"
+          edition = "2024"
+          rust-version = "1.98"
+          publish = false
+
+          [dependencies]
+          tauri = { version = "=2.11.1", default-features = false, features = ["wry"] }
+
+          [build-dependencies]
+          tauri-build = { version = "=2.6.1", default-features = false }
+          EOF
+          printf 'fn main() {}\n' >/tmp/golam-spec006-cargo/src/main.rs
+          cd /tmp/golam-spec006-cargo
+          cargo +1.98.0 generate-lockfile
+          echo '=== CARGO_LOCK_SHA256 ==='
+          sha256sum Cargo.lock
+          echo '=== CARGO_DIRECT_TREE ==='
+          cargo +1.98.0 tree --locked --edges normal,build
+          echo '=== CARGO_LOCK_PACKAGES ==='
+          python3 - <<'PY'
+          import tomllib
+          data = tomllib.load(open('Cargo.lock','rb'))
+          packages = data.get('package', [])
+          print(f'package_count={len(packages)}')
+          for p in sorted(packages, key=lambda x:(x['name'],x['version'],x.get('source',''))):
+              print('|'.join([p['name'], p['version'], p.get('source','workspace'), p.get('checksum','')]))
+          PY
+
+      - name: Resolve exact Tauri React frontend closure in isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/golam-spec006-js
+          mkdir -p /tmp/golam-spec006-js
+          cd /tmp/golam-spec006-js
+          cat >package.json <<'EOF'
+          {
+            "name": "golam-spec006-source-foundry",
+            "private": true,
+            "version": "0.0.0",
+            "dependencies": {
+              "@tauri-apps/api": "2.11.1",
+              "react": "19.2.8",
+              "react-dom": "19.2.8"
+            },
+            "devDependencies": {
+              "@tauri-apps/cli": "2.11.4",
+              "@vitejs/plugin-react": "6.1.1",
+              "typescript": "6.0.3",
+              "vite": "8.2.2"
+            }
+          }
+          EOF
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          echo '=== NPM_LOCK_SHA256 ==='
+          sha256sum package-lock.json
+          echo '=== NPM_LOCK_PACKAGES ==='
+          node <<'NODE'
+          const fs = require('fs');
+          const lock = JSON.parse(fs.readFileSync('package-lock.json','utf8'));
+          const entries = Object.entries(lock.packages || {}).filter(([k]) => k !== '');
+          console.log(`package_count=${entries.length}`);
+          for (const [path, meta] of entries.sort((a,b)=>a[0].localeCompare(b[0]))) {
+            console.log([path, meta.version || '', meta.resolved || '', meta.integrity || ''].join('|'));
+          }
+          NODE
+          echo '=== NPM_DIRECT_METADATA ==='
+          for spec in \
+            '@tauri-apps/api@2.11.1' \
+            '@tauri-apps/cli@2.11.4' \
+            'react@19.2.8' \
+            'react-dom@19.2.8' \
+            'typescript@6.0.3' \
+            'vite@8.2.2' \
+            '@vitejs/plugin-react@6.1.1'
+          do
+            echo "--- $spec ---"
+            npm view "$spec" version license repository.url dist.integrity dependencies optionalDependencies peerDependencies engines --json
+          done
+          echo '=== LIFECYCLE_SCRIPTS ==='
+          node <<'NODE'
+          const fs = require('fs');
+          const cp = require('child_process');
+          const specs = ['@tauri-apps/api@2.11.1','@tauri-apps/cli@2.11.4','react@19.2.8','react-dom@19.2.8','typescript@6.0.3','vite@8.2.2','@vitejs/plugin-react@6.1.1'];
+          for (const spec of specs) {
+            const out = cp.execFileSync('npm',['view',spec,'scripts','--json'],{encoding:'utf8'}).trim();
+            console.log(`${spec}|${out || '{}'}`);
+          }
+          NODE
