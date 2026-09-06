@@ -281,7 +281,9 @@ fn clipboard_evidence(
         control_lease_digest: None,
         visible_channel_digest: None,
         permission_session_digest: intent.prepared_permission_session_evidence_ref,
-        target_or_source_digest: intent.content_digest.unwrap_or(intent.request.canonical_request_digest),
+        target_or_source_digest: intent
+            .content_digest
+            .unwrap_or(intent.request.canonical_request_digest),
         status,
         reconciliation_ref: None,
         recorded_at_unix_ms,
