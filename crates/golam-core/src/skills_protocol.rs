@@ -34,6 +34,7 @@ pub enum SkillAdmissionState {
     LockedVersion,
     Deprecated,
     Revoked,
+    Replaced,
     Unknown,
 }
 
@@ -78,14 +79,9 @@ impl SkillDescriptor {
                 "skill provenance_refs",
             ));
         }
-        if !self.script_refs.is_empty()
-            && !matches!(
-                self.admission_state,
-                SkillAdmissionState::ExecutableAdmitted | SkillAdmissionState::LockedVersion
-            )
-        {
-            return Err(ProtocolValidationError::ExecutableSkillNotAdmitted);
-        }
+        // Script references are discovery evidence, not executable authority. A package may
+        // expose scripts while remaining instruction-only; executable dispatch is gated separately
+        // by `SkillDispatchBinding::revalidate` and current lifecycle state.
         Ok(())
     }
 }

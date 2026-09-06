@@ -106,7 +106,10 @@ impl ReviewedInstructionSkill {
         &self.provenance_refs
     }
 
-    pub fn current_state(&self, state: SkillAdmissionState) -> Result<CurrentSkillDispatchState, SkillPackageError> {
+    pub fn current_state(
+        &self,
+        state: SkillAdmissionState,
+    ) -> Result<CurrentSkillDispatchState, SkillPackageError> {
         Ok(CurrentSkillDispatchState {
             skill_package_ref: self.descriptor.package_ref,
             skill_version: self.descriptor.version.clone(),
@@ -183,6 +186,14 @@ impl SkillLifecycle {
         }
         self.state = next;
         Ok(())
+    }
+
+    pub fn replace_with(
+        &mut self,
+        replacement: ReviewedInstructionSkill,
+    ) -> Result<SkillLifecycle, SkillPackageError> {
+        self.transition(SkillAdmissionState::Replaced)?;
+        Ok(SkillLifecycle::new(replacement))
     }
 
     pub fn bind_instruction_activation(
@@ -281,6 +292,7 @@ pub enum SkillPackageError {
     SpecialFileForbidden(PathBuf),
     DuplicatePath,
     MissingSkillFile,
+    PackageChangedDuringDiscovery,
     ProvenanceRequired,
     InvalidProvenanceOrder,
     ZeroBindingRef(&'static str),
@@ -297,8 +309,16 @@ pub enum SkillPackageError {
 impl fmt::Display for SkillPackageError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Io { operation, path, source } => {
-                write!(f, "skill package {operation} failed for {}: {source}", path.display())
+            Self::Io {
+                operation,
+                path,
+                source,
+            } => {
+                write!(
+                    f,
+                    "skill package {operation} failed for {}: {source}",
+                    path.display()
+                )
             }
             Self::Core(error) => write!(f, "skill package canonical encoding failed: {error}"),
             Self::Protocol(error) => write!(f, "skill protocol validation failed: {error}"),
@@ -306,28 +326,61 @@ impl fmt::Display for SkillPackageError {
             Self::InvalidRoot(reason) => write!(f, "invalid skill package root: {reason}"),
             Self::InvalidManifest(reason) => write!(f, "invalid SKILL.md manifest: {reason}"),
             Self::InvalidName => f.write_str("invalid Agent Skills package name"),
-            Self::DescriptionOutOfBounds => f.write_str("skill description is empty or exceeds bound"),
+            Self::DescriptionOutOfBounds => {
+                f.write_str("skill description is empty or exceeds bound")
+            }
             Self::CompatibilityOutOfBounds => f.write_str("skill compatibility exceeds bound"),
-            Self::OptionalScalarOutOfBounds(field) => write!(f, "skill optional scalar exceeds bound: {field}"),
+            Self::OptionalScalarOutOfBounds(field) => {
+                write!(f, "skill optional scalar exceeds bound: {field}")
+            }
             Self::TooManyMetadataEntries => f.write_str("skill metadata entry bound exceeded"),
             Self::MetadataOutOfBounds => f.write_str("skill metadata key/value exceeds bound"),
             Self::TooManyFiles => f.write_str("skill package file-count bound exceeded"),
             Self::PackageTooLarge => f.write_str("skill package byte bound exceeded"),
             Self::SkillFileTooLarge => f.write_str("SKILL.md byte bound exceeded"),
             Self::TooManyLines => f.write_str("SKILL.md line bound exceeded"),
-            Self::InvalidRelativePath => f.write_str("skill package contains an invalid relative path"),
-            Self::SymlinkForbidden(path) => write!(f, "skill package symlink is forbidden: {}", path.display()),
-            Self::SpecialFileForbidden(path) => write!(f, "skill package special file is forbidden: {}", path.display()),
-            Self::DuplicatePath => f.write_str("skill package contains duplicate canonical relative paths"),
+            Self::InvalidRelativePath => {
+                f.write_str("skill package contains an invalid relative path")
+            }
+            Self::SymlinkForbidden(path) => {
+                write!(f, "skill package symlink is forbidden: {}", path.display())
+            }
+            Self::SpecialFileForbidden(path) => write!(
+                f,
+                "skill package special file is forbidden: {}",
+                path.display()
+            ),
+            Self::DuplicatePath => {
+                f.write_str("skill package contains duplicate canonical relative paths")
+            }
             Self::MissingSkillFile => f.write_str("skill package is missing root SKILL.md"),
-            Self::ProvenanceRequired => f.write_str("skill package requires reviewed provenance evidence"),
-            Self::InvalidProvenanceOrder => f.write_str("skill provenance refs must be sorted and unique"),
-            Self::ZeroBindingRef(field) => write!(f, "skill binding reference must be nonzero: {field}"),
-            Self::InvalidLifecycleTransition { from, to } => write!(f, "invalid skill lifecycle transition: {from:?} -> {to:?}"),
-            Self::LifecycleNotDispatchable(state) => write!(f, "skill lifecycle state is not dispatchable: {state:?}"),
-            Self::WrongDispatchKind => f.write_str("skill binding dispatch kind does not match activation"),
-            Self::LivePackageChanged => f.write_str("live skill package identity changed after review"),
-            Self::ExecutableSkillNotAdmitted => f.write_str("skill executable dispatch is not independently admitted"),
+            Self::PackageChangedDuringDiscovery => {
+                f.write_str("skill package changed while discovery evidence was being frozen")
+            }
+            Self::ProvenanceRequired => {
+                f.write_str("skill package requires reviewed provenance evidence")
+            }
+            Self::InvalidProvenanceOrder => {
+                f.write_str("skill provenance refs must be sorted and unique")
+            }
+            Self::ZeroBindingRef(field) => {
+                write!(f, "skill binding reference must be nonzero: {field}")
+            }
+            Self::InvalidLifecycleTransition { from, to } => {
+                write!(f, "invalid skill lifecycle transition: {from:?} -> {to:?}")
+            }
+            Self::LifecycleNotDispatchable(state) => {
+                write!(f, "skill lifecycle state is not dispatchable: {state:?}")
+            }
+            Self::WrongDispatchKind => {
+                f.write_str("skill binding dispatch kind does not match activation")
+            }
+            Self::LivePackageChanged => {
+                f.write_str("live skill package identity changed after review")
+            }
+            Self::ExecutableSkillNotAdmitted => {
+                f.write_str("skill executable dispatch is not independently admitted")
+            }
         }
     }
 }
@@ -374,10 +427,14 @@ pub fn discover_reviewed_instruction_skill(
     let root_meta = fs::symlink_metadata(input.package_root)
         .map_err(|source| io_error("inspect root", input.package_root, source))?;
     if root_meta.file_type().is_symlink() {
-        return Err(SkillPackageError::SymlinkForbidden(input.package_root.to_owned()));
+        return Err(SkillPackageError::SymlinkForbidden(
+            input.package_root.to_owned(),
+        ));
     }
     if !root_meta.is_dir() {
-        return Err(SkillPackageError::InvalidRoot("package root must be a directory"));
+        return Err(SkillPackageError::InvalidRoot(
+            "package root must be a directory",
+        ));
     }
     let canonical_root = fs::canonicalize(input.package_root)
         .map_err(|source| io_error("canonicalize root", input.package_root, source))?;
@@ -391,6 +448,11 @@ pub fn discover_reviewed_instruction_skill(
         return Err(SkillPackageError::SkillFileTooLarge);
     }
     let skill_bytes = read_bounded(&canonical_root.join("SKILL.md"), MAX_SKILL_MD_BYTES)?;
+    if skill_file.byte_len != u64::try_from(skill_bytes.len()).unwrap_or(u64::MAX)
+        || skill_file.content_digest != BindingDigest::new(sha256(&skill_bytes))
+    {
+        return Err(SkillPackageError::PackageChangedDuringDiscovery);
+    }
     if skill_bytes.iter().filter(|byte| **byte == b'\n').count() + 1 > MAX_SKILL_LINES {
         return Err(SkillPackageError::TooManyLines);
     }
@@ -399,11 +461,13 @@ pub fn discover_reviewed_instruction_skill(
     let package_content_digest = package_content_digest(&files)?;
     let package_ref = package_ref(&manifest.name, &input.version, &input.provenance_refs)?;
     let instruction_ref = digest_ref(SKILL_INSTRUCTION_DOMAIN, body)?;
-    let script_refs = files
+    let mut script_refs = files
         .iter()
         .filter(|file| file.script_candidate)
         .map(|file| file.content_digest)
         .collect::<Vec<_>>();
+    script_refs.sort_unstable();
+    script_refs.dedup();
 
     let descriptor = SkillDescriptor {
         name_ref: digest_ref(SKILL_NAME_DOMAIN, manifest.name.as_bytes())?,
@@ -420,6 +484,15 @@ pub fn discover_reviewed_instruction_skill(
     };
     descriptor.validate()?;
 
+    // Freeze a package identity only when a complete second bounded scan matches the first.
+    // This prevents a reviewed digest from representing a mixed state assembled while files or
+    // directory entries were changing during discovery. Activation still performs its own live
+    // rediscovery immediately before use.
+    let stable_files = collect_package_files(&canonical_root)?;
+    if stable_files != files {
+        return Err(SkillPackageError::PackageChangedDuringDiscovery);
+    }
+
     Ok(ReviewedInstructionSkill {
         canonical_root,
         descriptor,
@@ -435,12 +508,15 @@ fn collect_package_files(root: &Path) -> Result<Vec<SkillPackageFileEvidence>, S
     let mut paths = Vec::new();
     while let Some((directory, depth)) = pending.pop() {
         if depth > MAX_DIRECTORY_DEPTH {
-            return Err(SkillPackageError::InvalidRoot("directory nesting exceeds bound"));
+            return Err(SkillPackageError::InvalidRoot(
+                "directory nesting exceeds bound",
+            ));
         }
         let entries = fs::read_dir(&directory)
             .map_err(|source| io_error("read directory", &directory, source))?;
         for entry in entries {
-            let entry = entry.map_err(|source| io_error("read directory entry", &directory, source))?;
+            let entry =
+                entry.map_err(|source| io_error("read directory entry", &directory, source))?;
             let path = entry.path();
             let metadata = fs::symlink_metadata(&path)
                 .map_err(|source| io_error("inspect package entry", &path, source))?;
@@ -468,8 +544,11 @@ fn collect_package_files(root: &Path) -> Result<Vec<SkillPackageFileEvidence>, S
             .map_err(|_| SkillPackageError::InvalidRelativePath)?;
         let relative_path = normalized_relative_path(relative)?;
         let bytes = read_bounded(&path, MAX_PACKAGE_BYTES)?;
-        let byte_len = u64::try_from(bytes.len()).map_err(|_| SkillPackageError::PackageTooLarge)?;
-        total = total.checked_add(byte_len).ok_or(SkillPackageError::PackageTooLarge)?;
+        let byte_len =
+            u64::try_from(bytes.len()).map_err(|_| SkillPackageError::PackageTooLarge)?;
+        total = total
+            .checked_add(byte_len)
+            .ok_or(SkillPackageError::PackageTooLarge)?;
         if total > MAX_PACKAGE_BYTES {
             return Err(SkillPackageError::PackageTooLarge);
         }
@@ -515,7 +594,9 @@ fn normalized_relative_path(path: &Path) -> Result<String, SkillPackageError> {
     for component in path.components() {
         match component {
             std::path::Component::Normal(value) => {
-                let segment = value.to_str().ok_or(SkillPackageError::InvalidRelativePath)?;
+                let segment = value
+                    .to_str()
+                    .ok_or(SkillPackageError::InvalidRelativePath)?;
                 if segment.is_empty() || segment == "." || segment == ".." {
                     return Err(SkillPackageError::InvalidRelativePath);
                 }
@@ -542,7 +623,9 @@ fn parse_manifest<'a>(
         .next()
         .ok_or(SkillPackageError::InvalidManifest("SKILL.md is empty"))?;
     if first.trim_end_matches(['\r', '\n']) != "---" {
-        return Err(SkillPackageError::InvalidManifest("YAML frontmatter must start with ---"));
+        return Err(SkillPackageError::InvalidManifest(
+            "YAML frontmatter must start with ---",
+        ));
     }
 
     let mut offset = first.len();
@@ -558,13 +641,17 @@ fn parse_manifest<'a>(
         frontmatter_lines.push(trimmed);
     }
     if !closed {
-        return Err(SkillPackageError::InvalidManifest("YAML frontmatter is not closed"));
+        return Err(SkillPackageError::InvalidManifest(
+            "YAML frontmatter is not closed",
+        ));
     }
     let body = bytes
         .get(offset..)
         .ok_or(SkillPackageError::InvalidManifest("invalid body offset"))?;
     if body.is_empty() {
-        return Err(SkillPackageError::InvalidManifest("instruction body is empty"));
+        return Err(SkillPackageError::InvalidManifest(
+            "instruction body is empty",
+        ));
     }
 
     let mut name = None;
@@ -581,11 +668,13 @@ fn parse_manifest<'a>(
         }
         if line.starts_with(' ') || line.starts_with('\t') {
             if !in_metadata {
-                return Err(SkillPackageError::InvalidManifest("nested YAML is supported only for metadata"));
+                return Err(SkillPackageError::InvalidManifest(
+                    "nested YAML is supported only for metadata",
+                ));
             }
             let nested = line.trim();
             let (key, value) = split_scalar(nested)?;
-            validate_metadata_entry(key, value)?;
+            validate_metadata_entry(key, &value)?;
             if metadata.insert(key.to_owned(), value.to_owned()).is_some() {
                 return Err(SkillPackageError::InvalidManifest("duplicate metadata key"));
             }
@@ -605,21 +694,31 @@ fn parse_manifest<'a>(
             "allowed-tools" => set_once(&mut allowed_tools_request, value, "allowed-tools")?,
             "metadata" => {
                 if !value.is_empty() {
-                    return Err(SkillPackageError::InvalidManifest("metadata must be a string mapping"));
+                    return Err(SkillPackageError::InvalidManifest(
+                        "metadata must be a string mapping",
+                    ));
                 }
                 in_metadata = true;
             }
-            _ => return Err(SkillPackageError::InvalidManifest("unsupported frontmatter field")),
+            _ => {
+                return Err(SkillPackageError::InvalidManifest(
+                    "unsupported frontmatter field",
+                ));
+            }
         }
     }
 
     let name = name.ok_or(SkillPackageError::InvalidManifest("missing name"))?;
     validate_skill_name(&name, root)?;
-    let description = description.ok_or(SkillPackageError::InvalidManifest("missing description"))?;
+    let description =
+        description.ok_or(SkillPackageError::InvalidManifest("missing description"))?;
     if description.is_empty() || description.len() > MAX_DESCRIPTION_BYTES {
         return Err(SkillPackageError::DescriptionOutOfBounds);
     }
-    if compatibility.as_ref().is_some_and(|value| value.len() > MAX_COMPATIBILITY_BYTES) {
+    if compatibility
+        .as_ref()
+        .is_some_and(|value| value.len() > MAX_COMPATIBILITY_BYTES)
+    {
         return Err(SkillPackageError::CompatibilityOutOfBounds);
     }
     for (field, value) in [
@@ -652,10 +751,14 @@ fn parse_manifest<'a>(
 fn split_scalar(line: &str) -> Result<(&str, String), SkillPackageError> {
     let (key, raw) = line
         .split_once(':')
-        .ok_or(SkillPackageError::InvalidManifest("frontmatter entry must contain ':'"))?;
+        .ok_or(SkillPackageError::InvalidManifest(
+            "frontmatter entry must contain ':'",
+        ))?;
     let key = key.trim();
     if key.is_empty() {
-        return Err(SkillPackageError::InvalidManifest("frontmatter key is empty"));
+        return Err(SkillPackageError::InvalidManifest(
+            "frontmatter key is empty",
+        ));
     }
     let raw = raw.trim();
     let value = if raw.len() >= 2
@@ -666,8 +769,13 @@ fn split_scalar(line: &str) -> Result<(&str, String), SkillPackageError> {
     } else {
         raw.to_owned()
     };
-    if value.contains(['\0', '\r', '\n']) {
-        return Err(SkillPackageError::InvalidManifest("frontmatter scalar contains forbidden control bytes"));
+    if value
+        .chars()
+        .any(|character| matches!(character, '\0' | '\r' | '\n'))
+    {
+        return Err(SkillPackageError::InvalidManifest(
+            "frontmatter scalar contains forbidden control bytes",
+        ));
     }
     Ok((key, value))
 }
@@ -736,7 +844,9 @@ fn validate_provenance(values: &[BindingDigest]) -> Result<(), SkillPackageError
     Ok(())
 }
 
-fn package_content_digest(files: &[SkillPackageFileEvidence]) -> Result<BindingDigest, SkillPackageError> {
+fn package_content_digest(
+    files: &[SkillPackageFileEvidence],
+) -> Result<BindingDigest, SkillPackageError> {
     let mut encoder = CanonicalEncoder::new();
     encoder.push_bytes(SKILL_CONTENT_DOMAIN)?;
     encoder.push_u64(u64::try_from(files.len()).map_err(|_| SkillPackageError::TooManyFiles)?);
@@ -758,7 +868,10 @@ fn package_ref(
     encoder.push_bytes(SKILL_PACKAGE_DOMAIN)?;
     encoder.push_bytes(name.as_bytes())?;
     encoder.push_bytes(version.as_str().as_bytes())?;
-    encoder.push_u64(u64::try_from(provenance_refs.len()).map_err(|_| SkillPackageError::InvalidProvenanceOrder)?);
+    encoder.push_u64(
+        u64::try_from(provenance_refs.len())
+            .map_err(|_| SkillPackageError::InvalidProvenanceOrder)?,
+    );
     for provenance in provenance_refs {
         encoder.push_bytes(&provenance.bytes())?;
     }
@@ -799,7 +912,8 @@ const fn skill_state_code(state: SkillAdmissionState) -> u8 {
         SkillAdmissionState::LockedVersion => 6,
         SkillAdmissionState::Deprecated => 7,
         SkillAdmissionState::Revoked => 8,
-        SkillAdmissionState::Unknown => 9,
+        SkillAdmissionState::Replaced => 9,
+        SkillAdmissionState::Unknown => 10,
     }
 }
 
@@ -807,13 +921,23 @@ const fn allowed_transition(from: SkillAdmissionState, to: SkillAdmissionState) 
     use SkillAdmissionState::*;
     matches!(
         (from, to),
-        (Discovered, ProvenanceRecorded | Reviewed | Deprecated | Revoked | Unknown)
-            | (ProvenanceRecorded, Reviewed | Deprecated | Revoked | Unknown)
-            | (Reviewed, InstructionAdmitted | ExecutableAdmitted | Deprecated | Revoked | Unknown)
-            | (InstructionAdmitted, ExecutableAdmitted | LockedVersion | Deprecated | Revoked | Unknown)
-            | (ExecutableAdmitted, LockedVersion | Deprecated | Revoked | Unknown)
-            | (LockedVersion, Deprecated | Revoked | Unknown)
-            | (Deprecated, Revoked | Unknown)
+        (
+            Discovered,
+            ProvenanceRecorded | Reviewed | Deprecated | Revoked | Replaced | Unknown
+        ) | (
+            ProvenanceRecorded,
+            Reviewed | Deprecated | Revoked | Replaced | Unknown
+        ) | (
+            Reviewed,
+            InstructionAdmitted | ExecutableAdmitted | Deprecated | Revoked | Replaced | Unknown
+        ) | (
+            InstructionAdmitted,
+            ExecutableAdmitted | LockedVersion | Deprecated | Revoked | Replaced | Unknown
+        ) | (
+            ExecutableAdmitted,
+            LockedVersion | Deprecated | Revoked | Replaced | Unknown
+        ) | (LockedVersion, Deprecated | Revoked | Replaced | Unknown)
+            | (Deprecated, Revoked | Replaced | Unknown)
     )
 }
 
@@ -891,10 +1015,24 @@ mod tests {
     fn discovers_agent_skill_without_granting_allowed_tools_authority() {
         let skill = TempSkill::new("repo-check", "# Repo Check\nRead the repository.", &[]);
         let reviewed = discover(&skill);
-        assert_eq!(reviewed.descriptor().admission_state, SkillAdmissionState::InstructionAdmitted);
-        assert!(reviewed.descriptor().requested_capability_classes.is_empty());
-        assert_eq!(reviewed.descriptor().network_posture, ToolNetworkPosture::Denied);
-        assert_eq!(reviewed.instructions().as_bytes(), b"# Repo Check\nRead the repository.\n");
+        assert_eq!(
+            reviewed.descriptor().admission_state,
+            SkillAdmissionState::InstructionAdmitted
+        );
+        assert!(
+            reviewed
+                .descriptor()
+                .requested_capability_classes
+                .is_empty()
+        );
+        assert_eq!(
+            reviewed.descriptor().network_posture,
+            ToolNetworkPosture::Denied
+        );
+        assert_eq!(
+            reviewed.instructions().as_bytes(),
+            b"# Repo Check\nRead the repository.\n"
+        );
         assert!(reviewed.descriptor().script_refs.is_empty());
     }
 
@@ -983,11 +1121,30 @@ mod tests {
         let binding = lifecycle
             .bind_instruction_activation(digest(10), digest(11), digest(12))
             .unwrap();
-        lifecycle.transition(SkillAdmissionState::Deprecated).unwrap();
+        lifecycle
+            .transition(SkillAdmissionState::Deprecated)
+            .unwrap();
         assert!(lifecycle.activate_instructions(&binding).is_err());
         assert!(matches!(
             lifecycle.transition(SkillAdmissionState::InstructionAdmitted),
             Err(SkillPackageError::InvalidLifecycleTransition { .. })
         ));
+    }
+
+    #[test]
+    fn replacement_invalidates_old_binding_and_creates_new_reviewed_identity() {
+        let old_skill = TempSkill::new("replace-old", "# Old\nOld instructions.", &[]);
+        let new_skill = TempSkill::new("replace-new", "# New\nNew instructions.", &[]);
+        let mut old = SkillLifecycle::new(discover(&old_skill));
+        let old_binding = old
+            .bind_instruction_activation(digest(20), digest(21), digest(22))
+            .unwrap();
+        let replacement = old.replace_with(discover(&new_skill)).unwrap();
+        assert_eq!(old.state(), SkillAdmissionState::Replaced);
+        assert!(old.activate_instructions(&old_binding).is_err());
+        assert_ne!(
+            old.reviewed().descriptor().package_ref,
+            replacement.reviewed().descriptor().package_ref
+        );
     }
 }

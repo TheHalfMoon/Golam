@@ -19,6 +19,7 @@ pub mod process_dispatch_v2;
 #[allow(clippy::redundant_guards)]
 pub mod process_execution_v2;
 pub mod process_secret_evidence;
+pub mod skill_packages;
 pub mod static_elf_v2;
 
 use golam_core::{EffectId, SessionId};
