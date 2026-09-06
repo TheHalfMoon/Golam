@@ -51,10 +51,10 @@ impl DesktopControlEvidenceStore {
         let previous_chain_hash = verify_effect_chain(&tx, evidence.effect_id)?;
         let previous = latest_status(&tx, evidence.effect_id)?;
         validate_transition(previous.map(|value| value.0), evidence.status)?;
-        if let Some((_, previous_time)) = previous {
-            if evidence.recorded_at_unix_ms < previous_time {
-                return Err(DesktopControlEvidenceError::NonMonotonicTime);
-            }
+        if let Some((_, previous_time)) = previous
+            && evidence.recorded_at_unix_ms < previous_time
+        {
+            return Err(DesktopControlEvidenceError::NonMonotonicTime);
         }
         let integrity_hash = chain_hash(payload_hash, previous_chain_hash)?;
         tx.execute(
