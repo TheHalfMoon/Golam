@@ -1,0 +1,21 @@
+# Requirements Quality Checklist — Spec 006
+
+- [x] Scope is bounded to desktop/computer control and desktop shell boundary.
+- [x] Planning authority derives from canonical Spec 001 T060–T071 and closed Spec 005.
+- [x] Product implementation is explicitly blocked until planning canonical closeout.
+- [x] Observation and actuation authority are separated.
+- [x] Semantic actions are primary; raw input fallback is explicit-only.
+- [x] Capture and actuation are separate capabilities/effects.
+- [x] Target identity/stale/focus races are explicit requirements.
+- [x] Windows/macOS/Linux backend directions use official OS/community primitives and honest unsupported states.
+- [x] Windows secure desktop is explicitly not supported.
+- [x] Wayland bypass is explicitly denied.
+- [x] Camera and microphone are explicitly denied.
+- [x] Screenshot OCR/text extraction is deferred to Spec 007.
+- [x] Clipboard requires explicit authority and silent inspection is denied.
+- [x] Raw capture/clipboard payloads are ephemeral by default and secret-safe evidence is required.
+- [x] Tauri frontend is untrusted and cannot receive raw privileged handles.
+- [x] Donor code is reference-only and not architecture authority.
+- [x] No hidden network/cloud fallback is admitted.
+- [x] Fake backend testing precedes native adapter admission.
+- [x] Final exact-head CI, independent review, expected-head merge and post-merge CI are mandatory.
