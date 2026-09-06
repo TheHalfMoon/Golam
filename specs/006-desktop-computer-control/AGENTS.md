@@ -26,6 +26,7 @@ The planning package must complete specification, clarification closeout, resear
 - Prepared actions must fail closed when work-surface, focused element, permission, session, capability, policy, approval, platform identity or control-lease generation drifts.
 - The Tauri native Rust host must authenticate to `golamd` through the existing authenticated local IPC/client-enrollment boundary. Localhost/same-machine location and renderer state are not authentication.
 - Tauri webview/frontend receives only sanitized state and opaque non-authority references; never raw privileged OS handles, local-client authentication material, capability tokens or control-lease authority.
+- Autonomous computer control must remain persistently visible to the local user through at least one qualified visible-control channel that exposes immediate pause/stop/takeover. Loss of every qualified visible-control channel suspends new autonomous actuation fail closed; cached renderer state cannot satisfy visibility.
 - Human pause/stop/takeover is enforced at protected lease/input-authority state. It must advance/suspend/revoke conflicting agent input generation and invalidate stale queued/prepared input; renderer-only pause state is insufficient.
 - No Windows secure-desktop interaction or UAC bypass. Locked/non-interactive Windows desktop and protected-desktop transitions fail closed.
 - No background keylogging.
@@ -40,11 +41,12 @@ The planning package must complete specification, clarification closeout, resear
 
 ## Engineering rules
 
-- Rust owns trusted desktop-control contracts, authenticated client handling, authority checks, control-lease/takeover state, adapter boundaries, evidence and lifecycle state.
+- Rust owns trusted desktop-control contracts, authenticated client handling, authority checks, control-lease/takeover state, visible-control-channel safety state, adapter boundaries, evidence and lifecycle state.
 - Tauri 2 capabilities/permissions are least-privilege and explicit.
 - Platform-specific code stays behind common traits/contracts and must expose unsupported/permission-denied/interrupted states deterministically.
 - Fake backends and adversarial tests precede native adapter admission.
 - Any pixel/vision implementation remains bounded, local, non-authoritative and dependency-gated by Source Foundry; do not expand Spec 006 into screenshot OCR or broad computer vision.
+- The visible autonomous-control indicator/control channel must not rely solely on renderer liveness; its loss must be observable by trusted Rust state and suspend new actuation until a qualified visible channel is restored.
 - Takeover qualification must cover latency, stale lease generations/refs, wrong-window hazards, focus theft, restart/reconnect and uncertain already-dispatched effects.
 - Windows qualification must cover locked/UAC/secure-desktop and interactive-session transitions with fail-closed behavior; unsupported runner conditions must be reported honestly rather than fabricated.
 - No force-push, rebase, history rewrite, stale CI reuse, stale review reuse, or completion claims without exact evidence.
