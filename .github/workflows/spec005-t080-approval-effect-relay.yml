@@ -52,15 +52,15 @@ jobs:
           export GOLAM_PROCESS_V2_HELPER="$PWD/target/debug/deps/golam-native-exec-helper-v2"
           export GOLAM_PROCESS_SECRET_CANARY='SPEC005_PROCESS_SECRET_MUST_NOT_CROSS_EXEC_BOUNDARY'
           cargo +1.98.0 test --locked -p golamd --test process_v2_qualification -- --ignored --nocapture
-      - name: Commit exact qualified repair
+      - name: Commit exact qualified source repair
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin impl/005-local-tools-context-memory
           test "$(git rev-parse origin/impl/005-local-tools-context-memory)" = "$GITHUB_SHA"
-          git rm .github/workflows/spec005-t080-approval-effect-relay.yml scripts/qualification/spec005_t080_approval_effect_repair.py scripts/qualification/spec005_t080_approval_effect_repair_v2.py scripts/qualification/spec005_t080_approval_effect_repair_v3.py scripts/qualification/spec005_t080_payload_recipe_repair.py scripts/qualification/spec005_t080_stage_layout_repair.py scripts/qualification/spec005_t080_ready_diag.py scripts/qualification/spec005_t080_fd_hygiene_repair.py scripts/qualification/spec005_t080_argv_fixture_repair.py scripts/qualification/spec005_t080_ready_budget_repair.py
+          git rm scripts/qualification/spec005_t080_approval_effect_repair.py scripts/qualification/spec005_t080_approval_effect_repair_v2.py scripts/qualification/spec005_t080_approval_effect_repair_v3.py scripts/qualification/spec005_t080_payload_recipe_repair.py scripts/qualification/spec005_t080_stage_layout_repair.py scripts/qualification/spec005_t080_ready_diag.py scripts/qualification/spec005_t080_fd_hygiene_repair.py scripts/qualification/spec005_t080_argv_fixture_repair.py scripts/qualification/spec005_t080_ready_budget_repair.py
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .github/workflows/ci.yml crates/golam-kernel/src/approval_lifecycle.rs crates/golam-kernel/src/policy_lifecycle.rs crates/golam-kernel/src/capability_lease_effect.rs crates/golamd/src/bin/golam-native-exec-helper-v2.rs crates/golamd/src/process_dispatch_v2.rs crates/golamd/tests/process_v2_qualification.rs
+          git add crates/golam-kernel/src/approval_lifecycle.rs crates/golam-kernel/src/policy_lifecycle.rs crates/golam-kernel/src/capability_lease_effect.rs crates/golamd/src/bin/golam-native-exec-helper-v2.rs crates/golamd/src/process_dispatch_v2.rs crates/golamd/tests/process_v2_qualification.rs
           git commit -m 'fix(005): govern exact process qualification'
           git push origin HEAD:impl/005-local-tools-context-memory
