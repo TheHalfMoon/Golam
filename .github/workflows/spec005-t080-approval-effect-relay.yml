@@ -1,5 +1,6 @@
 name: spec005-t080-approval-effect-relay
 
+# Exact-head repair trigger for T005-080 qualification convergence.
 on:
   push:
     branches:
