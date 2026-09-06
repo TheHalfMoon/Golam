@@ -225,7 +225,7 @@ fn bind_durable_interactive_state(
         .iter()
         .find(|stored| stored.channel_id == channel.channel_id)
     {
-        Some(stored) if *stored == channel => {}
+        Some(stored) if stored == channel => {}
         Some(_) => return Err(DesktopControlEvidenceError::StaleGeneration.into()),
         None => {
             store.persist_visible_channel(*channel)?;
