@@ -1,0 +1,56 @@
+name: spec005-i-optionality
+
+on:
+  push:
+    branches:
+      - impl/005-local-tools-context-memory
+    paths:
+      - .github/workflows/spec005-i-optionality.yml
+
+permissions:
+  contents: read
+
+jobs:
+  measure-optionality:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+      - name: Qualify L0 context and optionality boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +1.98.0 fmt --all -- --check
+          cargo +1.98.0 clippy --locked -p golam-core -p golamd --all-targets -- -D warnings
+          cargo +1.98.0 test --locked -p golam-core context_compiler::
+          cargo +1.98.0 test --locked -p golamd local_read::
+          cargo +1.98.0 test --locked -p golamd local_walk::
+          cargo +1.98.0 test --locked -p golamd local_search::
+          cargo +1.98.0 test --locked -p golamd git_read::
+          cargo +1.98.0 test --locked -p golamd git_observe::
+          cargo +1.98.0 test --locked -p golamd git_status::
+          cargo +1.98.0 test --locked -p golamd mcp_remote_gate::
+          cargo +1.98.0 test --locked -p golamd --lib
+          python3 - <<'PY'
+          from pathlib import Path
+          lock = Path('Cargo.lock').read_text()
+          forbidden_lock = [
+              'name = "tree-sitter"',
+              'name = "qdrant"',
+              'name = "qdrant-client"',
+              'name = "reqwest"',
+              'name = "hyper"',
+          ]
+          found = [item for item in forbidden_lock if item in lock]
+          if found:
+              raise SystemExit(f'unexpected optional dependency already admitted: {found}')
+
+          manifests = '\n'.join(path.read_text() for path in Path('crates').glob('*/Cargo.toml'))
+          ui_dependencies = ['enigo', 'rdev', 'x11rb', 'winit', 'tao', 'scrap']
+          found_ui = [item for item in ui_dependencies if item in manifests]
+          if found_ui:
+              raise SystemExit(f'unexpected Spec 006 UI/control dependency in Spec 005: {found_ui}')
+          PY
