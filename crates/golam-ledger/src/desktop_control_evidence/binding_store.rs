@@ -137,6 +137,23 @@ impl super::DesktopControlEvidenceStore {
         )
     }
 
+    pub fn binding_terminal_evidence(
+        &self,
+        effect_id: EffectId,
+        status: DesktopEvidenceStatus,
+        recorded_at_unix_ms: u64,
+    ) -> Result<DesktopEffectEvidence, DesktopControlEvidenceError> {
+        if !matches!(
+            status,
+            DesktopEvidenceStatus::Succeeded
+                | DesktopEvidenceStatus::Failed
+                | DesktopEvidenceStatus::Interrupted
+        ) {
+            return Err(DesktopControlEvidenceError::InvalidEvidenceTransition);
+        }
+        self.binding_evidence(effect_id, status, None, recorded_at_unix_ms)
+    }
+
     pub fn latest_effect_reconciliation_ref(
         &self,
         effect_id: EffectId,
