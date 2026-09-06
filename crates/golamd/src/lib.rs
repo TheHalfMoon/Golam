@@ -11,6 +11,7 @@ mod sys {
     }
 }
 
+pub mod acp_adapter;
 pub mod local_fs;
 pub mod mcp_local_process_v2;
 #[cfg(test)]

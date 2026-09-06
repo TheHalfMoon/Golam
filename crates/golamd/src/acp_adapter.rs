@@ -123,11 +123,7 @@ impl AcpClientBinding {
         validate_text(scope, MAX_SCOPE_BYTES, AcpAdapterError::InvalidScope)?;
 
         let scope_ref = scope_ref(scope)?;
-        let binding_digest = client_binding_digest(
-            authenticated,
-            principal.subject,
-            scope_ref,
-        )?;
+        let binding_digest = client_binding_digest(authenticated, principal.subject, scope_ref)?;
         Ok(Self {
             client_id: authenticated.client_id(),
             connection_id: authenticated.connection_id(),
@@ -187,10 +183,7 @@ impl AcpClientBinding {
         })
     }
 
-    pub fn revalidate_request(
-        &self,
-        request: &AcpRequestBinding,
-    ) -> Result<(), AcpAdapterError> {
+    pub fn revalidate_request(&self, request: &AcpRequestBinding) -> Result<(), AcpAdapterError> {
         if request.client_binding_digest != self.binding_digest {
             return Err(AcpAdapterError::ClientBindingMismatch);
         }
@@ -256,9 +249,7 @@ mod tests {
     use golam_core::{PROTOCOL_VERSION, ResourceLimits};
     use golam_ipc::client_handshake::sign_authenticate;
     use golam_ipc::credentials::ClientCredentialStore;
-    use golam_ipc::lifecycle::{
-        ClientKeyId, EnrolledClientKey, Hello, ServerLifecycle,
-    };
+    use golam_ipc::lifecycle::{ClientKeyId, EnrolledClientKey, Hello, ServerLifecycle};
     use std::fs;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -292,21 +283,11 @@ mod tests {
             client_id: generated.client_id,
             client_nonce: [5; 32],
         };
-        let mut lifecycle = ServerLifecycle::new(
-            71,
-            [7; 32],
-            ResourceLimits::default(),
-            ConnectionId(72),
-        )
-        .unwrap();
+        let mut lifecycle =
+            ServerLifecycle::new(71, [7; 32], ResourceLimits::default(), ConnectionId(72)).unwrap();
         let challenge = lifecycle.receive_hello(hello).unwrap();
-        let authenticate = sign_authenticate(
-            hello,
-            challenge,
-            generated.key_id,
-            &signing_key,
-        )
-        .unwrap();
+        let authenticate =
+            sign_authenticate(hello, challenge, generated.key_id, &signing_key).unwrap();
         lifecycle
             .authenticate(
                 authenticate,
@@ -332,7 +313,10 @@ mod tests {
         assert_eq!(binding.client_id(), authenticated.client_id());
         assert_eq!(binding.connection_id(), authenticated.connection_id());
         assert_eq!(binding.principal().kind, PrincipalKind::EnrolledClient);
-        assert_eq!(binding.principal().client_id, Some(authenticated.client_id()));
+        assert_eq!(
+            binding.principal().client_id,
+            Some(authenticated.client_id())
+        );
         assert_eq!(binding.scope(), "project:read");
         fs::remove_dir_all(runtime.root).unwrap();
     }
