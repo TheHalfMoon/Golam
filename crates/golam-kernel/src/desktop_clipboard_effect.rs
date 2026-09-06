@@ -27,6 +27,7 @@ const CLIPBOARD_PAYLOAD_DOMAIN: &[u8] = b"golam:desktop-clipboard-payload:v1";
 const CLIPBOARD_RECEIPT_DOMAIN: &[u8] = b"golam:desktop-clipboard-receipt:v1";
 const CLIPBOARD_HANDLER_ID: &str = "golam-desktop-clipboard";
 const CLIPBOARD_HANDLER_VERSION: &str = "1";
+const CLIPBOARD_PROVIDER_ID: &str = "golam-desktop-clipboard-v1";
 
 pub struct PrepareDesktopClipboard<'a> {
     pub request: &'a PreparedToolRequest,
@@ -183,6 +184,17 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
                 return Err(DesktopClipboardError::Revalidation(error));
             }
         };
+
+        let intent_bytes = input.prepared.intent().canonical_bytes()?;
+        self.record_tool_mutation_intent(
+            principal,
+            input.prepared.effect(),
+            CLIPBOARD_PROVIDER_ID,
+            &intent_bytes,
+            scope,
+        )
+        .map_err(ToolEffectError::MutationEvidence)?;
+
         let receipt = match input.backend.clipboard(validated) {
             Ok(receipt) => receipt,
             Err(error) => {
