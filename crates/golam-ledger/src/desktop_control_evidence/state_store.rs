@@ -1,12 +1,12 @@
 #![forbid(unsafe_code)]
 
+use golam_core::CanonicalEncoder;
 use golam_core::desktop_control::{
     DesktopControlLeaseId, DesktopControlLeaseState, DesktopControlMode, HumanInterruptEvidence,
     HumanInterruptOperation, VisibleControlChannelId, VisibleControlChannelKind,
     VisibleControlChannelState,
 };
 use golam_core::tool_request::BindingDigest;
-use golam_core::CanonicalEncoder;
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 
 use super::{DesktopControlEvidenceError, DesktopControlEvidenceStore};
@@ -136,7 +136,9 @@ impl DesktopControlEvidenceStore {
                 i64_from_u64(lease.expires_at_unix_ms)?,
                 lease.capability_ref.bytes().to_vec(),
                 lease.policy_ref.bytes().to_vec(),
-                lease.interrupt_cause_ref.map(|value| value.bytes().to_vec()),
+                lease
+                    .interrupt_cause_ref
+                    .map(|value| value.bytes().to_vec()),
                 canonical,
                 integrity_hash.to_vec(),
             ],
@@ -443,9 +445,7 @@ fn decode_channel(
     Ok(channel)
 }
 
-fn lease_hash(
-    lease: &DesktopControlLeaseState,
-) -> Result<[u8; 32], DesktopControlEvidenceError> {
+fn lease_hash(lease: &DesktopControlLeaseState) -> Result<[u8; 32], DesktopControlEvidenceError> {
     let mut encoder = CanonicalEncoder::new();
     encoder.push_bytes(LEASE_STATE_DOMAIN)?;
     encoder.push_bytes(&lease.canonical_bytes()?)?;
@@ -564,10 +564,7 @@ fn i64_from_u64(value: u64) -> Result<i64, DesktopControlEvidenceError> {
     i64::try_from(value).map_err(|_| DesktopControlEvidenceError::IntegerOverflow)
 }
 
-fn u64_from_i64(
-    value: i64,
-    field: &'static str,
-) -> Result<u64, DesktopControlEvidenceError> {
+fn u64_from_i64(value: i64, field: &'static str) -> Result<u64, DesktopControlEvidenceError> {
     u64::try_from(value).map_err(|_| DesktopControlEvidenceError::InvalidStoredRecord(field))
 }
 
