@@ -1,5 +1,13 @@
 # Desktop Action Contract
 
+## Route ordering
+
+Spec 006 does not authorize bypassing stronger constitutional control routes. Applicable routes are evaluated in this order:
+
+`domain/application API → native OS automation API → accessibility/semantic tree → browser DOM/protocol → deterministic keyboard/mouse control → vision/pixel fallback`
+
+A route may be skipped only when it is genuinely inapplicable, unavailable, unsupported, denied by required authority/permission, or has failed without creating ambiguous side effects. The raw-input adapter and any pixel-hint producer cannot self-assert fallback eligibility.
+
 ## Semantic action
 
 Supported abstract families include invoke, select, toggle, focus, scroll, set-value and platform-equivalent semantic actions.
@@ -19,11 +27,13 @@ The intent becomes immutable at `Effect PREPARED`. Immediately before dispatch, 
 
 ## Raw fallback
 
-Raw pointer/keyboard input is a distinct operation class with its own ToolRequest, request/effect/intent bindings, capability, explicit fallback policy, required approval and current protected control-lease generation. Semantic failure cannot manufacture or inherit this authority.
+Raw pointer/keyboard input is a distinct operation class with its own ToolRequest, request/effect/intent bindings, capability, explicit fallback policy, required approval, current protected control-lease generation and a canonical `fallback_eligibility_evidence_digest` proving the applicable higher-priority routes were evaluated under the constitutional ordering. Semantic failure cannot manufacture or inherit this authority.
 
-A bounded `PixelTargetHint` may be attached to a raw fallback only as untrusted candidate geometry. The hint binds capture/source provenance, coordinate-space metadata, expiry and digest. It cannot supply semantic identity, capability, policy, approval, Effect authority or a valid control lease. Before dispatch the runtime must fresh-observe and bind the exact work surface/focus/session and revalidate the hint against that state. OCR/text extraction from raw screenshot pixels is not part of Spec 006.
+A bounded `PixelTargetHint` may be attached to a raw fallback only as untrusted candidate geometry. The hint binds capture/source provenance, coordinate-space metadata, expiry and digest. It cannot supply semantic identity, capability, policy, approval, Effect authority, fallback eligibility or a valid control lease. Before dispatch the runtime must fresh-observe and bind the exact work surface/focus/session and revalidate the hint against that state. OCR/text extraction from raw screenshot pixels is not part of Spec 006.
 
 Raw fallback is always denied for:
+- an applicable higher-priority constitutional route that remains available and authorized;
+- missing/stale/substituted fallback-eligibility evidence;
 - Windows secure desktop, UAC secure desktop or a locked/non-interactive Windows session;
 - background keylogging/listening;
 - unspecified global target;
@@ -42,7 +52,7 @@ Releasing human-exclusive control requires a protected attributable transition. 
 
 ## Lifecycle
 
-`ToolRequest → immutable action intent + exact control-lease generation → capability/policy/approval → Effect PREPARED → Kernel/Effect Gate → immediate request/effect/intent/target/permission/lease-generation revalidation → bounded platform dispatch → post-action evidence → terminal reconciliation`
+`route evaluation → ToolRequest → immutable action intent + exact control-lease generation → capability/policy/approval → Effect PREPARED → Kernel/Effect Gate → immediate request/effect/intent/target/permission/lease-generation/fallback-eligibility/visible-channel revalidation → bounded platform dispatch → post-action evidence → terminal reconciliation`
 
 ## Outcome
 
