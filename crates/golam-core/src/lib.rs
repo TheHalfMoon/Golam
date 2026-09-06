@@ -7,6 +7,8 @@ pub mod context_compiler;
 pub mod context_evidence;
 pub mod context_projection;
 pub mod desktop_backend;
+#[cfg(test)]
+mod desktop_backend_tests;
 pub mod desktop_control;
 pub mod desktop_intent;
 pub mod digest;
