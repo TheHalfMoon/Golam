@@ -61,6 +61,14 @@ If execution may have crossed the side-effect boundary and terminal truth is unc
 
 If no qualified visible-control channel is active at final revalidation, new autonomous interactive actuation fails closed before platform dispatch.
 
+## Focus lifecycle
+
+Focus is a consequential side effect and uses its own governed effect lifecycle rather than relying on observation or UI convention:
+
+`observe/select exact work surface → create FOCUS ToolRequest → prepare immutable focus intent bound to exact work-surface identity + capability/policy/approval + current control-lease generation + qualified visible-control-channel state → Effect PREPARED → Kernel/Effect Gate → immediate request/effect/intent/work-surface/session/permission/control-lease/visible-channel revalidation → bounded platform focus dispatch → observe actual focus → terminal evidence/reconciliation`
+
+Missing, stale, mismatched or substituted Gate authorization fails closed before focus dispatch. Focus success must be re-observed; a dispatch attempt does not itself prove that the intended surface became focused. If focus may have crossed the effect boundary but terminal truth is uncertain, persist `UNKNOWN_OUTCOME` and block conflicting or focus-dependent action until reconciliation. Restart, reconnect, human takeover or a weaker route cannot convert uncertain focus into permission to proceed.
+
 ## Capture lifecycle
 
 `select explicit source → create ToolRequest → prepare immutable capture intent with capability/policy/approval + exact source/limits → Effect PREPARED → Kernel/Effect Gate → immediate request/effect/intent/source/permission revalidation → bounded native capture → compute digest/metadata → finalize Effect terminal status → hand ephemeral bytes only to authorized local consumer → release native resources`
@@ -112,7 +120,7 @@ Requirements:
 3. Windows semantic/capture/raw adapters may introduce only exact qualified platform crates/libraries after Source Foundry admission; qualify locked/UAC/secure-desktop and session-transition fail-closed behavior.
 4. macOS accessibility/capture/raw adapters may introduce only exact qualified bindings/libraries after Source Foundry admission; qualify TCC permission changes and stale element/session behavior.
 5. Linux AT-SPI/X11/Wayland portal/EIS adapters may introduce only exact qualified bindings/libraries after Source Foundry admission; qualify compositor/portal/session termination behavior.
-6. Cross-platform fake/native qualification covers route ordering, unsupported-state, permission-loss, uncertain-completion, stale/focus race, Gate authorization absence/staleness/mismatch/substitution, pixel-hint non-authority, visible-channel loss, human takeover and reconciliation.
+6. Cross-platform fake/native qualification covers route ordering, unsupported-state, permission-loss, uncertain-completion, stale/focus race, Gate authorization absence/staleness/mismatch/substitution for focus/raw/clipboard paths, pixel-hint non-authority, visible-channel loss, human takeover and reconciliation.
 7. Donor behavioral evidence remains reference-only unless a later bounded source is separately admitted through Source Foundry; no donor runtime or architecture is implicitly admitted.
 
 ## Final convergence
