@@ -57,7 +57,8 @@ Rules: observation is read-only evidence and does not imply action authority.
 ## PreparedDesktopAction
 
 Fields:
-- effect id
+- request id + canonical request digest
+- effect id + immutable effect binding digest
 - operation kind (`SEMANTIC_ACTION`, `RAW_INPUT_FALLBACK`, `FOCUS`, `CLIPBOARD_WRITE`, etc.)
 - exact target identity digest
 - action payload digest
@@ -67,52 +68,60 @@ Fields:
 - expiration/deadline
 - canonical intent digest
 
-Rules: immutable after PREPARED; any relevant drift invalidates dispatch.
+Rules: request and effect bindings are distinct, immutable after `Effect PREPARED`, and revalidated immediately before dispatch. Missing, mismatched, stale or substituted bindings fail closed.
 
 ## CaptureIntent
 
 Fields:
-- effect/request id
+- request id + canonical request digest
+- effect id + immutable effect binding digest
 - selected source identity digest
+- capture capability/policy/approval refs
 - dimensions/frame/byte/time limits
 - cursor/audio policy
-- system permission/session evidence ref
+- prepared system permission/session evidence ref
 - retention policy (`EPHEMERAL_ONLY` in default Spec 006 path)
 - canonical intent digest
 
-Rules: audio policy is always disabled in Spec 006; capture cannot broaden source after preparation.
+Rules: audio policy is always disabled in Spec 006; capture cannot broaden source after preparation. The request, effect, intent and authority bindings are immutable after `Effect PREPARED`; missing, mismatched or stale authority fails before native capture dispatch.
 
 ## CaptureObservation
 
 Fields:
+- request digest + effect binding digest + intent digest
 - source identity digest
 - capture timestamp
 - width/height/format
 - payload byte count
 - payload digest
 - permission/session evidence ref
-- terminal status
+- terminal status (`COMMITTED`, `FAILED_BEFORE_EFFECT`, `UNKNOWN_OUTCOME`, `PERMISSION_REVOKED`, `STALE_TARGET`, `NOT_SUPPORTED`)
+- reconciliation evidence ref when terminal truth required reconciliation
 
-Rules: raw bytes are not included in ordinary durable record; payload digest is not action authority.
+Rules: raw bytes are not included in ordinary durable record; payload digest is not action authority. If capture may have crossed the effect boundary but terminal truth is uncertain, durable status is `UNKNOWN_OUTCOME` and conflicting retry/reuse is blocked until reconciliation.
 
 ## ClipboardIntent
 
 Fields:
+- request id + canonical request digest
+- effect id + immutable effect binding digest
 - operation (`READ` or `WRITE`)
-- capability/policy/approval/effect refs
+- capability/policy/approval refs
 - max byte limit
 - content digest for writes
 - expiration
+- canonical intent digest
 
-Rules: no polling/background inspection; read payload ephemeral by default.
+Rules: immutable after `Effect PREPARED`; no polling/background inspection; read payload ephemeral by default. Missing, mismatched or stale request/effect/authority bindings fail closed before clipboard access.
 
 ## DesktopActionOutcome
 
 Fields:
-- effect id + intent digest
+- request digest + effect id/effect binding digest + intent digest
 - attempted target digest
 - status (`DENIED`, `COMMITTED`, `FAILED_BEFORE_EFFECT`, `UNKNOWN_OUTCOME`, `STALE_TARGET`, `PERMISSION_REVOKED`, `NOT_SUPPORTED`)
 - post-action observation/evidence ref when available
+- reconciliation evidence ref when applicable
 - platform error class sanitized
 - timing/limit metadata
 
