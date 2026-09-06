@@ -176,7 +176,9 @@ impl ProtectedDesktopControlState {
     }
 }
 
-fn validate_interrupt_request(request: &HumanInterruptRequest) -> Result<(), DesktopAuthorityError> {
+fn validate_interrupt_request(
+    request: &HumanInterruptRequest,
+) -> Result<(), DesktopAuthorityError> {
     if request.interrupt_id == 0
         || request.attributed_local_source_ref.bytes() == [0; 32]
         || request.accepted_at_unix_ms == 0
@@ -207,15 +209,19 @@ fn transition_mode(
         (DesktopControlMode::AgentAllowed, HumanInterruptOperation::Pause) => {
             Ok(DesktopControlMode::Paused)
         }
-        (DesktopControlMode::AgentAllowed | DesktopControlMode::Paused, HumanInterruptOperation::Takeover) => {
-            Ok(DesktopControlMode::HumanExclusive)
-        }
+        (
+            DesktopControlMode::AgentAllowed | DesktopControlMode::Paused,
+            HumanInterruptOperation::Takeover,
+        ) => Ok(DesktopControlMode::HumanExclusive),
         (DesktopControlMode::HumanExclusive, HumanInterruptOperation::ReleaseHumanExclusive) => {
             Ok(DesktopControlMode::AgentAllowed)
         }
-        (DesktopControlMode::AgentAllowed | DesktopControlMode::Paused | DesktopControlMode::HumanExclusive, HumanInterruptOperation::Stop) => {
-            Ok(DesktopControlMode::Revoked)
-        }
+        (
+            DesktopControlMode::AgentAllowed
+            | DesktopControlMode::Paused
+            | DesktopControlMode::HumanExclusive,
+            HumanInterruptOperation::Stop,
+        ) => Ok(DesktopControlMode::Revoked),
         _ => Err(DesktopAuthorityError::InvalidInterruptTransition),
     }
 }
@@ -268,9 +274,7 @@ impl From<DesktopControlError> for DesktopAuthorityError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use golam_core::desktop_control::{
-        DesktopControlLeaseId, VisibleControlChannelKind,
-    };
+    use golam_core::desktop_control::{DesktopControlLeaseId, VisibleControlChannelKind};
 
     fn digest(value: u8) -> BindingDigest {
         BindingDigest::new([value; 32])
@@ -330,7 +334,10 @@ mod tests {
             .unwrap();
         assert_eq!(evidence.prior_generation, 1);
         assert_eq!(evidence.resulting_generation, 2);
-        assert_eq!(state.current_lease().mode, DesktopControlMode::HumanExclusive);
+        assert_eq!(
+            state.current_lease().mode,
+            DesktopControlMode::HumanExclusive
+        );
         assert!(!state.autonomous_actuation_allowed(100));
         assert_eq!(evidence.takeover_latency_ms().unwrap(), 1);
     }
@@ -340,10 +347,9 @@ mod tests {
         let mut state = ProtectedDesktopControlState::new(lease(), vec![channel()]).unwrap();
         assert_eq!(
             state
-                .apply_human_interrupt(interrupt(
-                    HumanInterruptOperation::ReleaseHumanExclusive,
-                    1,
-                ))
+                .apply_human_interrupt(
+                    interrupt(HumanInterruptOperation::ReleaseHumanExclusive, 1,)
+                )
                 .unwrap_err(),
             DesktopAuthorityError::InvalidInterruptTransition
         );
@@ -358,10 +364,9 @@ mod tests {
         state.upsert_visible_channel(hidden).unwrap();
         assert_eq!(
             state
-                .apply_human_interrupt(interrupt(
-                    HumanInterruptOperation::ReleaseHumanExclusive,
-                    3,
-                ))
+                .apply_human_interrupt(
+                    interrupt(HumanInterruptOperation::ReleaseHumanExclusive, 3,)
+                )
                 .unwrap_err(),
             DesktopAuthorityError::NoQualifiedVisibleChannel
         );
