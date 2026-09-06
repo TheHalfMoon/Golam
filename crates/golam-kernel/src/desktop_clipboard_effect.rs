@@ -12,6 +12,10 @@ use golam_core::desktop_intent::{
 use golam_core::digest::sha256;
 use golam_core::tool_request::{BindingDigest, PreparedToolRequest};
 use golam_core::{CanonicalEncoder, CoreError, EffectId, SessionId};
+use golam_ledger::desktop_control_evidence::{
+    DesktopControlEvidenceError, DesktopControlEvidenceStore, DesktopEffectEvidence,
+    DesktopEvidenceOperation, DesktopEvidenceStatus,
+};
 
 use crate::desktop_effect::effect_binding;
 use crate::{
@@ -58,6 +62,8 @@ pub struct DispatchDesktopClipboard<'a, B: DesktopBackend> {
     pub prepared: &'a PreparedDesktopClipboard,
     pub current_request: &'a PreparedToolRequest,
     pub current_authority: AuthorityBindings,
+    /// Caller input can only conservatively add a block. Durable protected
+    /// evidence is authoritative and cannot be cleared by passing `false`.
     pub unresolved_conflicting_unknown_outcome: bool,
     pub now_unix_ms: u64,
     pub finished_at: &'a str,
@@ -68,8 +74,10 @@ struct CompleteDesktopClipboard<'a> {
     prepared: &'a PreparedDesktopClipboard,
     finished_at: &'a str,
     completion: ToolExecutionCompletion,
+    evidence_status: DesktopEvidenceStatus,
     reason_code: &'a str,
     receipt: Option<&'a [u8]>,
+    recorded_at_unix_ms: u64,
 }
 
 impl<P: AuthorizationPolicy> KernelApi<P> {
@@ -133,8 +141,17 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         if input.finished_at.is_empty() || input.now_unix_ms == 0 {
             return Err(DesktopClipboardError::InvalidDispatchInput);
         }
+        let mut evidence_store = DesktopControlEvidenceStore::open(&self.authority)?;
+        let durable_unknown = evidence_store
+            .has_unresolved_unknown_outcome_for_effect(input.prepared.effect().effect_id())?;
         let capabilities = input.backend.capabilities()?;
         let effect = effect_binding(input.prepared.effect())?;
+        evidence_store.append_effect_evidence(clipboard_evidence(
+            &evidence_store,
+            input.prepared,
+            DesktopEvidenceStatus::Prepared,
+            input.now_unix_ms,
+        )?)?;
         let context = ClipboardDispatchContext {
             intent: input.prepared.intent(),
             now_unix_ms: input.now_unix_ms,
@@ -143,19 +160,23 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             current_gate_authorization_digest: effect.gate_authorization_digest,
             current_authority: input.current_authority,
             current_capabilities: &capabilities,
-            unresolved_conflicting_unknown_outcome: input.unresolved_conflicting_unknown_outcome,
+            unresolved_conflicting_unknown_outcome: durable_unknown
+                || input.unresolved_conflicting_unknown_outcome,
         };
         let validated = match context.authorize() {
             Ok(validated) => validated,
             Err(error) => {
                 self.complete_clipboard(
+                    &mut evidence_store,
                     principal,
                     CompleteDesktopClipboard {
                         prepared: input.prepared,
                         finished_at: input.finished_at,
                         completion: ToolExecutionCompletion::Failed,
+                        evidence_status: DesktopEvidenceStatus::Failed,
                         reason_code: "desktop_clipboard_revalidation_failed_before_dispatch",
                         receipt: None,
+                        recorded_at_unix_ms: input.now_unix_ms,
                     },
                     scope,
                 )?;
@@ -166,13 +187,16 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             Ok(receipt) => receipt,
             Err(error) => {
                 self.complete_clipboard(
+                    &mut evidence_store,
                     principal,
                     CompleteDesktopClipboard {
                         prepared: input.prepared,
                         finished_at: input.finished_at,
                         completion: ToolExecutionCompletion::UnknownOutcome,
+                        evidence_status: DesktopEvidenceStatus::UnknownOutcome,
                         reason_code: "desktop_clipboard_adapter_error_after_dispatch_boundary",
                         receipt: None,
+                        recorded_at_unix_ms: input.now_unix_ms,
                     },
                     scope,
                 )?;
@@ -181,19 +205,23 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         };
         let completion = classify_receipt(input.prepared, &receipt);
         let receipt_bytes = clipboard_receipt_bytes(&receipt)?;
+        let evidence_status = evidence_status_for_receipt(completion, receipt.status);
         let reason_code = match completion {
             ToolExecutionCompletion::Succeeded => "desktop_clipboard_succeeded",
             ToolExecutionCompletion::Failed => "desktop_clipboard_terminal_failure",
             ToolExecutionCompletion::UnknownOutcome => "desktop_clipboard_unknown_outcome",
         };
         self.complete_clipboard(
+            &mut evidence_store,
             principal,
             CompleteDesktopClipboard {
                 prepared: input.prepared,
                 finished_at: input.finished_at,
                 completion,
+                evidence_status,
                 reason_code,
                 receipt: Some(receipt_bytes.as_slice()),
+                recorded_at_unix_ms: input.now_unix_ms,
             },
             scope,
         )?;
@@ -205,6 +233,7 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
 
     fn complete_clipboard(
         &mut self,
+        evidence_store: &mut DesktopControlEvidenceStore,
         principal: Principal<'_>,
         input: CompleteDesktopClipboard<'_>,
         scope: &str,
@@ -221,12 +250,59 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             },
             scope,
         )?;
+        evidence_store.append_effect_evidence(clipboard_evidence(
+            evidence_store,
+            input.prepared,
+            input.evidence_status,
+            input.recorded_at_unix_ms,
+        )?)?;
         Ok(())
+    }
+}
+
+fn clipboard_evidence(
+    store: &DesktopControlEvidenceStore,
+    prepared: &PreparedDesktopClipboard,
+    status: DesktopEvidenceStatus,
+    recorded_at_unix_ms: u64,
+) -> Result<DesktopEffectEvidence, DesktopClipboardError> {
+    let intent = prepared.intent();
+    Ok(DesktopEffectEvidence {
+        effect_id: prepared.effect().effect_id(),
+        session_id: store.effect_session_id(prepared.effect().effect_id())?,
+        operation: match intent.operation {
+            ClipboardOperation::Read => DesktopEvidenceOperation::ClipboardRead,
+            ClipboardOperation::Write => DesktopEvidenceOperation::ClipboardWrite,
+        },
+        request_digest: intent.request.canonical_request_digest,
+        effect_digest: intent.effect.immutable_effect_digest,
+        intent_digest: intent.intent_digest()?,
+        fallback_eligibility_digest: None,
+        control_lease_digest: None,
+        visible_channel_digest: None,
+        permission_session_digest: intent.prepared_permission_session_evidence_ref,
+        target_or_source_digest: intent.content_digest.unwrap_or(intent.request.canonical_request_digest),
+        status,
+        reconciliation_ref: None,
+        recorded_at_unix_ms,
+    })
+}
+
+fn evidence_status_for_receipt(
+    completion: ToolExecutionCompletion,
+    status: DesktopBackendTerminalStatus,
+) -> DesktopEvidenceStatus {
+    match (completion, status) {
+        (_, DesktopBackendTerminalStatus::Interrupted) => DesktopEvidenceStatus::Interrupted,
+        (ToolExecutionCompletion::Succeeded, _) => DesktopEvidenceStatus::Succeeded,
+        (ToolExecutionCompletion::Failed, _) => DesktopEvidenceStatus::Failed,
+        (ToolExecutionCompletion::UnknownOutcome, _) => DesktopEvidenceStatus::UnknownOutcome,
     }
 }
 
 fn validate_prepare(input: &PrepareDesktopClipboard<'_>) -> Result<(), DesktopClipboardError> {
     if input.effect_id.0 == 0
+        || input.session_id.0 == 0
         || input.started_at.is_empty()
         || input.expires_at_unix_ms == 0
         || input.max_bytes == 0
@@ -330,6 +406,7 @@ pub enum DesktopClipboardError {
     AdapterUncertain(DesktopBackendError),
     UnknownOutcome(ClipboardBackendReceipt),
     Backend(DesktopBackendError),
+    Evidence(DesktopControlEvidenceError),
     Kernel(crate::DesktopKernelError),
     Intent(golam_core::desktop_intent::DesktopIntentError),
     Effect(ToolEffectError),
@@ -349,6 +426,7 @@ impl fmt::Display for DesktopClipboardError {
             }
             Self::UnknownOutcome(_) => f.write_str("desktop clipboard outcome is unknown"),
             Self::Backend(error) => write!(f, "desktop clipboard backend error: {error}"),
+            Self::Evidence(error) => write!(f, "desktop clipboard durable evidence error: {error}"),
             Self::Kernel(error) => write!(f, "desktop clipboard kernel error: {error}"),
             Self::Intent(error) => write!(f, "desktop clipboard intent error: {error}"),
             Self::Effect(error) => write!(f, "desktop clipboard effect error: {error}"),
@@ -362,6 +440,12 @@ impl std::error::Error for DesktopClipboardError {}
 impl From<DesktopBackendError> for DesktopClipboardError {
     fn from(value: DesktopBackendError) -> Self {
         Self::Backend(value)
+    }
+}
+
+impl From<DesktopControlEvidenceError> for DesktopClipboardError {
+    fn from(value: DesktopControlEvidenceError) -> Self {
+        Self::Evidence(value)
     }
 }
 
