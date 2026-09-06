@@ -3,8 +3,8 @@
 use core::fmt;
 
 use crate::desktop_control::{
-    ControlRoute, DesktopControlLeaseId, DesktopControlError, FallbackEligibilityEvidence,
-    VisibleControlChannelId, DESKTOP_CONTROL_SCHEMA_VERSION,
+    ControlRoute, DESKTOP_CONTROL_SCHEMA_VERSION, DesktopControlError, DesktopControlLeaseId,
+    FallbackEligibilityEvidence, VisibleControlChannelId,
 };
 use crate::digest::sha256;
 use crate::tool_request::{BindingDigest, ToolRequestId};
@@ -163,7 +163,10 @@ impl PreparedDesktopAction {
             self.prepared_permission_session_evidence_ref,
             "prepared_permission_session_evidence_ref",
         )?;
-        require_digest(self.prepared_observation_digest, "prepared_observation_digest")?;
+        require_digest(
+            self.prepared_observation_digest,
+            "prepared_observation_digest",
+        )?;
         if self.expires_at_unix_ms == 0 {
             return Err(DesktopIntentError::InvalidExpiry);
         }
@@ -203,7 +206,9 @@ impl PreparedDesktopAction {
             return Err(DesktopIntentError::FallbackNotEligible);
         }
         if Some(evidence.binding_digest()?) != self.fallback_eligibility_evidence_digest {
-            return Err(DesktopIntentError::BindingMismatch("fallback_eligibility_evidence"));
+            return Err(DesktopIntentError::BindingMismatch(
+                "fallback_eligibility_evidence",
+            ));
         }
         Ok(())
     }
@@ -222,10 +227,7 @@ impl PreparedDesktopAction {
         push_digest(&mut encoder, self.action_payload_digest)?;
         self.authority.encode(&mut encoder)?;
         self.interactive_authority.encode(&mut encoder)?;
-        push_digest(
-            &mut encoder,
-            self.prepared_permission_session_evidence_ref,
-        )?;
+        push_digest(&mut encoder, self.prepared_permission_session_evidence_ref)?;
         push_digest(&mut encoder, self.prepared_observation_digest)?;
         encoder.push_u64(self.expires_at_unix_ms);
         Ok(encoder.finish())
@@ -328,10 +330,7 @@ impl CaptureIntent {
         self.limits.encode(&mut encoder);
         encoder.push_u8(u8::from(self.include_cursor));
         encoder.push_u8(u8::from(self.audio_enabled));
-        push_digest(
-            &mut encoder,
-            self.prepared_permission_session_evidence_ref,
-        )?;
+        push_digest(&mut encoder, self.prepared_permission_session_evidence_ref)?;
         encoder.push_u8(1);
         encoder.push_u64(self.expires_at_unix_ms);
         Ok(encoder.finish())
@@ -398,10 +397,7 @@ impl ClipboardIntent {
         self.authority.encode(&mut encoder)?;
         encoder.push_u64(u64::from(self.max_bytes));
         push_optional_digest(&mut encoder, self.content_digest)?;
-        push_digest(
-            &mut encoder,
-            self.prepared_permission_session_evidence_ref,
-        )?;
+        push_digest(&mut encoder, self.prepared_permission_session_evidence_ref)?;
         encoder.push_u64(self.expires_at_unix_ms);
         Ok(encoder.finish())
     }
@@ -442,14 +438,24 @@ impl fmt::Display for DesktopIntentError {
             }
             Self::MissingBinding(field) => write!(f, "missing desktop intent binding: {field}"),
             Self::BindingMismatch(field) => write!(f, "desktop intent binding mismatch: {field}"),
-            Self::MissingFallbackEligibility => f.write_str("raw fallback requires eligibility evidence"),
-            Self::UnexpectedFallbackBinding => f.write_str("non-fallback action cannot carry fallback bindings"),
-            Self::FallbackNotEligible => f.write_str("fallback evidence does not authorize deterministic input"),
+            Self::MissingFallbackEligibility => {
+                f.write_str("raw fallback requires eligibility evidence")
+            }
+            Self::UnexpectedFallbackBinding => {
+                f.write_str("non-fallback action cannot carry fallback bindings")
+            }
+            Self::FallbackNotEligible => {
+                f.write_str("fallback evidence does not authorize deterministic input")
+            }
             Self::InvalidExpiry => f.write_str("desktop intent expiry is invalid"),
             Self::InvalidCaptureLimits => f.write_str("capture limits are invalid or unbounded"),
             Self::AudioDenied => f.write_str("capture audio is denied in Spec 006"),
-            Self::InvalidClipboardLimit => f.write_str("clipboard byte limit is invalid or unbounded"),
-            Self::InvalidClipboardContentBinding => f.write_str("clipboard content binding does not match operation"),
+            Self::InvalidClipboardLimit => {
+                f.write_str("clipboard byte limit is invalid or unbounded")
+            }
+            Self::InvalidClipboardContentBinding => {
+                f.write_str("clipboard content binding does not match operation")
+            }
             Self::DesktopControl(error) => write!(f, "desktop control validation error: {error}"),
             Self::CanonicalEncoding(error) => write!(f, "canonical encoding error: {error}"),
         }
@@ -525,7 +531,7 @@ const fn clipboard_operation_code(operation: ClipboardOperation) -> u8 {
 mod tests {
     use super::*;
     use crate::desktop_control::{
-        ControlRoute, RouteDisposition, RouteEvaluation, DESKTOP_CONTROL_SCHEMA_VERSION,
+        ControlRoute, DESKTOP_CONTROL_SCHEMA_VERSION, RouteDisposition, RouteEvaluation,
     };
 
     fn digest(value: u8) -> BindingDigest {
@@ -571,7 +577,9 @@ mod tests {
         effect.gate_authorization_digest = BindingDigest::new([0; 32]);
         assert!(matches!(
             effect.validate(),
-            Err(DesktopIntentError::MissingBinding("gate_authorization_digest"))
+            Err(DesktopIntentError::MissingBinding(
+                "gate_authorization_digest"
+            ))
         ));
     }
 
