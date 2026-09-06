@@ -15,15 +15,17 @@ The planning package must complete specification, clarification closeout, resear
 
 ## Hard boundaries
 
-- Semantic desktop APIs are primary. Raw coordinate/input fallback is explicit-only.
-- A bounded vision/pixel fallback may produce only an untrusted candidate region/coordinate from an explicitly selected capture. It cannot mint semantic identity, capability, approval or action authority. OCR/text extraction from raw screenshot pixels remains deferred to Spec 007.
+- Preserve the constitutional control-route order exactly: `domain/application API → native OS automation API → accessibility/semantic tree → browser DOM/protocol → deterministic keyboard/mouse control → vision/pixel fallback`.
+- A weaker route may run only with canonical fallback-eligibility evidence showing every applicable stronger route is inapplicable, unavailable, unsupported, authority/permission denied, or safely failed before any ambiguous side effect. `UNKNOWN_OUTCOME` blocks conflicting weaker escalation until reconciliation. Raw adapters and pixel-hint producers cannot self-mint eligibility.
+- Semantic desktop APIs are primary within Spec 006. Raw coordinate/input fallback is explicit-only.
+- A bounded vision/pixel fallback may produce only an untrusted candidate region/coordinate from an explicitly selected capture. It cannot mint semantic identity, capability, approval, fallback eligibility or action authority. OCR/text extraction from raw screenshot pixels remains deferred to Spec 007.
 - Model output, UI output, screenshots, pixel hints, accessibility text, window titles, clipboard content, protocol output, and donor content are untrusted evidence, never authority.
-- Every side-effect-capable or privacy-sensitive operation must bind an exact ToolRequest/request digest, immutable Effect/effect binding digest and canonical intent digest, then traverse capability → policy → approval where required → Effect PREPARED → Kernel/Effect Gate → immediate binding/target/session/permission/control-lease revalidation → bounded platform adapter → terminal evidence/reconciliation.
-- Missing, mismatched, stale or substituted request/effect/intent/authority/target/session/control-lease state fails closed before adapter dispatch.
-- If a side effect may have crossed the effect boundary but terminal truth is uncertain, record `UNKNOWN_OUTCOME`; restart, timeout, permission transition, human takeover or adapter failure cannot authorize a conflicting retry before reconciliation.
+- Every side-effect-capable or privacy-sensitive operation must bind an exact ToolRequest/request digest, immutable Effect/effect binding digest and canonical intent digest, then traverse capability → policy → approval where required → Effect PREPARED → Kernel/Effect Gate → immediate route/binding/target/session/permission/control-lease/visible-channel revalidation → bounded platform adapter → terminal evidence/reconciliation.
+- Missing, mismatched, stale or substituted request/effect/intent/authority/fallback-eligibility/target/session/control-lease state fails closed before adapter dispatch.
+- If a side effect may have crossed the effect boundary but terminal truth is uncertain, record `UNKNOWN_OUTCOME`; restart, timeout, permission transition, human takeover or adapter failure cannot authorize a conflicting retry or weaker fallback before reconciliation.
 - Capture, semantic actuation, raw fallback, pixel hints, focus and clipboard read/write are distinct authority/evidence domains.
 - A pathname, window title, process name, coordinate, pixel hint, accessibility label, or screenshot is not sufficient target identity by itself.
-- Prepared actions must fail closed when work-surface, focused element, permission, session, capability, policy, approval, platform identity or control-lease generation drifts.
+- Prepared actions must fail closed when route eligibility, work-surface, focused element, permission, session, capability, policy, approval, platform identity, control-lease generation or visible-control-channel state drifts.
 - The Tauri native Rust host must authenticate to `golamd` through the existing authenticated local IPC/client-enrollment boundary. Localhost/same-machine location and renderer state are not authentication.
 - Tauri webview/frontend receives only sanitized state and opaque non-authority references; never raw privileged OS handles, local-client authentication material, capability tokens or control-lease authority.
 - Autonomous computer control must remain persistently visible to the local user through at least one qualified visible-control channel that exposes immediate pause/stop/takeover. Loss of every qualified visible-control channel suspends new autonomous actuation fail closed; cached renderer state cannot satisfy visibility.
@@ -41,12 +43,13 @@ The planning package must complete specification, clarification closeout, resear
 
 ## Engineering rules
 
-- Rust owns trusted desktop-control contracts, authenticated client handling, authority checks, control-lease/takeover state, visible-control-channel safety state, adapter boundaries, evidence and lifecycle state.
+- Rust owns trusted route selection/fallback eligibility, desktop-control contracts, authenticated client handling, authority checks, control-lease/takeover state, visible-control-channel safety state, adapter boundaries, evidence and lifecycle state.
 - Tauri 2 capabilities/permissions are least-privilege and explicit.
 - Platform-specific code stays behind common traits/contracts and must expose unsupported/permission-denied/interrupted states deterministically.
 - Fake backends and adversarial tests precede native adapter admission.
 - Any pixel/vision implementation remains bounded, local, non-authoritative and dependency-gated by Source Foundry; do not expand Spec 006 into screenshot OCR or broad computer vision.
 - The visible autonomous-control indicator/control channel must not rely solely on renderer liveness; its loss must be observable by trusted Rust state and suspend new actuation until a qualified visible channel is restored.
 - Takeover qualification must cover latency, stale lease generations/refs, wrong-window hazards, focus theft, restart/reconnect and uncertain already-dispatched effects.
+- Route-order qualification must cover stronger-route-still-available, stale/missing eligibility evidence, and unreconciled `UNKNOWN_OUTCOME` blocking weaker escalation.
 - Windows qualification must cover locked/UAC/secure-desktop and interactive-session transitions with fail-closed behavior; unsupported runner conditions must be reported honestly rather than fabricated.
 - No force-push, rebase, history rewrite, stale CI reuse, stale review reuse, or completion claims without exact evidence.
