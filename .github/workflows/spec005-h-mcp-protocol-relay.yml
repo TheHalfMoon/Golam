@@ -166,7 +166,7 @@ jobs:
           set -euo pipefail
           git fetch origin impl/005-local-tools-context-memory
           test "$(git rev-parse origin/impl/005-local-tools-context-memory)" = "$GITHUB_SHA"
-          git rm .github/workflows/spec005-h-mcp-protocol-relay.yml scripts/qualification/spec005_h_mcp_protocol_repair.py
+          git rm -f .github/workflows/spec005-h-mcp-protocol-relay.yml scripts/qualification/spec005_h_mcp_protocol_repair.py
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add Cargo.toml Cargo.lock crates/golamd/Cargo.toml crates/golamd/src/lib.rs crates/golamd/src/mcp_protocol.rs
