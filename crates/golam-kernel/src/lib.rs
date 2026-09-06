@@ -10,6 +10,7 @@ mod desktop_capture_effect;
 mod desktop_clipboard_effect;
 mod desktop_dispatch;
 mod desktop_effect;
+mod desktop_reconciliation;
 mod effect_execution;
 mod managed_memory_writer;
 mod memory_restart;
@@ -62,6 +63,7 @@ pub use desktop_effect::{
     DesktopKernelError, PrepareDesktopAction, PreparedDesktopKernelAction, TrustedRouteCandidate,
     TrustedRouteDisposition, effect_binding, evaluate_desktop_routes,
 };
+pub use desktop_reconciliation::{DesktopReconciliationError, DesktopReconciliationRepair};
 pub use effect_execution::PreparedEffectDispatch;
 pub use golam_ipc::credentials::GeneratedClientCredential;
 pub use golam_ipc::lifecycle::{Authenticate, ClientKeyId, ConnectionId, Ready, ServerLifecycle};
