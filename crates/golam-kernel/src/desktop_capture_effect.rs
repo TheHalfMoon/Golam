@@ -27,6 +27,7 @@ const CAPTURE_PAYLOAD_DOMAIN: &[u8] = b"golam:desktop-capture-payload:v1";
 const CAPTURE_RECEIPT_DOMAIN: &[u8] = b"golam:desktop-capture-receipt:v1";
 const CAPTURE_HANDLER_ID: &str = "golam-desktop-capture";
 const CAPTURE_HANDLER_VERSION: &str = "1";
+const CAPTURE_PROVIDER_ID: &str = "golam-desktop-capture-v1";
 
 pub struct PrepareDesktopCapture<'a> {
     pub request: &'a PreparedToolRequest,
@@ -184,6 +185,17 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
                 return Err(DesktopCaptureError::Revalidation(error));
             }
         };
+
+        let intent_bytes = input.prepared.intent().canonical_bytes()?;
+        self.record_tool_mutation_intent(
+            principal,
+            input.prepared.effect(),
+            CAPTURE_PROVIDER_ID,
+            &intent_bytes,
+            scope,
+        )
+        .map_err(ToolEffectError::MutationEvidence)?;
+
         let receipt = match input.backend.capture(validated) {
             Ok(receipt) => receipt,
             Err(error) => {
