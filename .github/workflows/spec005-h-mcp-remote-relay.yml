@@ -1,0 +1,55 @@
+name: spec005-h-mcp-remote-relay
+
+on:
+  push:
+    branches:
+      - impl/005-local-tools-context-memory
+    paths:
+      - .github/workflows/spec005-h-mcp-remote-relay.yml
+
+permissions:
+  contents: write
+
+jobs:
+  qualify-and-commit:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+      - name: Restore qualified library and qualify remote MCP gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show f9a34bd8947e74d865f4a67327541211828fac88:crates/golamd/src/lib.rs > crates/golamd/src/lib.rs
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('crates/golamd/src/lib.rs')
+          text = path.read_text()
+          anchor = 'pub mod mcp_protocol;\n'
+          replacement = 'pub mod mcp_protocol;\npub mod mcp_remote_gate;\n'
+          if text.count(anchor) != 1:
+              raise SystemExit('expected exact qualified mcp_protocol module anchor')
+          path.write_text(text.replace(anchor, replacement, 1))
+          PY
+          cargo +1.98.0 fmt --all
+          cargo +1.98.0 fmt --all -- --check
+          cargo +1.98.0 clippy --locked -p golam-core -p golamd --all-targets -- -D warnings
+          cargo +1.98.0 test --locked -p golamd mcp_remote_gate::
+          cargo +1.98.0 test --locked -p golamd mcp_local_process_v2::
+          cargo +1.98.0 test --locked -p golamd mcp_protocol::
+          cargo +1.98.0 test --locked -p golamd --lib
+      - name: Commit exact qualified T005-091 unit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin impl/005-local-tools-context-memory
+          test "$(git rev-parse origin/impl/005-local-tools-context-memory)" = "$GITHUB_SHA"
+          git rm .github/workflows/spec005-h-mcp-remote-relay.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/golamd/src/lib.rs crates/golamd/src/mcp_remote_gate.rs
+          git commit -m 'feat(005): gate remote MCP dispatch authority'
+          git push origin HEAD:impl/005-local-tools-context-memory
