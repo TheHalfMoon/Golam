@@ -65,6 +65,14 @@ pub struct DispatchDesktopCapture<'a, B: DesktopBackend> {
     pub backend: &'a mut B,
 }
 
+struct CompleteDesktopCapture<'a> {
+    prepared: &'a PreparedDesktopCapture,
+    finished_at: &'a str,
+    completion: ToolExecutionCompletion,
+    reason_code: &'a str,
+    receipt: Option<&'a [u8]>,
+}
+
 impl<P: AuthorizationPolicy> KernelApi<P> {
     pub fn prepare_desktop_capture(
         &mut self,
@@ -143,11 +151,13 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             Err(error) => {
                 self.complete_capture(
                     principal,
-                    input.prepared,
-                    input.finished_at,
-                    ToolExecutionCompletion::Failed,
-                    "desktop_capture_revalidation_failed_before_dispatch",
-                    None,
+                    CompleteDesktopCapture {
+                        prepared: input.prepared,
+                        finished_at: input.finished_at,
+                        completion: ToolExecutionCompletion::Failed,
+                        reason_code: "desktop_capture_revalidation_failed_before_dispatch",
+                        receipt: None,
+                    },
                     scope,
                 )?;
                 return Err(DesktopCaptureError::Revalidation(error));
@@ -158,11 +168,13 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             Err(error) => {
                 self.complete_capture(
                     principal,
-                    input.prepared,
-                    input.finished_at,
-                    ToolExecutionCompletion::UnknownOutcome,
-                    "desktop_capture_adapter_error_after_dispatch_boundary",
-                    None,
+                    CompleteDesktopCapture {
+                        prepared: input.prepared,
+                        finished_at: input.finished_at,
+                        completion: ToolExecutionCompletion::UnknownOutcome,
+                        reason_code: "desktop_capture_adapter_error_after_dispatch_boundary",
+                        receipt: None,
+                    },
                     scope,
                 )?;
                 return Err(DesktopCaptureError::AdapterUncertain(error));
@@ -170,18 +182,20 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         };
         let completion = classify_receipt(input.prepared, &receipt);
         let receipt_bytes = capture_receipt_bytes(&receipt)?;
-        let reason = match completion {
+        let reason_code = match completion {
             ToolExecutionCompletion::Succeeded => "desktop_capture_succeeded",
             ToolExecutionCompletion::Failed => "desktop_capture_terminal_failure",
             ToolExecutionCompletion::UnknownOutcome => "desktop_capture_unknown_outcome",
         };
         self.complete_capture(
             principal,
-            input.prepared,
-            input.finished_at,
-            completion,
-            reason,
-            Some(receipt_bytes.as_slice()),
+            CompleteDesktopCapture {
+                prepared: input.prepared,
+                finished_at: input.finished_at,
+                completion,
+                reason_code,
+                receipt: Some(receipt_bytes.as_slice()),
+            },
             scope,
         )?;
         if completion == ToolExecutionCompletion::UnknownOutcome {
@@ -193,22 +207,18 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
     fn complete_capture(
         &mut self,
         principal: Principal<'_>,
-        prepared: &PreparedDesktopCapture,
-        finished_at: &str,
-        completion: ToolExecutionCompletion,
-        reason_code: &str,
-        receipt: Option<&[u8]>,
+        input: CompleteDesktopCapture<'_>,
         scope: &str,
     ) -> Result<(), DesktopCaptureError> {
         self.complete_tool_effect(
             principal,
             CompleteToolEffect {
-                prepared: prepared.effect(),
-                finished_at,
-                completion,
-                reason_code: Some(reason_code),
-                evidence_ref: receipt,
-                receipt,
+                prepared: input.prepared.effect(),
+                finished_at: input.finished_at,
+                completion: input.completion,
+                reason_code: Some(input.reason_code),
+                evidence_ref: input.receipt,
+                receipt: input.receipt,
             },
             scope,
         )?;
