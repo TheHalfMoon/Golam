@@ -586,10 +586,10 @@ impl FallbackEligibilityEvidence {
                 return Err(DesktopControlError::InvalidRouteOrder);
             }
             previous_rank = Some(rank);
-            if evaluation.disposition == RouteDisposition::Selected {
-                if selected.replace(evaluation.route).is_some() {
-                    return Err(DesktopControlError::MultipleSelectedRoutes);
-                }
+            if evaluation.disposition == RouteDisposition::Selected
+                && selected.replace(evaluation.route).is_some()
+            {
+                return Err(DesktopControlError::MultipleSelectedRoutes);
             }
         }
 
