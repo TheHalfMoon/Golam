@@ -329,9 +329,7 @@ pub enum DesktopClipboardError {
 impl fmt::Display for DesktopClipboardError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidPrepareInput => {
-                f.write_str("invalid desktop clipboard preparation input")
-            }
+            Self::InvalidPrepareInput => f.write_str("invalid desktop clipboard preparation input"),
             Self::InvalidDispatchInput => f.write_str("invalid desktop clipboard dispatch input"),
             Self::Revalidation(error) => {
                 write!(f, "desktop clipboard revalidation failed: {error}")
