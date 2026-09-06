@@ -66,6 +66,11 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         }
 
         let mut evidence_store = DesktopControlEvidenceStore::open(&self.authority)?;
+        bind_durable_interactive_state(
+            &mut evidence_store,
+            input.current_lease,
+            input.current_visible_channel,
+        )?;
         let durable_unknown = evidence_store
             .has_unresolved_unknown_outcome_for_effect(input.prepared.effect().effect_id())?;
         let current_capabilities = input.backend.capabilities()?;
@@ -200,6 +205,33 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         )?)?;
         Ok(())
     }
+}
+
+fn bind_durable_interactive_state(
+    store: &mut DesktopControlEvidenceStore,
+    lease: &DesktopControlLeaseState,
+    channel: &VisibleControlChannelState,
+) -> Result<(), DesktopDispatchError> {
+    match store.load_lease_state(lease.lease_id)? {
+        Some(stored) if stored == *lease => {}
+        Some(_) => return Err(DesktopControlEvidenceError::StaleGeneration.into()),
+        None => {
+            store.persist_lease_state(*lease)?;
+        }
+    }
+
+    let stored_channels = store.load_visible_channels()?;
+    match stored_channels
+        .iter()
+        .find(|stored| stored.channel_id == channel.channel_id)
+    {
+        Some(stored) if *stored == channel => {}
+        Some(_) => return Err(DesktopControlEvidenceError::StaleGeneration.into()),
+        None => {
+            store.persist_visible_channel(*channel)?;
+        }
+    }
+    Ok(())
 }
 
 fn action_evidence(
