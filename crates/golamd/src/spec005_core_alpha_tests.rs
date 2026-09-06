@@ -64,8 +64,11 @@ fn repository_read_search_context_authorized_edit_and_readback_converge() {
     let workspace = base.join("repository");
     fs::create_dir_all(workspace.join("src")).unwrap();
     fs::create_dir(workspace.join(".git")).unwrap();
-    fs::write(workspace.join("src/lib.rs"), b"pub const TODO_ALPHA: &str = \"pending\";\n")
-        .unwrap();
+    fs::write(
+        workspace.join("src/lib.rs"),
+        b"pub const TODO_ALPHA: &str = \"pending\";\n",
+    )
+    .unwrap();
 
     let runtime = RuntimeLayout::initialize(base.join("runtime")).unwrap();
     let mut operations = vec![
@@ -99,7 +102,10 @@ fn repository_read_search_context_authorized_edit_and_readback_converge() {
         10,
     )
     .unwrap();
-    assert_eq!(initial.bytes, b"pub const TODO_ALPHA: &str = \"pending\";\n");
+    assert_eq!(
+        initial.bytes,
+        b"pub const TODO_ALPHA: &str = \"pending\";\n"
+    );
 
     let search = search_literal_text(
         &resolver,
@@ -187,18 +193,17 @@ fn repository_read_search_context_authorized_edit_and_readback_converge() {
         11,
     )
     .unwrap();
-    assert_eq!(compiled.capsule.sufficiency_state, SufficiencyState::Sufficient);
+    assert_eq!(
+        compiled.capsule.sufficiency_state,
+        SufficiencyState::Sufficient
+    );
     assert!(compiled.replan.is_none());
 
     let target_identity = resolver
         .resolve_read_target(&target, &write_operation, 12)
         .unwrap();
     let parent_identity = resolver
-        .resolve_read_target(
-            &RequestedTarget::new("src").unwrap(),
-            &write_operation,
-            12,
-        )
+        .resolve_read_target(&RequestedTarget::new("src").unwrap(), &write_operation, 12)
         .unwrap();
     let expectation = FileMutationExpectation {
         expected_exists: true,
@@ -275,7 +280,10 @@ fn repository_read_search_context_authorized_edit_and_readback_converge() {
     )
     .unwrap();
     assert_eq!(readback.bytes, new_bytes);
-    assert_eq!(readback.content_digest, BindingDigest::new(sha256(new_bytes)));
+    assert_eq!(
+        readback.content_digest,
+        BindingDigest::new(sha256(new_bytes))
+    );
 
     kernel
         .complete_tool_effect(
