@@ -31,6 +31,7 @@ jobs:
           python3 scripts/qualification/spec005_t080_stage_layout_repair.py
           python3 scripts/qualification/spec005_t080_fd_hygiene_repair.py
           python3 scripts/qualification/spec005_t080_argv_fixture_repair.py
+          python3 scripts/qualification/spec005_t080_ready_diag.py
           cargo +1.98.0 fmt --all
           cargo +1.98.0 fmt --all -- --check
           cargo +1.98.0 clippy --locked -p golam-kernel -p golamd --all-targets -- -D warnings
