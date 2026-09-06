@@ -230,7 +230,10 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         }
 
         if desktop_status == DesktopEvidenceStatus::Prepared
-            && attempt.outcome == snapshot.current_state
+            && matches!(
+                (attempt.outcome.as_str(), snapshot.current_state.as_str()),
+                ("success", "succeeded") | ("failure", "failed")
+            )
         {
             let terminal = store.binding_terminal_evidence(
                 snapshot.effect_id,
