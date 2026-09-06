@@ -186,7 +186,9 @@ impl DesktopCapabilitySet {
             return Err(DesktopControlError::InvalidSchemaVersion);
         }
         if digest_is_zero(self.permission_session_evidence) {
-            return Err(DesktopControlError::MissingBinding("permission_session_evidence"));
+            return Err(DesktopControlError::MissingBinding(
+                "permission_session_evidence",
+            ));
         }
         if self.raw_fallback_supported && !self.visible_control_supported {
             return Err(DesktopControlError::UnsafeCapabilityCombination);
@@ -284,10 +286,16 @@ impl SemanticElementIdentity {
             return Err(DesktopControlError::InvalidIdentity);
         }
         for (value, field) in [
-            (self.parent_work_surface_digest, "parent_work_surface_digest"),
+            (
+                self.parent_work_surface_digest,
+                "parent_work_surface_digest",
+            ),
             (self.platform_reference_digest, "platform_reference_digest"),
             (self.role_control_type_digest, "role_control_type_digest"),
-            (self.supported_action_set_digest, "supported_action_set_digest"),
+            (
+                self.supported_action_set_digest,
+                "supported_action_set_digest",
+            ),
             (self.state_geometry_digest, "state_geometry_digest"),
         ] {
             require_digest(value, field)?;
@@ -335,9 +343,15 @@ impl DesktopObservation {
         if self.observation_id.as_u128() == 0 || self.observed_at_unix_ms == 0 {
             return Err(DesktopControlError::InvalidObservation);
         }
-        require_digest(self.capability_session_evidence, "capability_session_evidence")?;
+        require_digest(
+            self.capability_session_evidence,
+            "capability_session_evidence",
+        )?;
         require_digest(self.semantic_summary_digest, "semantic_summary_digest")?;
-        validate_digest_list(&self.work_surface_digests, self.limits.max_work_surfaces as usize)?;
+        validate_digest_list(
+            &self.work_surface_digests,
+            self.limits.max_work_surfaces as usize,
+        )?;
         if let Some(value) = self.focused_surface_digest {
             require_digest(value, "focused_surface_digest")?;
         }
@@ -652,7 +666,10 @@ impl PixelTargetHint {
         validate_schema(self.schema_version)?;
         for (value, field) in [
             (self.source_identity_digest, "source_identity_digest"),
-            (self.capture_observation_digest, "capture_observation_digest"),
+            (
+                self.capture_observation_digest,
+                "capture_observation_digest",
+            ),
             (self.coordinate_space_digest, "coordinate_space_digest"),
             (self.producer_provenance_ref, "producer_provenance_ref"),
         ] {
@@ -736,7 +753,10 @@ impl HumanInterruptEvidence {
         {
             return Err(DesktopControlError::InvalidInterruptEvidence);
         }
-        require_digest(self.attributed_local_source_ref, "attributed_local_source_ref")?;
+        require_digest(
+            self.attributed_local_source_ref,
+            "attributed_local_source_ref",
+        )?;
         validate_digest_list(&self.affected_operation_refs, MAX_INTERRUPT_REFS)?;
         validate_digest_list(&self.cancellation_reconciliation_refs, MAX_INTERRUPT_REFS)?;
         Ok(())
@@ -799,20 +819,38 @@ impl fmt::Display for DesktopControlError {
             Self::InvalidSchemaVersion => f.write_str("invalid desktop-control schema version"),
             Self::InvalidLimits => f.write_str("desktop-control limits are invalid or unbounded"),
             Self::InvalidIdentity => f.write_str("desktop identity is invalid or incomplete"),
-            Self::InvalidObservation => f.write_str("desktop observation is invalid or inconsistent"),
+            Self::InvalidObservation => {
+                f.write_str("desktop observation is invalid or inconsistent")
+            }
             Self::InvalidLease => f.write_str("desktop control lease is invalid"),
             Self::InvalidVisibleChannel => f.write_str("visible control channel is invalid"),
-            Self::InvalidFallbackEvidence => f.write_str("fallback eligibility evidence is invalid"),
-            Self::InvalidRouteOrder => f.write_str("control routes are not in constitutional order"),
-            Self::MultipleSelectedRoutes => f.write_str("fallback evidence selects multiple routes"),
-            Self::SelectedRouteMismatch => f.write_str("selected route does not match highest eligible route"),
-            Self::UnsafeFallbackEscalation => f.write_str("fallback escalation is blocked by stronger-route state"),
-            Self::InvalidPixelHint => f.write_str("pixel target hint is invalid, stale, or unbounded"),
+            Self::InvalidFallbackEvidence => {
+                f.write_str("fallback eligibility evidence is invalid")
+            }
+            Self::InvalidRouteOrder => {
+                f.write_str("control routes are not in constitutional order")
+            }
+            Self::MultipleSelectedRoutes => {
+                f.write_str("fallback evidence selects multiple routes")
+            }
+            Self::SelectedRouteMismatch => {
+                f.write_str("selected route does not match highest eligible route")
+            }
+            Self::UnsafeFallbackEscalation => {
+                f.write_str("fallback escalation is blocked by stronger-route state")
+            }
+            Self::InvalidPixelHint => {
+                f.write_str("pixel target hint is invalid, stale, or unbounded")
+            }
             Self::InvalidInterruptEvidence => f.write_str("human interrupt evidence is invalid"),
-            Self::UnsafeCapabilityCombination => f.write_str("desktop capability combination is unsafe"),
+            Self::UnsafeCapabilityCombination => {
+                f.write_str("desktop capability combination is unsafe")
+            }
             Self::MissingBinding(field) => write!(f, "missing canonical desktop binding: {field}"),
             Self::TooManyBindings => f.write_str("too many bounded desktop bindings"),
-            Self::UnsortedOrDuplicateBindings => f.write_str("desktop binding list must be sorted and unique"),
+            Self::UnsortedOrDuplicateBindings => {
+                f.write_str("desktop binding list must be sorted and unique")
+            }
             Self::CanonicalEncoding(error) => write!(f, "canonical encoding error: {error}"),
         }
     }
@@ -857,7 +895,10 @@ fn validate_digest_list(values: &[BindingDigest], max: usize) -> Result<(), Desk
     Ok(())
 }
 
-fn push_digest(encoder: &mut CanonicalEncoder, digest: BindingDigest) -> Result<(), DesktopControlError> {
+fn push_digest(
+    encoder: &mut CanonicalEncoder,
+    digest: BindingDigest,
+) -> Result<(), DesktopControlError> {
     encoder.push_bytes(&digest.bytes())?;
     Ok(())
 }
