@@ -33,6 +33,7 @@ jobs:
           cargo +1.98.0 test --locked -p golamd git_observe::
           cargo +1.98.0 test --locked -p golamd git_status::
           cargo +1.98.0 test --locked -p golamd mcp_remote_gate::
+          cargo +1.98.0 test --locked -p golamd --test phase_i_network_optionality
           cargo +1.98.0 test --locked -p golamd --lib
           python3 - <<'PY'
           from pathlib import Path
