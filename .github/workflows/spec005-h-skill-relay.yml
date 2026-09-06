@@ -25,6 +25,7 @@ jobs:
           set -euo pipefail
           python3 scripts/qualification/spec005_h_skill_repair.py
           python3 scripts/qualification/spec005_h_skill_repair_v2.py
+          python3 scripts/qualification/spec005_h_skill_repair_v3.py
           cargo +1.98.0 fmt --all
           cargo +1.98.0 fmt --all -- --check
           cargo +1.98.0 clippy --locked -p golam-core -p golamd --all-targets -- -D warnings
@@ -37,7 +38,7 @@ jobs:
           set -euo pipefail
           git fetch origin impl/005-local-tools-context-memory
           test "$(git rev-parse origin/impl/005-local-tools-context-memory)" = "$GITHUB_SHA"
-          git rm .github/workflows/spec005-h-skill-relay.yml scripts/qualification/spec005_h_skill_repair.py scripts/qualification/spec005_h_skill_repair_v2.py
+          git rm .github/workflows/spec005-h-skill-relay.yml scripts/qualification/spec005_h_skill_repair.py scripts/qualification/spec005_h_skill_repair_v2.py scripts/qualification/spec005_h_skill_repair_v3.py
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add crates/golam-core/src/skills_protocol.rs crates/golamd/src/lib.rs crates/golamd/src/skill_packages.rs
