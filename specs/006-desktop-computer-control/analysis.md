@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This analysis verifies the planning package against the Golam Constitution v1.2.0, canonical Spec 001 Phase 5 authority T060–T069, predecessor security/effect semantics, and the internal Spec 006 artifacts before implementation authorization.
+This analysis verifies the planning package against the Golam Constitution v1.2.0, canonical Spec 001 Phase 5 authority T060–T069, predecessor security/effect semantics, root repository governance, and the internal Spec 006 artifacts before implementation authorization.
 
 `ANALYSIS_SCOPE=PLANNING_ONLY`
 `PRODUCT_IMPLEMENTATION_AUTHORIZED=NO`
@@ -11,7 +11,7 @@ This analysis verifies the planning package against the Golam Constitution v1.2.
 
 | Canonical requirement | Spec 006 planning disposition | Evidence location |
 | --- | --- | --- |
-| T060 bounded Spec 006 after Spec 005 close | Present; planning-only branch from canonical base | `spec.md`, `AGENTS.md`, `tasks.md` |
+| T060 bounded Spec 006 after Spec 005 close | Present; planning-only branch from canonical base | root `AGENTS.md`, `spec.md`, local `AGENTS.md`, `tasks.md` |
 | T061 seriously mine donor desktop behavior without importing Electron trust architecture | Present; pinned behavioral/reference matrix, no runtime/architecture admission | `research.md` |
 | T062 Tauri desktop is an authenticated client of `golamd`; renderer untrusted | Present after forward repair | `spec.md` FR-025, `plan.md`, `ui-rpc-contract.md`, `tasks.md` T006-012/T006-014 |
 | T063 semantic snapshot/ref/action contract | Present | controller/observation/action/focus contracts |
@@ -66,6 +66,7 @@ PASS as a planning constraint. Donor behavioral evidence remains reference-only.
 10. **Platform permissions remain external mutable state** — they are prerequisites, not Golam grants.
 11. **Windows protected desktop boundaries are not bypassed** — locked/UAC/secure-desktop transitions fail closed.
 12. **Dependencies remain unadmitted until Source Foundry** — no planning research URL or donor reference is treated as implementation admission.
+13. **Root governance follows live successor phase** — root `AGENTS.md` no longer advertises stale Spec 005 convergence; it records closed Spec 005 predecessor state, T060 planning authority and the fail-closed Spec 006 planning lifecycle without hardcoding a transient PR head.
 
 ## Requirement-to-implementation-phase coverage
 
@@ -92,12 +93,13 @@ The canonical re-read after initial exact-head CI found five material omissions 
 4. locked/UAC/session-transition Windows qualification was underspecified relative to T064;
 5. the explicit Spec Kit clarification/analyze artifacts and dependency Source Foundry preconditions were not complete.
 
-A subsequent Constitution-focused audit found two additional material planning omissions before final candidate freeze:
+A subsequent Constitution/governance-focused audit found three additional material planning/governance omissions before final candidate freeze:
 
 6. active autonomous computer control visibility and the fail-closed behavior when every qualified visible-control channel is lost were not explicit enough;
-7. the exact constitutional route order, including domain/app and browser routes outside Spec 006, was not bound to deterministic fallback-eligibility evidence, leaving room for a weaker adapter to interpret ordinary failure as permission to escalate.
+7. the exact constitutional route order, including domain/app and browser routes outside Spec 006, was not bound to deterministic fallback-eligibility evidence, leaving room for a weaker adapter to interpret ordinary failure as permission to escalate;
+8. root `AGENTS.md` still advertised stale Spec 005 final-convergence state and stale pending gates after Spec 005 had already closed canonical and T060 successor planning authority had been established.
 
-All seven planning omissions were repaired forward-only before final qualification. These are planning defects, not authorization to implement product code. They invalidate qualification use of every pre-repair exact-head CI/review request. The final repaired planning head must receive fresh exact-head CI and fresh independent substantive review.
+All eight omissions were repaired forward-only before final qualification. These are planning/governance defects, not authorization to implement product code. They invalidate qualification use of every pre-repair exact-head CI/review request. The final repaired planning head must receive fresh exact-head CI and fresh independent substantive review.
 
 ## Remaining planning gates
 
