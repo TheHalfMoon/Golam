@@ -1,5 +1,6 @@
 name: spec005-j-convergence
 
+# Retrigger after rustfmt-only repair.
 on:
   push:
     branches:
