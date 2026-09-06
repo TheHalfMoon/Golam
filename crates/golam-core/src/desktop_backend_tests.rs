@@ -267,14 +267,7 @@ fn request_gate_target_lease_and_visible_channel_drift_fail_closed() {
 
     let mut hidden = current_channel;
     hidden.visible = false;
-    let hidden_context = context(
-        &prepared,
-        &caps,
-        &observed,
-        &current_lease,
-        &hidden,
-        None,
-    );
+    let hidden_context = context(&prepared, &caps, &observed, &current_lease, &hidden, None);
     assert_eq!(
         hidden_context.authorize().unwrap_err(),
         DesktopBackendError::AutonomousActuationSuspended
