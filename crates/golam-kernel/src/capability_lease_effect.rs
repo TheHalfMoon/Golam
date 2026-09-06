@@ -12,7 +12,7 @@ use golam_ledger::capability_leases::{
 use golam_ledger::dispatch::{EffectDispatchStoreError, encode_effect_dependencies};
 use golam_ledger::effects::{CompareAndSwapEffect, EffectStore, EffectStoreError, ProposeEffect};
 
-use super::approval_lifecycle::{ApprovalMutationError, IssueApproval};
+use super::approval_lifecycle::{ApprovalMutationError, IssueApproval, PrepareApprovalIssueEffect};
 use crate::{
     AuthorizationContext, AuthorizationOutcome, AuthorizationPolicy, AuthorizationRequest,
     CapabilityLease, CapabilityLeaseScope, KernelApi, KernelError, Principal,
@@ -43,6 +43,20 @@ impl PreparedCapabilityLeaseIssueEffect {
     pub fn resource(&self) -> &str {
         &self.resource
     }
+}
+
+pub struct PrepareCapabilityLeaseIssueApprovalEffect<'a> {
+    pub issuer: Principal<'a>,
+    pub lease_issue_effect_id: EffectId,
+    pub resource: &'a str,
+    pub issued_at: &'a str,
+    pub approval_issue_effect_id: EffectId,
+    pub session_id: SessionId,
+    pub proposed_event_id: EventId,
+    pub proposed_transition_id: EffectTransitionId,
+    pub authorized_event_id: EventId,
+    pub authorized_transition_id: EffectTransitionId,
+    pub authorization_scope: &'a str,
 }
 
 #[derive(Debug)]
@@ -171,6 +185,35 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         })?;
 
         Ok(PreparedCapabilityLeaseIssueEffect { resource })
+    }
+
+    pub fn prepare_capability_lease_issue_once_approval_effect(
+        &mut self,
+        input: PrepareCapabilityLeaseIssueApprovalEffect<'_>,
+    ) -> Result<(), CapabilityLeaseEffectError> {
+        let approval_scope = ApprovalScope::once(
+            input.lease_issue_effect_id,
+            CAPABILITY_LEASE_ISSUE_ACTION,
+            input.resource,
+        )?;
+        let prepared = self.prepare_approval_issue_effect(PrepareApprovalIssueEffect {
+            principal: input.issuer,
+            approval_scope,
+            risk_class: CAPABILITY_LEASE_MUTATION_RISK_CLASS,
+            taint_digest: [0; 32],
+            issued_at: input.issued_at,
+            expires_at: None,
+            max_uses: 1,
+            effect_id: input.approval_issue_effect_id,
+            session_id: input.session_id,
+            proposed_event_id: input.proposed_event_id,
+            proposed_transition_id: input.proposed_transition_id,
+            authorized_event_id: input.authorized_event_id,
+            authorized_transition_id: input.authorized_transition_id,
+            authorization_scope: input.authorization_scope,
+        })?;
+        debug_assert!(!prepared.resource().is_empty());
+        Ok(())
     }
 
     pub fn issue_capability_lease_once_approval(

@@ -18,7 +18,9 @@ mod linux_x86_64 {
         ToolRequest, ToolRequestId,
     };
     use golam_core::{EffectId, EffectTransitionId, EventId, SessionId};
-    use golam_kernel::policy_lifecycle::capability_lease_effect::PrepareCapabilityLeaseIssueEffect;
+    use golam_kernel::policy_lifecycle::capability_lease_effect::{
+        PrepareCapabilityLeaseIssueApprovalEffect, PrepareCapabilityLeaseIssueEffect,
+    };
     use golam_kernel::{
         AuthorizationDecision, AuthorizationPolicy, AuthorizationRequest, CapabilityLease,
         CapabilityLeaseScope, KernelApi, KernelCreateSession, PolicyDecision, Principal,
@@ -78,7 +80,7 @@ mod linux_x86_64 {
                 .expect("qualification root mode");
             let runtime = RuntimeLayout::initialize(root.join("runtime")).expect("runtime");
             let source_root = root.join("source");
-            let staging_root = root.join("stage");
+            let staging_root = runtime.runtime_dir.join("process-stage-v2");
             fs::create_dir_all(&source_root).expect("source root");
             fs::create_dir_all(&staging_root).expect("staging root");
             fs::set_permissions(&source_root, fs::Permissions::from_mode(0o700))
@@ -289,6 +291,23 @@ mod linux_x86_64 {
             })
             .expect("prepare lease issue effect");
         let resource = prepared.resource().to_owned();
+        kernel
+            .prepare_capability_lease_issue_once_approval_effect(
+                PrepareCapabilityLeaseIssueApprovalEffect {
+                    issuer: Principal::local_owner("issuer"),
+                    lease_issue_effect_id: effect_id,
+                    resource: &resource,
+                    issued_at: "2026-09-05T19:15:30Z",
+                    approval_issue_effect_id: EffectId(0x6010),
+                    session_id: SessionId(0x5000),
+                    proposed_event_id: EventId(0x6011),
+                    proposed_transition_id: EffectTransitionId(0x6012),
+                    authorized_event_id: EventId(0x6014),
+                    authorized_transition_id: EffectTransitionId(0x6013),
+                    authorization_scope: SCOPE,
+                },
+            )
+            .expect("prepare lease approval issue effect");
         let approval_id = kernel
             .issue_capability_lease_once_approval(
                 Principal::local_owner("issuer"),
@@ -320,13 +339,48 @@ mod linux_x86_64 {
     fn process_v2_requalifies_strict_local_secrets_limits_cancel_and_terminal_reconciliation() {
         let mut fixture = Fixture::new(&[100, 101, 102, 103, 104]);
 
-        let success = fixture.execute(100, (0x7000, 0x7100), &[b"success"], 2_000, 4096, false);
+        let secret_canary =
+            std::env::var("GOLAM_PROCESS_SECRET_CANARY").expect("qualification secret canary");
+        let assert_secret_absent =
+            |receipt: &golamd::process_dispatch_v2::ProcessExecutionReceiptV2| {
+                let secret = secret_canary.as_bytes();
+                assert!(
+                    !receipt
+                        .stdout
+                        .windows(secret.len())
+                        .any(|window| window == secret)
+                );
+                assert!(
+                    !receipt
+                        .stderr
+                        .windows(secret.len())
+                        .any(|window| window == secret)
+                );
+            };
+
+        let success = fixture.execute(
+            100,
+            (0x7000, 0x7100),
+            &[b"process-v2-payload", b"success"],
+            2_000,
+            4096,
+            false,
+        );
+        assert_secret_absent(&success);
         assert_eq!(success.status, ProcessExecutionStatusV2::Succeeded);
         assert_eq!(success.exit_code, Some(0));
         assert_eq!(success.observed_descendant_count, 0);
         assert_eq!(success.stdout, b"SUCCESS\n");
 
-        let isolation = fixture.execute(101, (0x7200, 0x7300), &[b"isolation"], 2_000, 4096, false);
+        let isolation = fixture.execute(
+            101,
+            (0x7200, 0x7300),
+            &[b"process-v2-payload", b"isolation"],
+            2_000,
+            4096,
+            false,
+        );
+        assert_secret_absent(&isolation);
         assert_eq!(isolation.status, ProcessExecutionStatusV2::Succeeded);
         assert_eq!(
             isolation.stdout,
@@ -334,16 +388,40 @@ mod linux_x86_64 {
         );
         assert_eq!(isolation.observed_descendant_count, 0);
 
-        let timeout = fixture.execute(102, (0x7400, 0x7500), &[b"spin"], 100, 4096, false);
+        let timeout = fixture.execute(
+            102,
+            (0x7400, 0x7500),
+            &[b"process-v2-payload", b"spin"],
+            100,
+            4096,
+            false,
+        );
+        assert_secret_absent(&timeout);
         assert_eq!(timeout.status, ProcessExecutionStatusV2::TimedOut);
         assert_eq!(timeout.observed_descendant_count, 0);
 
-        let output = fixture.execute(103, (0x7600, 0x7700), &[b"output"], 2_000, 128, false);
+        let output = fixture.execute(
+            103,
+            (0x7600, 0x7700),
+            &[b"process-v2-payload", b"output"],
+            2_000,
+            128,
+            false,
+        );
+        assert_secret_absent(&output);
         assert_eq!(output.status, ProcessExecutionStatusV2::OutputLimitExceeded);
         assert!(output.stdout.len() <= 128);
         assert_eq!(output.observed_descendant_count, 0);
 
-        let cancelled = fixture.execute(104, (0x7800, 0x7900), &[b"spin"], 2_000, 4096, true);
+        let cancelled = fixture.execute(
+            104,
+            (0x7800, 0x7900),
+            &[b"process-v2-payload", b"spin"],
+            2_000,
+            4096,
+            true,
+        );
+        assert_secret_absent(&cancelled);
         assert_eq!(cancelled.status, ProcessExecutionStatusV2::Cancelled);
         assert_eq!(cancelled.observed_descendant_count, 0);
     }

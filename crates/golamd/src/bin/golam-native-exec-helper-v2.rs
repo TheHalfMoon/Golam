@@ -12,16 +12,17 @@ mod static_elf_v2;
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 mod linux_x86_64 {
     use std::ffi::{CString, OsString};
-    use std::fs::File;
+    use std::fs::{self, File};
     use std::io::{Read, Write};
     use std::os::unix::ffi::OsStringExt;
     use std::os::unix::fs::MetadataExt;
     use std::path::PathBuf;
 
     use golam_core::digest::sha256;
+    use nix::errno::Errno;
     use nix::sys::prctl::{get_pdeathsig, set_pdeathsig};
     use nix::sys::signal::Signal;
-    use nix::unistd::{fexecve, geteuid, getppid};
+    use nix::unistd::{close, fexecve, geteuid, getppid};
 
     use super::native_containment_v2::{
         LinuxContainmentPlan, NativeObjectIdentity, PROFILE_TOKEN, apply_child_side,
@@ -70,6 +71,7 @@ mod linux_x86_64 {
                 "trusted native exec helper requires an empty ambient environment".to_owned(),
             );
         }
+        close_inherited_descriptors()?;
         let config = parse_args()?;
         bind_parent_death(config.expected_parent_pid)?;
 
@@ -151,6 +153,36 @@ mod linux_x86_64 {
             Ok(never) => match never {},
             Err(error) => Err(format!("descriptor-bound fexecve failed: {error}")),
         }
+    }
+
+    fn close_inherited_descriptors() -> Result<(), String> {
+        let entries = fs::read_dir("/proc/self/fd").map_err(|error| {
+            format!("inspect inherited descriptors before containment: {error}")
+        })?;
+        let mut descriptors = entries
+            .map(|entry| {
+                entry
+                    .map_err(|error| format!("read inherited descriptor entry: {error}"))
+                    .and_then(|entry| {
+                        entry
+                            .file_name()
+                            .to_string_lossy()
+                            .parse::<i32>()
+                            .map_err(|_| "non-numeric /proc/self/fd entry".to_owned())
+                    })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        descriptors.sort_unstable();
+        descriptors.dedup();
+        for fd in descriptors.into_iter().filter(|fd| *fd > 2) {
+            match close(fd) {
+                Ok(()) | Err(Errno::EBADF) => {}
+                Err(error) => {
+                    return Err(format!("close inherited descriptor {fd}: {error}"));
+                }
+            }
+        }
+        Ok(())
     }
 
     fn bind_parent_death(expected_parent_pid: u32) -> Result<(), String> {

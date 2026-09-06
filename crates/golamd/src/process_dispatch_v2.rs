@@ -43,6 +43,7 @@ const STREAM_CHUNK_BYTES: usize = 4096;
 const STREAM_CHANNEL_DEPTH: usize = 8;
 const SUPERVISOR_POLL_MS: u64 = 10;
 const TERMINAL_DRAIN_MS: u64 = 1000;
+const HELPER_READY_TIMEOUT_MS: u64 = 30_000;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ProcessExecutionLimitsV2 {
@@ -518,13 +519,13 @@ mod linux_x86_64 {
         spawn_stdout_reader(stdout, sender.clone());
         spawn_stderr_reader(stderr, sender);
 
-        let started = Instant::now();
+        let ready_started = Instant::now();
         if let Err(reason) = await_ready(
             &mut child,
             &receiver,
             execution_binding_digest,
-            input.limits.wall_time_ms,
-            started,
+            HELPER_READY_TIMEOUT_MS,
+            ready_started,
         ) {
             let exact_terminal = terminate_before_ready(&mut child);
             let completion = if exact_terminal {
@@ -546,6 +547,11 @@ mod linux_x86_64 {
             )?;
             return Err(ProcessExecutionV2Error::HelperProtocol(reason));
         }
+
+        // The payload wall-time budget begins only after the trusted helper has emitted the
+        // containment-ready receipt. Helper verification and containment setup remain separately
+        // bounded by HELPER_READY_TIMEOUT_MS and cannot consume the payload execution budget.
+        let started = Instant::now();
 
         let binding = RootContainmentBinding {
             profile_token: PROFILE_TOKEN.to_owned(),
@@ -960,8 +966,8 @@ mod linux_x86_64 {
         child: &mut Child,
         receiver: &Receiver<StreamEvent>,
         expected_binding: [u8; 32],
-        wall_time_ms: u64,
-        started: Instant,
+        ready_timeout_ms: u64,
+        ready_started: Instant,
     ) -> Result<(), &'static str> {
         let expected = {
             let mut value = READY_PREFIX.to_vec();
@@ -970,7 +976,7 @@ mod linux_x86_64 {
             value
         };
         loop {
-            if started.elapsed().as_millis() >= u128::from(wall_time_ms) {
+            if ready_started.elapsed().as_millis() >= u128::from(ready_timeout_ms) {
                 return Err("process_execute_helper_ready_timeout");
             }
             match child.try_wait() {
