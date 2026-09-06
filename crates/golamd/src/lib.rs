@@ -13,6 +13,8 @@ mod sys {
 
 pub mod local_fs;
 pub mod mcp_local_process_v2;
+#[cfg(test)]
+mod mcp_phase_h_adversarial_tests;
 pub mod mcp_protocol;
 pub mod mcp_remote_gate;
 pub mod native_containment_v2;

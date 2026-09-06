@@ -6,9 +6,7 @@ use golam_core::skills_protocol::{
 use golam_core::taint::TaintSet;
 use golam_core::tool_request::BindingDigest;
 
-use crate::mcp_protocol::{
-    McpAdvertisementKind, McpLifecycle, McpProtocolError, McpReviewRequest,
-};
+use crate::mcp_protocol::{McpAdvertisementKind, McpLifecycle, McpProtocolError, McpReviewRequest};
 use crate::mcp_remote_gate::{
     RemoteMcpAuthorityContext, RemoteMcpGateError, remote_network_emission_implemented,
     validate_remote_binding_and_authority,
@@ -73,9 +71,8 @@ fn top_level_authority_like_mcp_metadata_is_rejected() {
         "taint",
         "trust",
     ] {
-        let payload = format!(
-            r#"{{"name":"unsafe","inputSchema":{{"type":"object"}},"{field}":true}}"#
-        );
+        let payload =
+            format!(r#"{{"name":"unsafe","inputSchema":{{"type":"object"}},"{field}":true}}"#);
         assert!(matches!(
             lifecycle.normalize_advertisement(McpAdvertisementKind::Tool, payload.as_bytes()),
             Err(McpProtocolError::AuthorityMetadataForbidden(_))
@@ -116,7 +113,10 @@ fn nested_schema_and_meta_are_untrusted_data_not_mapping_authority() {
         descriptor.golam_local_mapping_digest,
         lifecycle.binding().golam_local_mapping_digest
     );
-    assert_eq!(normalized.binding_state.binding_id, lifecycle.binding().binding_id);
+    assert_eq!(
+        normalized.binding_state.binding_id,
+        lifecycle.binding().binding_id
+    );
     assert_eq!(
         normalized.binding_state.binding_digest,
         lifecycle.binding().binding_digest
