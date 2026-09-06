@@ -1,0 +1,44 @@
+name: spec005-j-convergence
+
+on:
+  push:
+    branches:
+      - impl/005-local-tools-context-memory
+    paths:
+      - .github/workflows/spec005-j-convergence.yml
+
+permissions:
+  contents: read
+
+jobs:
+  qualify-phase-j:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+      - name: T005-110 core alpha repository E2E
+        run: |
+          cargo +1.98.0 fmt --all -- --check
+          cargo +1.98.0 clippy --locked -p golamd --all-targets -- -D warnings
+          cargo +1.98.0 test --locked -p golamd --bin golamd spec005_core_alpha_tests:: -- --nocapture
+      - name: T005-112 managed memory restart and conflict corpus
+        run: |
+          cargo +1.98.0 test --locked -p golamd --bin golamd memory_commit:: -- --nocapture
+          cargo +1.98.0 test --locked -p golamd --bin golamd memory_reconcile:: -- --nocapture
+          cargo +1.98.0 test --locked -p golam-kernel memory_restart:: -- --nocapture
+          cargo +1.98.0 test --locked -p golam-kernel managed_memory_writer:: -- --nocapture
+      - name: T005-113 malicious authority and path corpus
+        run: |
+          cargo +1.98.0 test --locked -p golamd --lib mcp_phase_h_adversarial_tests:: -- --nocapture
+          cargo +1.98.0 test --locked -p golamd --test phase_i_network_optionality -- --nocapture
+          cargo +1.98.0 test --locked -p golamd --bin golamd file_mutation_qualification_tests:: -- --nocapture
+          cargo +1.98.0 test --locked -p golamd --bin golamd file_path_mutation_qualification_tests:: -- --nocapture
+          cargo +1.98.0 test --locked -p golam-kernel --test hostile_adapter -- --nocapture
+          cargo +1.98.0 test --locked -p golam-effects --test qualification_properties -- --nocapture
+      - name: T005-111 strict-local external observation
+        run: |
+          cargo +1.98.0 build --locked -p golamd --bin golamd
+          bash scripts/qualification/strict-local-no-network.sh target/debug/golamd
