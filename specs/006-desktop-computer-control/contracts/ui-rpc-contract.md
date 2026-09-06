@@ -6,13 +6,23 @@ The Tauri webview/frontend is an untrusted presentation tier. The native Rust Ta
 
 - The native Rust host authenticates to `golamd`; localhost, same-machine location, process ancestry, a successful transport connection or a renderer-provided identity is not authentication.
 - Client credentials, enrollment secrets, capability tokens and authority-bearing IPC material remain Rust-side and never enter the webview/DOM/JavaScript state.
-- Every renderer-originated request is treated as untrusted input. The Rust host and `golamd` independently validate schema, opaque references, authority, control-lease generation and effect state.
+- Every renderer-originated request is treated as untrusted input. The Rust host and `golamd` independently validate schema, opaque references, authority, control-lease generation, visible-control-channel state and effect state.
 - Reconnect requires the existing authenticated-client rules; a disconnected/restarted renderer cannot inherit or recreate authority from cached UI state.
+
+## Qualified visible-control channel
+
+Autonomous computer control requires at least one qualified persistent local indicator/control channel that visibly communicates active control and provides immediate local `PAUSE`, `STOP` and `TAKEOVER` actions.
+
+- Trusted Rust owns or independently observes channel identity/liveness/visibility; renderer DOM state alone is not evidence that a qualified channel exists.
+- A Tauri native window, native tray/status surface or platform indicator may qualify only after implementation defines and tests the required visibility/liveness/control guarantees.
+- If the only qualified visible-control channel disappears, becomes unobservable or loses its immediate controls, trusted state suspends new autonomous actuation fail closed.
+- Renderer reload/crash cannot leave hidden autonomous actuation running solely because stale frontend state claimed the indicator was visible.
+- Restoring a qualified channel does not restore stale capability/control-lease/effect authority; ordinary fresh revalidation still applies.
 
 ## Allowed frontend data
 - sanitized work-surface labels and bounded geometry;
 - opaque observation/action/control-state references;
-- sanitized capability, permission, stale/unsupported, pause/takeover and terminal-status states;
+- sanitized capability, permission, visible-control-channel, stale/unsupported, pause/takeover and terminal-status states;
 - bounded untrusted pixel-hint visualization metadata where needed for user review;
 - explicit user action choices and approval prompts.
 
