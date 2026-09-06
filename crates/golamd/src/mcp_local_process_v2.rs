@@ -89,9 +89,9 @@ impl fmt::Display for McpLocalProcessV2Error {
             Self::InvalidRequestBinding(reason) => {
                 write!(f, "local MCP ToolRequest binding is invalid: {reason}")
             }
-            Self::StaleQueuedRequest => f.write_str(
-                "local MCP queued request no longer matches the prepared ToolRequest",
-            ),
+            Self::StaleQueuedRequest => {
+                f.write_str("local MCP queued request no longer matches the prepared ToolRequest")
+            }
             Self::ServerExecutableIdentityMismatch => f.write_str(
                 "local MCP staged executable does not match the reviewed server identity",
             ),
@@ -291,10 +291,8 @@ mod tests {
 
     #[test]
     fn local_binding_requires_exact_admitted_profile() {
-        let lifecycle = active_lifecycle(
-            McpTransport::LocalStdio,
-            admitted_local_mcp_profile_ref(),
-        );
+        let lifecycle =
+            active_lifecycle(McpTransport::LocalStdio, admitted_local_mcp_profile_ref());
         let dispatch = lifecycle
             .bind_dispatch(digest(7), digest(8), digest(9))
             .unwrap();
@@ -321,10 +319,8 @@ mod tests {
             Err(McpLocalProcessV2Error::InvalidTransport)
         ));
 
-        let mut revoked = active_lifecycle(
-            McpTransport::LocalStdio,
-            admitted_local_mcp_profile_ref(),
-        );
+        let mut revoked =
+            active_lifecycle(McpTransport::LocalStdio, admitted_local_mcp_profile_ref());
         let stale = revoked
             .bind_dispatch(digest(7), digest(8), digest(9))
             .unwrap();
