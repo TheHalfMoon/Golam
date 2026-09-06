@@ -64,6 +64,14 @@ pub struct DispatchDesktopClipboard<'a, B: DesktopBackend> {
     pub backend: &'a mut B,
 }
 
+struct CompleteDesktopClipboard<'a> {
+    prepared: &'a PreparedDesktopClipboard,
+    finished_at: &'a str,
+    completion: ToolExecutionCompletion,
+    reason_code: &'a str,
+    receipt: Option<&'a [u8]>,
+}
+
 impl<P: AuthorizationPolicy> KernelApi<P> {
     pub fn prepare_desktop_clipboard(
         &mut self,
@@ -142,11 +150,13 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             Err(error) => {
                 self.complete_clipboard(
                     principal,
-                    input.prepared,
-                    input.finished_at,
-                    ToolExecutionCompletion::Failed,
-                    "desktop_clipboard_revalidation_failed_before_dispatch",
-                    None,
+                    CompleteDesktopClipboard {
+                        prepared: input.prepared,
+                        finished_at: input.finished_at,
+                        completion: ToolExecutionCompletion::Failed,
+                        reason_code: "desktop_clipboard_revalidation_failed_before_dispatch",
+                        receipt: None,
+                    },
                     scope,
                 )?;
                 return Err(DesktopClipboardError::Revalidation(error));
@@ -157,11 +167,13 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             Err(error) => {
                 self.complete_clipboard(
                     principal,
-                    input.prepared,
-                    input.finished_at,
-                    ToolExecutionCompletion::UnknownOutcome,
-                    "desktop_clipboard_adapter_error_after_dispatch_boundary",
-                    None,
+                    CompleteDesktopClipboard {
+                        prepared: input.prepared,
+                        finished_at: input.finished_at,
+                        completion: ToolExecutionCompletion::UnknownOutcome,
+                        reason_code: "desktop_clipboard_adapter_error_after_dispatch_boundary",
+                        receipt: None,
+                    },
                     scope,
                 )?;
                 return Err(DesktopClipboardError::AdapterUncertain(error));
@@ -169,18 +181,20 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         };
         let completion = classify_receipt(input.prepared, &receipt);
         let receipt_bytes = clipboard_receipt_bytes(&receipt)?;
-        let reason = match completion {
+        let reason_code = match completion {
             ToolExecutionCompletion::Succeeded => "desktop_clipboard_succeeded",
             ToolExecutionCompletion::Failed => "desktop_clipboard_terminal_failure",
             ToolExecutionCompletion::UnknownOutcome => "desktop_clipboard_unknown_outcome",
         };
         self.complete_clipboard(
             principal,
-            input.prepared,
-            input.finished_at,
-            completion,
-            reason,
-            Some(receipt_bytes.as_slice()),
+            CompleteDesktopClipboard {
+                prepared: input.prepared,
+                finished_at: input.finished_at,
+                completion,
+                reason_code,
+                receipt: Some(receipt_bytes.as_slice()),
+            },
             scope,
         )?;
         if completion == ToolExecutionCompletion::UnknownOutcome {
@@ -192,22 +206,18 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
     fn complete_clipboard(
         &mut self,
         principal: Principal<'_>,
-        prepared: &PreparedDesktopClipboard,
-        finished_at: &str,
-        completion: ToolExecutionCompletion,
-        reason_code: &str,
-        receipt: Option<&[u8]>,
+        input: CompleteDesktopClipboard<'_>,
         scope: &str,
     ) -> Result<(), DesktopClipboardError> {
         self.complete_tool_effect(
             principal,
             CompleteToolEffect {
-                prepared: prepared.effect(),
-                finished_at,
-                completion,
-                reason_code: Some(reason_code),
-                evidence_ref: receipt,
-                receipt,
+                prepared: input.prepared.effect(),
+                finished_at: input.finished_at,
+                completion: input.completion,
+                reason_code: Some(input.reason_code),
+                evidence_ref: input.receipt,
+                receipt: input.receipt,
             },
             scope,
         )?;
