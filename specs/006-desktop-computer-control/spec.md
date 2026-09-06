@@ -7,7 +7,7 @@
 
 ## Problem
 
-Golam needs a local, reviewable computer-control layer that can observe desktop work surfaces, focus a selected surface, capture bounded visual evidence, perform semantic UI actions, and use narrowly governed fallback mechanisms only when stronger semantic paths are unavailable. The control plane must remain local-first, auditable, least-authority, permission-aware, immediately human-interruptible and cross-platform without pretending that Windows, macOS and Linux expose equivalent primitives.
+Golam needs a local, reviewable computer-control layer that can observe desktop work surfaces, focus a selected surface, capture bounded visual evidence, perform semantic UI actions, and use narrowly governed fallback mechanisms only when stronger semantic paths are unavailable. The control plane must remain local-first, auditable, least-authority, permission-aware, visibly active, immediately human-interruptible and cross-platform without pretending that Windows, macOS and Linux expose equivalent primitives.
 
 ## User stories
 
@@ -43,10 +43,10 @@ Golam exposes one typed desktop-control contract while Windows, macOS and Linux 
 
 **Acceptance**: unsupported operations fail closed and are not emulated by a weaker mechanism unless a separately authorized fallback exists.
 
-### US7 — Immediate human pause, stop and takeover (P1)
-A local user can immediately pause agent input, stop computer-control work, or take exclusive control of the interactive session.
+### US7 — Immediate visible human pause, stop and takeover (P1)
+A local user can see when autonomous computer control is active and can immediately pause agent input, stop computer-control work, or take exclusive control of the interactive session.
 
-**Acceptance**: takeover is enforced at the protected lease/input-authority layer, not only in UI state. It revokes or suspends conflicting agent input authority, invalidates stale queued/prepared actions, preserves reconciliation for any already-crossed effect boundary, and has measured takeover latency.
+**Acceptance**: active autonomous control has a persistent local visible indicator/control surface. Takeover is enforced at the protected lease/input-authority layer, not only in UI state. It revokes or suspends conflicting agent input authority, invalidates stale queued/prepared actions, preserves reconciliation for any already-crossed effect boundary, and has measured takeover latency. Loss of the qualified visible-control channel suspends new autonomous actuation until visibility/control is restored or another qualified visible channel is active.
 
 ### US8 — Authenticated desktop client boundary (P1)
 The Tauri desktop shell communicates with `golamd` only as an authenticated local client through the existing governed local IPC boundary.
@@ -83,6 +83,7 @@ The Tauri desktop shell communicates with `golamd` only as an authenticated loca
 - **FR-026**: Human pause/stop/takeover must be enforced by protected control-lease/input-authority state. Takeover revokes or suspends conflicting agent input generations before additional dispatch and cannot be undone by a stale model/UI request.
 - **FR-027**: Prepared/queued agent input bound to a superseded or revoked lease generation must fail closed. Already-dispatched uncertain effects must remain `UNKNOWN_OUTCOME` until reconciled rather than being silently replayed after takeover.
 - **FR-028**: Any third-party crate, JS package, native library, helper or copied donor implementation introduced for Spec 006 requires exact per-source Source Foundry admission before dependency or code admission. Official platform documentation establishes direction only, not dependency admission.
+- **FR-029**: Autonomous computer control must maintain a persistent visible local indicator/control channel that exposes immediate pause, stop and takeover. If no qualified visible-control channel is available, new autonomous actuation is suspended fail closed rather than continuing invisibly.
 
 ## Non-functional and security requirements
 
@@ -95,6 +96,7 @@ The Tauri desktop shell communicates with `golamd` only as an authenticated loca
 - **NFR-007**: Tauri capabilities and commands are narrowly scoped; frontend compromise must not yield unrestricted native control.
 - **NFR-008**: Human pause/stop/takeover latency must be measured from the protected interrupt signal to conflicting input-authority revocation/suspension, with a deterministic fail-closed bound selected and qualified during implementation.
 - **NFR-009**: Desktop-client authentication must reuse the existing authenticated local IPC trust boundary rather than creating a second renderer-owned authentication path.
+- **NFR-010**: Visibility of active autonomous computer control is a safety invariant. Loss of the qualified visible-control channel must be detected and must suspend new autonomous input within the implementation's qualified fail-closed bound.
 
 ## Explicit dispositions
 
@@ -105,6 +107,8 @@ The Tauri desktop shell communicates with `golamd` only as an authenticated loca
 `TAURI_2_DESKTOP_SHELL=SELECTED`  
 `TAURI_GOLAMD_AUTHENTICATED_CLIENT=REQUIRED`  
 `RENDERER_AUTHENTICATION_MATERIAL=DENIED`  
+`AUTONOMOUS_CONTROL_VISIBLE_INDICATOR=REQUIRED`  
+`INVISIBLE_AUTONOMOUS_ACTUATION=FAIL_CLOSED_DENIED`  
 `HUMAN_TAKEOVER=LEASE_INPUT_AUTHORITY_LAYER_REQUIRED`  
 `ELECTRON_PRIVILEGED_RUNTIME=NOT_SELECTED`  
 `DONOR_ARCHITECTURE_AUTHORITY=NONE`  
@@ -121,12 +125,13 @@ The Tauri desktop shell communicates with `golamd` only as an authenticated loca
 
 ## Success criteria
 
-1. Fake backend proves bounded observation, stale-target invalidation, focus races, permission loss, semantic action success/failure, explicit fallback denial/allow, bounded pixel-hint handling, bounded capture, clipboard gating and lease-generation invalidation.
+1. Fake backend proves bounded observation, stale-target invalidation, focus races, permission loss, semantic action success/failure, explicit fallback denial/allow, bounded pixel-hint handling, bounded capture, clipboard gating, lease-generation invalidation and visible-channel-loss suspension.
 2. Windows/macOS/Linux adapters each pass their supported contract subset and explicit unsupported paths, including interactive-session/permission transitions applicable to that platform.
 3. No camera/mic/OCR/network capability is reachable through Spec 006, and bounded vision/pixel hints cannot mint authority.
 4. Tauri desktop authenticates as a local `golamd` client while the renderer receives no authentication material or native authority.
-5. Human pause/stop/takeover invalidates conflicting agent input authority at the protected lease/input layer and passes takeover-latency, stale-reference and wrong-window adversarial tests.
-6. Every introduced dependency/runtime primitive has an exact Source Foundry admission record before use.
-7. Exact-head CI succeeds on Windows, macOS and Ubuntu before final review and merge.
-8. Fresh independent semantic/security/governance review reports no unresolved material finding on the exact qualified head.
-9. Expected-head merge and post-merge push CI succeed before Spec 006 is closed canonical.
+5. Active autonomous computer control remains visibly indicated with immediate local pause/stop/takeover; loss of the qualified visible-control channel suspends new actuation fail closed.
+6. Human pause/stop/takeover invalidates conflicting agent input authority at the protected lease/input layer and passes takeover-latency, stale-reference and wrong-window adversarial tests.
+7. Every introduced dependency/runtime primitive has an exact Source Foundry admission record before use.
+8. Exact-head CI succeeds on Windows, macOS and Ubuntu before final review and merge.
+9. Fresh independent semantic/security/governance review reports no unresolved material finding on the exact qualified head.
+10. Expected-head merge and post-merge push CI succeed before Spec 006 is closed canonical.
