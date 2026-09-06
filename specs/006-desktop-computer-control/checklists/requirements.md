@@ -5,9 +5,12 @@
 - [x] Product implementation is explicitly blocked until planning canonical closeout.
 - [x] Spec Kit clarification closeout is explicit.
 - [x] Cross-artifact analysis reconciles Constitution and Spec 001 Phase 5 authority.
+- [x] Exact constitutional control-route ordering is explicit: domain/app → native OS automation → accessibility → browser DOM/protocol → deterministic keyboard/mouse → vision/pixel.
+- [x] Weaker deterministic raw/vision fallback requires canonical trusted fallback-eligibility evidence and cannot bypass a stronger applicable authorized route.
+- [x] Unreconciled `UNKNOWN_OUTCOME` blocks conflicting retry and weaker fallback escalation.
 - [x] Observation and actuation authority are separated.
-- [x] Semantic actions are primary; raw input fallback is explicit-only.
-- [x] Bounded vision/pixel fallback is modeled only as untrusted candidate geometry; it cannot mint authority.
+- [x] Semantic desktop actions are primary within the Spec 006 layer; raw input fallback is explicit-only.
+- [x] Bounded vision/pixel fallback is modeled only as untrusted candidate geometry; it cannot mint authority or fallback eligibility.
 - [x] Raw screenshot OCR/text extraction remains deferred to Spec 007.
 - [x] Capture and actuation are separate capabilities/effects.
 - [x] Target identity/stale/focus races are explicit requirements.
@@ -23,7 +26,6 @@
 - [x] Loss of all qualified visible-control channels suspends new autonomous actuation fail closed; renderer DOM state alone cannot satisfy visibility.
 - [x] Human pause/stop/takeover is enforced at protected lease/input-authority state, not UI convention.
 - [x] Takeover latency, stale generation/reference, wrong-window, focus theft and restart/reconnect hazards are qualification requirements.
-- [x] `UNKNOWN_OUTCOME` blocks conflicting retry across timeout/restart/permission change/takeover until reconciliation.
 - [x] Donor code is behavioral/reference-only and not architecture/runtime authority.
 - [x] Official research direction is not dependency admission; every new crate/package/native binding/helper/copied component requires exact Source Foundry admission before use.
 - [x] No hidden network/cloud fallback is admitted.
