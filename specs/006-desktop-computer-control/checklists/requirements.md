@@ -1,21 +1,29 @@
 # Requirements Quality Checklist — Spec 006
 
 - [x] Scope is bounded to desktop/computer control and desktop shell boundary.
-- [x] Planning authority derives from canonical Spec 001 T060–T071 and closed Spec 005.
+- [x] Planning authority derives from canonical Spec 001 T060–T069 and closed Spec 005.
 - [x] Product implementation is explicitly blocked until planning canonical closeout.
+- [x] Spec Kit clarification closeout is explicit.
+- [x] Cross-artifact analysis reconciles Constitution and Spec 001 Phase 5 authority.
 - [x] Observation and actuation authority are separated.
 - [x] Semantic actions are primary; raw input fallback is explicit-only.
+- [x] Bounded vision/pixel fallback is modeled only as untrusted candidate geometry; it cannot mint authority.
+- [x] Raw screenshot OCR/text extraction remains deferred to Spec 007.
 - [x] Capture and actuation are separate capabilities/effects.
 - [x] Target identity/stale/focus races are explicit requirements.
 - [x] Windows/macOS/Linux backend directions use official OS/community primitives and honest unsupported states.
-- [x] Windows secure desktop is explicitly not supported.
+- [x] Windows locked/UAC/secure-desktop and interactive-session transitions fail closed; secure desktop is explicitly not supported.
 - [x] Wayland bypass is explicitly denied.
 - [x] Camera and microphone are explicitly denied.
-- [x] Screenshot OCR/text extraction is deferred to Spec 007.
 - [x] Clipboard requires explicit authority and silent inspection is denied.
 - [x] Raw capture/clipboard payloads are ephemeral by default and secret-safe evidence is required.
-- [x] Tauri frontend is untrusted and cannot receive raw privileged handles.
-- [x] Donor code is reference-only and not architecture authority.
+- [x] Tauri native Rust host is an authenticated `golamd` local client through the existing authenticated IPC boundary.
+- [x] Tauri renderer is untrusted and cannot receive raw privileged handles, client authentication material or capability/control-lease authority.
+- [x] Human pause/stop/takeover is enforced at protected lease/input-authority state, not UI convention.
+- [x] Takeover latency, stale generation/reference, wrong-window, focus theft and restart/reconnect hazards are qualification requirements.
+- [x] `UNKNOWN_OUTCOME` blocks conflicting retry across timeout/restart/permission change/takeover until reconciliation.
+- [x] Donor code is behavioral/reference-only and not architecture/runtime authority.
+- [x] Official research direction is not dependency admission; every new crate/package/native binding/helper/copied component requires exact Source Foundry admission before use.
 - [x] No hidden network/cloud fallback is admitted.
 - [x] Fake backend testing precedes native adapter admission.
 - [x] Final exact-head CI, independent review, expected-head merge and post-merge CI are mandatory.
