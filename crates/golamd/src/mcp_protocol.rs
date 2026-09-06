@@ -1,31 +1,4 @@
-from pathlib import Path
-
-
-def replace_once(path: str, old: str, new: str) -> None:
-    p = Path(path)
-    text = p.read_text()
-    if text.count(old) != 1:
-        raise SystemExit(f"expected one patch anchor in {path}: {old[:80]!r}")
-    p.write_text(text.replace(old, new, 1))
-
-
-replace_once(
-    "Cargo.toml",
-    'seccompiler = { version = "=0.5.0", default-features = false }\n',
-    'seccompiler = { version = "=0.5.0", default-features = false }\nserde_json = { version = "=1.0.151", default-features = false, features = ["std"] }\n',
-)
-replace_once(
-    "crates/golamd/Cargo.toml",
-    'miniz_oxide_read = { package = "miniz_oxide", version = "=0.9.1", default-features = false }\n',
-    'miniz_oxide_read = { package = "miniz_oxide", version = "=0.9.1", default-features = false }\nserde_json.workspace = true\n',
-)
-replace_once(
-    "crates/golamd/src/lib.rs",
-    "pub mod memory_writer;\n",
-    "pub mod memory_writer;\npub mod mcp_protocol;\n",
-)
-
-Path("crates/golamd/src/mcp_protocol.rs").write_text(r'''#![forbid(unsafe_code)]
+#![forbid(unsafe_code)]
 
 //! Bounded MCP advertisement normalization and reviewed binding lifecycle for Spec 005.
 //!
@@ -306,16 +279,29 @@ impl fmt::Display for McpProtocolError {
             Self::StringTooLarge => f.write_str("MCP JSON string exceeds the byte bound"),
             Self::ExpectedObject => f.write_str("MCP advertisement must be a JSON object"),
             Self::MissingField(field) => write!(f, "MCP advertisement is missing field: {field}"),
-            Self::InvalidFieldType(field) => write!(f, "MCP advertisement field has invalid type: {field}"),
-            Self::UnsupportedField(field) => write!(f, "unsupported MCP advertisement field: {field}"),
-            Self::AuthorityMetadataForbidden(field) => write!(f, "MCP authority-like metadata is forbidden: {field}"),
+            Self::InvalidFieldType(field) => {
+                write!(f, "MCP advertisement field has invalid type: {field}")
+            }
+            Self::UnsupportedField(field) => {
+                write!(f, "unsupported MCP advertisement field: {field}")
+            }
+            Self::AuthorityMetadataForbidden(field) => {
+                write!(f, "MCP authority-like metadata is forbidden: {field}")
+            }
             Self::InvalidName => f.write_str("MCP advertisement name is invalid"),
             Self::InvalidDescription => f.write_str("MCP description exceeds the bound"),
             Self::InvalidUri => f.write_str("MCP resource URI is invalid or oversized"),
             Self::InvalidBinding(field) => write!(f, "MCP binding reference is invalid: {field}"),
-            Self::WrongAdvertisementKind => f.write_str("MCP advertisement is not a tool descriptor"),
-            Self::LifecycleNotDispatchable(state) => write!(f, "MCP lifecycle is not usable for this operation: {state:?}"),
-            Self::InvalidLifecycleTransition { from, to } => write!(f, "invalid MCP lifecycle transition: {from:?} -> {to:?}"),
+            Self::WrongAdvertisementKind => {
+                f.write_str("MCP advertisement is not a tool descriptor")
+            }
+            Self::LifecycleNotDispatchable(state) => write!(
+                f,
+                "MCP lifecycle is not usable for this operation: {state:?}"
+            ),
+            Self::InvalidLifecycleTransition { from, to } => {
+                write!(f, "invalid MCP lifecycle transition: {from:?} -> {to:?}")
+            }
         }
     }
 }
@@ -367,8 +353,24 @@ fn normalize_advertisement(
     let object = value.as_object().ok_or(McpProtocolError::ExpectedObject)?;
     reject_authority_metadata(object.keys().map(String::as_str))?;
     let allowed = match kind {
-        McpAdvertisementKind::Tool => &["name", "description", "inputSchema", "outputSchema", "annotations", "title", "_meta"][..],
-        McpAdvertisementKind::Resource => &["uri", "name", "description", "mimeType", "annotations", "title", "_meta"][..],
+        McpAdvertisementKind::Tool => &[
+            "name",
+            "description",
+            "inputSchema",
+            "outputSchema",
+            "annotations",
+            "title",
+            "_meta",
+        ][..],
+        McpAdvertisementKind::Resource => &[
+            "uri",
+            "name",
+            "description",
+            "mimeType",
+            "annotations",
+            "title",
+            "_meta",
+        ][..],
         McpAdvertisementKind::Prompt => &["name", "description", "arguments", "title", "_meta"][..],
     };
     for key in object.keys() {
@@ -379,9 +381,11 @@ fn normalize_advertisement(
 
     let name = required_string(object.get("name"), "name")?.to_owned();
     validate_name(&name)?;
-    let description = optional_string(object.get("description"), "description")?
-        .map(str::to_owned);
-    if description.as_ref().is_some_and(|value| value.len() > MAX_MCP_DESCRIPTION_BYTES) {
+    let description = optional_string(object.get("description"), "description")?.map(str::to_owned);
+    if description
+        .as_ref()
+        .is_some_and(|value| value.len() > MAX_MCP_DESCRIPTION_BYTES)
+    {
         return Err(McpProtocolError::InvalidDescription);
     }
     let resource_uri = if kind == McpAdvertisementKind::Resource {
@@ -413,18 +417,24 @@ fn normalize_advertisement(
         Some(_) if kind == McpAdvertisementKind::Tool => {
             return Err(McpProtocolError::InvalidFieldType("outputSchema"));
         }
-        Some(_) => return Err(McpProtocolError::UnsupportedField("outputSchema".to_owned())),
+        Some(_) => {
+            return Err(McpProtocolError::UnsupportedField(
+                "outputSchema".to_owned(),
+            ));
+        }
         None => None,
     };
 
-    if kind == McpAdvertisementKind::Prompt {
-        if let Some(arguments) = object.get("arguments") {
-            let arguments = arguments
-                .as_array()
-                .ok_or(McpProtocolError::InvalidFieldType("arguments"))?;
-            if arguments.len() > MAX_MCP_CONTAINER_ITEMS || arguments.iter().any(|value| !value.is_object()) {
-                return Err(McpProtocolError::ContainerTooLarge);
-            }
+    if kind == McpAdvertisementKind::Prompt
+        && let Some(arguments) = object.get("arguments")
+    {
+        let arguments = arguments
+            .as_array()
+            .ok_or(McpProtocolError::InvalidFieldType("arguments"))?;
+        if arguments.len() > MAX_MCP_CONTAINER_ITEMS
+            || arguments.iter().any(|value| !value.is_object())
+        {
+            return Err(McpProtocolError::ContainerTooLarge);
         }
     }
 
@@ -506,7 +516,9 @@ fn encode_json(encoder: &mut CanonicalEncoder, value: &Value) -> Result<(), McpP
         }
         Value::Array(values) => {
             encoder.push_u8(5);
-            encoder.push_u64(u64::try_from(values.len()).map_err(|_| McpProtocolError::ContainerTooLarge)?);
+            encoder.push_u64(
+                u64::try_from(values.len()).map_err(|_| McpProtocolError::ContainerTooLarge)?,
+            );
             for value in values {
                 encode_json(encoder, value)?;
             }
@@ -515,7 +527,9 @@ fn encode_json(encoder: &mut CanonicalEncoder, value: &Value) -> Result<(), McpP
             encoder.push_u8(6);
             let mut entries = values.iter().collect::<Vec<_>>();
             entries.sort_by(|left, right| left.0.cmp(right.0));
-            encoder.push_u64(u64::try_from(entries.len()).map_err(|_| McpProtocolError::ContainerTooLarge)?);
+            encoder.push_u64(
+                u64::try_from(entries.len()).map_err(|_| McpProtocolError::ContainerTooLarge)?,
+            );
             for (key, value) in entries {
                 encoder.push_bytes(key.as_bytes())?;
                 encode_json(encoder, value)?;
@@ -538,7 +552,10 @@ fn mcp_binding_digest(
         McpTransport::RemoteHttp => 2,
     });
     encoder.push_bytes(&request.process_profile_ref_or_remote_endpoint.bytes())?;
-    encoder.push_u64(u64::try_from(request.allowed_protocol_features.len()).map_err(|_| McpProtocolError::InvalidBinding("allowed_protocol_features"))?);
+    encoder.push_u64(
+        u64::try_from(request.allowed_protocol_features.len())
+            .map_err(|_| McpProtocolError::InvalidBinding("allowed_protocol_features"))?,
+    );
     for feature in &request.allowed_protocol_features {
         encoder.push_bytes(&(feature.0).bytes())?;
     }
@@ -573,7 +590,9 @@ fn mcp_lifecycle_state_ref(
     Ok(BindingDigest::new(sha256(&encoder.finish())))
 }
 
-fn reject_authority_metadata<'a>(keys: impl Iterator<Item = &'a str>) -> Result<(), McpProtocolError> {
+fn reject_authority_metadata<'a>(
+    keys: impl Iterator<Item = &'a str>,
+) -> Result<(), McpProtocolError> {
     const FORBIDDEN: &[&str] = &[
         "approval",
         "approved",
@@ -595,16 +614,26 @@ fn reject_authority_metadata<'a>(keys: impl Iterator<Item = &'a str>) -> Result<
     Ok(())
 }
 
-fn required_string<'a>(value: Option<&'a Value>, field: &'static str) -> Result<&'a str, McpProtocolError> {
+fn required_string<'a>(
+    value: Option<&'a Value>,
+    field: &'static str,
+) -> Result<&'a str, McpProtocolError> {
     value
         .ok_or(McpProtocolError::MissingField(field))?
         .as_str()
         .ok_or(McpProtocolError::InvalidFieldType(field))
 }
 
-fn optional_string<'a>(value: Option<&'a Value>, field: &'static str) -> Result<Option<&'a str>, McpProtocolError> {
+fn optional_string<'a>(
+    value: Option<&'a Value>,
+    field: &'static str,
+) -> Result<Option<&'a str>, McpProtocolError> {
     value
-        .map(|value| value.as_str().ok_or(McpProtocolError::InvalidFieldType(field)))
+        .map(|value| {
+            value
+                .as_str()
+                .ok_or(McpProtocolError::InvalidFieldType(field))
+        })
         .transpose()
 }
 
@@ -664,10 +693,17 @@ mod tests {
     #[test]
     fn reviewed_binding_forces_mcp_taint_and_active_dispatch_revalidates() {
         let mut lifecycle = lifecycle(McpTransport::LocalStdio);
-        assert!(lifecycle.binding().taint_class.contains(TaintLabel::McpUntrusted));
+        assert!(
+            lifecycle
+                .binding()
+                .taint_class
+                .contains(TaintLabel::McpUntrusted)
+        );
         assert!(matches!(
             lifecycle.bind_dispatch(digest(10), digest(11), digest(12)),
-            Err(McpProtocolError::LifecycleNotDispatchable(McpLifecycleState::Reviewed))
+            Err(McpProtocolError::LifecycleNotDispatchable(
+                McpLifecycleState::Reviewed
+            ))
         ));
         lifecycle.transition(McpLifecycleState::Active).unwrap();
         let dispatch = lifecycle
@@ -677,8 +713,11 @@ mod tests {
         lifecycle.transition(McpLifecycleState::Revoked).unwrap();
         assert!(matches!(
             lifecycle.revalidate_dispatch(&dispatch),
-            Err(McpProtocolError::Dispatch(DispatchValidationError::McpLifecycleStateMismatch))
-                | Err(McpProtocolError::Dispatch(DispatchValidationError::McpLifecycleNotDispatchable))
+            Err(McpProtocolError::Dispatch(
+                DispatchValidationError::McpLifecycleStateMismatch
+            )) | Err(McpProtocolError::Dispatch(
+                DispatchValidationError::McpLifecycleNotDispatchable
+            ))
         ));
     }
 
@@ -724,7 +763,7 @@ mod tests {
         for _ in 0..18 {
             deep.push_str("{\"x\":");
         }
-        deep.push_str("0");
+        deep.push('0');
         for _ in 0..18 {
             deep.push('}');
         }
@@ -798,7 +837,9 @@ mod tests {
             version_lock: McpVersionLock::new("2025-06-18").unwrap(),
         })
         .unwrap_err();
-        assert!(matches!(error, McpProtocolError::InvalidBinding("network_policy_ref")));
+        assert!(matches!(
+            error,
+            McpProtocolError::InvalidBinding("network_policy_ref")
+        ));
     }
 }
-''')

@@ -11,6 +11,7 @@ golam-effects = { path = "../golam-effects" }
 golam-ipc = { path = "../golam-ipc" }
 golam-kernel = { path = "../golam-kernel" }
 miniz_oxide_read = { package = "miniz_oxide", version = "=0.9.1", default-features = false }
+serde_json.workspace = true
 
 [target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dependencies]
 landlock.workspace = true

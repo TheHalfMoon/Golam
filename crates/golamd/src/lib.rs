@@ -12,6 +12,7 @@ mod sys {
 }
 
 pub mod local_fs;
+pub mod mcp_protocol;
 pub mod native_containment_v2;
 pub mod native_process_supervisor_v2;
 #[allow(dead_code)]
