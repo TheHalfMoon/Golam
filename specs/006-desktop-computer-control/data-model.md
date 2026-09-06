@@ -15,6 +15,7 @@ Fields:
 - bounded pixel-hint support flag
 - clipboard support flags
 - human interrupt/takeover support state
+- visible-control-channel support state
 - permission/session evidence reference
 
 Rules: capability discovery describes support only; it grants no authority.
@@ -70,6 +71,20 @@ Fields:
 
 Rules: only the privileged control/authority path may mutate this state. Human pause/stop/takeover advances, suspends or revokes the conflicting agent input generation. Stale model, renderer, worker or adapter state cannot restore a prior generation. Every prepared input action binds the exact generation that was current when prepared and must revalidate it immediately before dispatch.
 
+## VisibleControlChannelState
+
+Fields:
+- channel id + generation
+- channel kind (`TAURI_NATIVE_WINDOW`, `SYSTEM_TRAY`, `PLATFORM_INDICATOR`, or another separately qualified local surface)
+- trusted host/client ref
+- visibility/liveness state
+- supported immediate controls (`PAUSE`, `STOP`, `TAKEOVER`)
+- last trusted observation timestamp
+- expiration/heartbeat deadline where applicable
+- canonical state digest
+
+Rules: at least one qualified channel must be trusted-visible and capable of immediate local interrupt before new autonomous actuation dispatch. Renderer-only DOM state is not sufficient. Loss/expiry of all qualified channels moves the protected control state into an actuation-suspended fail-closed condition until a qualified visible channel is restored. A stale UI message cannot fabricate channel liveness.
+
 ## PreparedDesktopAction
 
 Fields:
@@ -81,12 +96,13 @@ Fields:
 - action payload digest
 - capability/policy/approval refs
 - control lease id + generation for side-effecting input/focus operations
+- qualified visible-control-channel state digest/generation for autonomous interactive actuation
 - prepared permission/session evidence ref
 - prepared observation digest
 - expiration/deadline
 - canonical intent digest
 
-Rules: request and effect bindings are distinct, immutable after `Effect PREPARED`, and revalidated immediately before dispatch. Missing, mismatched, stale or substituted bindings, including a superseded/revoked control-lease generation, fail closed.
+Rules: request and effect bindings are distinct, immutable after `Effect PREPARED`, and revalidated immediately before dispatch. Missing, mismatched, stale or substituted bindings, including a superseded/revoked control-lease generation or loss of every qualified visible-control channel for autonomous actuation, fail closed.
 
 ## CaptureIntent
 
@@ -153,6 +169,7 @@ Fields:
 - request digest + effect id/effect binding digest + intent digest
 - attempted target digest
 - control lease id/generation where applicable
+- visible-control-channel state digest/generation where applicable
 - pixel-hint digest where applicable
 - status (`DENIED`, `COMMITTED`, `FAILED_BEFORE_EFFECT`, `UNKNOWN_OUTCOME`, `STALE_TARGET`, `PERMISSION_REVOKED`, `INTERRUPTED`, `NOT_SUPPORTED`)
 - post-action observation/evidence ref when available
@@ -160,7 +177,7 @@ Fields:
 - platform error class sanitized
 - timing/limit metadata
 
-Rules: post-boundary uncertainty becomes `UNKNOWN_OUTCOME`; conflicting follow-up fails closed until reconciliation. Human takeover cannot rewrite an already-crossed outcome; it blocks new conflicting dispatch while any uncertain outcome is reconciled.
+Rules: post-boundary uncertainty becomes `UNKNOWN_OUTCOME`; conflicting follow-up fails closed until reconciliation. Human takeover or visible-channel loss cannot rewrite an already-crossed outcome; both block new conflicting dispatch while any uncertain outcome is reconciled.
 
 ## HumanInterruptEvidence
 
@@ -183,6 +200,6 @@ Rules: renderer-only state is insufficient to create this evidence. A stale inte
 Frontend-only projection:
 - opaque observation/action/control-state refs
 - human-readable labels/state
-- sanitized capability, permission, stale/unsupported, pause/takeover and terminal-status states
+- sanitized capability, permission, visible-control-channel, stale/unsupported, pause/takeover and terminal-status states
 - bounded geometry and action menu
 - no raw handles, pointers, access tokens, IPC authentication material, capability tokens, portal file descriptors or privileged session objects
