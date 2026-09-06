@@ -367,7 +367,11 @@ mod tests {
         store
             .append_effect_evidence(evidence(DesktopEvidenceStatus::UnknownOutcome, None, 11))
             .unwrap();
-        assert!(store.has_unresolved_unknown_outcome_for_effect(EffectId(1)).unwrap());
+        assert!(
+            store
+                .has_unresolved_unknown_outcome_for_effect(EffectId(1))
+                .unwrap()
+        );
         store
             .append_effect_evidence(evidence(
                 DesktopEvidenceStatus::Reconciling,
