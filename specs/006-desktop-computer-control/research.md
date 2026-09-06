@@ -94,12 +94,35 @@ Disposition: `TAURI_2=SELECTED`; `FRONTEND_PRIVILEGED_HANDLE_ACCESS=DENIED`.
 
 Exact donor revision inspected: `a9f633e09d49a85829b8236331b9e21f7e612634`.
 
-The donor is an Electron/Node research agent and is not a trusted architecture source. Repository searches for a concrete desktop-control/accessibility/capture implementation did not identify a bounded implementation suitable for admission into Golam. No claim is made that donor behavior is absent beyond the inspected revision/search surface; the bounded result is only that no admissible implementation was found during this source-foundry pass.
+The donor is an Electron/Node research agent and is not a trusted architecture or authority source. A second bounded pass found concrete desktop/computer-control **behavioral evidence** that the earlier broad `DONOR_DESKTOP_CONTROL_IMPLEMENTATION=NOT_FOUND` wording failed to distinguish from admissible implementation. The evidence is useful only to recover observable UX/state/contract semantics; it does not admit the donor runtime, trust model, authorization model, privileged IPC, preload boundary, VNC stack, or native helper architecture into Golam.
+
+### Exact pinned evidence matrix
+
+| Exact donor path | Observed evidence at the pinned revision | Golam disposition |
+| --- | --- | --- |
+| `frontend/manifests/computer-shell-evidence.json` | Evidence manifest binds immutable renderer assets, recovered shell assets, native contract artifacts, raw-byte anchors, and fail-closed recovery boundaries. | Qualified as an untrusted behavioral/source map only. It is not an authority record. |
+| `src/app/dist/renderer/assets/index-UbX-y3il.js` | Manifest anchors identify `computerUse`, VNC liveness/viewer/session state, monitor selection, fullscreen, cursor overlay, preview, attention/open-computer states, and handoff/take-over surfaces. | Behavioral reference for bounded state/lifecycle and UX contracts. Renderer state cannot grant Golam capability or actuation authority. |
+| `src/app/dist/electron-preload/preload-vnc.cjs` | Manifest binds `box-vnc`, user-presence, VNC liveness/viewer visibility, host-key and session contract anchors. | Contract-shape reference only. Electron preload is explicitly rejected as a Golam trusted authorization boundary. |
+| `src/app/dist/electron-main/main.cjs` | Manifest binds forever-box status/ensure/hand-back and VNC session/liveness/open-computer/user-presence anchors. | Lifecycle/handoff reference only. Electron main, Node privileges and donor IPC authority are not admitted. |
+| `frontend/src/recovered/features/computer/shell/view.css` and `frontend/src/recovered/features/computer/shell/cursor-icons-16-f_W_ogc-.woff2` | Manifest identifies recovered computer-shell presentation assets derived from immutable artifacts. | Presentation reference only; no native authority or implementation dependency. |
+
+The same manifest explicitly records a fail-closed composition boundary: the shipped noVNC/RFB implementation remains inside an immutable dependency, teach-task recording controls are absent where internal capability/recording stores were not exposed, and no new DesktopBridge keys/main RPC methods/event names/Electron IPC channels were invented. These are useful recovery-discipline observations, not permission to adopt the runtime.
+
+Golam therefore separates two questions:
+
+1. **Is there pinned donor desktop/computer behavior worth learning from?** Yes. The exact evidence above qualifies as untrusted behavioral reference material.
+2. **Is there an admissible donor desktop-control implementation or authority boundary that may be copied into Golam?** No. The donor Electron/Node/preload/VNC/privileged-IPC architecture is not admitted. Any reused behavior must be reconstructed behind Golam-native capability, policy, approval, effect, revalidation, audit and platform-permission boundaries.
 
 Disposition:
+- `DONOR_DESKTOP_BEHAVIORAL_REFERENCE=QUALIFIED`
 - `DONOR_REFERENCE_ONLY=YES`
 - `DONOR_ARCHITECTURE_AUTHORITY=NONE`
-- `DONOR_DESKTOP_CONTROL_IMPLEMENTATION=NOT_FOUND`
+- `DONOR_RUNTIME_STACK_ADMITTED=NO`
+- `ELECTRON_NODE_PRELOAD_ADMITTED=NO`
+- `PRIVILEGED_IPC_AUTHORITY_ADMITTED=NO`
+- `VNC_PRESENCE_IMPLIES_AUTHORITY=NO`
+- `DONOR_DESKTOP_CONTROL_IMPLEMENTATION_ADMITTED=NO`
+- `GOLAM_NATIVE_CAPABILITY_EFFECT_BOUNDARY_REQUIRED=YES`
 - `ELECTRON_PRIVILEGED_RUNTIME=NOT_SELECTED`
 - `WHOLESALE_DONOR_COPY=DENIED`
 
@@ -111,3 +134,4 @@ Disposition:
 4. Platform permission/session objects are external mutable state and must be revalidated near dispatch.
 5. Cross-platform compatibility means a stable contract plus honest capability discovery, not pretending every backend supports every operation.
 6. Captured pixels, accessibility strings, titles and clipboard text are untrusted evidence and cannot authorize side effects.
+7. Donor renderer/preload/main/VNC behavior can inform bounded state and UX contracts, but it cannot define Golam authority; every side effect remains governed by Golam-native capability, policy, approval, effect, revalidation and evidence boundaries.
