@@ -61,7 +61,11 @@ jobs:
         env:
           GOLAM_PROCESS_SECRET_CANARY: SPEC005_PROCESS_SECRET_MUST_NOT_CROSS_EXEC_BOUNDARY
         run: |
-          rustc +1.98.0 -C target-feature=+crt-static -C opt-level=1 scripts/qualification/process-v2-payload.rs -o target/debug/process-v2-payload
+          rustc +1.98.0 -C target-feature=+crt-static -C relocation-model=static -C link-arg=-no-pie -C opt-level=1 scripts/qualification/process-v2-payload.rs -o target/debug/process-v2-payload
+          if ! readelf -h target/debug/process-v2-payload | grep -Eq 'Type:[[:space:]]+EXEC'; then
+            echo 'qualification payload is not an ET_EXEC ELF' >&2
+            exit 1
+          fi
           if readelf -l target/debug/process-v2-payload | grep -q 'INTERP'; then
             echo 'qualification payload is dynamically linked' >&2
             exit 1
