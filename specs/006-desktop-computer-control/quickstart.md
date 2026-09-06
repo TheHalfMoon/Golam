@@ -11,6 +11,14 @@
 7. Mark Ready, merge with expected-head guard, and require push CI on the exact merge SHA.
 8. Only then create `impl/006-desktop-computer-control`.
 
+## Constitutional route-order invariant
+
+Preserve the exact control-route order:
+
+`domain/application API → native OS automation API → accessibility/semantic tree → browser DOM/protocol → deterministic keyboard/mouse control → vision/pixel fallback`
+
+Before a deterministic raw-input or vision/pixel fallback is prepared, trusted orchestration must produce canonical `FallbackEligibilityEvidence` for the applicable stronger routes. A weaker route is denied while a stronger route remains available/authorized. `UNKNOWN_OUTCOME` never establishes fallback eligibility and blocks conflicting weaker escalation until reconciliation. Raw adapters, renderer state, model output and pixel-hint producers cannot self-mint route eligibility.
+
 ## Source Foundry invariant
 
 Planning research selects direction, not implementation dependencies. Before introducing any new Rust crate, Tauri/React/TypeScript package, native platform library/binding, helper process or copied donor source, create an exact per-source Source Foundry admission record covering version/revision, permission/license scope, notices, dependency closure, network/build behavior, unsafe/FFI/process boundaries and Golam verification.
@@ -38,15 +46,15 @@ A renderer crash/reload must never leave invisible autonomous actuation running 
 
 For every side-effect-capable path, including semantic action, raw fallback, capture and clipboard, require:
 
-`observation/source selection → exact target/source identity → ToolRequest + canonical request digest → immutable intent → capability/policy/approval → Effect PREPARED + effect binding digest → Kernel/Effect Gate → immediate request/effect/intent/identity/permission/control-lease/visible-channel revalidation → bounded adapter dispatch → durable terminal evidence → reconciliation when terminal truth is uncertain`
+`route evaluation where applicable → observation/source selection → exact target/source identity → ToolRequest + canonical request digest → immutable intent → capability/policy/approval → Effect PREPARED + effect binding digest → Kernel/Effect Gate → immediate route/request/effect/intent/identity/permission/control-lease/visible-channel revalidation → bounded adapter dispatch → durable terminal evidence → reconciliation when terminal truth is uncertain`
 
-A timeout, adapter crash, daemon restart, permission loss, human takeover or other uncertainty after the effect boundary becomes `UNKNOWN_OUTCOME`. Conflicting retry/reuse is blocked until reconciliation establishes terminal truth.
+A timeout, adapter crash, daemon restart, permission loss, human takeover or other uncertainty after the effect boundary becomes `UNKNOWN_OUTCOME`. Conflicting retry/reuse/fallback escalation is blocked until reconciliation establishes terminal truth.
 
 ## Vision/pixel fallback invariant
 
-A bounded `PixelTargetHint` may be derived from an explicitly selected authorized capture only as untrusted candidate geometry. It must retain capture/source provenance and expiry. It cannot mint semantic identity or action authority.
+A bounded `PixelTargetHint` may be derived from an explicitly selected authorized capture only as untrusted candidate geometry. It must retain capture/source provenance and expiry. It cannot mint semantic identity, action authority or fallback eligibility.
 
-Using a pixel hint requires a separate raw-input ToolRequest/effect/capability/policy/approval plus fresh work-surface/focus/session/control-lease/visible-channel revalidation. OCR/text extraction from raw screenshot pixels remains deferred to Spec 007.
+Using a pixel hint requires fresh canonical fallback-eligibility evidence, a separate raw-input ToolRequest/effect/capability/policy/approval plus fresh work-surface/focus/session/control-lease/visible-channel revalidation. OCR/text extraction from raw screenshot pixels remains deferred to Spec 007.
 
 ## Human interrupt invariant
 
@@ -62,9 +70,12 @@ Implementation qualification must measure takeover latency and test stale refere
 
 ## Do not
 
+- bypass an applicable stronger constitutional control route;
+- treat ordinary failure or `UNKNOWN_OUTCOME` as permission to use a weaker fallback;
+- let an adapter/model/renderer/pixel hint self-mint fallback eligibility;
 - use titles/coordinates/screenshots as sole identity;
 - expose native handles or authentication material to frontend;
-- dispatch with missing, mismatched, stale or substituted request/effect/authority/control-lease/visible-channel bindings;
+- dispatch with missing, mismatched, stale or substituted route/request/effect/authority/control-lease/visible-channel bindings;
 - continue autonomous actuation when no qualified visible-control channel is active;
 - silently escalate semantic failure to raw input;
 - let a pixel hint authorize an action;
@@ -82,14 +93,15 @@ Implementation qualification must measure takeover latency and test stale refere
 - `cargo fmt --all -- --check`
 - `cargo clippy --workspace --all-targets --all-features -- -D warnings`
 - `cargo test --workspace --all-targets --all-features`
+- route-order/fallback-eligibility tests proving stronger applicable routes and unreconciled `UNKNOWN_OUTCOME` block weaker fallback
 - authenticated Tauri-host/`golamd` local-client tests proving the renderer holds no auth material
 - visible-control-channel liveness/loss/recovery tests proving invisible autonomous actuation is suspended fail closed
-- fake-backend adversarial tests that reject missing/mismatched/stale request/effect/authority/control-lease/visible-channel bindings
-- pixel-hint tests proving capture/pixel evidence cannot authorize raw input or survive stale source/work-surface generations
+- fake-backend adversarial tests that reject missing/mismatched/stale route/request/effect/authority/control-lease/visible-channel bindings
+- pixel-hint tests proving capture/pixel evidence cannot authorize raw input, mint fallback eligibility or survive stale source/work-surface generations
 - capture/clipboard permission-loss and uncertain-completion tests
 - human pause/stop/takeover latency, stale-generation, wrong-window and restart/reconnect tests
 - Windows locked/UAC/session-transition fail-closed tests where runner/environment support permits, with deterministic unsupported evidence elsewhere
-- restart tests proving `UNKNOWN_OUTCOME` survives and blocks conflicting retry until reconciliation
+- restart tests proving `UNKNOWN_OUTCOME` survives and blocks conflicting retry/fallback until reconciliation
 - fake backend adversarial suites on all CI platforms
 - native platform tests only where the runner actually supports the relevant OS facility; unsupported/permission-limited paths must be explicit and deterministic
 
