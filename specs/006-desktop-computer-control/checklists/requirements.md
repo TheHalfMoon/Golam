@@ -19,6 +19,8 @@
 - [x] Raw capture/clipboard payloads are ephemeral by default and secret-safe evidence is required.
 - [x] Tauri native Rust host is an authenticated `golamd` local client through the existing authenticated IPC boundary.
 - [x] Tauri renderer is untrusted and cannot receive raw privileged handles, client authentication material or capability/control-lease authority.
+- [x] Active autonomous computer control requires a persistent qualified local visible indicator/control channel with immediate pause/stop/takeover.
+- [x] Loss of all qualified visible-control channels suspends new autonomous actuation fail closed; renderer DOM state alone cannot satisfy visibility.
 - [x] Human pause/stop/takeover is enforced at protected lease/input-authority state, not UI convention.
 - [x] Takeover latency, stale generation/reference, wrong-window, focus theft and restart/reconnect hazards are qualification requirements.
 - [x] `UNKNOWN_OUTCOME` blocks conflicting retry across timeout/restart/permission change/takeover until reconciliation.
