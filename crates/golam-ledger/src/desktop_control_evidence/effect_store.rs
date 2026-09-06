@@ -3,6 +3,7 @@
 use golam_core::{CanonicalEncoder, EffectId, SessionId};
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 
+use super::binding_store;
 use super::{DesktopControlEvidenceStore, DesktopEffectEvidence, DesktopEvidenceStatus};
 use crate::desktop_control_evidence::DesktopControlEvidenceError;
 
@@ -85,6 +86,7 @@ impl DesktopControlEvidenceStore {
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        binding_store::ensure_effect_binding(&tx, &evidence)?;
         let previous_chain_hash = verify_effect_chain(&tx, evidence.effect_id)?;
         let previous = latest_status(&tx, evidence.effect_id)?;
         validate_transition(previous.map(|value| value.0), evidence.status)?;
@@ -150,10 +152,11 @@ impl DesktopControlEvidenceStore {
                        FROM desktop_effect_evidence latest
                        WHERE latest.effect_id = current.effect_id
                      )
-                     AND current.status IN (?2, ?3)
+                     AND current.status IN (?2, ?3, ?4)
                    LIMIT 1"#,
                 params![
                     id_bytes(session_id.0),
+                    DesktopEvidenceStatus::Prepared.code(),
                     DesktopEvidenceStatus::UnknownOutcome.code(),
                     DesktopEvidenceStatus::Reconciling.code(),
                 ],
@@ -354,6 +357,20 @@ mod tests {
                 params![id_bytes(1), id_bytes(2)],
             )
             .unwrap();
+    }
+
+    #[test]
+    fn prepared_state_blocks_restart_conflicts_until_terminal_truth() {
+        let mut store = DesktopControlEvidenceStore::open_in_memory().unwrap();
+        seed_effect_session(&store);
+        store
+            .append_effect_evidence(evidence(DesktopEvidenceStatus::Prepared, None, 10))
+            .unwrap();
+        assert!(store.has_unresolved_unknown_outcome(SessionId(2)).unwrap());
+        store
+            .append_effect_evidence(evidence(DesktopEvidenceStatus::Failed, None, 11))
+            .unwrap();
+        assert!(!store.has_unresolved_unknown_outcome(SessionId(2)).unwrap());
     }
 
     #[test]
