@@ -272,7 +272,10 @@ pub struct ClipboardBackendReceipt {
 pub trait DesktopBackend {
     fn capabilities(&mut self) -> Result<DesktopCapabilitySet, DesktopBackendError>;
 
-    fn observe(&mut self, limits: DesktopLimits) -> Result<DesktopObservation, DesktopBackendError>;
+    fn observe(
+        &mut self,
+        limits: DesktopLimits,
+    ) -> Result<DesktopObservation, DesktopBackendError>;
 
     fn dispatch_action(
         &mut self,
@@ -327,7 +330,8 @@ impl FakeDesktopBackend {
         observation: DesktopObservation,
     ) -> Result<(), DesktopBackendError> {
         observation.validate()?;
-        if observation.capability_session_evidence != self.capabilities.permission_session_evidence {
+        if observation.capability_session_evidence != self.capabilities.permission_session_evidence
+        {
             return Err(DesktopBackendError::PermissionOrSessionDrift);
         }
         self.observation = observation;
@@ -362,7 +366,10 @@ impl DesktopBackend for FakeDesktopBackend {
         Ok(self.capabilities)
     }
 
-    fn observe(&mut self, limits: DesktopLimits) -> Result<DesktopObservation, DesktopBackendError> {
+    fn observe(
+        &mut self,
+        limits: DesktopLimits,
+    ) -> Result<DesktopObservation, DesktopBackendError> {
         self.require_permission()?;
         limits.validate()?;
         self.observation.validate()?;
@@ -465,24 +472,54 @@ pub enum DesktopBackendError {
 impl fmt::Display for DesktopBackendError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidRequestBinding => f.write_str("desktop request binding is stale or substituted"),
-            Self::InvalidEffectBinding => f.write_str("desktop effect binding is stale or substituted"),
-            Self::MissingGateAuthorization => f.write_str("desktop Kernel/Effect Gate authorization is missing"),
-            Self::GateAuthorizationMismatch => f.write_str("desktop Kernel/Effect Gate authorization is stale or substituted"),
-            Self::AuthorityBindingMismatch => f.write_str("desktop capability/policy/approval bindings are stale or substituted"),
-            Self::PermissionOrSessionDrift => f.write_str("desktop permission or session evidence changed after prepare"),
+            Self::InvalidRequestBinding => {
+                f.write_str("desktop request binding is stale or substituted")
+            }
+            Self::InvalidEffectBinding => {
+                f.write_str("desktop effect binding is stale or substituted")
+            }
+            Self::MissingGateAuthorization => {
+                f.write_str("desktop Kernel/Effect Gate authorization is missing")
+            }
+            Self::GateAuthorizationMismatch => {
+                f.write_str("desktop Kernel/Effect Gate authorization is stale or substituted")
+            }
+            Self::AuthorityBindingMismatch => {
+                f.write_str("desktop capability/policy/approval bindings are stale or substituted")
+            }
+            Self::PermissionOrSessionDrift => {
+                f.write_str("desktop permission or session evidence changed after prepare")
+            }
             Self::ObservationDrift => f.write_str("desktop observation changed after prepare"),
-            Self::StaleOrSubstitutedTarget => f.write_str("desktop target identity is stale or substituted"),
-            Self::StaleOrSupersededLease => f.write_str("desktop control lease is stale, superseded, paused, or revoked"),
-            Self::AutonomousActuationSuspended => f.write_str("no qualified visible control channel permits autonomous actuation"),
-            Self::MissingFallbackEligibility => f.write_str("raw fallback requires canonical fallback eligibility"),
-            Self::UnexpectedFallbackEvidence => f.write_str("semantic or focus dispatch cannot carry fallback evidence"),
+            Self::StaleOrSubstitutedTarget => {
+                f.write_str("desktop target identity is stale or substituted")
+            }
+            Self::StaleOrSupersededLease => {
+                f.write_str("desktop control lease is stale, superseded, paused, or revoked")
+            }
+            Self::AutonomousActuationSuspended => {
+                f.write_str("no qualified visible control channel permits autonomous actuation")
+            }
+            Self::MissingFallbackEligibility => {
+                f.write_str("raw fallback requires canonical fallback eligibility")
+            }
+            Self::UnexpectedFallbackEvidence => {
+                f.write_str("semantic or focus dispatch cannot carry fallback evidence")
+            }
             Self::StalePixelHint => f.write_str("pixel hint is stale or invalid"),
-            Self::PixelHintBindingMismatch => f.write_str("pixel hint binding is stale or substituted"),
-            Self::UnknownOutcomeBlocksDispatch => f.write_str("unreconciled UNKNOWN_OUTCOME blocks conflicting desktop dispatch"),
+            Self::PixelHintBindingMismatch => {
+                f.write_str("pixel hint binding is stale or substituted")
+            }
+            Self::UnknownOutcomeBlocksDispatch => {
+                f.write_str("unreconciled UNKNOWN_OUTCOME blocks conflicting desktop dispatch")
+            }
             Self::ExpiredIntent => f.write_str("desktop prepared intent expired before dispatch"),
-            Self::ObservationLimitExceeded => f.write_str("desktop observation exceeds requested bounds"),
-            Self::ClipboardDenied => f.write_str("clipboard operation is not supported by current capabilities"),
+            Self::ObservationLimitExceeded => {
+                f.write_str("desktop observation exceeds requested bounds")
+            }
+            Self::ClipboardDenied => {
+                f.write_str("clipboard operation is not supported by current capabilities")
+            }
             Self::DesktopControl(error) => write!(f, "desktop control error: {error}"),
             Self::DesktopIntent(error) => write!(f, "desktop intent error: {error}"),
         }
@@ -579,9 +616,10 @@ fn validate_pixel_hint_binding(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::EffectId;
     use crate::desktop_control::{
-        ControlRoute, DESKTOP_CONTROL_SCHEMA_VERSION, DesktopControlLeaseId, DesktopPlatform,
-        DesktopSessionKind, DesktopObservationId, RouteDisposition, RouteEvaluation,
+        ControlRoute, DESKTOP_CONTROL_SCHEMA_VERSION, DesktopControlLeaseId, DesktopObservationId,
+        DesktopPlatform, DesktopSessionKind, RouteDisposition, RouteEvaluation,
         VisibleControlChannelId, VisibleControlChannelKind,
     };
     use crate::desktop_intent::{
@@ -589,7 +627,6 @@ mod tests {
         RequestBinding,
     };
     use crate::tool_request::ToolRequestId;
-    use crate::EffectId;
 
     fn digest(value: u8) -> BindingDigest {
         BindingDigest::new([value; 32])
@@ -705,7 +742,10 @@ mod tests {
         }
     }
 
-    fn action(kind: DesktopActionKind, fallback_ref: Option<BindingDigest>) -> PreparedDesktopAction {
+    fn action(
+        kind: DesktopActionKind,
+        fallback_ref: Option<BindingDigest>,
+    ) -> PreparedDesktopAction {
         PreparedDesktopAction {
             schema_version: DESKTOP_CONTROL_SCHEMA_VERSION,
             request: RequestBinding {
