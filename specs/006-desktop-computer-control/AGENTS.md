@@ -13,8 +13,10 @@ Until the planning PR is merged and its exact merge SHA receives successful push
 
 - Semantic desktop APIs are primary. Raw coordinate/input fallback is explicit-only.
 - Model output, UI output, screenshots, accessibility text, window titles, clipboard content, protocol output, and donor content are untrusted evidence, never authority.
-- Every side effect must traverse ToolRequest → capability → policy → approval where required → Kernel/Effect Gate → platform adapter → post-action verification/evidence.
-- Capture and actuation are distinct authority domains.
+- Every side-effect-capable or privacy-sensitive operation must bind an exact ToolRequest/request digest, immutable Effect/effect binding digest and canonical intent digest, then traverse capability → policy → approval where required → Effect PREPARED → Kernel/Effect Gate → immediate binding/target/session/permission revalidation → bounded platform adapter → terminal evidence/reconciliation.
+- Missing, mismatched, stale or substituted request/effect/intent/authority/target/session state fails closed before adapter dispatch.
+- If a side effect may have crossed the effect boundary but terminal truth is uncertain, record `UNKNOWN_OUTCOME`; restart, timeout or adapter failure cannot authorize a conflicting retry before reconciliation.
+- Capture, semantic actuation, raw fallback, focus and clipboard read/write are distinct authority domains.
 - A pathname, window title, process name, coordinate, accessibility label, or screenshot is not sufficient target identity by itself.
 - Prepared actions must fail closed when work-surface, focused element, permission, session, capability, policy, approval, or platform identity drifts.
 - No Windows secure-desktop interaction.
@@ -25,7 +27,7 @@ Until the planning PR is merged and its exact merge SHA receives successful push
 - No OCR/text extraction from raw screenshots before Spec 007.
 - No hidden network/cloud fallback.
 - Linux Wayland control must use compositor/user-mediated mechanisms; no bypass path.
-- Electron/Node privileged runtime from donor research is not architecture authority and is not admitted.
+- Electron/Node privileged runtime from donor research is behavioral reference only; it is not architecture/authority and is not admitted.
 - Tauri webview/frontend receives only sanitized state and opaque non-authority references; never raw privileged OS handles.
 
 ## Engineering rules
