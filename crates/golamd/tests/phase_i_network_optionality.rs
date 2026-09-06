@@ -136,9 +136,7 @@ fn prepared_remote_dispatch_rejects_credential_redirect_proxy_and_authority_drif
     let mut secret = baseline;
     secret.secret_policy_ref = digest(46);
     assert_eq!(
-        revalidate_prepared_remote_mcp_dispatch(
-            &lifecycle, &dispatch, &request, secret, &prepared,
-        ),
+        revalidate_prepared_remote_mcp_dispatch(&lifecycle, &dispatch, &request, secret, &prepared,),
         Err(RemoteMcpGateError::SecretPolicyMismatch)
     );
 }
