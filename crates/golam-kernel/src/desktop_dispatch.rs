@@ -13,7 +13,7 @@ use golam_core::desktop_intent::{AuthorityBindings, DesktopActionKind};
 use golam_core::tool_request::{BindingDigest, PreparedToolRequest};
 use golam_core::{CanonicalEncoder, CoreError};
 
-use crate::desktop_effect::{effect_binding, PreparedDesktopKernelAction};
+use crate::desktop_effect::{PreparedDesktopKernelAction, effect_binding};
 use crate::{
     AuthorizationPolicy, CompleteToolEffect, KernelApi, Principal, ToolEffectError,
     ToolExecutionCompletion,
