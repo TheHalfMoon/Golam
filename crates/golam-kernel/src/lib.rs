@@ -5,6 +5,7 @@ mod authorization;
 mod capability_lease;
 mod client_auth;
 mod client_enrollment;
+mod desktop_effect;
 mod effect_execution;
 mod managed_memory_writer;
 mod memory_restart;
@@ -42,6 +43,10 @@ pub use capability_lease::{
 };
 pub use client_auth::ClientAuthorityError;
 pub use client_enrollment::{ClientEnrollmentError, EnrolledClientCredential};
+pub use desktop_effect::{
+    DesktopKernelError, PrepareDesktopAction, PreparedDesktopKernelAction, TrustedRouteCandidate,
+    TrustedRouteDisposition, effect_binding, evaluate_desktop_routes,
+};
 pub use effect_execution::PreparedEffectDispatch;
 pub use golam_ipc::credentials::GeneratedClientCredential;
 pub use golam_ipc::lifecycle::{Authenticate, ClientKeyId, ConnectionId, Ready, ServerLifecycle};
