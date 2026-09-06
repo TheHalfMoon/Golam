@@ -42,13 +42,12 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         let context = self.begin_tool_reconciliation(principal, effect_id, detected_at, scope)?;
         let reconciliation_ref = reconciliation_ref(&context)?;
         let mut store = DesktopControlEvidenceStore::open(&self.authority)?;
-        let status = store
-            .latest_effect_status(effect_id)?
-            .ok_or(DesktopReconciliationError::MissingDesktopEvidence(effect_id))?;
+        let status = store.latest_effect_status(effect_id)?.ok_or(
+            DesktopReconciliationError::MissingDesktopEvidence(effect_id),
+        )?;
         match status {
             DesktopEvidenceStatus::Prepared => {
-                let recovered =
-                    store.recovered_unknown_evidence(effect_id, recorded_at_unix_ms)?;
+                let recovered = store.recovered_unknown_evidence(effect_id, recorded_at_unix_ms)?;
                 store.append_effect_evidence(recovered)?;
                 let reconciling = store.reconciliation_evidence(
                     effect_id,
@@ -170,9 +169,9 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             context: AuthorizationContext::local(scope),
         })?;
         let mut store = DesktopControlEvidenceStore::open(&self.authority)?;
-        let desktop_status = store
-            .latest_effect_status(effect_id)?
-            .ok_or(DesktopReconciliationError::MissingDesktopEvidence(effect_id))?;
+        let desktop_status = store.latest_effect_status(effect_id)?.ok_or(
+            DesktopReconciliationError::MissingDesktopEvidence(effect_id),
+        )?;
 
         match snapshot.current_state.as_str() {
             "succeeded" => self.repair_terminal_desktop_state(
@@ -361,10 +360,7 @@ fn normalize_to_reconciling(
             }
         }
         actual => {
-            return Err(DesktopReconciliationError::DesktopNotReconcilable {
-                effect_id,
-                actual,
-            });
+            return Err(DesktopReconciliationError::DesktopNotReconcilable { effect_id, actual });
         }
     }
     Ok(())
@@ -526,7 +522,11 @@ impl fmt::Display for DesktopReconciliationError {
             Self::Core(error) => write!(f, "desktop reconciliation encoding error: {error}"),
             Self::Kernel(error) => write!(f, "desktop reconciliation kernel error: {error}"),
             Self::MissingEffect(effect_id) => {
-                write!(f, "desktop reconciliation effect {} is missing", effect_id.0)
+                write!(
+                    f,
+                    "desktop reconciliation effect {} is missing",
+                    effect_id.0
+                )
             }
             Self::MissingAttempt(effect_id) => write!(
                 f,
@@ -564,7 +564,10 @@ impl fmt::Display for DesktopReconciliationError {
                 effect_id.0
             ),
             Self::UnexpectedTerminalState(state) => {
-                write!(f, "unexpected generic reconciliation terminal state: {state}")
+                write!(
+                    f,
+                    "unexpected generic reconciliation terminal state: {state}"
+                )
             }
         }
     }
