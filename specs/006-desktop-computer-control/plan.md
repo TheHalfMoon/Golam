@@ -71,7 +71,7 @@ If capture may have crossed the effect boundary but terminal truth is uncertain,
 
 The constitutional last-resort vision/pixel path is intentionally narrower than a semantic vision subsystem:
 
-`canonical route evaluation shows stronger applicable routes unavailable/inapplicable/denied/safely failed → bounded explicitly authorized capture → local consumer proposes bounded PixelTargetHint(region/coordinate + capture/source provenance) → treat hint as untrusted evidence only → fresh work-surface/focus/session observation → create separate RAW_INPUT_FALLBACK ToolRequest → bind fresh fallback-eligibility evidence + explicit fallback capability/policy/approval → Effect PREPARED → immediate hint/source/target/route/lease-generation/visible-channel/permission revalidation → bounded raw dispatch → post-action evidence/reconciliation`
+`canonical route evaluation shows stronger applicable routes unavailable/inapplicable/denied/safely failed → bounded explicitly authorized capture → local consumer proposes bounded PixelTargetHint(region/coordinate + capture/source provenance) → treat hint as untrusted evidence only → fresh work-surface/focus/session observation → create separate RAW_INPUT_FALLBACK ToolRequest → bind fresh fallback-eligibility evidence + explicit fallback capability/policy/approval → Effect PREPARED → Kernel/Effect Gate → immediate hint/source/target/route/lease-generation/visible-channel/permission revalidation → bounded raw dispatch → post-action evidence/reconciliation`
 
 Rules:
 - the exact constitutional route order remains binding;
@@ -79,13 +79,14 @@ Rules:
 - OCR/text extraction from raw pixels remains deferred to Spec 007;
 - the hint alone is never sufficient target identity and never authorizes raw input;
 - capture authority never implies raw-input authority;
+- missing, stale, mismatched or substituted Gate authorization fails closed before raw dispatch;
 - loss of the qualified visible-control channel blocks raw dispatch like any other autonomous actuation.
 
 ## Clipboard lifecycle
 
-`create explicit read/write ToolRequest → bind immutable request/effect/intent + capability/policy/approval → Effect PREPARED → immediate binding/permission revalidation → one bounded clipboard operation → terminal evidence/reconciliation → discard read payload unless separately authorized`
+`create explicit read/write ToolRequest → bind immutable request/effect/intent + capability/policy/approval → Effect PREPARED → Kernel/Effect Gate → immediate binding/permission revalidation → one bounded clipboard operation → terminal evidence/reconciliation → discard read payload unless separately authorized`
 
-Clipboard polling/background inspection is never an implementation path.
+Missing, stale, mismatched or substituted Gate authorization fails closed before clipboard access. Clipboard polling/background inspection is never an implementation path.
 
 ## Human pause/stop/takeover and visibility lifecycle
 
@@ -111,7 +112,7 @@ Requirements:
 3. Windows semantic/capture/raw adapters may introduce only exact qualified platform crates/libraries after Source Foundry admission; qualify locked/UAC/secure-desktop and session-transition fail-closed behavior.
 4. macOS accessibility/capture/raw adapters may introduce only exact qualified bindings/libraries after Source Foundry admission; qualify TCC permission changes and stale element/session behavior.
 5. Linux AT-SPI/X11/Wayland portal/EIS adapters may introduce only exact qualified bindings/libraries after Source Foundry admission; qualify compositor/portal/session termination behavior.
-6. Cross-platform fake/native qualification covers route ordering, unsupported-state, permission-loss, uncertain-completion, stale/focus race, pixel-hint non-authority, visible-channel loss, human takeover and reconciliation.
+6. Cross-platform fake/native qualification covers route ordering, unsupported-state, permission-loss, uncertain-completion, stale/focus race, Gate authorization absence/staleness/mismatch/substitution, pixel-hint non-authority, visible-channel loss, human takeover and reconciliation.
 7. Donor behavioral evidence remains reference-only unless a later bounded source is separately admitted through Source Foundry; no donor runtime or architecture is implicitly admitted.
 
 ## Final convergence
