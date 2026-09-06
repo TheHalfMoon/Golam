@@ -5,10 +5,19 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+adler2 = { version = "=2.0.1", default-features = false }
 golam-core = { path = "../golam-core" }
 golam-effects = { path = "../golam-effects" }
 golam-ipc = { path = "../golam-ipc" }
 golam-kernel = { path = "../golam-kernel" }
+miniz_oxide_read = { package = "miniz_oxide", version = "=0.9.1", default-features = false }
+serde_json.workspace = true
+
+[target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dependencies]
+landlock.workspace = true
+libc.workspace = true
+nix.workspace = true
+seccompiler.workspace = true
 
 [lints]
 workspace = true

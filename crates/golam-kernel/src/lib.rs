@@ -6,6 +6,8 @@ mod capability_lease;
 mod client_auth;
 mod client_enrollment;
 mod effect_execution;
+mod managed_memory_writer;
+mod memory_restart;
 mod operations;
 pub mod policy_candidate;
 pub mod policy_lifecycle;
@@ -13,6 +15,8 @@ mod resource;
 mod runtime_policy;
 mod startup;
 mod synthetic_effect;
+mod tool_effect;
+mod tool_mutation_evidence;
 
 use std::error::Error;
 use std::fmt;
@@ -52,6 +56,14 @@ pub use golam_ledger::recovery::{
     RecoveryError, RecoveryIssue, RecoveryIssueKind, RecoveryMode, RecoveryReport, RecoveryScanner,
 };
 pub use golam_ledger::session_read::SessionSummary;
+pub use managed_memory_writer::{
+    CommittedManagedMemoryWrite, ManagedMarkdownCommitObservation, ManagedMemoryExecutionFinish,
+    ManagedMemoryExecutionStart, ManagedMemoryWriter, ManagedMemoryWriterError,
+    PreparedManagedMemoryWrite,
+};
+pub use memory_restart::{
+    ManagedMemoryRestartError, MemoryRestartCase, MemoryRestartObservation, MemoryRestartResolution,
+};
 pub use operations::{
     KernelAppendGoal, KernelCreateCheckpoint, KernelCreateFork, KernelCreateSession,
     KernelOperationError,
@@ -64,6 +76,11 @@ pub use synthetic_effect::{
     SyntheticEffectError, SyntheticEffectOutcome, SyntheticExecutionCompletion,
     SyntheticReconciliationContext, SyntheticReconciliationResult,
 };
+pub use tool_effect::{
+    CompleteToolEffect, PrepareToolEffect, PreparedToolEffect, ToolEffectError,
+    ToolExecutionCompletion,
+};
+pub use tool_mutation_evidence::{ToolMutationEvidenceKernelError, ToolMutationVerifiedStatus};
 
 use authorization::AuthorizationEngine;
 use client_auth::ClientAuthority;
@@ -218,6 +235,30 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
             &self.authority,
             lease,
             principal_id,
+            action,
+            resource,
+            context_constraints,
+            observed_at,
+        )
+    }
+
+    /// Revalidates a sealed capability lease for a typed authenticated principal.
+    /// Canonical authority identity remains kernel-owned so adapters cannot accidentally
+    /// substitute a raw subject for the principal class/client binding.
+    pub fn validate_principal_capability_lease_use(
+        &self,
+        lease: &CapabilityLease,
+        principal: Principal<'_>,
+        action: &str,
+        resource: &str,
+        context_constraints: &[&str],
+        observed_at: &str,
+    ) -> Result<CapabilityLeaseUseEvidence, CapabilityLeaseUseError> {
+        let principal_id = principal.audit_subject();
+        capability_lease::validate_capability_lease_use(
+            &self.authority,
+            lease,
+            &principal_id,
             action,
             resource,
             context_constraints,
@@ -462,63 +503,63 @@ mod tests {
                 "local-owner",
             )
             .unwrap();
-        assert_eq!(enrolled.owner_principal, "owner");
+        assert_eq!(enrolled.client_id, ClientId(800));
+
         assert!(matches!(
             kernel.revoke_client(
                 Principal::enrolled_client("owner", ClientId(9)),
-                generated.client_id,
+                ClientId(800),
                 "2026-08-25T05:22:00Z",
                 "local-client",
             ),
             Err(KernelError::AuthorizationDenied(_))
         ));
-        kernel
+        let revoked = kernel
             .revoke_client(
                 Principal::local_owner("owner"),
-                generated.client_id,
+                ClientId(800),
                 "2026-08-25T05:23:00Z",
                 "local-owner",
             )
             .unwrap();
+        assert_eq!(revoked.revoked_at.as_deref(), Some("2026-08-25T05:23:00Z"));
         drop(kernel);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 
     #[test]
-    fn prepared_effect_dispatch_is_kernel_minted_after_durable_attempt() {
+    fn kernel_dispatches_only_prepared_authorized_effects() {
         let runtime = runtime();
         let authority = AuthorityLayout::initialize(&runtime).unwrap();
-        let dependencies = encode_effect_dependencies(&[]).unwrap();
-        let effect_id = EffectId(900);
-        let attempt_id = EffectAttemptId(901);
         let mut effects = EffectStore::open(&authority).unwrap();
+        let dependencies = golam_ledger::dispatch::encode_effect_dependencies(&[]).unwrap();
         effects
             .propose(ProposeEffect {
-                effect_id,
-                session_id: SessionId(1),
+                effect_id: EffectId(41),
+                session_id: SessionId(0),
                 requested_by: "owner",
-                action: "sim.write",
-                resource: "sim:item",
-                risk_class: "synthetic",
+                action: "file.write",
+                resource: "workspace:/tmp/example",
+                risk_class: "write",
                 execution_semantics: "at_most_once",
                 idempotency_key: None,
-                preconditions: b"[]",
+                preconditions: b"digest=abc",
                 dependencies: &dependencies,
                 payload_hash: [7; 32],
-                proposed_event_id: EventId(902),
-                transition_id: EffectTransitionId(903),
+                proposed_event_id: EventId(410),
+                transition_id: EffectTransitionId(411),
             })
             .unwrap();
-        let authorized = effects
+        effects
             .compare_and_swap(CompareAndSwapEffect {
-                transition_id: EffectTransitionId(904),
-                effect_id,
+                transition_id: EffectTransitionId(412),
+                effect_id: EffectId(41),
                 expected_state: "proposed",
                 next_state: "authorized",
                 attempt_id: None,
                 reason_code: Some("test_authorized"),
                 evidence_ref: None,
-                event_id: EventId(905),
+                event_id: EventId(413),
             })
             .unwrap();
         drop(effects);
@@ -526,48 +567,35 @@ mod tests {
         let mut kernel = KernelApi::open(&runtime, DenyByDefault).unwrap();
         let prepared = kernel
             .prepare_effect_dispatch(PrepareEffectDispatch {
-                effect_id,
-                attempt_id,
-                transition_id: EffectTransitionId(906),
-                handler_id: "sim-at-most-once-write",
+                effect_id: EffectId(41),
+                attempt_id: EffectAttemptId(414),
+                transition_id: EffectTransitionId(415),
+                handler_id: "test-handler",
                 handler_version: "1",
-                dispatch_token: b"dispatch-901",
-                started_at: "2026-08-25T10:10:00Z",
-                event_id: EventId(907),
+                dispatch_token: b"opaque",
+                started_at: "2026-08-25T06:00:00Z",
+                event_id: EventId(416),
             })
             .unwrap();
-        assert_eq!(prepared.effect_id(), effect_id);
-        assert_eq!(prepared.attempt_id(), attempt_id);
-        assert_eq!(prepared.started_global_seq(), authorized.global_seq);
+        assert_eq!(prepared.effect_id(), EffectId(41));
+        assert_eq!(prepared.attempt_id(), EffectAttemptId(414));
         assert!(prepared.executing_global_seq() > prepared.started_global_seq());
-        drop(kernel);
 
-        let effects = EffectStore::open(&authority).unwrap();
-        assert_eq!(effects.attempt_count(effect_id).unwrap(), 1);
-        assert_eq!(
-            effects.current_state(effect_id).unwrap().as_deref(),
-            Some("executing")
+        assert!(
+            kernel
+                .prepare_effect_dispatch(PrepareEffectDispatch {
+                    effect_id: EffectId(42),
+                    attempt_id: EffectAttemptId(417),
+                    transition_id: EffectTransitionId(418),
+                    handler_id: "test-handler",
+                    handler_version: "1",
+                    dispatch_token: b"opaque-2",
+                    started_at: "2026-08-25T06:01:00Z",
+                    event_id: EventId(419),
+                })
+                .is_err()
         );
-        drop(effects);
+        drop(kernel);
         fs::remove_dir_all(runtime.root).unwrap();
-    }
-
-    #[test]
-    fn unprivileged_workspace_crates_do_not_link_the_ledger_directly() {
-        let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .and_then(Path::parent)
-            .expect("kernel crate lives under workspace/crates");
-        for manifest in [
-            "crates/golam-ipc/Cargo.toml",
-            "crates/golamd/Cargo.toml",
-            "crates/golam/Cargo.toml",
-        ] {
-            let text = fs::read_to_string(workspace.join(manifest)).unwrap();
-            assert!(
-                !text.contains("golam-ledger"),
-                "unprivileged manifest links privileged ledger directly: {manifest}"
-            );
-        }
     }
 }

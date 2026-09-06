@@ -63,6 +63,32 @@ pub struct Ready {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct AuthenticatedLocalClient {
+    client_id: ClientId,
+    connection_id: ConnectionId,
+    server_epoch: u64,
+    limits: ResourceLimits,
+}
+
+impl AuthenticatedLocalClient {
+    pub const fn client_id(self) -> ClientId {
+        self.client_id
+    }
+
+    pub const fn connection_id(self) -> ConnectionId {
+        self.connection_id
+    }
+
+    pub const fn server_epoch(self) -> u64 {
+        self.server_epoch
+    }
+
+    pub const fn limits(self) -> ResourceLimits {
+        self.limits
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ShutdownReason {
     Normal,
     ProtocolViolation,
@@ -315,6 +341,19 @@ impl ServerLifecycle {
 
     pub const fn authenticated_client(&self) -> Option<ClientId> {
         self.authenticated_client
+    }
+
+    pub fn authenticated_local_client(&self) -> Option<AuthenticatedLocalClient> {
+        if self.phase != LifecyclePhase::Ready {
+            return None;
+        }
+        let client_id = self.authenticated_client?;
+        Some(AuthenticatedLocalClient {
+            client_id,
+            connection_id: self.connection_id,
+            server_epoch: self.server_epoch,
+            limits: self.limits,
+        })
     }
 
     pub fn receive_hello(&mut self, hello: Hello) -> Result<Challenge, LifecycleError> {

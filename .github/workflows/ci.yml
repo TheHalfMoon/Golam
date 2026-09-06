@@ -51,6 +51,32 @@ jobs:
           cargo +1.98.0 test --locked -p golam-ipc --test adversarial
           cargo +1.98.0 test --locked -p golam-kernel --test hostile_adapter
           cargo +1.98.0 test --locked -p golam-kernel client_auth::tests::
+      - name: Native containment v2 hostile qualification (Linux x86_64)
+        if: runner.os == 'Linux' && runner.arch == 'X64'
+        run: |
+          cargo +1.98.0 build --locked -p golamd --bin golam-native-containment-hostile-probe-v2
+          bash scripts/qualification/native-containment-hostile.sh target/debug/golam-native-containment-hostile-probe-v2
+      - name: Governed process v2 end-to-end qualification (Linux x86_64)
+        if: runner.os == 'Linux' && runner.arch == 'X64'
+        env:
+          GOLAM_PROCESS_SECRET_CANARY: SPEC005_PROCESS_SECRET_MUST_NOT_CROSS_EXEC_BOUNDARY
+        run: |
+          rustc +1.98.0 -C target-feature=+crt-static -C relocation-model=static -C link-arg=-no-pie -C opt-level=1 scripts/qualification/process-v2-payload.rs -o target/debug/process-v2-payload
+          if ! readelf -h target/debug/process-v2-payload | grep -Eq 'Type:[[:space:]]+EXEC'; then
+            echo 'qualification payload is not an ET_EXEC ELF' >&2
+            exit 1
+          fi
+          if readelf -l target/debug/process-v2-payload | grep -q 'INTERP'; then
+            echo 'qualification payload is dynamically linked' >&2
+            exit 1
+          fi
+          cargo +1.98.0 build --locked -p golamd --bin golam-native-exec-helper-v2
+          mkdir -p target/debug/deps
+          cp target/debug/golam-native-exec-helper-v2 target/debug/deps/golam-native-exec-helper-v2
+          chmod 700 target/debug/deps/golam-native-exec-helper-v2 target/debug/process-v2-payload
+          export GOLAM_PROCESS_V2_PAYLOAD="$PWD/target/debug/process-v2-payload"
+          export GOLAM_PROCESS_V2_HELPER="$PWD/target/debug/deps/golam-native-exec-helper-v2"
+          cargo +1.98.0 test --locked -p golamd --test process_v2_qualification -- --ignored --nocapture
       - name: Build daemon for external locality observation
         run: cargo +1.98.0 build --locked -p golamd --bin golamd
       - name: Strict-local external network observation (Unix)

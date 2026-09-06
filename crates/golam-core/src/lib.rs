@@ -2,17 +2,31 @@
 
 pub mod authority;
 pub mod compaction;
+pub mod context_authority;
+pub mod context_compiler;
+pub mod context_evidence;
 pub mod context_projection;
 pub mod digest;
 pub mod execution_profile;
+pub mod git_authority;
 pub mod harness;
 pub mod harness_state;
+pub mod memory;
+pub mod memory_markdown;
+pub mod memory_storage;
+pub mod memory_transition;
 pub mod model_backend;
 pub mod paths;
 pub mod routing;
 pub mod runtime_home;
+pub mod skills_protocol;
 pub mod taint;
+pub mod target_identity;
 pub mod tool_call;
+pub mod tool_descriptor;
+pub mod tool_request;
+#[cfg(unix)]
+pub mod unix_fs;
 
 use core::fmt;
 
@@ -45,6 +59,44 @@ pub struct EffectTransitionId(pub u128);
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct EffectAttemptId(pub u128);
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ToolReconciliationResolution {
+    Succeeded,
+    Failed,
+    UnknownOutcome,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ToolReconciliationContext {
+    pub effect_id: EffectId,
+    pub session_id: SessionId,
+    pub action: String,
+    pub resource: String,
+    pub execution_semantics: String,
+    pub idempotency_key: Option<String>,
+    pub preconditions_hash: [u8; 32],
+    pub payload_hash: [u8; 32],
+    pub attempt_id: EffectAttemptId,
+    pub started_global_seq: u64,
+    pub handler_id: String,
+    pub handler_version: String,
+    pub dispatch_token: Vec<u8>,
+    pub attempt_outcome: String,
+    pub receipt: Option<Vec<u8>>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ToolReconciliationResult {
+    Resolved {
+        effect_id: EffectId,
+        state: String,
+    },
+    ManualReview {
+        effect_id: EffectId,
+        incident_id: [u8; 16],
+    },
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ResourceLimits {

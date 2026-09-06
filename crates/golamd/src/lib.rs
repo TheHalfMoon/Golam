@@ -1,5 +1,34 @@
 #![forbid(unsafe_code)]
 
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+mod fcntl {
+    pub use golam_core::unix_fs::{OFlag, openat};
+}
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+mod sys {
+    pub mod stat {
+        pub use golam_core::unix_fs::Mode;
+    }
+}
+
+pub mod acp_adapter;
+pub mod local_fs;
+pub mod mcp_local_process_v2;
+#[cfg(test)]
+mod mcp_phase_h_adversarial_tests;
+pub mod mcp_protocol;
+pub mod mcp_remote_gate;
+pub mod native_containment_v2;
+pub mod native_process_supervisor_v2;
+#[allow(dead_code)]
+pub mod process_dispatch_v2;
+#[allow(clippy::redundant_guards)]
+pub mod process_execution_v2;
+pub mod process_secret_evidence;
+pub mod skill_packages;
+pub mod skill_process_v2;
+pub mod static_elf_v2;
+
 use golam_core::{EffectId, SessionId};
 use golam_effects::simulators::{
     AtMostOnceWriteHandler, CompensatableWriteHandler, IdempotentWriteHandler,

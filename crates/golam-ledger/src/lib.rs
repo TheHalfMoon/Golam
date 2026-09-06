@@ -34,6 +34,22 @@ pub mod harness_evidence;
 mod harness_sink;
 pub mod integrity;
 pub mod manual_review;
+pub mod memory_control_authority;
+pub mod memory_control_evidence;
+pub mod memory_derivative;
+pub mod memory_evidence;
+#[path = "memory_operational_store.rs"]
+pub mod memory_operational;
+pub mod memory_promotion_authority;
+#[cfg(test)]
+mod memory_promotion_authority_adversarial;
+pub mod memory_promotion_gate;
+pub mod memory_promotion_operational;
+pub mod memory_restart;
+#[cfg(test)]
+mod memory_restart_adversarial;
+pub mod memory_writer_authority;
+pub mod memory_writer_readback;
 pub mod policy;
 pub mod protocol_audit;
 pub mod recovery;
@@ -66,6 +82,8 @@ pub mod storage;
 #[cfg(test)]
 mod taint_adversarial;
 pub mod taint_attestation;
+pub mod tool_context_evidence;
+pub mod tool_mutation_evidence;
 pub mod verifier_registry;
 
 use golam_core::{CanonicalEncoder, CoreError, EventId, SessionId};

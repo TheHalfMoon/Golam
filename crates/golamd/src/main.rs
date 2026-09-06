@@ -1,11 +1,123 @@
 #![forbid(unsafe_code)]
 
+extern crate self as miniz_oxide;
+
+pub use miniz_oxide_read::{DataFormat, MZError, MZFlush, MZStatus};
+
+pub mod inflate {
+    pub mod stream {
+        pub use miniz_oxide_read::inflate::stream::{InflateState, inflate};
+    }
+}
+
+#[cfg(unix)]
+pub mod deflate {
+    const ADLER_MODULUS: u32 = 65_521;
+    const STORED_BLOCK_MAX: usize = u16::MAX as usize;
+
+    pub fn compress_to_vec_zlib(input: &[u8], _level: u8) -> Vec<u8> {
+        let block_count = input.len().div_ceil(STORED_BLOCK_MAX).max(1);
+        let capacity = input
+            .len()
+            .saturating_add(block_count.saturating_mul(5))
+            .saturating_add(6);
+        let mut output = Vec::with_capacity(capacity);
+        output.extend_from_slice(&[0x78, 0x01]);
+
+        if input.is_empty() {
+            push_stored_block(&mut output, &[], true);
+        } else {
+            let chunks = input.chunks(STORED_BLOCK_MAX);
+            let count = chunks.len();
+            for (index, chunk) in chunks.enumerate() {
+                push_stored_block(&mut output, chunk, index + 1 == count);
+            }
+        }
+
+        output.extend_from_slice(&adler32(input).to_be_bytes());
+        output
+    }
+
+    fn push_stored_block(output: &mut Vec<u8>, bytes: &[u8], final_block: bool) {
+        let len = u16::try_from(bytes.len()).expect("stored DEFLATE chunk is bounded to u16");
+        output.push(u8::from(final_block));
+        output.extend_from_slice(&len.to_le_bytes());
+        output.extend_from_slice(&(!len).to_le_bytes());
+        output.extend_from_slice(bytes);
+    }
+
+    fn adler32(bytes: &[u8]) -> u32 {
+        let mut a = 1_u32;
+        let mut b = 0_u32;
+        for byte in bytes {
+            a = (a + u32::from(*byte)) % ADLER_MODULUS;
+            b = (b + a) % ADLER_MODULUS;
+        }
+        b << 16 | a
+    }
+}
+
+#[cfg(unix)]
+extern crate self as nix;
+
+#[cfg(unix)]
+mod errno {
+    pub use golam_core::unix_fs::Errno;
+}
+#[cfg(unix)]
+mod fcntl {
+    pub use golam_core::unix_fs::{AtFlags, OFlag, open, openat, renameat};
+}
+#[cfg(unix)]
+mod sys {
+    pub mod stat {
+        pub use golam_core::unix_fs::{Mode, mkdirat};
+    }
+}
+#[cfg(unix)]
+mod unistd {
+    pub use golam_core::unix_fs::{UnlinkatFlags, linkat, unlinkat};
+}
+
 pub mod benchmark;
 mod connection;
 mod deadline_io;
+pub mod file_mutation;
+#[cfg(all(test, unix))]
+mod file_mutation_qualification_tests;
+pub mod file_path_mutation;
+#[cfg(all(test, unix))]
+mod file_path_mutation_qualification_tests;
+pub mod git_index;
+#[cfg_attr(not(unix), allow(dead_code, unused_imports))]
+pub mod git_mutation;
+#[cfg(all(test, target_os = "linux"))]
+mod git_mutation_phase_f_qualification_tests;
+#[allow(
+    clippy::too_many_arguments,
+    reason = "sealed Git observation constructors keep every evidence-bound field explicit"
+)]
+pub mod git_observe;
+pub mod git_pack;
+#[cfg(test)]
+mod git_pack_ref_delta_qualification_tests;
+pub mod git_read;
+pub mod git_read_budget;
+pub mod git_sha1;
+#[cfg_attr(all(test, not(unix)), allow(dead_code, unused_imports))]
+pub mod git_status;
 pub mod harness;
+pub mod local_dir;
+pub mod local_fs;
+pub mod local_read;
+pub mod local_search;
+pub mod local_walk;
+pub mod memory_commit;
+mod memory_reconcile;
 #[cfg(test)]
 mod spec004_compaction_tests;
+#[cfg(all(test, unix))]
+mod spec005_core_alpha_tests;
 
 use std::error::Error;
 use std::io::{self, Write};
@@ -100,7 +212,7 @@ fn run() -> Result<(), Box<dyn Error>> {
 
     let runtime = RuntimeLayout::initialize(default_runtime_root()?)?;
     let startup = start_kernel(&runtime, RuntimeAuthorityPolicy::for_runtime(&runtime)?)?;
-    let kernel = match startup {
+    let mut kernel = match startup {
         KernelStartup::Serving { kernel, report } => {
             eprintln!(
                 "golamd: recovery_mode={:?} issues={} runtime={}",
@@ -127,6 +239,16 @@ fn run() -> Result<(), Box<dyn Error>> {
             .into());
         }
     };
+
+    let memory_restart =
+        memory_reconcile::reconcile_managed_memory_on_startup(&runtime, &mut kernel)?;
+    eprintln!(
+        "golamd: memory_restart_scanned={} committed={} no_mutation={} blocked_unknown={}",
+        memory_restart.scanned,
+        memory_restart.committed,
+        memory_restart.no_mutation,
+        memory_restart.blocked_unknown
+    );
 
     let mut router = CommandRouter::new(kernel);
     let mut approval = ForegroundApproval::new();
