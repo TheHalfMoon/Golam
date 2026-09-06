@@ -71,7 +71,9 @@ impl fmt::Display for RemoteMcpGateError {
             Self::StrictLocalDenied => {
                 f.write_str("strict-local mode denies external remote MCP dispatch")
             }
-            Self::EgressDenied => f.write_str("remote MCP dispatch lacks explicit egress authority"),
+            Self::EgressDenied => {
+                f.write_str("remote MCP dispatch lacks explicit egress authority")
+            }
             Self::EndpointUnauthenticated => {
                 f.write_str("remote MCP endpoint identity is not authenticated")
             }
@@ -216,10 +218,7 @@ fn validate_queued_request(
     Ok(())
 }
 
-fn require_nonzero(
-    value: BindingDigest,
-    field: &'static str,
-) -> Result<(), RemoteMcpGateError> {
+fn require_nonzero(value: BindingDigest, field: &'static str) -> Result<(), RemoteMcpGateError> {
     if value.bytes() == [0; 32] {
         return Err(RemoteMcpGateError::InvalidAuthorityReference(field));
     }

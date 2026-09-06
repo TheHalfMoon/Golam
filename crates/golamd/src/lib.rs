@@ -14,6 +14,7 @@ mod sys {
 pub mod local_fs;
 pub mod mcp_local_process_v2;
 pub mod mcp_protocol;
+pub mod mcp_remote_gate;
 pub mod native_containment_v2;
 pub mod native_process_supervisor_v2;
 #[allow(dead_code)]
