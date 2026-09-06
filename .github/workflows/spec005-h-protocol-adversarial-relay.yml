@@ -1,0 +1,52 @@
+name: spec005-h-protocol-adversarial-relay
+
+on:
+  push:
+    branches:
+      - impl/005-local-tools-context-memory
+    paths:
+      - .github/workflows/spec005-h-protocol-adversarial-relay.yml
+
+permissions:
+  contents: write
+
+jobs:
+  qualify-and-close:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+      - name: Qualify malicious protocol and disconnect boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo +1.98.0 fmt --all -- --check
+          cargo +1.98.0 clippy --locked -p golam-core -p golam-ipc -p golam-effects -p golam-kernel -p golamd --all-targets -- -D warnings
+          cargo +1.98.0 test --locked -p golam-core skills_protocol::
+          cargo +1.98.0 test --locked -p golamd skill_packages::
+          cargo +1.98.0 test --locked -p golamd skill_process_v2::
+          cargo +1.98.0 test --locked -p golamd mcp_protocol::
+          cargo +1.98.0 test --locked -p golamd mcp_local_process_v2::
+          cargo +1.98.0 test --locked -p golamd mcp_remote_gate::
+          cargo +1.98.0 test --locked -p golamd mcp_phase_h_adversarial_tests::
+          cargo +1.98.0 test --locked -p golamd acp_adapter::
+          cargo +1.98.0 test --locked -p golamd connection::tests::
+          cargo +1.98.0 test --locked -p golam-effects --lib
+          cargo +1.98.0 test --locked -p golam-kernel --lib
+          cargo +1.98.0 test --locked -p golamd --lib
+          grep -RInE 'disconnect|UNKNOWN_OUTCOME|UnknownOutcome|revok|replac|stale|mapping.*mismatch' crates/golam-core crates/golam-ipc crates/golam-effects crates/golam-kernel crates/golamd --include='*.rs' > /tmp/spec005-h-adversarial-markers.txt
+          test -s /tmp/spec005-h-adversarial-markers.txt
+      - name: Close exact qualified T005-094 relay
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin impl/005-local-tools-context-memory
+          test "$(git rev-parse origin/impl/005-local-tools-context-memory)" = "$GITHUB_SHA"
+          git rm .github/workflows/spec005-h-protocol-adversarial-relay.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'test(005): qualify Phase H adversarial protocols'
+          git push origin HEAD:impl/005-local-tools-context-memory
