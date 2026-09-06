@@ -6,6 +6,7 @@ pub mod context_authority;
 pub mod context_compiler;
 pub mod context_evidence;
 pub mod context_projection;
+pub mod desktop_control;
 pub mod digest;
 pub mod execution_profile;
 pub mod git_authority;
