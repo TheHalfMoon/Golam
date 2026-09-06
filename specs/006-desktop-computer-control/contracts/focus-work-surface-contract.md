@@ -2,7 +2,9 @@
 
 Focus is mutable external state, not authority.
 
-A focus intent binds an exact work-surface identity and authorized effect. Before focus/action dispatch, the adapter must revalidate that the surface incarnation still matches the prepared identity. After a focus request, the runtime must observe whether the intended surface actually became focused before allowing any operation whose target depends on focus.
+A focus intent binds an immutable ToolRequest/request digest, Effect/effect binding digest, canonical intent digest, exact work-surface identity, capability/policy/approval refs as applicable, and prepared session/observation evidence. Before focus/action dispatch, the runtime revalidates every binding and verifies that the surface incarnation still matches the prepared identity. Missing, mismatched, stale or substituted state fails closed before platform actuation.
+
+After a focus request, the runtime must observe whether the intended surface actually became focused before allowing any operation whose target depends on focus. If the focus effect may have occurred but terminal truth is uncertain, record `UNKNOWN_OUTCOME` and block conflicting focus-dependent action until reconciliation.
 
 Required denial/race cases:
 - target window closed/recreated;
