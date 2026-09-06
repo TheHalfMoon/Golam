@@ -228,9 +228,7 @@ fn validate_transition(
                 | DesktopEvidenceStatus::UnknownOutcome
                 | DesktopEvidenceStatus::Interrupted
         ),
-        Some(DesktopEvidenceStatus::UnknownOutcome) => {
-            next == DesktopEvidenceStatus::Reconciling
-        }
+        Some(DesktopEvidenceStatus::UnknownOutcome) => next == DesktopEvidenceStatus::Reconciling,
         Some(DesktopEvidenceStatus::Reconciling) => matches!(
             next,
             DesktopEvidenceStatus::ReconciledSucceeded
@@ -261,17 +259,11 @@ fn i64_from_u64(value: u64) -> Result<i64, DesktopControlEvidenceError> {
     i64::try_from(value).map_err(|_| DesktopControlEvidenceError::IntegerOverflow)
 }
 
-fn u64_from_i64(
-    value: i64,
-    field: &'static str,
-) -> Result<u64, DesktopControlEvidenceError> {
+fn u64_from_i64(value: i64, field: &'static str) -> Result<u64, DesktopControlEvidenceError> {
     u64::try_from(value).map_err(|_| DesktopControlEvidenceError::InvalidStoredRecord(field))
 }
 
-fn hash32(
-    value: Vec<u8>,
-    field: &'static str,
-) -> Result<[u8; 32], DesktopControlEvidenceError> {
+fn hash32(value: Vec<u8>, field: &'static str) -> Result<[u8; 32], DesktopControlEvidenceError> {
     value
         .try_into()
         .map_err(|_| DesktopControlEvidenceError::InvalidStoredRecord(field))
@@ -282,7 +274,7 @@ mod tests {
     use golam_core::tool_request::BindingDigest;
 
     use super::*;
-    use crate::desktop_control_evidence::{DesktopEvidenceOperation, DesktopEffectEvidence};
+    use crate::desktop_control_evidence::{DesktopEffectEvidence, DesktopEvidenceOperation};
 
     fn digest(value: u8) -> BindingDigest {
         BindingDigest::new([value; 32])
