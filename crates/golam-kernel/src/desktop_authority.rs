@@ -3,11 +3,16 @@
 use core::fmt;
 
 use golam_core::desktop_control::{
-    DESKTOP_CONTROL_SCHEMA_VERSION, DesktopControlError, DesktopControlLeaseState,
-    DesktopControlMode, HumanInterruptEvidence, HumanInterruptOperation, VisibleControlChannelId,
-    VisibleControlChannelState,
+    DESKTOP_CONTROL_SCHEMA_VERSION, DesktopControlError, DesktopControlLeaseId,
+    DesktopControlLeaseState, DesktopControlMode, HumanInterruptEvidence, HumanInterruptOperation,
+    VisibleControlChannelId, VisibleControlChannelState,
 };
 use golam_core::tool_request::BindingDigest;
+use golam_ledger::desktop_control_evidence::{
+    DesktopControlEvidenceError, DesktopControlEvidenceStore,
+};
+
+use crate::{AuthorizationPolicy, KernelApi};
 
 const MAX_VISIBLE_CHANNELS: usize = 8;
 
@@ -176,6 +181,72 @@ impl ProtectedDesktopControlState {
     }
 }
 
+impl<P: AuthorizationPolicy> KernelApi<P> {
+    pub fn persist_desktop_control_state(
+        &self,
+        state: &ProtectedDesktopControlState,
+    ) -> Result<(), DesktopAuthorityError> {
+        let mut store = DesktopControlEvidenceStore::open(&self.authority)?;
+        store.persist_lease_state(state.lease)?;
+        for channel in &state.visible_channels {
+            store.persist_visible_channel(*channel)?;
+        }
+        Ok(())
+    }
+
+    pub fn persist_desktop_visible_channel_update(
+        &self,
+        state: &mut ProtectedDesktopControlState,
+        next: VisibleControlChannelState,
+    ) -> Result<(), DesktopAuthorityError> {
+        let mut candidate = state.clone();
+        candidate.upsert_visible_channel(next)?;
+        let mut store = DesktopControlEvidenceStore::open(&self.authority)?;
+        store.persist_visible_channel(next)?;
+        *state = candidate;
+        Ok(())
+    }
+
+    pub fn apply_persisted_desktop_human_interrupt(
+        &self,
+        state: &mut ProtectedDesktopControlState,
+        request: HumanInterruptRequest,
+    ) -> Result<HumanInterruptEvidence, DesktopAuthorityError> {
+        let mut candidate = state.clone();
+        let operation = request.operation;
+        let evidence = candidate.apply_human_interrupt(request)?;
+        let resulting_lease = candidate.current_lease();
+        let mut store = DesktopControlEvidenceStore::open(&self.authority)?;
+
+        if operation == HumanInterruptOperation::ReleaseHumanExclusive {
+            // A failed persistence sequence must never widen agent authority. Record
+            // release evidence first; if lease persistence fails, durable state remains
+            // human-exclusive and dispatch stays fail closed.
+            store.persist_interrupt(&evidence)?;
+            store.persist_lease_state(resulting_lease)?;
+        } else {
+            // Pause/stop/takeover are restrictive. Persist the newer restrictive lease
+            // first so a crash cannot resurrect stale agent authority.
+            store.persist_lease_state(resulting_lease)?;
+            store.persist_interrupt(&evidence)?;
+        }
+        *state = candidate;
+        Ok(evidence)
+    }
+
+    pub fn restore_desktop_control_state(
+        &self,
+        lease_id: DesktopControlLeaseId,
+    ) -> Result<Option<ProtectedDesktopControlState>, DesktopAuthorityError> {
+        let store = DesktopControlEvidenceStore::open(&self.authority)?;
+        let Some(lease) = store.load_lease_state(lease_id)? else {
+            return Ok(None);
+        };
+        let channels = store.load_visible_channels()?;
+        Ok(Some(ProtectedDesktopControlState::new(lease, channels)?))
+    }
+}
+
 fn validate_interrupt_request(
     request: &HumanInterruptRequest,
 ) -> Result<(), DesktopAuthorityError> {
@@ -226,7 +297,7 @@ fn transition_mode(
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub enum DesktopAuthorityError {
     InvalidInterruptRequest,
     InvalidInterruptTransition,
@@ -236,6 +307,7 @@ pub enum DesktopAuthorityError {
     DuplicateVisibleChannel,
     StaleOrSubstitutedVisibleChannel,
     NoQualifiedVisibleChannel,
+    Evidence(DesktopControlEvidenceError),
     Control(DesktopControlError),
 }
 
@@ -258,12 +330,19 @@ impl fmt::Display for DesktopAuthorityError {
             Self::NoQualifiedVisibleChannel => {
                 f.write_str("no qualified visible control channel permits agent release")
             }
+            Self::Evidence(error) => write!(f, "desktop authority durable evidence error: {error}"),
             Self::Control(error) => write!(f, "desktop control authority error: {error}"),
         }
     }
 }
 
 impl std::error::Error for DesktopAuthorityError {}
+
+impl From<DesktopControlEvidenceError> for DesktopAuthorityError {
+    fn from(value: DesktopControlEvidenceError) -> Self {
+        Self::Evidence(value)
+    }
+}
 
 impl From<DesktopControlError> for DesktopAuthorityError {
     fn from(value: DesktopControlError) -> Self {
@@ -347,9 +426,10 @@ mod tests {
         let mut state = ProtectedDesktopControlState::new(lease(), vec![channel()]).unwrap();
         assert_eq!(
             state
-                .apply_human_interrupt(
-                    interrupt(HumanInterruptOperation::ReleaseHumanExclusive, 1,)
-                )
+                .apply_human_interrupt(interrupt(
+                    HumanInterruptOperation::ReleaseHumanExclusive,
+                    1,
+                ))
                 .unwrap_err(),
             DesktopAuthorityError::InvalidInterruptTransition
         );
@@ -364,9 +444,10 @@ mod tests {
         state.upsert_visible_channel(hidden).unwrap();
         assert_eq!(
             state
-                .apply_human_interrupt(
-                    interrupt(HumanInterruptOperation::ReleaseHumanExclusive, 3,)
-                )
+                .apply_human_interrupt(interrupt(
+                    HumanInterruptOperation::ReleaseHumanExclusive,
+                    3,
+                ))
                 .unwrap_err(),
             DesktopAuthorityError::NoQualifiedVisibleChannel
         );
