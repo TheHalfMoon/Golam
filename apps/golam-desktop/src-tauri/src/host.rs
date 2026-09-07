@@ -14,8 +14,15 @@ use golam_core::runtime_home::default_runtime_root;
 use golam_core::{ClientId, PROTOCOL_VERSION, ResourceLimits};
 use golam_ipc::client_handshake::{authenticate_client, random_connection_id};
 use golam_ipc::credentials::{ClientCredentialStore, GeneratedClientCredential};
-use golam_ipc::lifecycle::{ClientKeyId, LifecycleMessage, ShutdownReason};
-use golam_ipc::wire::write_frame;
+use golam_ipc::desktop_control::{
+    DesktopControlRequest, DesktopControlSurfaceReply, decode_desktop_control_reply,
+    encode_desktop_control_request,
+};
+use golam_ipc::lifecycle::{ClientKeyId, LifecycleMessage, LifecyclePhase, ShutdownReason};
+use golam_ipc::request::{
+    ClientAction, ReplyStatus, RequestId, ServerAction, ServerRequestTracker, encode_request,
+};
+use golam_ipc::wire::{read_frame, write_frame};
 use golam_ipc::{FrameHeader, FrameKind};
 use golam_ledger::clients::{ClientKind, ClientRegistry};
 
@@ -60,7 +67,7 @@ impl<S: Read> Read for DeadlineIo<S> {
                 Ok(read) => return Ok(read),
                 Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                    self.wait_for_progress()?;
+                    self.wait_for_progress()?
                 }
                 Err(error) => return Err(error),
             }
@@ -75,7 +82,7 @@ impl<S: Write> Write for DeadlineIo<S> {
                 Ok(written) => return Ok(written),
                 Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
-                    self.wait_for_progress()?;
+                    self.wait_for_progress()?
                 }
                 Err(error) => return Err(error),
             }
@@ -91,31 +98,52 @@ pub struct DesktopHostStatus {
     pub connected: bool,
     pub client_id: Option<u128>,
     pub reason: Option<String>,
+    pub control_state: String,
+    pub visible_channel_qualified: bool,
+}
+
+pub struct DesktopControlResult {
+    pub client_id: u128,
+    pub reply: DesktopControlSurfaceReply,
 }
 
 pub fn authenticate_status() -> DesktopHostStatus {
-    match authenticate_desktop_host_serialized() {
-        Ok(client_id) => DesktopHostStatus {
+    match execute_desktop_control_serialized(DesktopControlRequest::Status) {
+        Ok(result) => DesktopHostStatus {
             connected: true,
-            client_id: Some(client_id.0),
+            client_id: Some(result.client_id),
             reason: None,
+            control_state: result.reply.state.as_str().to_owned(),
+            visible_channel_qualified: result.reply.visible_channel_qualified,
         },
         Err(error) => DesktopHostStatus {
             connected: false,
             client_id: None,
             reason: Some(error.to_string()),
+            control_state: "authentication-disconnected".to_owned(),
+            visible_channel_qualified: false,
         },
     }
 }
 
-fn authenticate_desktop_host_serialized() -> Result<ClientId, Box<dyn Error>> {
+pub fn execute_desktop_control(
+    request: DesktopControlRequest,
+) -> Result<DesktopControlResult, String> {
+    execute_desktop_control_serialized(request).map_err(|error| error.to_string())
+}
+
+fn execute_desktop_control_serialized(
+    request: DesktopControlRequest,
+) -> Result<DesktopControlResult, Box<dyn Error>> {
     let _identity_guard = DESKTOP_IDENTITY_LOCK
         .lock()
         .map_err(|_| "Golam desktop identity lock is poisoned")?;
-    authenticate_desktop_host()
+    execute_desktop_control_inner(request)
 }
 
-fn authenticate_desktop_host() -> Result<ClientId, Box<dyn Error>> {
+fn execute_desktop_control_inner(
+    request: DesktopControlRequest,
+) -> Result<DesktopControlResult, Box<dyn Error>> {
     let runtime = RuntimeLayout::initialize(default_runtime_root()?)?;
     let authority = AuthorityLayout::initialize(&runtime)?;
     let store = ClientCredentialStore::new(&authority);
@@ -140,7 +168,6 @@ fn authenticate_desktop_host() -> Result<ClientId, Box<dyn Error>> {
         &signing_key,
         limits,
     )?;
-    write_shutdown(&mut stream, ready.limits)?;
 
     let registry = ClientRegistry::open(&authority)?;
     let record = registry.resolve_active(credential.client_id, credential.key_id.0)?;
@@ -158,7 +185,61 @@ fn authenticate_desktop_host() -> Result<ClientId, Box<dyn Error>> {
     if bootstrap_candidate {
         clear_bootstrap_marker(&authority)?;
     }
-    Ok(credential.client_id)
+
+    let mut tracker = ServerRequestTracker::new(LifecyclePhase::Ready, ready.limits)?;
+    let request_id = RequestId(1);
+    let message = encode_desktop_control_request(request);
+    let payload = encode_request(&message)?;
+    let header = FrameHeader {
+        protocol_version: PROTOCOL_VERSION,
+        kind: FrameKind::Request,
+        request_id: Some(request_id.0),
+        payload_len: u32::try_from(payload.len()).expect("request payload length fits u32"),
+    };
+    match tracker.receive_client_frame(header, &payload)? {
+        ClientAction::Begin {
+            request_id: tracked_id,
+            method,
+        } => {
+            debug_assert_eq!(tracked_id, request_id);
+            debug_assert_eq!(method, message.method);
+        }
+        ClientAction::Cancel { .. } | ClientAction::CancelAlreadyRequested { .. } => {
+            unreachable!("request frame cannot decode as cancel")
+        }
+    }
+    write_frame(&mut stream, header, &payload, ready.limits)?;
+
+    let reply_frame = read_frame(&mut stream, ready.limits)?;
+    let message = match tracker.settle_server_frame(reply_frame.header, &reply_frame.payload)? {
+        ServerAction::Reply {
+            settlement,
+            message,
+        } => {
+            if settlement.request_id != request_id {
+                return Err("daemon reply settled a different desktop request id".into());
+            }
+            message
+        }
+        ServerAction::Event => {
+            return Err("unexpected daemon event while awaiting desktop control reply".into());
+        }
+    };
+    write_shutdown(&mut stream, ready.limits)?;
+    if message.status != ReplyStatus::Ok {
+        let body = String::from_utf8_lossy(&message.body);
+        return Err(format!(
+            "golamd rejected desktop control request: status={:?} body={}",
+            message.status,
+            body.trim()
+        )
+        .into());
+    }
+    let reply = decode_desktop_control_reply(&message.body)?;
+    Ok(DesktopControlResult {
+        client_id: credential.client_id.0,
+        reply,
+    })
 }
 
 fn desktop_credential(
