@@ -36,7 +36,7 @@ ACTIVE_IMPLEMENTATION_PR_IS_CANONICAL=NO_UNTIL_MERGED_AND_POST_MERGE_QUALIFIED
 
 PR #24 must be re-fetched live before using its head/check/review/task state. Do not hardcode a remembered head here.
 
-The program-superiority material under `specs/001-golam-local-agent-os-foundation/program-superiority-2026.md` and `program-superiority-tasks.md` is **planning/governance material only**. When nonmerged it is noncanonical; if later canonicalized it still does not widen PR #24 or directly authorize future product units. Every future implementation requires explicit canonical successor authority and its own bounded Spec Kit lifecycle.
+The program-superiority material under `specs/001-golam-local-agent-os-foundation/` is **planning/governance material only**. When nonmerged it is noncanonical; if later canonicalized it still does not widen PR #24 or directly authorize future product units. Every future implementation requires explicit canonical successor authority and its own bounded Spec Kit lifecycle.
 
 ## Authority order
 
@@ -79,10 +79,11 @@ When reviewing or applying the program roadmap rather than implementing Spec 006
 1. Constitution;
 2. canonical Spec 001 spec/plan/tasks/contracts;
 3. `specs/001-golam-local-agent-os-foundation/program-superiority-2026.md`;
-4. `specs/001-golam-local-agent-os-foundation/program-superiority-tasks.md`;
-5. `specs/001-golam-local-agent-os-foundation/competitive-source-register-2026.md`;
-6. `specs/CURRENT.md`;
-7. exact live PR/branch/CI/review state for the lifecycle action being attempted.
+4. `specs/001-golam-local-agent-os-foundation/program-superiority-proof-execution-extensions.md`;
+5. `specs/001-golam-local-agent-os-foundation/program-superiority-tasks.md`;
+6. `specs/001-golam-local-agent-os-foundation/competitive-source-register-2026.md`;
+7. `specs/CURRENT.md`;
+8. exact live PR/branch/CI/review state for the lifecycle action being attempted.
 
 Do not implement future superiority tasks directly from the overlay. Each product task still requires its own bounded Spec Kit lifecycle and predecessor/successor authorization.
 
