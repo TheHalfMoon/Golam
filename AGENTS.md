@@ -1,33 +1,64 @@
 # Golam Agent Instructions
 
-## Current phase
+## Live-state rule
 
-Golam is in **Spec 006 implementation: Desktop Computer Control** on branch `impl/006-desktop-computer-control`.
+Never treat this file, a prior chat, a handoff, a cached SHA, a bot summary or an open proposal as live qualification authority.
 
-Canonical Spec 006 planning closed on `main@c85b4b8f0d6ffccb039645803542d75b3bd47f29` after PR #23 merged exact qualified planning head `2c00a9a33bf3a1d82cbe2cc31891d6ccd3992364` and push-triggered CI run `34059235181` completed SUCCESS on macOS, Ubuntu, and Windows. Live closeout evidence records `SPEC_006_PLANNING_COMPLETE=YES`, `SPEC_006_PLANNING_CLOSED_CANONICAL=YES`, and `SPEC_006_PRODUCT_IMPLEMENTATION_AUTHORIZED=YES`.
+Read `specs/CURRENT.md` for **durable canonical lifecycle state**, then re-fetch exact GitHub state for every mutable fact required by the action you are about to take.
 
-Never treat a remembered implementation head, stale CI result, stale review, stale branch, or nonmerged proposal as qualification authority. Re-fetch live repository/PR/check/review state before every lifecycle decision.
+Before any CI qualification, independent review request, Ready transition, merge, post-merge closeout or successor-authority decision, re-fetch at minimum:
+
+```text
+CURRENT_MAIN
+CURRENT_PR_HEAD_AND_BASE
+CURRENT_DIFF
+CURRENT_CHECKS
+CURRENT_REVIEWS_AND_THREADS
+EXPECTED_HEAD
+```
+
+A branch mutation invalidates CI/review evidence bound to the prior head.
+
+## Current canonical program posture
+
+The current `main` SHA is always a live GitHub fact and MUST be fetched rather than hardcoded here. At the durable lifecycle reconciliation base recorded in `specs/CURRENT.md`:
+
+```text
+CANONICAL_MAIN_SHA=FETCH_LIVE_FROM_GITHUB
+SPEC_005_IMPLEMENTATION_COMPLETE=YES
+SPEC_005_CLOSED_CANONICAL=YES
+SPEC_006_PLANNING_CLOSED_CANONICAL=YES
+SPEC_006_PRODUCT_IMPLEMENTATION_AUTHORIZED=YES
+ACTIVE_CANONICAL_IMPLEMENTATION_UNIT=SPEC_006_DESKTOP_COMPUTER_CONTROL
+ACTIVE_IMPLEMENTATION_PR=24
+ACTIVE_IMPLEMENTATION_PR_IS_CANONICAL=NO_UNTIL_MERGED_AND_POST_MERGE_QUALIFIED
+```
+
+PR #24 must be re-fetched live before using its head/check/review/task state. Do not hardcode a remembered head here.
+
+The program-superiority material under `specs/001-golam-local-agent-os-foundation/` is **planning/governance material only**. When nonmerged it is noncanonical; if later canonicalized it still does not widen PR #24 or directly authorize future product units. Every future implementation requires explicit canonical successor authority and its own bounded Spec Kit lifecycle.
 
 ## Authority order
 
-1. exact live GitHub/repository truth;
+1. exact live GitHub/repository truth for mutable state;
 2. `.specify/memory/constitution.md` v1.2.0 or later;
-3. frozen Spec 001 program architecture/tasks/contracts/source-permission attestation;
-4. canonical Spec 002–005 closeout packages and predecessor implementation evidence;
-5. canonical Spec 006 planning package on `main@c85b4b8f0d6ffccb039645803542d75b3bd47f29` plus PR #23 closeout evidence;
-6. the current implementation branch and exact live implementation PR lifecycle evidence;
-7. exact Source Foundry records for every admitted dependency/runtime primitive.
+3. canonical Spec 001 architecture/contracts/tasks/source-permission governance;
+4. `specs/CURRENT.md` for durable canonical lifecycle state;
+5. canonical closed predecessor specs and closeout evidence;
+6. the currently authorized bounded spec package;
+7. exact Source Foundry records for every admitted source/dependency/runtime primitive;
+8. exact-head CI/review/evidence for the lifecycle action being attempted.
 
-Nonmerged proposals, status-only bot messages, stale comments, stale CI/reviews/hashes, old branch text, and prior handoffs cannot override live canonical truth.
+Open PRs, issues, experimental branches, source candidates, benchmark results and bot-generated summaries are noncanonical unless canonical governance explicitly promotes them.
 
 ## Spec 006 implementation read order
 
 1. `.specify/memory/constitution.md`
-2. `specs/001-golam-local-agent-os-foundation/spec.md`
-3. `specs/001-golam-local-agent-os-foundation/plan.md`
-4. `specs/001-golam-local-agent-os-foundation/tasks.md`, especially T060–T069
-5. `specs/001-golam-local-agent-os-foundation/source-permission-attestation.md`
-6. canonical Spec 002–005 predecessor closeout evidence as needed
+2. `specs/CURRENT.md`
+3. `specs/001-golam-local-agent-os-foundation/spec.md`
+4. `specs/001-golam-local-agent-os-foundation/plan.md`
+5. `specs/001-golam-local-agent-os-foundation/tasks.md`, especially T060–T069
+6. canonical Spec 002–005 closeout evidence as required by the current task
 7. `specs/006-desktop-computer-control/AGENTS.md`
 8. `specs/006-desktop-computer-control/spec.md`
 9. `specs/006-desktop-computer-control/clarification-closeout.md`
@@ -39,75 +70,98 @@ Nonmerged proposals, status-only bot messages, stale comments, stale CI/reviews/
 15. `specs/006-desktop-computer-control/checklists/requirements.md`
 16. `specs/006-desktop-computer-control/tasks.md`
 17. `specs/006-desktop-computer-control/analysis.md`
-18. live implementation PR exact-head CI/review/lifecycle evidence
+18. live exact-head PR #24 CI/review/lifecycle evidence
 
-## Predecessor posture that Spec 006 must preserve
+## Program-superiority planning read order
 
-- Consequential execution remains behind canonical ToolRequest + capability/policy/approval + Effect PREPARED + Kernel/Effect Gate + immediate revalidation + durable terminal/reconciliation semantics.
-- `UNKNOWN_OUTCOME` blocks conflicting retry until reconciliation. A later or weaker route never converts uncertainty into authority.
-- Strict-local hard denial dominates tool/protocol/network routing. Local failure never authorizes cloud/remote fallback.
-- Generic tools, model output, protocol output, renderer state, accessibility text, screenshots, and pixel hints cannot mint kernel authority.
-- Protected Golam kernel resources remain outside generic filesystem/process authority.
-- Existing production containment admissions remain bounded to their qualified platform/profile.
-- Shell syntax remains disabled unless separately re-authorized by later canonical scope.
-- Managed Markdown/SQLite memory governance, secret/taint boundaries, and untrusted Skill/MCP/ACP semantics remain predecessor constraints.
+When reviewing or applying the program roadmap rather than implementing Spec 006:
 
-## Spec 006 hard boundaries
+1. Constitution;
+2. canonical Spec 001 spec/plan/tasks/contracts and `source-permission-attestation.md`;
+3. `specs/001-golam-local-agent-os-foundation/program-superiority-2026.md`;
+4. `specs/001-golam-local-agent-os-foundation/program-superiority-proof-execution-extensions.md`;
+5. `specs/001-golam-local-agent-os-foundation/program-superiority-tasks.md` (T110–T165);
+6. `specs/001-golam-local-agent-os-foundation/source-synthesis-gap-closure-2026-09-08.md`;
+7. `specs/001-golam-local-agent-os-foundation/program-superiority-gap-closure-tasks.md` (T166–T184);
+8. `specs/001-golam-local-agent-os-foundation/competitive-source-register-2026.md`;
+9. `specs/001-golam-local-agent-os-foundation/competitive-source-register-supplement-2026-09-08.md`;
+10. `specs/001-golam-local-agent-os-foundation/tencent-source-adoption-2026.md` and source-specific license findings;
+11. `specs/CURRENT.md`;
+12. exact live PR/branch/CI/review state for the lifecycle action being attempted.
 
-- Preserve the constitutional route order exactly: `domain/application API → native OS automation API → accessibility/semantic tree → browser DOM/protocol → deterministic keyboard/mouse control → vision/pixel fallback`.
-- A weaker route requires canonical trusted `FallbackEligibilityEvidence`. An applicable stronger authorized route or unreconciled `UNKNOWN_OUTCOME` blocks weaker escalation.
-- Desktop adapters, renderer/model output, and pixel/vision components cannot self-mint fallback eligibility or actuation authority.
-- Observation, capture, semantic actuation, raw input, focus, clipboard read, and clipboard write remain distinct authority/evidence surfaces.
-- Every side-effect/privacy-sensitive path binds exact ToolRequest/request digest, immutable Effect/effect binding, canonical intent digest, capability/policy/approval, target/session/permission state, and control-lease/visible-channel state where applicable.
-- Every consequential desktop dispatch traverses `Effect PREPARED → Kernel/Effect Gate → immediate revalidation → bounded adapter dispatch → terminal evidence/reconciliation`.
-- Missing, mismatched, stale, substituted, expired, or superseded authority/binding state fails closed before adapter dispatch.
-- The Tauri native Rust host authenticates to `golamd` through the existing authenticated local IPC/client-enrollment boundary. Localhost/same-machine location and renderer state are not authentication.
-- Renderer/webview code receives no raw privileged handles, local-client credentials, capability tokens, Gate authorization, or protected control-lease mutation authority.
-- Autonomous computer actuation requires at least one qualified persistent local visible-control channel with immediate pause/stop/takeover. Loss of every qualified channel suspends new autonomous actuation fail closed.
-- Human pause/stop/takeover is enforced at protected lease/input-authority state. Stale generations cannot restore superseded agent authority.
-- Windows locked/non-interactive desktop, UAC/secure desktop, and unsupported interactive-session transitions fail closed. Secure-desktop/UAC bypass is not supported.
-- macOS TCC/Accessibility/Screen Recording and Linux portal/compositor/session state are mutable external prerequisites, never blanket authority.
-- No Wayland/compositor bypass, background keylogging, silent clipboard inspection, unbounded capture, camera/microphone collection, screenshot OCR under Spec 006, or hidden network/cloud fallback.
-- Bounded vision/pixel fallback is untrusted geometry evidence only. It cannot mint semantic identity, capability, policy, approval, Gate authorization, or fallback eligibility. Raw screenshot OCR/text extraction remains deferred to Spec 007.
-- Golam-research Electron/VNC/preload behavior remains reference evidence only unless a bounded component is separately Source Foundry admitted.
-- Official API research is not dependency admission. Every new crate/package/native binding/library/helper/copied source requires exact Source Foundry admission before manifest/code use.
+Historical planning PRs #6, #7, #8 and #22 are provenance/research inputs after their retained concepts are reconciled in the current gap-closure package. They do not become parallel implementation authority merely because their branches remain open.
 
-## Implementation execution discipline
+Do not implement future superiority tasks directly from the overlay. Each product task still requires its own bounded Spec Kit lifecycle and predecessor/successor authorization.
 
-Execute `specs/006-desktop-computer-control/tasks.md` in dependency order.
+## Source reuse rule
 
-- T006-001 through T006-005 establish pure contracts and deterministic fake-backend qualification before native adapters.
-- T006-006 through T006-011 establish Kernel authority/effect/route/interrupt/evidence/reconciliation lifecycle.
-- T006-012 through T006-015 require exact Source Foundry admission before Tauri/React/TypeScript manifest mutation.
-- Platform-specific dependencies for capture, semantic actuation, raw input, clipboard, portal/EIS, or native bindings require exact Source Foundry admission before use.
-- Native adapters cannot select their own route, mint fallback evidence, widen authority, or bypass the Kernel/Effect Gate.
-- Fake/adversarial qualification must cover route ordering, stale identity, permission loss, Gate absence/staleness/mismatch/substitution, `UNKNOWN_OUTCOME`, visible-channel loss, and human takeover before native adapter admission.
+Founder reuse permission is a rights input, not automatic technical admission. Every copied, ported, vendored or adapted donor component still requires exact component-level rights/obligation reconciliation and Source Foundry before product use.
 
-## Final implementation convergence
-
-The implementation closeout sequence is fail closed:
-
-1. T006-044 complete cross-artifact implementation/evidence audit;
-2. T006-045 run full exact-head Windows/macOS/Ubuntu CI and security qualification;
-3. T006-046 obtain fresh substantive independent semantic/security/governance review only after T006-045 succeeds on that exact unchanged head;
-4. T006-047 reconcile every material finding forward-only; any mutation returns to T006-045/T006-046;
-5. T006-048 mark implementation PR Ready only on the unchanged clean qualified head;
-6. T006-049 perform only guarded expected-head merge after re-fetching exact base/head;
-7. T006-050 require push-triggered canonical-main CI success on the exact returned merge SHA;
-8. T006-051 record `SPEC_006_IMPLEMENTATION_COMPLETE=YES` and `SPEC_006_CLOSED_CANONICAL=YES` only after T006-050 succeeds;
-9. T006-052 re-read canonical program ordering and determine the next authorized successor. Do not infer successor authority from stale or nonmerged proposals.
-
-Final review must be substantive, independent, exact-head, and obtained after exact-head CI. Status-only, billing/rate-limit/unavailable messages, stale-head output, CI alone, or self-review are insufficient. Codex review remains excluded by founder direction.
-
-Do not force-push, rebase shared history, or destructively rewrite published history. Never claim tests, CI, review, platform behavior, source admission, mergeability, implementation completion, or project completion without exact evidence.
+Owning specs MUST explicitly select a primary reuse strategy where donor implementation material is considered:
 
 ```text
-CANONICAL_MAIN=c85b4b8f0d6ffccb039645803542d75b3bd47f29
-SPEC_006_PLANNING_COMPLETE=YES
-SPEC_006_PLANNING_CLOSED_CANONICAL=YES
-SPEC_006_PRODUCT_IMPLEMENTATION_AUTHORIZED=YES
-IMPLEMENTATION_BRANCH=impl/006-desktop-computer-control
-SPEC_006_IMPLEMENTATION_COMPLETE=NO
-SPEC_006_CLOSED_CANONICAL=NO
-WAIVER_TAKEN=NO
+COPY_AS_IS
+SELECTIVE_COPY
+PORT_TO_RUST
+ADAPTER
+REIMPLEMENT_BEHAVIOR
+BENCHMARK_ONLY
+REJECT
 ```
+
+`PERMISSION_TO_COPY != TECHNICAL_ADMISSION` and `DONOR_IMPLEMENTATION != DONOR_AUTHORITY_MODEL`.
+
+## Invariants every feature must preserve
+
+- Consequential execution remains behind canonical ToolRequest + capability/policy/approval + Effect PREPARED + Kernel/Effect Gate + immediate revalidation + durable terminal/reconciliation semantics.
+- `UNKNOWN_OUTCOME` blocks conflicting retry and dependent work until reconciliation.
+- Strict-local hard denial dominates model/tool/protocol/network routing. Local failure never creates cloud fallback authority.
+- Generic tools, model output, protocol output, workers, skills, MCP servers, plugins, renderers, vision output and benchmark fixtures cannot mint kernel authority.
+- Protected kernel state remains outside generic filesystem/process/browser/computer-control capability.
+- Memory remains governed user-owned evidence; live authoritative source state outranks memory.
+- Skills/routines are versioned instruction/code artifacts, never authority; learned candidates do not activate themselves.
+- Every new dependency, package, native helper, binary, copied source or donor implementation requires exact Source Foundry admission before product use.
+- Do not force-push, rebase shared history or destructively rewrite published history.
+
+## Computer-control hard boundaries
+
+Preserve the constitutional route order exactly:
+
+```text
+domain/application API
+-> native OS automation API
+-> accessibility/semantic tree
+-> browser DOM/protocol
+-> deterministic keyboard/mouse control
+-> vision/pixel fallback
+```
+
+A weaker route requires trusted fallback-eligibility evidence. Stronger applicable routes and unreconciled `UNKNOWN_OUTCOME` block weaker escalation.
+
+Desktop adapters, model output, renderer state and pixel/vision components cannot self-mint fallback eligibility or actuation authority.
+
+Observation, focus, capture, semantic action, raw input and clipboard read/write are distinct authority/evidence surfaces.
+
+The Tauri native Rust host authenticates through existing local `golamd` IPC/client enrollment. Localhost/same-machine location and renderer state are not authentication. The renderer receives no credential, raw native handle, capability token, approval material or protected lease authority.
+
+Autonomous computer actuation requires a qualified visible local control channel with immediate pause/stop/takeover. Loss of every qualified visible channel suspends new actuation fail closed. Human takeover is enforced at protected lease/input authority so stale renderer/model requests cannot restore a superseded generation.
+
+Windows secure desktop/UAC bypass, Wayland/compositor bypass, background keylogging, silent clipboard inspection, unbounded capture, camera/microphone collection and hidden remote/cloud fallback remain denied.
+
+Raw screenshot OCR/text extraction is **not** owned by Spec 007 GolamConnect. It remains outside active Spec 006 and belongs to a future bounded Visual Semantics unit only after canonical successor authorization.
+
+## Cross-spec route ownership
+
+The program-superiority planning identifies a browser/application route-ownership gap. Until a canonical successor unit defines the global route-provider contract, active Spec 006 must not infer that an unknown browser/application route is unavailable merely because its provider lives outside the current crate/spec.
+
+No future route provider may mint its own authority. Applicability/availability evidence and action authority remain separate.
+
+## Review and merge discipline
+
+Planning and implementation review must be substantive, independent, exact-head and obtained after exact-head CI when the owning lifecycle requires it. Status-only, rate-limit/billing/unavailable output, automated summary without semantic inspection, stale-head review, CI alone or self-review are insufficient.
+
+Codex review remains excluded by founder direction unless later canonical governance explicitly changes that rule. Use the repository's live independent review mechanism and require substantive architecture/security/governance findings, not a presence signal.
+
+Ready/merge authorization is fail closed. Mark Ready only on an unchanged clean qualified head. Re-fetch exact base/head immediately before merge and use expected-head protection. Post-merge canonical-main CI belongs to the exact returned merge SHA.
+
+Never claim tests, review, runtime/platform behavior, source admission, benchmark status, security behavior, mergeability, readiness or completion without exact evidence.

@@ -4,6 +4,14 @@
 **Generated**: 2026-08-24 after GLM-5.3 reconciliation and cross-artifact analysis  
 **Authority**: PROGRAM ORCHESTRATION ONLY — this file does not authorize implementing the entire Golam product or skipping later Spec Kit gates.
 
+## Canonical lifecycle note — 2026-09
+
+This file preserves the **original frozen Spec 001 program decomposition** and its historical task identifiers. Its unchecked boxes MUST NOT be interpreted as current live lifecycle state or as instructions to recreate already-closed predecessor specs.
+
+Use `specs/CURRENT.md` for durable canonical lifecycle state and re-fetch GitHub for mutable PR/head/check/review facts. Program improvements discovered after the original freeze are tracked in `program-superiority-2026.md` and `program-superiority-tasks.md`. Those overlay tasks remain planning/governance work and never create product implementation authority by themselves.
+
+Do not retroactively mark historical T010–T069 boxes complete here merely from memory; canonical closeout evidence in each owning spec remains the proof of completion.
+
 ## Task execution rule
 
 Every implementation feature below MUST create its own Spec Kit package and complete:
@@ -28,7 +36,7 @@ No later feature may infer authority from this program task graph alone.
 - [x] **T008** Run post-GLM cross-artifact consistency analysis with zero unresolved blocker/major findings.
 - [x] **T009** Founder reviewed Draft PR #1, attested permission for the researched source universe, upgraded Golam-Research to high-value implementation evidence/authorized-source candidate, and explicitly approved merge/freeze of Spec 001 into `main`.
 
-**Exit gate**: merge PR #1 at the exact reviewed head, then re-read exact live `main` before the next feature branch is created.
+**Historical exit gate**: merge PR #1 at the exact reviewed head, then re-read exact live `main` before the next feature branch is created.
 
 ---
 
@@ -160,6 +168,10 @@ No later feature may infer authority from this program task graph alone.
 - mandatory Graphify/code-graph L2 stack;
 - large swarm architecture.
 
-## Next safe action
+## Current safe action
 
-Merge PR #1 at its exact reviewed head. Then re-read exact live `main`, create Spec 002 from that exact commit, and run its full Spec Kit lifecycle. Do not begin product implementation directly from this program task file.
+Do **not** follow the historical Phase 0/1 next action from this frozen decomposition. Read `specs/CURRENT.md` and exact live GitHub state first.
+
+At the canonical base reviewed by the 2026 superiority overlay, Spec 006 planning is closed canonical and Spec 006 product implementation is authorized in the separately governed implementation unit represented by live PR #24. The original T010–T106 identifiers above remain stable historical architecture identifiers; they are not a live completion ledger.
+
+Program improvements discovered after the original freeze are planned in `program-superiority-2026.md` and `program-superiority-tasks.md`. Those documents may become canonical planning/governance material through their own lifecycle, but no T110+ task creates implementation authority without an explicitly authorized bounded owning spec.
