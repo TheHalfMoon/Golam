@@ -66,14 +66,25 @@ Every product task below requires its own bounded Spec Kit lifecycle and exact l
 - [ ] **T147** Require backup/restore drill, updater/signature drill, device-loss/key-rotation drill and strict-local external observation against the exact release candidate artifacts before stable release.
 - [ ] **T148** Publish no “best”, “parity”, “superset”, security, offline or reliability claim unless the exact benchmark/release evidence is revision-bound and reproducible.
 
+## Phase H — Proof, execution-fabric and ecosystem superiority
+
+- [ ] **T149** Define a `VerificationObligation` / `VerificationReceipt` fabric separate from model self-assessment. Every long-running goal and high-risk task declares required evidence classes; `VERIFIED_COMPLETE` is permitted only when trusted verifiers satisfy them. Model confidence may inform prioritization but cannot certify completion.
+- [ ] **T150** Add verifier diversity and independence rules: deterministic checks first, source-of-truth/API readback where available, environment observation second, independent model critique only as untrusted supporting evidence. Prevent the actor that produced an effect from being the sole verifier of the effect when a stronger verifier exists.
+- [ ] **T151** Define a replaceable `ExecutionBackend` contract that separates agent logic from local process containment, local VM/container/microVM environments and optional remote sandbox providers. Evaluate SWE-ReX and E2B-like infrastructure as reference candidates; remote execution is an explicit non-strict capability and never becomes the canonical authority root.
+- [ ] **T152** Extend resource routing into a `QualityCostPrivacyGovernor`: hard locality/privacy/authority compatibility first, then quality/latency/cost/resource optimization. Every provider/model/backend fallback is explicit, budgeted and attributable; an unavailable cheap/local path cannot silently widen privacy or authority.
+- [ ] **T153** Define workspace snapshot/time-travel semantics for agent work: reproducible base identity, immutable checkpoints, worktree/VM snapshot refs, diff/artifact lineage, rollback as a new governed effect, and no claim that filesystem rollback reverses already-emitted external effects.
+- [ ] **T154** Define a Golam Extension SDK + conformance kit for Skills/MCP/ACP/connectors/control-route providers and optional execution backends. Third-party extensions receive generated typed schemas, capability declarations, sandbox profiles, deterministic test fixtures and compatibility tests; extension conformance never implies authority admission.
+- [ ] **T155** Add accessibility/internationalization/human-factors release gates for the desktop/TUI/approval/control surfaces: keyboard-only operation, screen-reader semantics where applicable, readable risk prompts, localization-safe identifiers, reduced-motion/high-contrast support and measured emergency-stop discoverability. Safety-critical controls cannot depend on color or pointer-only interaction.
+
 ## Competitor-reference rules
 
 - Grok Bot public behavior is a product baseline, not internal architecture evidence.
 - Hermes is a behavioral/implementation reference candidate for learning, schedules, skills, gateways and workers, subject to Source Foundry before code reuse/dependency use.
+- Letta Code is a high-value reference for persistent agent identity, git-backed memory and self-evolving memory/skills/mods; Golam must retain candidate->verification->activation governance rather than allowing an active agent to rewrite trusted behavior in place.
 - Codex is a behavioral/implementation reference candidate for local Rust agent UX, sandbox/approval, multi-agent/session and MCP/skills surfaces, subject to Source Foundry before reuse.
 - OpenHands is a reference candidate for control-surface/backend topology.
 - Browser Use/OpenClaw are browser behavior/reference candidates; they do not override Golam's semantic-route or credential/authority model.
-- SWE-agent/SWE-ReX are coding ACI/evaluation/sandbox references.
+- SWE-agent/SWE-ReX and E2B are coding/execution-infrastructure references; remote or cloud sandboxes remain optional execution capabilities, not Golam authority roots.
 - Ripwire remains governed by Issue #25 and cannot enter the privileged kernel merely because it improves context quality.
 
 ## Current safe sequencing
