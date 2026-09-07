@@ -70,7 +70,7 @@ jobs:
               cat >>"$ROOT/Cargo.toml" <<'EOF'
 
           [dependencies]
-          uiautomation = { version = "=0.25.0", default-features = false, features = ["control"] }
+          uiautomation = { version = "=0.25.1", default-features = false, features = ["control"] }
           wgc = { version = "=1.0.7", default-features = false }
           enigo = { version = "=0.6.1", default-features = false }
           arboard = { version = "=3.6.1", default-features = false }
