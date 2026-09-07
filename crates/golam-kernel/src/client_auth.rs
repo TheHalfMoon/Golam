@@ -299,7 +299,7 @@ mod tests {
     use golam_core::paths::RuntimeLayout;
     use golam_core::{PROTOCOL_VERSION, ResourceLimits};
     use golam_ipc::credentials::ClientCredentialStore;
-    use golam_ipc::lifecycle::{AuthTranscript, Challenge, Hello, NONCE_LEN};
+    use golam_ipc::lifecycle::{AuthTranscript, NONCE_LEN};
     use std::fs;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
