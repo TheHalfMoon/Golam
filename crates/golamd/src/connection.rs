@@ -32,7 +32,7 @@ pub struct ConnectionMaterial {
 }
 
 pub trait BootstrapApprover {
-    fn approve(&mut self, client_id: ClientId, key_id: ClientKeyId) -> bool;
+    fn approve(&mut self, client_id: ClientId, key_id: ClientKeyId) -> Option<ClientKind>;
 }
 
 #[derive(Debug)]
@@ -194,10 +194,11 @@ pub fn serve_connection<S: Read + Write, A: BootstrapApprover, P: AuthorizationP
         authenticate,
         &timestamp_now(),
     )?;
+    let client_record = auth_kernel.active_client_record(hello.client_id, authenticate.key_id)?;
     write_lifecycle(stream, LifecycleMessage::Ready(ready), ready.limits)?;
 
     let mut tracker = ServerRequestTracker::new(LifecyclePhase::Ready, ready.limits)?;
-    let principal = Principal::enrolled_client("local-cli", hello.client_id);
+    let principal = Principal::enrolled_client(client_subject(client_record.kind), hello.client_id);
 
     loop {
         let frame = read_frame(stream, ready.limits)?;
@@ -242,7 +243,7 @@ fn authenticate_with_optional_bootstrap<A: BootstrapApprover>(
         return Ok(());
     }
 
-    if !approver.approve(hello.client_id, authenticate.key_id) {
+    let Some(kind) = approver.approve(hello.client_id, authenticate.key_id) else {
         let _ = kernel.authenticate_registered_client(
             lifecycle,
             connection_id,
@@ -253,17 +254,26 @@ fn authenticate_with_optional_bootstrap<A: BootstrapApprover>(
         return Err(ConnectionError::BootstrapDenied {
             client_id: hello.client_id,
         });
-    }
+    };
 
     kernel.enroll_precreated_client(
         Principal::local_owner("local-owner"),
         hello.client_id,
         authenticate.key_id,
-        ClientKind::Cli,
+        kind,
         &timestamp_now(),
         "local-bootstrap",
     )?;
     Ok(())
+}
+
+const fn client_subject(kind: ClientKind) -> &'static str {
+    match kind {
+        ClientKind::Cli => "local-cli",
+        ClientKind::DesktopFuture => "local-desktop",
+        ClientKind::IdeFuture => "local-ide",
+        ClientKind::Test => "local-test",
+    }
 }
 
 fn write_lifecycle<S: Write>(
@@ -359,14 +369,14 @@ mod tests {
     }
 
     struct Approval {
-        allow: bool,
+        kind: Option<ClientKind>,
         calls: usize,
     }
 
     impl BootstrapApprover for Approval {
-        fn approve(&mut self, _client_id: ClientId, _key_id: ClientKeyId) -> bool {
+        fn approve(&mut self, _client_id: ClientId, _key_id: ClientKeyId) -> Option<ClientKind> {
             self.calls += 1;
-            self.allow
+            self.kind
         }
     }
 
@@ -464,7 +474,7 @@ mod tests {
         let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
         let mut router = CommandRouter::new(kernel);
         let mut approval = Approval {
-            allow: true,
+            kind: Some(ClientKind::Cli),
             calls: 0,
         };
 
@@ -499,6 +509,44 @@ mod tests {
                 .client_requires_bootstrap_enrollment(generated.client_id, generated.key_id)
                 .unwrap()
         );
+        assert_eq!(
+            kernel
+                .active_client_record(generated.client_id, generated.key_id)
+                .unwrap()
+                .kind,
+            ClientKind::Cli
+        );
+        drop(kernel);
+        drop(router);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn desktop_bootstrap_kind_is_trusted_approval_output() {
+        let runtime = runtime();
+        let authority = AuthorityLayout::initialize(&runtime).unwrap();
+        let store = ClientCredentialStore::new(&authority);
+        let generated = store.generate(ClientId(2010)).unwrap();
+        let mut io = ScriptedIo::new(authenticated_input(
+            &store,
+            generated.client_id,
+            generated.key_id,
+            None,
+        ));
+        let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
+        let mut router = CommandRouter::new(kernel);
+        let mut approval = Approval {
+            kind: Some(ClientKind::DesktopFuture),
+            calls: 0,
+        };
+
+        serve_connection(&mut io, &runtime, &mut router, material(), &mut approval).unwrap();
+        let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
+        let record = kernel
+            .active_client_record(generated.client_id, generated.key_id)
+            .unwrap();
+        assert_eq!(record.kind, ClientKind::DesktopFuture);
+        assert_eq!(client_subject(record.kind), "local-desktop");
         drop(kernel);
         drop(router);
         fs::remove_dir_all(runtime.root).unwrap();
@@ -519,7 +567,7 @@ mod tests {
         let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
         let mut router = CommandRouter::new(kernel);
         let mut approval = Approval {
-            allow: false,
+            kind: None,
             calls: 0,
         };
 
@@ -569,7 +617,7 @@ mod tests {
         let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
         let mut router = CommandRouter::new(kernel);
         let mut approval = Approval {
-            allow: true,
+            kind: Some(ClientKind::Cli),
             calls: 0,
         };
 
