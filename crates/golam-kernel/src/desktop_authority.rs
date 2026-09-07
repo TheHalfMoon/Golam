@@ -5,16 +5,21 @@ use core::fmt;
 use golam_core::desktop_control::{
     DESKTOP_CONTROL_SCHEMA_VERSION, DesktopControlError, DesktopControlLeaseId,
     DesktopControlLeaseState, DesktopControlMode, HumanInterruptEvidence, HumanInterruptOperation,
-    VisibleControlChannelId, VisibleControlChannelState,
+    VisibleControlChannelId, VisibleControlChannelKind, VisibleControlChannelState,
 };
+use golam_core::digest::sha256;
 use golam_core::tool_request::BindingDigest;
 use golam_ledger::desktop_control_evidence::{
     DesktopControlEvidenceError, DesktopControlEvidenceStore,
 };
 
-use crate::{AuthorizationPolicy, KernelApi};
+use crate::{AuthorizationPolicy, KernelApi, Principal, PrincipalKind};
 
 const MAX_VISIBLE_CHANNELS: usize = 8;
+const DESKTOP_VISIBLE_CHANNEL_TTL_MS: u64 = 5_000;
+const DESKTOP_HOST_BINDING_DOMAIN: &[u8] = b"golam:desktop-visible-host:v1";
+const DESKTOP_CHANNEL_ID_DOMAIN: &[u8] = b"golam:desktop-visible-channel-id:v1";
+const DESKTOP_INTERRUPT_ID_DOMAIN: &[u8] = b"golam:desktop-native-interrupt-id:v1";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct HumanInterruptRequest {
@@ -25,6 +30,12 @@ pub struct HumanInterruptRequest {
     pub authority_revoked_at_unix_ms: u64,
     pub affected_operation_refs: Vec<BindingDigest>,
     pub cancellation_reconciliation_refs: Vec<BindingDigest>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct DesktopControlSurfaceSnapshot {
+    pub mode: Option<DesktopControlMode>,
+    pub visible_channel_qualified: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -207,6 +218,146 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         Ok(())
     }
 
+    pub fn observe_desktop_native_visible_channel(
+        &self,
+        principal: Principal<'_>,
+        visible: bool,
+        observed_at_unix_ms: u64,
+    ) -> Result<VisibleControlChannelState, DesktopAuthorityError> {
+        let client_id = desktop_client_id(principal)?;
+        if observed_at_unix_ms == 0 {
+            return Err(DesktopAuthorityError::InvalidVisibleChannelObservation);
+        }
+        let channel_id = desktop_channel_id(client_id.0)?;
+        let trusted_host_ref = desktop_host_ref(client_id.0);
+        let mut store = DesktopControlEvidenceStore::open(&self.authority)?;
+        let current = store
+            .load_visible_channels()?
+            .into_iter()
+            .find(|channel| channel.channel_id == channel_id);
+        let generation = match current {
+            Some(channel) => {
+                if channel.kind != VisibleControlChannelKind::TauriNativeWindow
+                    || channel.trusted_host_ref != trusted_host_ref
+                    || observed_at_unix_ms < channel.observed_at_unix_ms
+                {
+                    return Err(DesktopAuthorityError::StaleOrSubstitutedVisibleChannel);
+                }
+                channel
+                    .generation
+                    .checked_add(1)
+                    .ok_or(DesktopAuthorityError::GenerationOverflow)?
+            }
+            None => 1,
+        };
+        let heartbeat_deadline_unix_ms = observed_at_unix_ms
+            .checked_add(DESKTOP_VISIBLE_CHANNEL_TTL_MS)
+            .ok_or(DesktopAuthorityError::VisibleChannelDeadlineOverflow)?;
+        let next = VisibleControlChannelState {
+            schema_version: DESKTOP_CONTROL_SCHEMA_VERSION,
+            channel_id,
+            generation,
+            kind: VisibleControlChannelKind::TauriNativeWindow,
+            trusted_host_ref,
+            visible,
+            live: true,
+            supports_pause: true,
+            supports_stop: true,
+            supports_takeover: true,
+            observed_at_unix_ms,
+            heartbeat_deadline_unix_ms,
+        };
+        store.persist_visible_channel(next)?;
+        Ok(next)
+    }
+
+    pub fn desktop_control_surface_snapshot(
+        &self,
+        now_unix_ms: u64,
+    ) -> Result<DesktopControlSurfaceSnapshot, DesktopAuthorityError> {
+        if now_unix_ms == 0 {
+            return Err(DesktopAuthorityError::InvalidVisibleChannelObservation);
+        }
+        let store = DesktopControlEvidenceStore::open(&self.authority)?;
+        let visible_channel_qualified = store
+            .load_visible_channels()?
+            .iter()
+            .any(|channel| channel.qualifies_for_autonomous_actuation(now_unix_ms));
+        let lease_ids = store.load_lease_ids()?;
+        let mode = match lease_ids.as_slice() {
+            [] => None,
+            [lease_id] => Some(
+                store
+                    .load_lease_state(*lease_id)?
+                    .ok_or(DesktopAuthorityError::MissingDesktopControlLease)?
+                    .mode,
+            ),
+            _ => return Err(DesktopAuthorityError::AmbiguousDesktopControlLease),
+        };
+        Ok(DesktopControlSurfaceSnapshot {
+            mode,
+            visible_channel_qualified,
+        })
+    }
+
+    pub fn apply_native_desktop_human_interrupt(
+        &self,
+        principal: Principal<'_>,
+        operation: HumanInterruptOperation,
+        accepted_at_unix_ms: u64,
+        authority_revoked_at_unix_ms: u64,
+    ) -> Result<DesktopControlSurfaceSnapshot, DesktopAuthorityError> {
+        let client_id = desktop_client_id(principal)?;
+        if accepted_at_unix_ms == 0 || authority_revoked_at_unix_ms < accepted_at_unix_ms {
+            return Err(DesktopAuthorityError::InvalidInterruptRequest);
+        }
+        let channel_id = desktop_channel_id(client_id.0)?;
+        let trusted_host_ref = desktop_host_ref(client_id.0);
+        let store = DesktopControlEvidenceStore::open(&self.authority)?;
+        let lease_ids = store.load_lease_ids()?;
+        let lease_id = match lease_ids.as_slice() {
+            [] => return Err(DesktopAuthorityError::MissingDesktopControlLease),
+            [lease_id] => *lease_id,
+            _ => return Err(DesktopAuthorityError::AmbiguousDesktopControlLease),
+        };
+        drop(store);
+        let mut state = self
+            .restore_desktop_control_state(lease_id)?
+            .ok_or(DesktopAuthorityError::MissingDesktopControlLease)?;
+        let source_channel = state
+            .channel(channel_id)
+            .ok_or(DesktopAuthorityError::NoQualifiedVisibleChannel)?;
+        if source_channel.trusted_host_ref != trusted_host_ref
+            || !source_channel.qualifies_for_autonomous_actuation(accepted_at_unix_ms)
+        {
+            return Err(DesktopAuthorityError::NoQualifiedVisibleChannel);
+        }
+        let interrupt_id = desktop_interrupt_id(
+            client_id.0,
+            state.current_lease(),
+            operation,
+            accepted_at_unix_ms,
+        )?;
+        self.apply_persisted_desktop_human_interrupt(
+            &mut state,
+            HumanInterruptRequest {
+                interrupt_id,
+                attributed_local_source_ref: trusted_host_ref,
+                operation,
+                accepted_at_unix_ms,
+                authority_revoked_at_unix_ms,
+                affected_operation_refs: Vec::new(),
+                cancellation_reconciliation_refs: Vec::new(),
+            },
+        )?;
+        Ok(DesktopControlSurfaceSnapshot {
+            mode: Some(state.current_lease().mode),
+            visible_channel_qualified: state
+                .qualified_visible_channel(authority_revoked_at_unix_ms)
+                .is_some(),
+        })
+    }
+
     pub fn apply_persisted_desktop_human_interrupt(
         &self,
         state: &mut ProtectedDesktopControlState,
@@ -244,6 +395,76 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         };
         let channels = store.load_visible_channels()?;
         Ok(Some(ProtectedDesktopControlState::new(lease, channels)?))
+    }
+}
+
+fn desktop_client_id(principal: Principal<'_>) -> Result<golam_core::ClientId, DesktopAuthorityError> {
+    if principal.kind != PrincipalKind::EnrolledClient || principal.subject != "local-desktop" {
+        return Err(DesktopAuthorityError::UnauthorizedDesktopHost);
+    }
+    let client_id = principal
+        .client_id
+        .ok_or(DesktopAuthorityError::UnauthorizedDesktopHost)?;
+    if client_id.0 == 0 {
+        return Err(DesktopAuthorityError::UnauthorizedDesktopHost);
+    }
+    Ok(client_id)
+}
+
+fn desktop_host_ref(client_id: u128) -> BindingDigest {
+    let mut bytes = Vec::with_capacity(DESKTOP_HOST_BINDING_DOMAIN.len() + 16);
+    bytes.extend_from_slice(DESKTOP_HOST_BINDING_DOMAIN);
+    bytes.extend_from_slice(&client_id.to_be_bytes());
+    BindingDigest::new(sha256(&bytes))
+}
+
+fn desktop_channel_id(client_id: u128) -> Result<VisibleControlChannelId, DesktopAuthorityError> {
+    let mut bytes = Vec::with_capacity(DESKTOP_CHANNEL_ID_DOMAIN.len() + 16);
+    bytes.extend_from_slice(DESKTOP_CHANNEL_ID_DOMAIN);
+    bytes.extend_from_slice(&client_id.to_be_bytes());
+    let digest = sha256(&bytes);
+    let value = u128::from_be_bytes(
+        digest[..16]
+            .try_into()
+            .expect("desktop channel digest prefix is exactly 16 bytes"),
+    );
+    if value == 0 {
+        return Err(DesktopAuthorityError::InvalidDesktopHostIdentity);
+    }
+    Ok(VisibleControlChannelId::from_u128(value))
+}
+
+fn desktop_interrupt_id(
+    client_id: u128,
+    lease: DesktopControlLeaseState,
+    operation: HumanInterruptOperation,
+    accepted_at_unix_ms: u64,
+) -> Result<u128, DesktopAuthorityError> {
+    let mut bytes = Vec::with_capacity(DESKTOP_INTERRUPT_ID_DOMAIN.len() + 57);
+    bytes.extend_from_slice(DESKTOP_INTERRUPT_ID_DOMAIN);
+    bytes.extend_from_slice(&client_id.to_be_bytes());
+    bytes.extend_from_slice(&lease.lease_id.as_u128().to_be_bytes());
+    bytes.extend_from_slice(&lease.generation.to_be_bytes());
+    bytes.push(interrupt_operation_code(operation));
+    bytes.extend_from_slice(&accepted_at_unix_ms.to_be_bytes());
+    let digest = sha256(&bytes);
+    let value = u128::from_be_bytes(
+        digest[..16]
+            .try_into()
+            .expect("desktop interrupt digest prefix is exactly 16 bytes"),
+    );
+    if value == 0 {
+        return Err(DesktopAuthorityError::InvalidInterruptRequest);
+    }
+    Ok(value)
+}
+
+const fn interrupt_operation_code(operation: HumanInterruptOperation) -> u8 {
+    match operation {
+        HumanInterruptOperation::Pause => 1,
+        HumanInterruptOperation::Stop => 2,
+        HumanInterruptOperation::Takeover => 3,
+        HumanInterruptOperation::ReleaseHumanExclusive => 4,
     }
 }
 
@@ -307,6 +528,12 @@ pub enum DesktopAuthorityError {
     DuplicateVisibleChannel,
     StaleOrSubstitutedVisibleChannel,
     NoQualifiedVisibleChannel,
+    UnauthorizedDesktopHost,
+    InvalidDesktopHostIdentity,
+    InvalidVisibleChannelObservation,
+    VisibleChannelDeadlineOverflow,
+    MissingDesktopControlLease,
+    AmbiguousDesktopControlLease,
     Evidence(DesktopControlEvidenceError),
     Control(DesktopControlError),
 }
@@ -329,6 +556,20 @@ impl fmt::Display for DesktopAuthorityError {
             }
             Self::NoQualifiedVisibleChannel => {
                 f.write_str("no qualified visible control channel permits agent release")
+            }
+            Self::UnauthorizedDesktopHost => {
+                f.write_str("desktop control request requires an authenticated DesktopFuture host")
+            }
+            Self::InvalidDesktopHostIdentity => f.write_str("desktop host identity is invalid"),
+            Self::InvalidVisibleChannelObservation => {
+                f.write_str("desktop visible-channel observation is invalid")
+            }
+            Self::VisibleChannelDeadlineOverflow => {
+                f.write_str("desktop visible-channel heartbeat deadline overflow")
+            }
+            Self::MissingDesktopControlLease => f.write_str("no protected desktop control lease exists"),
+            Self::AmbiguousDesktopControlLease => {
+                f.write_str("multiple protected desktop control leases exist; refusing ambiguity")
             }
             Self::Evidence(error) => write!(f, "desktop authority durable evidence error: {error}"),
             Self::Control(error) => write!(f, "desktop control authority error: {error}"),
@@ -448,6 +689,27 @@ mod tests {
                 )
                 .unwrap_err(),
             DesktopAuthorityError::NoQualifiedVisibleChannel
+        ));
+    }
+
+    #[test]
+    fn desktop_visible_identity_is_stable_and_principal_bound() {
+        let first = desktop_channel_id(41).unwrap();
+        assert_eq!(first, desktop_channel_id(41).unwrap());
+        assert_ne!(first, desktop_channel_id(42).unwrap());
+        assert_ne!(desktop_host_ref(41), desktop_host_ref(42));
+    }
+
+    #[test]
+    fn only_exact_authenticated_desktop_principal_can_drive_native_control() {
+        assert!(desktop_client_id(Principal::enrolled_client("local-desktop", golam_core::ClientId(9))).is_ok());
+        assert!(matches!(
+            desktop_client_id(Principal::enrolled_client("local-cli", golam_core::ClientId(9))),
+            Err(DesktopAuthorityError::UnauthorizedDesktopHost)
+        ));
+        assert!(matches!(
+            desktop_client_id(Principal::local_owner("local-owner")),
+            Err(DesktopAuthorityError::UnauthorizedDesktopHost)
         ));
     }
 }
