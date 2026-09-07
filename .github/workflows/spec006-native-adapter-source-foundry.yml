@@ -153,6 +153,28 @@ jobs:
 
           case "$PLATFORM" in
             windows)
+              SEMANTIC_ROOT="${RUNNER_TEMP}/golam-spec006-windows-semantic-probe"
+              rm -rf "$SEMANTIC_ROOT"
+              mkdir -p "$SEMANTIC_ROOT/src"
+              cat >"$SEMANTIC_ROOT/Cargo.toml" <<'EOF'
+          [package]
+          name = "golam-spec006-windows-semantic-probe"
+          version = "0.0.0"
+          edition = "2024"
+          rust-version = "1.98"
+          publish = false
+
+          [dependencies]
+          windows = { version = "=0.62.2", default-features = false, features = ["std", "Win32_System_Com", "Win32_UI_Accessibility"] }
+          EOF
+              printf '#![forbid(unsafe_code)]\nfn main() {}\n' >"$SEMANTIC_ROOT/src/main.rs"
+              cd "$SEMANTIC_ROOT"
+              cargo +1.98.0 generate-lockfile
+              cargo +1.98.0 fetch --locked
+              HOST_TRIPLE="$(rustc +1.98.0 -vV | sed -n 's/^host: //p')"
+              cargo +1.98.0 check --locked
+              cargo +1.98.0 metadata --locked --filter-platform "$HOST_TRIPLE" --format-version 1 >metadata.json
+              cargo +1.98.0 tree --locked --target "$HOST_TRIPLE" --edges normal,build,features >features.txt
               python3 - <<'PY'
           import json
           import sys
@@ -165,22 +187,26 @@ jobs:
               if p['name'] == 'windows' and p['version'] == '0.62.2'
           ]
           if len(matches) != 1:
-              sys.exit(f'WINDOWS_PROJECTION_PACKAGE_COUNT={len(matches)}')
+              sys.exit(f'WINDOWS_SEMANTIC_PROBE_PACKAGE_COUNT={len(matches)}')
           pid, _ = matches[0]
           features = set(nodes[pid].get('features', []))
           required = {
               'std', 'Win32', 'Win32_Foundation', 'Win32_System',
               'Win32_System_Com', 'Win32_UI', 'Win32_UI_Accessibility'
           }
-          allowed = set(required)
           missing = sorted(required - features)
-          extra = sorted(features - allowed)
+          extra = sorted(features - required)
           if missing:
-              sys.exit('WINDOWS_PROJECTION_REQUIRED_FEATURE_MISSING=' + ','.join(missing))
+              sys.exit('WINDOWS_SEMANTIC_PROBE_REQUIRED_FEATURE_MISSING=' + ','.join(missing))
           if extra:
-              sys.exit('WINDOWS_PROJECTION_UNEXPECTED_FEATURE=' + ','.join(extra))
-          print('WINDOWS_SEMANTIC_PROJECTION_FEATURE_SET=PASS')
+              sys.exit('WINDOWS_SEMANTIC_PROBE_UNEXPECTED_FEATURE=' + ','.join(extra))
+          print('WINDOWS_SEMANTIC_PROJECTION_ISOLATED_FEATURE_SET=PASS')
           PY
+              echo "=== WINDOWS_SEMANTIC_PROBE_LOCK_SHA256 ==="
+              if command -v sha256sum >/dev/null 2>&1; then sha256sum Cargo.lock; else shasum -a 256 Cargo.lock; fi
+              echo "=== WINDOWS_SEMANTIC_PROBE_FEATURE_TREE ==="
+              cat features.txt
+              cd "$ROOT"
               deny_feature wgc tracing
               for f in x11rb wayland libei_smol libei_tokio xdo platform_specific serde tokio; do deny_feature enigo "$f"; done
               for f in image-data image core-graphics windows-sys wayland-data-control wl-clipboard-rs; do deny_feature arboard "$f"; done
@@ -218,7 +244,6 @@ jobs:
           cd "$ROOT"
           python3 - <<'PY'
           import json
-          import re
           import sys
 
           metadata = json.load(open('metadata.json', encoding='utf-8'))

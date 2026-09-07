@@ -13,7 +13,7 @@ waiver_taken: false
 
 This record proposes an exact, platform-scoped dependency set for the native desktop adapters required by Spec 006. It is a Source Foundry candidate only. It does not admit dependencies into Golam product manifests, authorize platform dispatch, or change the constitutional route or authority model.
 
-Qualification occurs in an isolated scratch Cargo project before product manifest mutation. Workflow success is evidence for independent review, not admission by itself.
+Qualification occurs in isolated scratch Cargo projects before product manifest mutation. Workflow success is evidence for independent review, not admission by itself.
 
 ## Immutable authority constraints
 
@@ -28,7 +28,7 @@ Candidate libraries provide platform mechanics only. They cannot:
 
 ## Windows candidate
 
-### Semantic automation — direct Microsoft projection
+### Semantic automation — direct Microsoft projection candidate
 
 ```toml
 windows = { version = "=0.62.2", default-features = false, features = ["std", "Win32_System_Com", "Win32_UI_Accessibility"] }
@@ -36,12 +36,16 @@ windows = { version = "=0.62.2", default-features = false, features = ["std", "W
 
 The two higher-level `uiautomation` candidates are rejected rather than weakened:
 
-- Source Foundry run `34169734322`, Windows job `101887612788`: `uiautomation 0.25.0` control-only failed because `src/core.rs` imported `crate::inputs::MouseButton` while the denied `input` feature correctly compiled the `inputs` module out.
-- Source Foundry run `34170134934`, Windows job `101888718026`: exact `uiautomation 0.25.1` reproduced the same unresolved import under the same least-authority feature selection.
+- run `34169734322`, Windows job `101887612788`: `uiautomation 0.25.0` control-only failed because its core imported `inputs::MouseButton` while the denied `input` feature compiled that module out;
+- run `34170134934`, Windows job `101888718026`: exact `uiautomation 0.25.1` reproduced the same control-only compile failure.
 
-Golam therefore does not enable `uiautomation/input` to work around the upstream boundary. The replacement candidate uses Microsoft's `windows 0.62.2` projection directly and restricts the direct semantic dependency to the COM and Win32 accessibility modules required for UI Automation. The workflow verifies the exact resolved feature set for this specific `windows 0.62.2` package and rejects unexpected features.
+Golam therefore does not enable `uiautomation/input` to work around the upstream boundary.
 
-Any later Golam Windows semantic facade must encapsulate unsafe Windows calls internally, expose only bounded semantic observation/actions through `DesktopBackend`, and keep raw keyboard/mouse simulation in the distinct fallback path governed by trusted fresh fallback eligibility and the Effect Gate.
+Run `34170554684`, Windows job `101889891002`, proved the replacement aggregate candidate compiles successfully. Its first feature guard then failed because `wgc 1.0.7` depends on the same `windows 0.62.2` package and Cargo correctly unified WGC capture/media/graphics features with Golam's semantic projection. That failure is a qualification-methodology failure, not semantic feature admission.
+
+The repaired workflow keeps the aggregate Windows build for real dependency interaction/closure evidence but verifies the semantic projection in a second isolated semantic-only scratch manifest. The semantic probe must resolve exactly the hierarchical feature set implied by `std`, `Win32_System_Com`, and `Win32_UI_Accessibility`; WGC feature unification cannot satisfy or contaminate this proof.
+
+Important implementation constraint: canonical workspace policy currently forbids Golam-authored unsafe code. Source Foundry qualification of the `windows` crate does not authorize weakening that policy, adding `allow(unsafe_code)`, or creating a new unsafe boundary. Fresh independent review must determine whether a Golam-authored semantic adapter can remain within the existing safe-Rust policy. If not, this direct projection is not product-admissible without separate canonical governance; dependency qualification alone cannot create that authority.
 
 ### Selected window/display capture
 
@@ -69,92 +73,44 @@ arboard = { version = "=3.6.1", default-features = false }
 
 ## macOS candidate
 
-### Accessibility semantic automation
-
 ```toml
 axuielement = { version = "=0.9.1", default-features = false }
-```
-
-`raw-ffi` and `async` remain disabled. The crate's safe API still contains compatibility keyboard-event helpers; Golam's semantic facade is forbidden from invoking them. Raw input remains a distinct governed fallback path. Accessibility/TCC state is external authority state and permission loss fails closed.
-
-### Selected display/window capture
-
-```toml
 screencapturekit = { version = "=10.0.3", default-features = false }
-```
-
-All optional macOS-version features remain disabled. Any later adapter must explicitly disable audio capture and register only screen output. Microphone, audio input/output, recording-to-file, content-picker authority, and convenience paths outside the bounded selected-source contract are not admitted by dependency presence.
-
-Source Foundry run `34170134934` proved this macOS candidate compiles, passes its feature denylist, passes active closure license/native/network inventory, and leaves product manifests unchanged. It remains not admitted until fresh independent review accepts the exact candidate.
-
-### Explicit raw fallback and clipboard
-
-```toml
 enigo = { version = "=0.6.1", default-features = false }
 arboard = { version = "=3.6.1", default-features = false }
 ```
 
-Linux X11/Wayland/libei and clipboard image features remain unselected.
+`axuielement/raw-ffi` and `async` remain disabled. Its compatibility keyboard-event helper is not part of Golam semantic dispatch. ScreenCaptureKit optional macOS-version features remain disabled; any later adapter must explicitly configure screen-only output with audio and microphone absent. Clipboard image features remain denied.
+
+Run `34170554684`, macOS job `101889890862`, completed SUCCESS for aggregate build, feature denylist, active closure license/native/network inventory, and no-product-manifest-mutation proof. This is candidate evidence only.
 
 ## Linux candidate
 
-### AT-SPI semantic layer
-
 ```toml
 atspi = { version = "=0.30.0", default-features = false, features = ["proxies", "connection", "tokio"] }
-```
-
-Only semantic connection/proxy/runtime features are requested. Accessibility-service availability and session permission must be observed; unavailable or permission-limited environments return explicit unsupported/denied dispositions.
-
-### Wayland/XDG ScreenCast and RemoteDesktop grant boundary
-
-```toml
 ashpd = { version = "=0.13.13", default-features = false, features = ["tokio", "remote_desktop", "screencast"] }
-```
-
-Denied features include `frontend`, `backend`, `background`, `camera`, `clipboard`, `input_capture`, `location`, `network_monitor`, `notification`, `open_uri`, `print`, `proxy_resolver`, `screenshot`, `secret`, `usb`, `wallpaper`, `wayland`, and `raw_handle`.
-
-`remote_desktop` means only the user/compositor-granted XDG portal path; it is not remote network access and cannot be used without a portal session grant. Direct Wayland compositor bypass remains forbidden.
-
-### PipeWire frame transport for a granted ScreenCast session
-
-```toml
 pipewire = { version = "=0.9.2" }
-```
-
-The candidate stays on the `0.9` family aligned with `ashpd 0.13.13`. `pipewire-sys`/`libspa-sys`, bindgen, custom build scripts, native links, and system-library probing remain explicit review targets.
-
-Source Foundry run `34170134934`, Linux job `101888717883`, proved the exact candidate builds and passes the feature denylist with `NETWORK_CLIENT_PACKAGES=0`. The job then failed in the first license evaluator because it rejected any expression containing an LGPL alternative, including `r-efi 6.0.0`'s `MIT OR Apache-2.0 OR LGPL-2.1-or-later`. That evaluator behavior is rejected as semantically incorrect: an SPDX `OR` expression has an allowed license path when one branch is acceptable. The repaired workflow evaluates `OR` as any accepted branch and `AND` as all accepted branches; it does not whitelist LGPL and takes no waiver.
-
-The repaired workflow also inventories only package IDs reachable from the host-filtered Cargo resolve graph, avoiding false findings from target-inactive metadata entries.
-
-### X11-only deterministic raw fallback
-
-```toml
 enigo = { version = "=0.6.1", default-features = false, features = ["x11rb"] }
-```
-
-`wayland`, `libei_smol`, `libei_tokio`, and `xdo` are denied. Enigo's Wayland/libei path is not trusted authority. Wayland input may later use only a user/compositor-granted XDG RemoteDesktop/EIS path governed by Golam's Effect Gate.
-
-### Explicit text clipboard
-
-```toml
 arboard = { version = "=3.6.1", default-features = false, features = ["wayland-data-control"] }
 ```
 
-`image-data` is denied. Availability of Wayland data-control is never assumed; unsupported compositor/session states fail closed. Clipboard polling remains forbidden.
+AT-SPI is the semantic layer. XDG ScreenCast/RemoteDesktop is user/compositor-granted authority only; denied `ashpd` features include camera, clipboard, `input_capture`, screenshot, background and unrelated portal surfaces. PipeWire is frame transport only for a granted ScreenCast session. Enigo is X11-only; Wayland/libei paths are denied, so Wayland bypass is impossible through this candidate. Clipboard remains explicit text-only and non-polling.
+
+Run `34170134934`, Linux job `101888717883`, proved build + feature denylist + `NETWORK_CLIENT_PACKAGES=0` before the original SPDX checker falsely rejected `r-efi 6.0.0`'s `MIT OR Apache-2.0 OR LGPL-2.1-or-later`. The repaired evaluator preserves SPDX `OR`/`AND` semantics, does not whitelist LGPL, and evaluates only the host-active resolve graph.
+
+Run `34170554684`, Linux job `101889890984`, completed SUCCESS with the repaired evaluator and product-manifest non-mutation proof. This is candidate evidence only.
 
 ## Candidate qualification workflow
 
 `.github/workflows/spec006-native-adapter-source-foundry.yml` must independently qualify Windows, macOS, and Ubuntu and must:
 
-1. create an isolated scratch manifest so product manifests remain unchanged;
+1. create isolated scratch manifests so product manifests remain unchanged;
 2. resolve exact candidate versions with Rust `1.98.0`;
 3. filter metadata and dependency reachability to the actual host target;
-4. record host triple, lock digest, direct dependency tree, and enabled feature tree;
-5. compile the exact closure on the matching platform;
-6. fail if any denied candidate feature appears;
-7. on Windows, verify the direct `windows 0.62.2` semantic projection has only the expected hierarchical `std`/COM/accessibility feature set;
+4. record host triple, lock digest, dependency tree, and enabled feature tree;
+5. compile exact aggregate closures on the matching platform;
+6. fail if denied candidate features appear;
+7. on Windows, separately compile and inspect an isolated semantic-only `windows 0.62.2` probe so WGC feature unification cannot masquerade as semantic authority;
 8. inventory active licenses, custom build scripts, native `links` declarations, and known HTTP-client packages;
 9. require at least one allowed path through every SPDX expression, with `OR`/`AND` semantics preserved rather than substring matching;
 10. surface native/FFI/build boundaries for independent review;
@@ -165,13 +121,13 @@ arboard = { version = "=3.6.1", default-features = false, features = ["wayland-d
 
 A fresh exact-head security/governance review must answer at least:
 
-- Is direct `windows 0.62.2` COM/UI Accessibility projection a sufficiently narrow and maintainable replacement for the rejected `uiautomation` control-only candidates?
-- Can the Windows semantic facade keep unsafe projection calls internal and prevent semantic code from reaching raw input helpers?
+- Does the isolated semantic probe correctly prove the requested direct Windows UIA projection independently of WGC feature unification?
+- Given Golam's existing `unsafe_code = "forbid"` policy, is direct `windows 0.62.2` actually product-implementable without weakening canonical safety policy? If not, reject it for product admission rather than creating an implicit unsafe exception.
 - Does the broad `wgc` closure remain safely encapsulated behind selected window/display capture only?
-- Does `axuielement` exclude `raw-ffi`, and can its compatibility keyboard helper remain unreachable from semantic dispatch?
+- Does `axuielement` exclude `raw-ffi`, and can compatibility keyboard helpers remain unreachable from semantic dispatch?
 - Can ScreenCaptureKit be configured deterministically as screen-only, audio-off, microphone-absent?
-- Are Swift/native/FFI/build-script and source/license obligations acceptable?
-- Does Linux ScreenCast frame access use only the user-granted portal PipeWire remote rather than ambient source enumeration?
+- Are native/FFI/build-script and source/license obligations acceptable?
+- Does Linux ScreenCast use only the user-granted portal PipeWire remote rather than ambient source enumeration?
 - Can XDG RemoteDesktop remain user/compositor-granted without camera, clipboard, `input_capture`, or unrelated portal surfaces?
 - Is X11 input explicitly session-scoped while Wayland bypass remains impossible?
 - Does text-only clipboard remain separate from observation/capture/raw authority and avoid polling?
@@ -185,7 +141,8 @@ MACOS_NATIVE_ADAPTERS=NOT_ADMITTED
 LINUX_NATIVE_ADAPTERS=NOT_ADMITTED
 UIAUTOMATION_0_25_0_CONTROL_ONLY=REJECTED_COMPILE_FAILURE
 UIAUTOMATION_0_25_1_CONTROL_ONLY=REJECTED_COMPILE_FAILURE
-WINDOWS_0_62_2_DIRECT_UIA_PROJECTION=CANDIDATE_PENDING_QUALIFICATION
+WINDOWS_0_62_2_DIRECT_UIA_PROJECTION=CANDIDATE_PENDING_QUALIFICATION_AND_SAFE_RUST_REVIEW
+WINDOWS_AGGREGATE_FEATURE_UNIFICATION=OBSERVED_NOT_SEMANTIC_AUTHORITY
 PRODUCT_MANIFEST_MUTATION=BLOCKED
 PLATFORM_DISPATCH=BLOCKED
 CAMERA=DENIED
@@ -196,6 +153,7 @@ HIDDEN_NETWORK_OR_CLOUD_FALLBACK=DENIED
 WAYLAND_BYPASS=DENIED
 RENDERER_AUTHORITY=DENIED
 FALLBACK_ELIGIBILITY_MINTING_BY_ADAPTER=DENIED
+GOLAM_UNSAFE_POLICY_WEAKENING=NOT_AUTHORIZED
 WAIVER_TAKEN=NO
 ```
 
@@ -203,7 +161,7 @@ WAIVER_TAKEN=NO
 
 ```text
 SPEC006_NATIVE_SOURCE_FOUNDRY_CANDIDATE=OPEN
-EXACT_VERSION_SET=REPAIRED_AFTER_UIAUTOMATION_0_25_1_AND_LICENSE_EVALUATOR_FAILURES
+EXACT_VERSION_SET=REPAIRED_AFTER_WINDOWS_FEATURE_UNIFICATION_METHOD_FAILURE
 WORKFLOW_QUALIFICATION=PENDING
 INDEPENDENT_REVIEW=PENDING
 SOURCE_FOUNDRY_ADMISSION=NO
