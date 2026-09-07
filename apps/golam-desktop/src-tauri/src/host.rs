@@ -120,8 +120,7 @@ fn authenticate_desktop_host() -> Result<ClientId, Box<dyn Error>> {
     let authority = AuthorityLayout::initialize(&runtime)?;
     let store = ClientCredentialStore::new(&authority);
     let registry = ClientRegistry::open(&authority)?;
-    let (credential, bootstrap_candidate) =
-        desktop_credential(&authority, &store, &registry)?;
+    let (credential, bootstrap_candidate) = desktop_credential(&authority, &store, &registry)?;
     let signing_key = store.load(credential.client_id, credential.key_id)?;
     let limits = ResourceLimits::default();
 
@@ -427,7 +426,12 @@ mod tests {
         let (second, second_pending) = bootstrap_credential(&authority, &store, &registry).unwrap();
         assert!(first_pending && second_pending);
         assert_eq!(first, second);
-        assert_eq!(credentials_for_client(&authority, &store, first.client_id).unwrap().len(), 1);
+        assert_eq!(
+            credentials_for_client(&authority, &store, first.client_id)
+                .unwrap()
+                .len(),
+            1
+        );
         fs::remove_dir_all(runtime.root).unwrap();
     }
 
