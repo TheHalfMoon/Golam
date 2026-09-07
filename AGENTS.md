@@ -21,7 +21,7 @@ A branch mutation invalidates CI/review evidence bound to the prior head.
 
 ## Current canonical program posture
 
-At the canonical base represented by this proposal:
+At the canonical base represented by this planning update:
 
 ```text
 CANONICAL_MAIN=c85b4b8f0d6ffccb039645803542d75b3bd47f29
@@ -36,7 +36,7 @@ ACTIVE_IMPLEMENTATION_PR_IS_CANONICAL=NO_UNTIL_MERGED_AND_POST_MERGE_QUALIFIED
 
 PR #24 must be re-fetched live before using its head/check/review/task state. Do not hardcode a remembered head here.
 
-The program-superiority material under `specs/001-golam-local-agent-os-foundation/program-superiority-2026.md` and `program-superiority-tasks.md` is planning/governance proposal material only until merged. It does **not** widen PR #24 or authorize future product units.
+The program-superiority material under `specs/001-golam-local-agent-os-foundation/program-superiority-2026.md` and `program-superiority-tasks.md` is **planning/governance material only**. When nonmerged it is noncanonical; if later canonicalized it still does not widen PR #24 or directly authorize future product units. Every future implementation requires explicit canonical successor authority and its own bounded Spec Kit lifecycle.
 
 ## Authority order
 
@@ -72,9 +72,9 @@ Open PRs, issues, experimental branches, source candidates, benchmark results an
 17. `specs/006-desktop-computer-control/analysis.md`
 18. live exact-head PR #24 CI/review/lifecycle evidence
 
-## Program-superiority proposal read order
+## Program-superiority planning read order
 
-When reviewing the roadmap proposal rather than implementing Spec 006:
+When reviewing or applying the program roadmap rather than implementing Spec 006:
 
 1. Constitution;
 2. canonical Spec 001 spec/plan/tasks/contracts;
@@ -82,7 +82,7 @@ When reviewing the roadmap proposal rather than implementing Spec 006:
 4. `specs/001-golam-local-agent-os-foundation/program-superiority-tasks.md`;
 5. `specs/001-golam-local-agent-os-foundation/competitive-source-register-2026.md`;
 6. `specs/CURRENT.md`;
-7. exact live PR for the proposal and exact review/CI state.
+7. exact live PR/branch/CI/review state for the lifecycle action being attempted.
 
 Do not implement future superiority tasks directly from the overlay. Each product task still requires its own bounded Spec Kit lifecycle and predecessor/successor authorization.
 
@@ -127,7 +127,7 @@ Raw screenshot OCR/text extraction is **not** owned by Spec 007 GolamConnect. It
 
 ## Cross-spec route ownership
 
-The program-superiority proposal identifies a browser/application route-ownership gap. Until a canonical successor unit defines the global route-provider contract, active Spec 006 must not infer that an unknown browser/application route is unavailable merely because its provider lives outside the current crate/spec.
+The program-superiority planning identifies a browser/application route-ownership gap. Until a canonical successor unit defines the global route-provider contract, active Spec 006 must not infer that an unknown browser/application route is unavailable merely because its provider lives outside the current crate/spec.
 
 No future route provider may mint its own authority. Applicability/availability evidence and action authority remain separate.
 
