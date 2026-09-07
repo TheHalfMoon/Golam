@@ -389,6 +389,7 @@ mod tests {
             record.last_authenticated_at.as_deref(),
             Some("2026-08-25T00:01:00Z")
         );
+        drop(clients);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 
@@ -423,6 +424,7 @@ mod tests {
         let audit = clients.protocol_audit_records().unwrap();
         assert_eq!(audit.len(), 1);
         assert_eq!(audit[0].reason, ProtocolRejectionReason::UnknownClient);
+        drop(clients);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 
@@ -459,6 +461,7 @@ mod tests {
             ))
         ));
         assert_eq!(lifecycle.phase(), LifecyclePhase::Closed);
+        drop(clients);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 
@@ -511,6 +514,7 @@ mod tests {
                 LifecycleError::AuthenticationFailed
             ))
         ));
+        drop(clients);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 }
