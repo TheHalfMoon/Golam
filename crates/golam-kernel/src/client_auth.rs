@@ -346,7 +346,9 @@ mod tests {
         let authenticate = Authenticate {
             key_id,
             client_nonce: hello.client_nonce,
-            signature: signing.sign(&transcript.canonical_bytes(key_id).unwrap()).to_bytes(),
+            signature: signing
+                .sign(&transcript.canonical_bytes(key_id).unwrap())
+                .to_bytes(),
         };
         (lifecycle, authenticate)
     }
@@ -356,17 +358,10 @@ mod tests {
         let (runtime, layout) = authority();
         let store = ClientCredentialStore::new(&layout);
         let generated = store.generate(ClientId(10)).unwrap();
-        let signing = store
-            .load(generated.client_id, generated.key_id)
-            .unwrap();
+        let signing = store.load(generated.client_id, generated.key_id).unwrap();
         let mut clients = ClientAuthority::open(&layout).unwrap();
         clients
-            .enroll_generated(
-                &generated,
-                ClientKind::Cli,
-                "owner",
-                "2026-08-25T00:00:00Z",
-            )
+            .enroll_generated(&generated, ClientKind::Cli, "owner", "2026-08-25T00:00:00Z")
             .unwrap();
         let (mut lifecycle, authenticate) = auth(
             &signing,
@@ -402,9 +397,7 @@ mod tests {
         let (runtime, layout) = authority();
         let store = ClientCredentialStore::new(&layout);
         let generated = store.generate(ClientId(12)).unwrap();
-        let signing = store
-            .load(generated.client_id, generated.key_id)
-            .unwrap();
+        let signing = store.load(generated.client_id, generated.key_id).unwrap();
         let mut clients = ClientAuthority::open(&layout).unwrap();
         let (mut lifecycle, authenticate) = auth(
             &signing,
@@ -442,12 +435,7 @@ mod tests {
         let wrong_signing = store.load(wrong.client_id, wrong.key_id).unwrap();
         let mut clients = ClientAuthority::open(&layout).unwrap();
         clients
-            .enroll_generated(
-                &generated,
-                ClientKind::Cli,
-                "owner",
-                "2026-08-25T00:03:00Z",
-            )
+            .enroll_generated(&generated, ClientKind::Cli, "owner", "2026-08-25T00:03:00Z")
             .unwrap();
         let (mut lifecycle, authenticate) = auth(
             &wrong_signing,
@@ -479,17 +467,10 @@ mod tests {
         let (runtime, layout) = authority();
         let store = ClientCredentialStore::new(&layout);
         let generated = store.generate(ClientId(17)).unwrap();
-        let signing = store
-            .load(generated.client_id, generated.key_id)
-            .unwrap();
+        let signing = store.load(generated.client_id, generated.key_id).unwrap();
         let mut clients = ClientAuthority::open(&layout).unwrap();
         clients
-            .enroll_generated(
-                &generated,
-                ClientKind::Cli,
-                "owner",
-                "2026-08-25T00:05:00Z",
-            )
+            .enroll_generated(&generated, ClientKind::Cli, "owner", "2026-08-25T00:05:00Z")
             .unwrap();
         let (mut first, authenticate) = auth(
             &signing,
