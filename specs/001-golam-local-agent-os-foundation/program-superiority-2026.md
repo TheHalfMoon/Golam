@@ -8,6 +8,8 @@
 
 This document is an overlay on the existing Spec 001 architecture. It does not reopen completed Specs 002–005, does not widen active Spec 006 implementation authority, and does not authorize implementation from this program file alone. Every new product unit still requires a bounded Spec Kit lifecycle and exact Source Foundry admission for every new dependency/runtime/source.
 
+> **2026-09-08 gap-closure amendment:** this roadmap is extended by `source-synthesis-gap-closure-2026-09-08.md`, `program-superiority-gap-closure-tasks.md` (T166–T184), and `competitive-source-register-supplement-2026-09-08.md`. Those artifacts consolidate historical planning PRs #6/#7/#8/#22 and add the current local-compute, A2A, MCP-profile, execution-isolation, model-artifact, formal-assurance, agent-security, observability, egress, extension-revocation and resilience gaps. When interpreting this roadmap, the gap-closure package is additive and takes precedence over older roadmap prose only where it explicitly closes or clarifies a gap. It grants no direct implementation authority.
+
 ## 1. Competitive objective
 
 Golam should not compete by copying the largest feature list. It should combine the strongest observed product properties of current alternatives with a materially stronger trust and evidence model.
@@ -403,87 +405,71 @@ Comparative metrics should include:
 - user intervention rate;
 - unnecessary approval rate;
 - human takeover latency;
-- recovery success after process/host interruption;
-- duplicate-effect rate;
-- wrong-target action rate;
-- memory stale/false recall rate;
-- contradiction surfacing quality;
-- context tokens and latency per successful task;
-- model cost per verified successful task for optional cloud profiles;
-- local resource use;
-- browser/desktop route strength used;
-- schedule reliability and duplicate/missed-run correctness;
-- worker handoff loss/conflict rate.
+- recovery success after process/host restart;
+- duplicate external-effect count;
+- wrong-target action count;
+- stale/false memory recall rate;
+- contradiction handling quality;
+- context/token cost;
+- model/provider monetary cost where applicable;
+- CPU/GPU/RAM/disk footprint;
+- route-strength distribution (semantic vs fallback);
+- scheduler missed/duplicate run count;
+- worker handoff/conflict rate;
+- benchmark variance and contamination disclosures.
 
-A leaderboard improvement is not sufficient if a hard gate regresses.
+Model-level intelligence and harness/system-level performance must be reported separately.
 
-## 6. External benchmark/source candidates
+## 6. Source and admission policy
 
-Owning specs must pin exact revisions/releases before use.
+Every source remains under Source Foundry.
 
-- W3C WebDriver and WebDriver BiDi — browser semantic/protocol architecture reference.
-- BrowserGym, WebArena-Verified, VisualWebArena, WorkArena — browser evaluation candidates.
-- OSWorld V2 — desktop/computer benchmark candidate; pin code/tasks/assets/websites as one versioned fixture.
-- WindowsAgentArena — Windows-native task benchmark candidate.
-- LongMemEval-V2 — long-horizon agentic memory benchmark candidate.
-- SWE-bench / SWE-agent / SWE-ReX — coding evaluation and sandbox/ACI references.
-- `NousResearch/hermes-agent` — learning/scheduler/skills/gateway/worker behavioral reference.
-- `openai/codex` — local Rust client, sandbox/approval, multi-agent/session and developer UX reference.
-- `OpenHands/OpenHands` and its SDK/server architecture — backend/control-surface reference.
-- `block/goose` — local extensible MCP/model portability reference.
-- `openclaw/openclaw` — dedicated agent browser/profile and local gateway behavioral reference.
-- `browser-use/browser-use` — browser-agent behavior and benchmark reference.
-- `redhat-et/ripwire` — repository-intelligence candidate already tracked separately.
-- `cargo-vet`, `cargo-deny`, RustSec and GitHub artifact attestations/SLSA guidance — supply-chain qualification candidates/reference.
-- Tauri updater/signing documentation — desktop release/update trust reference.
+For future owning specs:
 
-No source above receives automatic architecture authority or code admission.
+1. pin exact commit/release/standard snapshot;
+2. inspect license/NOTICE and non-code terms;
+3. classify architecture value separately from code-reuse value;
+4. inspect dependencies, lifecycle scripts, native helpers, telemetry/network behavior and secrets;
+5. decide `reference`, `external adapter`, `sandboxed sidecar`, `selective port`, `vendor`, or `reject`;
+6. add focused security/adversarial tests before activation;
+7. bind exact source identity into evidence;
+8. never grant source code or a model authority merely because it is high quality.
 
-## 7. Product experience principles
+The founder permission attestation in this repository permits serious evaluation of supplied/recommended sources for bounded reuse, but it does not waive exact per-component permission/license/NOTICE/technical qualification requirements.
 
-Golam should be easier to use than security-heavy architecture normally implies.
+## 7. Governance repairs required
 
-Required UX direction:
+Before the program claims mature repository governance:
 
-- one-step local onboarding that starts with least privilege;
-- capability requests explained in human language with exact scope and duration;
-- persistent named workers with clear state, ownership and current activity;
-- visible timeline of goal progress/evidence/blockers;
-- immediate steering, pause and takeover;
-- routine test mode before unattended activation;
-- actionable explanations for denied/unsupported operations;
-- clear local/cloud/privacy indicator per active execution profile;
-- easy model/backend switching without losing canonical state;
-- inspectable memory and skill/routine versions;
-- portable export/backup;
-- recovery UI that tells the truth about uncertainty instead of silently resetting.
+- enforce `main` protection/ruleset server-side rather than relying only on prose;
+- keep one durable canonical current-state pointer and fetch live hashes/checks/reviews;
+- automatically detect contradictory canonical lifecycle declarations where feasible;
+- preserve independent review requirements and the existing Codex reviewer exclusion;
+- ensure a planning merge cannot silently authorize implementation without the explicit owning Spec lifecycle;
+- remove stale future-ownership claims such as the existing OCR/Spec 007 mismatch.
 
-## 8. Architecture constraints that must not be traded away for parity
+## 8. Success condition
 
-Do not weaken these to match a competitor:
+The superiority program is successful when Golam can demonstrate all of these simultaneously:
 
-- no mandatory cloud authority or hidden cloud fallback;
-- no model-owned authorization;
-- no worker self-expansion of authority;
-- no shared worker environment presented as a security boundary;
-- no blind effect retry after ambiguous side effects;
-- no automatic memory promotion without governance;
-- no self-modifying active skills without versioned review/activation;
-- no browser/desktop login session interpreted as authorization to perform every action;
-- no hidden computer control or lost human takeover;
-- no generic filesystem/process access to protected authority state;
-- no benchmark claim without exact reproducible evidence.
+1. materially high task success across coding, research, browser, desktop and automation workloads;
+2. zero violations of hard authority/effect/privacy release gates;
+3. durable long-running work with crash/restart/resume and no false completion;
+4. safe governed learning that improves repeatable work without self-expanding authority;
+5. persistent multi-worker productivity with isolated authority and evidence-preserving handoffs;
+6. useful strict-local operation without mandatory cloud services;
+7. optional cloud/model/sandbox integrations without moving the authority root out of user control;
+8. transparent source/build/update provenance;
+9. a user-visible explanation of what happened, what was verified and what remains uncertain;
+10. reproducible benchmark evidence supporting every public comparative claim.
 
-## 9. Entry and exit rules for this overlay
+That is a stronger target than nominal feature parity with any single competitor.
 
-This overlay may become canonical only through its own planning/governance PR. It does not alter active Spec 006 implementation authority until merged and then explicitly consumed by an owning successor spec.
+## 9. Immediate sequencing
 
-Before merge:
-
-1. reconcile this overlay with Spec 001 `plan.md`, `tasks.md` and root governance;
-2. ensure it creates no contradictory authority for active PR #24;
-3. run exact-head repository CI if the branch touches executable/check-consumed artifacts;
-4. obtain fresh independent architecture/security/governance review;
-5. repair every material finding forward-only;
-6. guarded merge only on the unchanged qualified head;
-7. verify canonical `main` afterward.
+1. Do not widen active Spec 006 PR #24 with this overlay.
+2. Finish Spec 006 under its canonical tasks and qualification gates.
+3. In parallel, qualify this planning overlay with exact-head CI and independent architecture/security/governance review.
+4. After Spec 006 canonical closeout, read live successor authority before creating the next bounded implementation spec.
+5. Pull T110+ tasks into owning future specs only in dependency order.
+6. Build external benchmark fixtures early enough that architectural claims are measured before release, not after implementation lock-in.
