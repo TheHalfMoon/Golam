@@ -84,6 +84,16 @@ Every product task below requires its own bounded Spec Kit lifecycle and exact l
 - [ ] **T159** Define product SLO/efficiency gates independent of benchmark intelligence: daemon cold/warm startup, idle CPU/RAM, IPC latency, interactive steering latency, emergency-stop latency, model-load overhead, disk growth/GC, sustained worker overhead, battery/thermal impact where measurable, and graceful degraded behavior under pressure.
 - [ ] **T160** Define product data-lifecycle/privacy posture end to end: default retention by data class, local export/erase, cache/artifact cleanup, crash/log retention, remote execution/provider deletion semantics, connector/browser session cleanup, telemetry opt-in if ever admitted, and truthful limits for already-emitted external data.
 
+## Phase J — Temporal knowledge, evolved skills, delivery graphs and extension security
+
+Source qualification and design rationale for T161–T165 are recorded in `tencent-source-adoption-2026.md`. These tasks consume the Tencent sources only as explicitly bounded references/candidates; they do not widen active Spec 006.
+
+- [ ] **T161** Define Golam Temporal Memory Semantics: explicit `observed_at` / `valid_from` / `valid_until` / source-time basis / contradiction lineage plus query-time temporal retrieval evidence. Evaluate temporal ranking against properly qualified temporal benchmarks and Golam-native fixtures. Recency/volatility may change ranking but can never raise source authority or destructively erase canonical history. `Tencent/RoMem` remains research-reference-only until repository/code/checkpoint/dataset rights are separately clear.
+- [ ] **T162** Extend T122/T123 into Whole-Skill Evolution: atomic candidate revisions may change `SKILL.md`, scripts, references and assets together; held-out/private evaluation is separated from the improver by code/filesystem authority; every diagnosis → candidate → regression/safety evaluation → activation/rejection outcome becomes durable decision history. Activation is a separate governed effect and new dependencies still require Source Foundry. Use `Tencent/SkillHone` as a high-value method/source candidate, not authority.
+- [ ] **T163** Define a resumable `DeliveryGraph` integrated with T127/T134/T149/T153: complexity-sensitive stage selection, immutable requirement/design inputs, separate implementation/review/test principals, stage entry predicates, verification obligations, durable checkpoints/resume cursors, abort semantics and artifact manifests. Resume always revalidates live repository/environment/authority state. Use `Tencent/LoopForge` as a workflow reference; its confirmation cadence does not override Golam risk/governance policy.
+- [ ] **T164** Define a revisioned Knowledge Workspace distinct from canonical personal memory and protected authority: source documents, immutable `KnowledgeRevision`s, retrieval derivatives, exact citation/source bindings, connector-ingest receipts, stale/deletion semantics, manual edits and governed rollback. Borrow the strongest knowledge/revision/caller-bound-memory/sandbox-product patterns from `Tencent/WeKnora` while preserving Golam source-authority precedence, strict-local policy and execution/authority separation.
+- [ ] **T165** Add Extension Security Admission before activation of any Skill/MCP/connector/control-route provider/execution backend revision. Deterministic pre-scan must cover hidden executable/bytecode surfaces, charset/encoding smuggling, archive/path hazards, download-and-execute/bootstrap behavior, credential/metadata access, persistence hooks, command construction, declared-vs-actual capabilities, dependency integrity/advisories/licenses, intent-vs-implementation mismatch, confusable/shadow tools and behavior/version drift. Optional LLM/dynamic scanners run only as sandboxed supporting evidence and cannot mint `SAFE` authority. Prefer SARIF-compatible stable findings/fingerprints. Use `Tencent/AI-Infra-Guard` as the primary security reference/source candidate and preserve all NOTICE obligations if code is ever reused.
+
 ## Competitor-reference rules
 
 - Grok Bot public behavior is a product baseline, not internal architecture evidence.
@@ -94,6 +104,11 @@ Every product task below requires its own bounded Spec Kit lifecycle and exact l
 - Browser Use/OpenClaw are browser behavior/reference candidates; they do not override Golam's semantic-route or credential/authority model.
 - SWE-agent/SWE-ReX and E2B are coding/execution-infrastructure references; remote or cloud sandboxes remain optional execution capabilities, not Golam authority roots.
 - Ripwire remains governed by Issue #25 and cannot enter the privileged kernel merely because it improves context quality.
+- WeKnora is a high-value knowledge-workspace/memory UX/sandbox product reference; its multi-tenant/cloud/runtime assumptions do not define Golam authority.
+- RoMem is a temporal-memory research reference only at the reviewed pin because root repository licensing is absent; no source/checkpoint/dataset reuse is admitted.
+- SkillHone is a high-value governed skill-evolution reference/source candidate; runtime bypass behavior is explicitly not adopted.
+- LoopForge is a resumable software-delivery workflow reference/source candidate; workflow artifacts remain evidence rather than authority.
+- AI-Infra-Guard is a high-value Skill/MCP/agent security reference/source candidate; model-generated scanner verdicts are supporting evidence only and any code reuse must preserve exact Apache/NOTICE obligations.
 
 ## Current safe sequencing
 
