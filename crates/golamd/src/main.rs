@@ -134,7 +134,7 @@ use golam_core::runtime_home::default_runtime_root;
 use golam_core::{ClientId, ResourceLimits};
 use golam_ipc::client_handshake::{random_connection_id, random_server_epoch, random_server_nonce};
 use golam_ipc::lifecycle::ClientKeyId;
-use golam_kernel::{KernelStartup, RuntimeAuthorityPolicy, start_kernel};
+use golam_kernel::{ClientKind, KernelStartup, RuntimeAuthorityPolicy, start_kernel};
 use golamd::CommandRouter;
 
 const CONNECTION_DEADLINE: Duration = Duration::from_secs(30);
@@ -153,43 +153,50 @@ impl ForegroundApproval {
 }
 
 impl BootstrapApprover for ForegroundApproval {
-    fn approve(&mut self, client_id: ClientId, key_id: ClientKeyId) -> bool {
+    fn approve(&mut self, client_id: ClientId, key_id: ClientKeyId) -> Option<ClientKind> {
         if self
             .stdin_pending
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
             .is_err()
         {
             eprintln!("golamd: bootstrap approval input is already pending; denying request");
-            return false;
+            return None;
         }
 
         eprint!(
-            "Approve first local Golam CLI enrollment for client {} key {}? [y/N] ",
+            "Approve first local Golam client enrollment for client {} key {}? [c=CLI/d=desktop/N] ",
             client_id.0,
             hex(&key_id.0)
         );
         if io::stderr().flush().is_err() {
             self.stdin_pending.store(false, Ordering::Release);
-            return false;
+            return None;
         }
 
         let pending = Arc::clone(&self.stdin_pending);
         let (sender, receiver) = mpsc::sync_channel(1);
         thread::spawn(move || {
             let mut answer = String::new();
-            let approved = io::stdin().read_line(&mut answer).is_ok()
-                && matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes");
+            let kind = if io::stdin().read_line(&mut answer).is_ok() {
+                match answer.trim().to_ascii_lowercase().as_str() {
+                    "c" | "cli" | "y" | "yes" => Some(ClientKind::Cli),
+                    "d" | "desktop" => Some(ClientKind::DesktopFuture),
+                    _ => None,
+                }
+            } else {
+                None
+            };
             pending.store(false, Ordering::Release);
-            let _ = sender.send(approved);
+            let _ = sender.send(kind);
         });
 
         match receiver.recv_timeout(BOOTSTRAP_APPROVAL_DEADLINE) {
-            Ok(approved) => approved,
+            Ok(kind) => kind,
             Err(mpsc::RecvTimeoutError::Timeout) => {
                 eprintln!("golamd: bootstrap approval timed out; denying request");
-                false
+                None
             }
-            Err(mpsc::RecvTimeoutError::Disconnected) => false,
+            Err(mpsc::RecvTimeoutError::Disconnected) => None,
         }
     }
 }
