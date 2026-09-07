@@ -77,15 +77,39 @@ Open PRs, issues, experimental branches, source candidates, benchmark results an
 When reviewing or applying the program roadmap rather than implementing Spec 006:
 
 1. Constitution;
-2. canonical Spec 001 spec/plan/tasks/contracts;
+2. canonical Spec 001 spec/plan/tasks/contracts and `source-permission-attestation.md`;
 3. `specs/001-golam-local-agent-os-foundation/program-superiority-2026.md`;
 4. `specs/001-golam-local-agent-os-foundation/program-superiority-proof-execution-extensions.md`;
-5. `specs/001-golam-local-agent-os-foundation/program-superiority-tasks.md`;
-6. `specs/001-golam-local-agent-os-foundation/competitive-source-register-2026.md`;
-7. `specs/CURRENT.md`;
-8. exact live PR/branch/CI/review state for the lifecycle action being attempted.
+5. `specs/001-golam-local-agent-os-foundation/program-superiority-tasks.md` (T110–T165);
+6. `specs/001-golam-local-agent-os-foundation/source-synthesis-gap-closure-2026-09-08.md`;
+7. `specs/001-golam-local-agent-os-foundation/program-superiority-gap-closure-tasks.md` (T166–T184);
+8. `specs/001-golam-local-agent-os-foundation/competitive-source-register-2026.md`;
+9. `specs/001-golam-local-agent-os-foundation/competitive-source-register-supplement-2026-09-08.md`;
+10. `specs/001-golam-local-agent-os-foundation/tencent-source-adoption-2026.md` and source-specific license findings;
+11. `specs/CURRENT.md`;
+12. exact live PR/branch/CI/review state for the lifecycle action being attempted.
+
+Historical planning PRs #6, #7, #8 and #22 are provenance/research inputs after their retained concepts are reconciled in the current gap-closure package. They do not become parallel implementation authority merely because their branches remain open.
 
 Do not implement future superiority tasks directly from the overlay. Each product task still requires its own bounded Spec Kit lifecycle and predecessor/successor authorization.
+
+## Source reuse rule
+
+Founder reuse permission is a rights input, not automatic technical admission. Every copied, ported, vendored or adapted donor component still requires exact component-level rights/obligation reconciliation and Source Foundry before product use.
+
+Owning specs MUST explicitly select a primary reuse strategy where donor implementation material is considered:
+
+```text
+COPY_AS_IS
+SELECTIVE_COPY
+PORT_TO_RUST
+ADAPTER
+REIMPLEMENT_BEHAVIOR
+BENCHMARK_ONLY
+REJECT
+```
+
+`PERMISSION_TO_COPY != TECHNICAL_ADMISSION` and `DONOR_IMPLEMENTATION != DONOR_AUTHORITY_MODEL`.
 
 ## Invariants every feature must preserve
 
