@@ -398,7 +398,9 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
     }
 }
 
-fn desktop_client_id(principal: Principal<'_>) -> Result<golam_core::ClientId, DesktopAuthorityError> {
+fn desktop_client_id(
+    principal: Principal<'_>,
+) -> Result<golam_core::ClientId, DesktopAuthorityError> {
     if principal.kind != PrincipalKind::EnrolledClient || principal.subject != "local-desktop" {
         return Err(DesktopAuthorityError::UnauthorizedDesktopHost);
     }
@@ -567,7 +569,9 @@ impl fmt::Display for DesktopAuthorityError {
             Self::VisibleChannelDeadlineOverflow => {
                 f.write_str("desktop visible-channel heartbeat deadline overflow")
             }
-            Self::MissingDesktopControlLease => f.write_str("no protected desktop control lease exists"),
+            Self::MissingDesktopControlLease => {
+                f.write_str("no protected desktop control lease exists")
+            }
             Self::AmbiguousDesktopControlLease => {
                 f.write_str("multiple protected desktop control leases exist; refusing ambiguity")
             }
@@ -702,9 +706,18 @@ mod tests {
 
     #[test]
     fn only_exact_authenticated_desktop_principal_can_drive_native_control() {
-        assert!(desktop_client_id(Principal::enrolled_client("local-desktop", golam_core::ClientId(9))).is_ok());
+        assert!(
+            desktop_client_id(Principal::enrolled_client(
+                "local-desktop",
+                golam_core::ClientId(9)
+            ))
+            .is_ok()
+        );
         assert!(matches!(
-            desktop_client_id(Principal::enrolled_client("local-cli", golam_core::ClientId(9))),
+            desktop_client_id(Principal::enrolled_client(
+                "local-cli",
+                golam_core::ClientId(9)
+            )),
             Err(DesktopAuthorityError::UnauthorizedDesktopHost)
         ));
         assert!(matches!(
