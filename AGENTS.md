@@ -135,6 +135,8 @@ No future route provider may mint its own authority. Applicability/availability 
 
 Planning and implementation review must be substantive, independent, exact-head and obtained after exact-head CI when the owning lifecycle requires it. Status-only, rate-limit/billing/unavailable output, automated summary without semantic inspection, stale-head review, CI alone or self-review are insufficient.
 
+Codex review remains excluded by founder direction unless later canonical governance explicitly changes that rule. Use the repository's live independent review mechanism and require substantive architecture/security/governance findings, not a presence signal.
+
 Ready/merge authorization is fail closed. Mark Ready only on an unchanged clean qualified head. Re-fetch exact base/head immediately before merge and use expected-head protection. Post-merge canonical-main CI belongs to the exact returned merge SHA.
 
 Never claim tests, review, runtime/platform behavior, source admission, benchmark status, security behavior, mergeability, readiness or completion without exact evidence.
