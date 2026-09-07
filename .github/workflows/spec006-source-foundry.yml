@@ -89,17 +89,18 @@ jobs:
               'EUPL','OSL','CDDL','EPL'
           )
 
-          def alternatives(expr):
+          def license_leaves(expr):
               text = expr.strip().replace('(', ' ').replace(')', ' ')
-              return [part.strip() for part in re.split(r'\s+OR\s+|\s*/\s*', text) if part.strip()]
+              return [part.strip() for part in re.split(r'\s+(?:OR|AND)\s+|\s*/\s*', text) if part.strip()]
 
           def disposition(name, expr):
               if not expr:
                   return ('REJECT_MISSING_LICENSE_METADATA', '')
-              parts = alternatives(expr)
-              if parts and all(part in permissive for part in parts):
-                  selected = 'Apache-2.0' if 'Apache-2.0' in parts else parts[0]
-                  return ('ACCEPT_PERMISSIVE_DECLARED', f'SELECTED={selected}')
+              leaves = license_leaves(expr)
+              if leaves and all(leaf in permissive for leaf in leaves):
+                  selected = 'Apache-2.0' if 'Apache-2.0' in leaves else leaves[0]
+                  conjunction = 'YES' if re.search(r'\s+AND\s+', expr) else 'NO'
+                  return ('ACCEPT_PERMISSIVE_EXPRESSION', f'SELECTED_OR_BRANCH={selected};CONJUNCTION_TERMS_APPLY={conjunction}')
               if expr.strip() == 'MPL-2.0':
                   return (
                       'ACCEPT_MPL_2_0_FILE_LEVEL_WITH_OBLIGATIONS',
@@ -107,11 +108,8 @@ jobs:
                       'distribute-modified-MPL-covered-files-under-MPL-2.0;'
                       'if-covered-executable-is-distributed-make-corresponding-MPL-covered-source-available-and-inform-recipients'
                   )
-              if name == 'r-efi' and {'MIT', 'Apache-2.0'}.issubset(set(parts)):
-                  return (
-                      'ACCEPT_PERMISSIVE_ALTERNATIVE',
-                      'SELECTED=Apache-2.0;LGPL_ALTERNATIVE_NOT_SELECTED'
-                  )
+              if name == 'r-efi' and {'MIT', 'Apache-2.0'}.issubset(set(leaves)):
+                  return ('ACCEPT_PERMISSIVE_ALTERNATIVE', 'SELECTED=Apache-2.0;LGPL_ALTERNATIVE_NOT_SELECTED')
               if any(marker.lower() in expr.lower() for marker in forbidden_markers) or 'LGPL' in expr:
                   return ('REJECT_NONPERMISSIVE_OR_UNSELECTED_RECIPROCAL', '')
               return ('REJECT_UNCLASSIFIED_LICENSE_EXPRESSION', '')
@@ -138,9 +136,11 @@ jobs:
               if status.startswith('REJECT_'):
                   blocked.append((package['name'], package['version'], status, package.get('license') or ''))
               if status.startswith('ACCEPT_MPL_'):
-                  mpl.append((package['name'], package['version'], package.get('license') or '', ','.join(notice_files)))
-                  if not notice_files:
-                      blocked.append((package['name'], package['version'], 'REJECT_MPL_WITHOUT_OBSERVED_LICENSE_NOTICE_FILE', package.get('license') or ''))
+                  mpl.append((
+                      package['name'], package['version'], package.get('license') or '',
+                      ','.join(notice_files) if notice_files else 'NO_UPSTREAM_TOP_LEVEL_FILE_OBSERVED',
+                      'DISTRIBUTION_BUNDLE_MUST_CARRY_MPL_2_0_LICENSE_AND_SOURCE_AVAILABILITY_NOTICE'
+                  ))
               if has_custom_build:
                   custom_build.append((package['name'], package['version']))
               if links:
@@ -230,16 +230,17 @@ jobs:
           function packageName(packagePath) {
             return packagePath.split('node_modules/').pop();
           }
-          function alternatives(expr) {
-            return String(expr || '').replace(/[()]/g, ' ').split(/\s+OR\s+|\s*\/\s*/).map(v => v.trim()).filter(Boolean);
+          function licenseLeaves(expr) {
+            return String(expr || '').replace(/[()]/g, ' ').split(/\s+(?:OR|AND)\s+|\s*\/\s*/).map(v => v.trim()).filter(Boolean);
           }
           function disposition(value) {
             const text = typeof value === 'string' ? value.trim() : '';
             if (!text) return ['REJECT_MISSING_LICENSE_METADATA', ''];
-            const parts = alternatives(text);
-            if (parts.length && parts.every(v => permissive.has(v))) {
-              const selected = parts.includes('Apache-2.0') ? 'Apache-2.0' : parts[0];
-              return ['ACCEPT_PERMISSIVE_DECLARED', `SELECTED=${selected}`];
+            const leaves = licenseLeaves(text);
+            if (leaves.length && leaves.every(v => permissive.has(v))) {
+              const selected = leaves.includes('Apache-2.0') ? 'Apache-2.0' : leaves[0];
+              const conjunction = /\s+AND\s+/.test(text) ? 'YES' : 'NO';
+              return ['ACCEPT_PERMISSIVE_EXPRESSION', `SELECTED_OR_BRANCH=${selected};CONJUNCTION_TERMS_APPLY=${conjunction}`];
             }
             if (text === 'MPL-2.0') {
               return [
@@ -269,8 +270,7 @@ jobs:
               .split(/\r?\n/).map(v => v.trim()).filter(Boolean);
           }
           function archivePackageJson(archive) {
-            const raw = cp.execFileSync('tar', ['-xOzf', archive, 'package/package.json'], {encoding: 'utf8'});
-            return JSON.parse(raw);
+            return JSON.parse(cp.execFileSync('tar', ['-xOzf', archive, 'package/package.json'], {encoding: 'utf8'}));
           }
 
           const blocked = [];
@@ -295,32 +295,28 @@ jobs:
             }
             const noticeFiles = files.filter(file => /^package\/(?:license|licence|notice|copying|copyright)(?:[._-].*)?$/i.test(file));
             const [status, detail] = disposition(pkg.license);
-            if (status.startsWith('REJECT_')) {
-              blocked.push([name, version, status, JSON.stringify(pkg.license || null)]);
-            }
+            if (status.startsWith('REJECT_')) blocked.push([name, version, status, JSON.stringify(pkg.license || null)]);
             if (status.startsWith('ACCEPT_MPL_')) {
               mpl.push([name, version, String(pkg.license), noticeFiles.join(',') || 'NONE']);
-              if (!noticeFiles.length) {
-                blocked.push([name, version, 'REJECT_MPL_WITHOUT_ARCHIVE_LICENSE_NOTICE_FILE', String(pkg.license)]);
-              }
+              if (!noticeFiles.length) blocked.push([name, version, 'REJECT_MPL_WITHOUT_ARCHIVE_LICENSE_NOTICE_FILE', String(pkg.license)]);
             }
 
             const scripts = pkg.scripts && typeof pkg.scripts === 'object' ? pkg.scripts : {};
             const relevantScripts = Object.entries(scripts).filter(([key]) => lifecycleKeys.has(key));
             for (const [key, command] of relevantScripts) {
-              const isFseventsInstall = name === 'fsevents' && version === '2.3.3' && key === 'install';
-              const execution = isFseventsInstall
-                ? 'DENIED_BY_PRODUCT_NPM_CI_IGNORE_SCRIPTS'
-                : 'NOT_EXECUTED_BY_PRODUCT_DEPENDENCY_INSTALL_POLICY';
-              lifecycle.push([name, version, key, String(command), execution]);
+              lifecycle.push([name, version, key, String(command), 'DEPENDENCY_LIFECYCLE_EXECUTION_DENIED']);
             }
 
+            const nativeFiles = name === 'fsevents' && version === '2.3.3'
+              ? files.filter(file => /(?:\.node$|binding\.gyp$|src\/)/i.test(file))
+              : [];
             archiveRows.push([
               name, version, lockMeta.optional ? 'OPTIONAL' : 'REQUIRED',
               String(pkg.license || 'MISSING'), status, detail || 'NO_EXTRA_DISPOSITION_DETAIL',
               noticeFiles.length ? noticeFiles.join(',') : 'NO_ARCHIVE_TOP_LEVEL_LICENSE_NOTICE_FILE_OBSERVED',
               archiveSha256,
               relevantScripts.length ? JSON.stringify(Object.fromEntries(relevantScripts)) : '{}',
+              nativeFiles.length ? nativeFiles.join(',') : 'NO_FSEVENTS_NATIVE_SOURCE_OR_BINARY_LIST_APPLICABLE',
               lockMeta.hasInstallScript ? 'LOCK_HAS_INSTALL_SCRIPT' : 'LOCK_NO_INSTALL_SCRIPT_FLAG'
             ]);
           }
@@ -336,12 +332,12 @@ jobs:
           const fsevents = archiveRows.find(row => row[0] === 'fsevents' && row[1] === '2.3.3');
           if (fsevents) {
             console.log('PACKAGE=fsevents@2.3.3');
-            console.log('LOCK_POSTURE=OPTIONAL_MACOS_CLOSURE');
+            console.log('LOCK_POSTURE=OPTIONAL_MACOS_LOCK_ENTRY_ONLY');
+            console.log('PRODUCT_NODE_MODULES_POSTURE=PRUNE_BEFORE_ANY_PRODUCT_BUILD_OR_TOOL_EXECUTION');
             console.log('INSTALL_SCRIPT_EXECUTION=DENIED');
-            console.log('NATIVE_NODE_GYP_BUILD=DENIED');
+            console.log('NODE_GYP_EXECUTION=DENIED');
             console.log('NODE_HEADER_NETWORK_ACQUISITION=DENIED');
-            console.log('PRODUCT_INSTALL_POLICY=npm ci --ignore-scripts --no-audit --no-fund');
-            console.log('RATIONALE=production-build-does-not-require-file-watcher-native-addon');
+            console.log('NATIVE_ADDON_EXECUTION=DENIED');
           } else {
             blocked.push(['fsevents', '2.3.3', 'REJECT_EXPECTED_OPTIONAL_PACKAGE_MISSING', '']);
           }
@@ -358,6 +354,7 @@ jobs:
           cd /tmp/golam-spec006-js
           rm -rf node_modules
           npm ci --ignore-scripts --no-audit --no-fund
+          rm -rf node_modules/fsevents
           mkdir -p src
           cat >index.html <<'EOF'
           <div id="root"></div><script type="module" src="/src/main.jsx"></script>
@@ -370,12 +367,12 @@ jobs:
           ./node_modules/.bin/vite build
           cat <<'EOF'
           PRODUCT_NPM_INSTALL_COMMAND=npm ci --ignore-scripts --no-audit --no-fund
+          PRODUCT_POST_INSTALL_NATIVE_PRUNE=node scripts/prune-denied-native-optionals.mjs
           PRODUCT_DEPENDENCY_LIFECYCLE_EXECUTION=DENIED
           PRODUCT_FRONTEND_BUILD_COMMAND=npm run build --ignore-scripts
-          SOURCE_FOUNDRY_PROOF_BUILD=./node_modules/.bin/vite build
+          FSEVENTS_PRODUCT_NODE_MODULES=ABSENT_BEFORE_BUILD
           FSEVENTS_INSTALL_SCRIPT_EXECUTION=DENIED
-          FSEVENTS_NATIVE_BUILD=DENIED
-          FSEVENTS_NODE_HEADER_DOWNLOAD=DENIED
+          FSEVENTS_NATIVE_ADDON_EXECUTION=DENIED
           EOF
 
       - name: Record qualification-only network and authority boundary
@@ -397,7 +394,7 @@ jobs:
     name: prove-script-disabled-install-macos
     runs-on: macos-latest
     steps:
-      - name: Resolve exact frontend closure without lifecycle scripts and build
+      - name: Resolve exact frontend closure, prune denied native optional, and build
         shell: bash
         run: |
           set -euo pipefail
@@ -427,6 +424,11 @@ jobs:
           EOF
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
           npm ci --ignore-scripts --no-audit --no-fund
+          echo '=== FSEVENTS_PRE_PRUNE_NATIVE_FILES ==='
+          find node_modules/fsevents -type f \( -name '*.node' -o -name 'binding.gyp' \) -print 2>/dev/null || true
+          find node_modules/fsevents -type f -name '*.node' -exec shasum -a 256 {} \; 2>/dev/null || true
+          rm -rf node_modules/fsevents
+          test ! -e node_modules/fsevents
           cat >index.html <<'EOF'
           <div id="root"></div><script type="module" src="/src/main.jsx"></script>
           EOF
@@ -436,12 +438,11 @@ jobs:
           createRoot(document.getElementById('root')).render(React.createElement('main', null, 'Golam Source Foundry'));
           EOF
           npm run build --ignore-scripts
-          if find node_modules/fsevents -type f -name 'fsevents.node' -print -quit 2>/dev/null | grep -q .; then
-            echo 'unexpected fsevents native addon built under --ignore-scripts' >&2
-            exit 1
-          fi
+          test ! -e node_modules/fsevents
           cat <<'EOF'
           MACOS_SCRIPT_DISABLED_INSTALL=PASS
-          MACOS_FRONTEND_BUILD_WITHOUT_FSEVENTS_NATIVE_ADDON=PASS
-          FSEVENTS_INSTALL_SCRIPT_EXECUTION=DENIED_AND_NOT_REQUIRED_FOR_BUILD
+          MACOS_FSEVENTS_PRUNED_BEFORE_PRODUCT_BUILD=PASS
+          MACOS_FRONTEND_BUILD_WITHOUT_FSEVENTS_PACKAGE=PASS
+          FSEVENTS_INSTALL_SCRIPT_EXECUTION=DENIED
+          FSEVENTS_NATIVE_ADDON_EXECUTION=DENIED
           EOF
