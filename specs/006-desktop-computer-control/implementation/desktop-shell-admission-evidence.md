@@ -64,6 +64,33 @@ crates/golam-kernel/src/client_auth.rs     (rustfmt-only changes)
 
 The `ci` run created directly from the bot-authored formatter commit ended as `action_required` with zero jobs, so it is not code/test qualification evidence. This evidence commit intentionally creates a normal repository-authored head so the ordinary PR CI can execute again.
 
+## Cross-platform shell build diagnostics
+
+Subsequent normal CI advanced past the frontend closure and formatter gates and exposed three build-only integration gaps in dependency order:
+
+```text
+CI_1538_HEAD=8411c56f810dfa8c18fea6b57c8bf07f6536148b
+MACOS_CLIPPY=FAIL_UNUSED_TEST_IMPORTS
+WINDOWS_TAURI_BUILD=FAIL_MISSING_ICON_ICO
+
+CI_1539_HEAD=f888b3eb77b61b656d247da1ab3c2b8e51bad986
+FRONTEND_CLOSURE=PASS_UBUNTU_MACOS_WINDOWS
+RUSTFMT=PASS_UBUNTU_MACOS_WINDOWS
+TAURI_CONTEXT_ICON_PNG=ADDED
+WINDOWS_RESOURCE_ICON_ICO=ADDED
+CLIPPY=FAIL_CHUNKS_EXACT_TO_AS_CHUNKS_IN_DESKTOP_HOST
+```
+
+The pinned Rust 1.98.0 Clippy finding was repaired by the bounded one-shot run `34147766343`. That workflow changed only `apps/golam-desktop/src-tauri/src/host.rs` at the exact reported parser expression, ran pinned rustfmt, removed itself, and committed the repair as:
+
+```text
+PINNED_CLIPPY_REPAIR_RUN=34147766343
+PINNED_CLIPPY_REPAIR_RESULT=SUCCESS
+PINNED_CLIPPY_REPAIR_COMMIT=4531111b12840f9eccff31951b2f8af981d6d4ba
+```
+
+The direct CI run on that bot-authored commit ended `action_required` with zero jobs. This repository-authored evidence update exists to trigger ordinary PR CI on a non-bot head; it is not itself qualification evidence.
+
 ## Current authority boundary
 
 ```text
