@@ -76,6 +76,14 @@ Every product task below requires its own bounded Spec Kit lifecycle and exact l
 - [ ] **T154** Define a Golam Extension SDK + conformance kit for Skills/MCP/ACP/connectors/control-route providers and optional execution backends. Third-party extensions receive generated typed schemas, capability declarations, sandbox profiles, deterministic test fixtures and compatibility tests; extension conformance never implies authority admission.
 - [ ] **T155** Add accessibility/internationalization/human-factors release gates for the desktop/TUI/approval/control surfaces: keyboard-only operation, screen-reader semantics where applicable, readable risk prompts, localization-safe identifiers, reduced-motion/high-contrast support and measured emergency-stop discoverability. Safety-critical controls cannot depend on color or pointer-only interaction.
 
+## Phase I — System threat, compatibility and product-quality gates
+
+- [ ] **T156** Maintain one system-level adversary/trust-zone model covering same-user malware, compromised model/backend, malicious MCP/Skill/extension, poisoned memory/context, hostile website/document, connector impersonation, stolen paired device, remote-execution provider compromise, update/supply-chain compromise and privileged-host administrator limits. Every owning spec maps new attack surfaces and mitigations back to this model.
+- [ ] **T157** Define protocol/schema/migration compatibility policy for IPC, authority SQLite, canonical events, memory metadata, Skill/MCP/ACP bindings, GolamConnect, extension SDK and release artifacts: version negotiation, forward-only migration, backup-before-destructive migration, downgrade/rollback constraints, unsupported-future-version failure, and golden cross-version fixtures.
+- [ ] **T158** Add benchmark-integrity policy: exact fixture hashes, held-out/private regression tasks where appropriate, contamination disclosure, no benchmark-specific prompt/tool hacks, anti-reward-hacking checks, evaluator version binding and separation of development tuning from final release qualification.
+- [ ] **T159** Define product SLO/efficiency gates independent of benchmark intelligence: daemon cold/warm startup, idle CPU/RAM, IPC latency, interactive steering latency, emergency-stop latency, model-load overhead, disk growth/GC, sustained worker overhead, battery/thermal impact where measurable, and graceful degraded behavior under pressure.
+- [ ] **T160** Define product data-lifecycle/privacy posture end to end: default retention by data class, local export/erase, cache/artifact cleanup, crash/log retention, remote execution/provider deletion semantics, connector/browser session cleanup, telemetry opt-in if ever admitted, and truthful limits for already-emitted external data.
+
 ## Competitor-reference rules
 
 - Grok Bot public behavior is a product baseline, not internal architecture evidence.
