@@ -45,7 +45,10 @@ impl fmt::Display for DesktopControlRequestCodecError {
                 write!(f, "unknown desktop control request method {method}")
             }
             Self::UnexpectedBody { actual } => {
-                write!(f, "desktop control request body must be empty; got {actual} bytes")
+                write!(
+                    f,
+                    "desktop control request body must be empty; got {actual} bytes"
+                )
             }
         }
     }
