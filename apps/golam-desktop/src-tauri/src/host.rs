@@ -432,6 +432,9 @@ mod tests {
                 .len(),
             1
         );
+        drop(registry);
+        drop(store);
+        drop(authority);
         fs::remove_dir_all(runtime.root).unwrap();
     }
 
