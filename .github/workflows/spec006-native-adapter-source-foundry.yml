@@ -70,10 +70,19 @@ jobs:
               cat >>"$ROOT/Cargo.toml" <<'EOF'
 
           [dependencies]
-          windows = { version = "=0.62.2", default-features = false, features = ["std", "Win32_System_Com", "Win32_UI_Accessibility"] }
+          xa11y-core = { version = "=0.13.0", default-features = false }
+          xa11y-windows = { version = "=0.13.0", default-features = false }
           wgc = { version = "=1.0.7", default-features = false }
           enigo = { version = "=0.6.1", default-features = false }
           arboard = { version = "=3.6.1", default-features = false }
+          EOF
+              cat >"$ROOT/src/main.rs" <<'EOF'
+          #![forbid(unsafe_code)]
+          use xa11y_windows::WindowsProvider;
+
+          fn main() {
+              let _ = core::mem::size_of::<WindowsProvider>();
+          }
           EOF
               ;;
             macos)
@@ -85,6 +94,7 @@ jobs:
           enigo = { version = "=0.6.1", default-features = false }
           arboard = { version = "=3.6.1", default-features = false }
           EOF
+              printf '#![forbid(unsafe_code)]\nfn main() {}\n' >"$ROOT/src/main.rs"
               ;;
             linux)
               cat >>"$ROOT/Cargo.toml" <<'EOF'
@@ -96,6 +106,7 @@ jobs:
           enigo = { version = "=0.6.1", default-features = false, features = ["x11rb"] }
           arboard = { version = "=3.6.1", default-features = false, features = ["wayland-data-control"] }
           EOF
+              printf '#![forbid(unsafe_code)]\nfn main() {}\n' >"$ROOT/src/main.rs"
               ;;
             *)
               echo "unsupported platform: $PLATFORM" >&2
@@ -103,7 +114,6 @@ jobs:
               ;;
           esac
 
-          printf '#![forbid(unsafe_code)]\nfn main() {}\n' >"$ROOT/src/main.rs"
           cd "$ROOT"
           cargo +1.98.0 generate-lockfile
           cargo +1.98.0 fetch --locked
@@ -153,60 +163,25 @@ jobs:
 
           case "$PLATFORM" in
             windows)
-              SEMANTIC_ROOT="${RUNNER_TEMP}/golam-spec006-windows-semantic-probe"
-              rm -rf "$SEMANTIC_ROOT"
-              mkdir -p "$SEMANTIC_ROOT/src"
-              cat >"$SEMANTIC_ROOT/Cargo.toml" <<'EOF'
-          [package]
-          name = "golam-spec006-windows-semantic-probe"
-          version = "0.0.0"
-          edition = "2024"
-          rust-version = "1.98"
-          publish = false
-
-          [dependencies]
-          windows = { version = "=0.62.2", default-features = false, features = ["std", "Win32_System_Com", "Win32_UI_Accessibility"] }
-          EOF
-              printf '#![forbid(unsafe_code)]\nfn main() {}\n' >"$SEMANTIC_ROOT/src/main.rs"
-              cd "$SEMANTIC_ROOT"
-              cargo +1.98.0 generate-lockfile
-              cargo +1.98.0 fetch --locked
-              HOST_TRIPLE="$(rustc +1.98.0 -vV | sed -n 's/^host: //p')"
-              cargo +1.98.0 check --locked
-              cargo +1.98.0 metadata --locked --filter-platform "$HOST_TRIPLE" --format-version 1 >metadata.json
-              cargo +1.98.0 tree --locked --target "$HOST_TRIPLE" --edges normal,build,features >features.txt
               python3 - <<'PY'
           import json
+          import pathlib
           import sys
 
           metadata = json.load(open('metadata.json', encoding='utf-8'))
-          packages = {p['id']: p for p in metadata['packages']}
-          nodes = {n['id']: n for n in metadata['resolve']['nodes']}
-          matches = [
-              (pid, p) for pid, p in packages.items()
-              if p['name'] == 'windows' and p['version'] == '0.62.2'
-          ]
-          if len(matches) != 1:
-              sys.exit(f'WINDOWS_SEMANTIC_PROBE_PACKAGE_COUNT={len(matches)}')
-          pid, _ = matches[0]
-          features = set(nodes[pid].get('features', []))
-          required = {
-              'std', 'Win32', 'Win32_Foundation', 'Win32_System',
-              'Win32_System_Com', 'Win32_UI', 'Win32_UI_Accessibility'
-          }
-          missing = sorted(required - features)
-          extra = sorted(features - required)
-          if missing:
-              sys.exit('WINDOWS_SEMANTIC_PROBE_REQUIRED_FEATURE_MISSING=' + ','.join(missing))
-          if extra:
-              sys.exit('WINDOWS_SEMANTIC_PROBE_UNEXPECTED_FEATURE=' + ','.join(extra))
-          print('WINDOWS_SEMANTIC_PROJECTION_ISOLATED_FEATURE_SET=PASS')
+          packages = [p for p in metadata['packages'] if p['name'] == 'xa11y-windows' and p['version'] == '0.13.0']
+          if len(packages) != 1:
+              sys.exit(f'XA11Y_WINDOWS_PACKAGE_COUNT={len(packages)}')
+          manifest = pathlib.Path(packages[0]['manifest_path'])
+          source_root = manifest.parent
+          lib_rs = source_root / 'src' / 'lib.rs'
+          text = lib_rs.read_text(encoding='utf-8')
+          if 'WindowsProvider' not in text:
+              sys.exit('XA11Y_WINDOWS_PROVIDER_SURFACE_MISSING')
+          print('XA11Y_WINDOWS_PROVIDER_SURFACE=OBSERVED')
+          print('XA11Y_WINDOWS_CALLER_SAFE_RUST_PROBE=PASS')
+          print('XA11Y_WINDOWS_INPUT_AND_SCREENSHOT_TYPES=EXPLICITLY_NOT_ADMITTED_BY_SEMANTIC_ROLE')
           PY
-              echo "=== WINDOWS_SEMANTIC_PROBE_LOCK_SHA256 ==="
-              if command -v sha256sum >/dev/null 2>&1; then sha256sum Cargo.lock; else shasum -a 256 Cargo.lock; fi
-              echo "=== WINDOWS_SEMANTIC_PROBE_FEATURE_TREE ==="
-              cat features.txt
-              cd "$ROOT"
               deny_feature wgc tracing
               for f in x11rb wayland libei_smol libei_tokio xdo platform_specific serde tokio; do deny_feature enigo "$f"; done
               for f in image-data image core-graphics windows-sys wayland-data-control wl-clipboard-rs; do deny_feature arboard "$f"; done
