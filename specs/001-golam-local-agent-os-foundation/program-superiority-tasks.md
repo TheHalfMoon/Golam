@@ -1,0 +1,85 @@
+# Program Superiority Task Graph — 2026 Overlay
+
+**Authority**: PROGRAM ORCHESTRATION ONLY — NO PRODUCT IMPLEMENTATION AUTHORITY
+
+**Parent**: `program-superiority-2026.md`
+
+Every product task below requires its own bounded Spec Kit lifecycle and exact live predecessor verification before implementation. This task graph does not widen active Spec 006 PR #24.
+
+## Phase A — Governance and release trust prerequisites
+
+- [ ] **T110** Create and maintain one canonical durable lifecycle pointer (`specs/CURRENT.md`) and eliminate stale duplicated phase/PR state from root governance documents.
+- [ ] **T111** Add a repository-state consistency check that fails when canonical lifecycle declarations contradict each other; live PR head/check/review state remains fetched rather than cached.
+- [ ] **T112** Configure or formally require a GitHub `main` ruleset/branch-protection posture: PR-only updates, protected history, required qualification checks, no force-push/delete, and review requirements appropriate to repository governance. Record evidence or an explicit external-administration blocker; do not pretend documentation is enforcement.
+- [ ] **T113** Define release supply-chain governance: dependency audit evidence, advisories/licenses/sources, action pinning, SBOM, artifact provenance/attestations, platform signing/notarization, update signature/key rotation/recovery, rollback/anti-downgrade and third-party notice obligations.
+- [ ] **T114** Define real-device qualification as a separate evidence class from hosted CI and create a machine-readable platform/capability/permission fixture manifest.
+
+## Phase B — Unified action/capability fabric
+
+- [ ] **T115** Define `ControlRouteProvider` and kernel-owned `RouteApplicabilityEvidence` spanning domain/app API, native API, accessibility, browser DOM/protocol, deterministic input and bounded vision/pixel evidence without letting providers mint authority.
+- [ ] **T116** Require stronger-route provider freshness/identity/disposition before weaker fallback; unknown/stale stronger-route state must not silently authorize weaker routes.
+- [ ] **T117** Create a bounded Browser/Application Semantic Control planning unit after Spec 006 closes; prefer WebDriver/WebDriver BiDi and native application APIs over generic computer input where available.
+- [ ] **T118** Correct the current OCR ownership mismatch: raw screenshot OCR/visual semantic extraction is not Spec 007 GolamConnect. Create a future bounded Visual Semantics unit only after canonical successor authorization.
+- [ ] **T119** Define a connector/account capability broker separating API connector identity/scopes/secret handles from browser login/session state and from ordinary egress permission.
+
+## Phase C — Context, memory and safe learning
+
+- [ ] **T120** Formalize repository-intelligence promotion gates: L0 text/git -> structural/AST -> LSP -> Ripwire-style deterministic graph/context -> heavier dataflow/runtime/vector only after measured residual need.
+- [ ] **T121** Benchmark `redhat-et/ripwire` under Issue #25 as an external local tool first, then optional sandboxed sidecar/MCP; measure task success, changed-file/test-selection quality, token savings, latency, memory and stale-index behavior before any port/admission.
+- [ ] **T122** Add a safe learning compiler: trajectory -> `SkillCandidate`/`RoutineCandidate` -> provenance/taint/authority analysis -> deterministic replay/tests -> approval -> immutable versioned activation -> outcome evidence -> candidate improvement.
+- [ ] **T123** Prohibit in-place autonomous mutation of active skills/routines; every learned revision is a new immutable version and stale queued/cached authority is invalidated on replacement/revocation.
+- [ ] **T124** Add governed demonstration-to-routine planning: semantic observation first, secret separation, variable/precondition/postcondition inference, dry-run/test mode and explicit activation authority; coordinates remain untrusted hints only.
+- [ ] **T125** Add external memory-quality qualification using exact-pinned LongMemEval-V2 plus bounded LoCoMo/BEAM-style cases and Golam-specific stale-memory/contradiction/provenance/abstention scenarios.
+- [ ] **T126** Add product UX for inspecting/editing/promoting/forgetting memory and reviewing skill/routine provenance/version history without bypassing canonical writer governance.
+
+## Phase D — Workers, automations and resource governance
+
+- [ ] **T127** Expand Spec 008 with durable named worker identities, narrow child leases, isolated worktree/workspace by default, typed handoff bundles and explicit shared-artifact channels.
+- [ ] **T128** Define conflict detection and merge/reconciliation for concurrent worker writes; shared workspace is never presented as a security boundary.
+- [ ] **T129** Define trusted time semantics: timezone identity, DST fold/gap, clock jumps, suspend/resume, missed-run catch-up, overlap policy, dedup identity and stale/no-data policy.
+- [ ] **T130** Bind every scheduled run to exact current skill/routine/model/profile/connector versions and re-evaluate authority at run time; drift cannot silently inherit old approval.
+- [ ] **T131** Add deterministic no-agent automation mode where an LLM is unnecessary; it still uses Golam scheduling/effect/authority semantics.
+- [ ] **T132** Implement a Golam Resource Governor for CPU/GPU/memory/model residency, worker concurrency, disk/artifact quotas, bandwidth, battery/thermal state where available, foreground latency priority and graceful degradation. Resource pressure never weakens security gates.
+
+## Phase E — Persistent teammate and product-superset UX
+
+- [ ] **T133** Define persistent named teammate UX: durable role, goal/status/evidence/blockers, clear current activity, explicit authority and per-worker memory view.
+- [ ] **T134** Define typed multi-worker handoff/group semantics so workers may coordinate without collapsing identities, approvals, memory provenance or effect attribution.
+- [ ] **T135** Add routine authoring/test/history/pause/resume/rollback UX with explicit unattended-risk controls and recent-run evidence.
+- [ ] **T136** Add first-class deep-research evidence graph/citation provenance and exact-source freshness semantics rather than answer-only citations.
+- [ ] **T137** Complete built-in governed artifact workflows for documents, presentations, spreadsheets and PDFs with deterministic validation, provenance and file/effect safety.
+- [ ] **T138** Add product-wide encrypted backup/export/restore planning for canonical memory, authority metadata, secret/device posture and rebuildable derivatives; restore requires integrity/schema/anti-replay checks and dry-run reporting.
+- [ ] **T139** Add `golam doctor`/diagnostic bundle design with local-only structured diagnostics, bounded/redacted logs, pending uncertainty, platform capability state, model/worker/resource status and no silent upload.
+
+## Phase F — Voice, multimodal and cross-device superiority
+
+- [ ] **T140** Plan optional real-time voice after trusted core maturity: local-first STT/TTS candidates, explicit cloud capability when used, interruption/barge-in, secret/privacy boundary and no always-listening default.
+- [ ] **T141** Plan mobile/remote companion UX over GolamConnect while keeping local owner authority canonical; remote clients receive explicit short-lived capabilities rather than becoming cloud authority roots.
+- [ ] **T142** Add governed multimodal artifact/image/PDF understanding with exact provenance and privacy controls; visual perception remains evidence, never authority.
+
+## Phase G — GolamBench and verified release supremacy
+
+- [ ] **T143** Pin and qualify external benchmark fixtures: OSWorld V2, WindowsAgentArena where feasible, BrowserGym/WebArena-Verified/WorkArena, SWE-bench-class coding suites and LongMemEval-V2. Never use floating benchmark state for release claims.
+- [ ] **T144** Define hard non-compensating release gates: zero unauthorized effects, zero blind retry of at-most-once/irreversible effects, zero strict-local unexpected egress, zero protected-authority forgery success, zero silent control without required visibility, zero stale control generation accepted and zero unverified completion reported as verified.
+- [ ] **T145** Define comparative metrics across verified task success, intervention rate, unnecessary approvals, takeover latency, crash recovery, wrong-target actions, memory stale/false recall, context/token cost, model cost, resources, route strength, scheduler reliability and worker handoff conflicts.
+- [ ] **T146** Separate hosted CI, real-device platform qualification and signed release-artifact qualification; all three must be explicitly represented in final release evidence.
+- [ ] **T147** Require backup/restore drill, updater/signature drill, device-loss/key-rotation drill and strict-local external observation against the exact release candidate artifacts before stable release.
+- [ ] **T148** Publish no “best”, “parity”, “superset”, security, offline or reliability claim unless the exact benchmark/release evidence is revision-bound and reproducible.
+
+## Competitor-reference rules
+
+- Grok Bot public behavior is a product baseline, not internal architecture evidence.
+- Hermes is a behavioral/implementation reference candidate for learning, schedules, skills, gateways and workers, subject to Source Foundry before code reuse/dependency use.
+- Codex is a behavioral/implementation reference candidate for local Rust agent UX, sandbox/approval, multi-agent/session and MCP/skills surfaces, subject to Source Foundry before reuse.
+- OpenHands is a reference candidate for control-surface/backend topology.
+- Browser Use/OpenClaw are browser behavior/reference candidates; they do not override Golam's semantic-route or credential/authority model.
+- SWE-agent/SWE-ReX are coding ACI/evaluation/sandbox references.
+- Ripwire remains governed by Issue #25 and cannot enter the privileged kernel merely because it improves context quality.
+
+## Current safe sequencing
+
+1. Do not widen active PR #24 with this overlay.
+2. Complete Spec 006 under its existing canonical task graph.
+3. Merge this overlay only after exact-head planning/governance qualification and independent review.
+4. After Spec 006 canonical closeout, re-read live successor authority and create only the next bounded authorized unit.
+5. Future owning specs consume these tasks selectively in dependency order; this file never grants direct implementation authority.
