@@ -237,8 +237,18 @@ mod tests {
 
     #[test]
     fn credential_filename_parser_rejects_zero_and_malformed_ids() {
-        assert!(parse_credential_filename("not-a-credential").unwrap().is_none());
-        assert!(parse_credential_filename(&format!("{}-{}.gkey", "0".repeat(32), "1".repeat(64))).is_err());
-        assert!(parse_credential_filename(&format!("{}-{}.gkey", "1".repeat(32), "0".repeat(64))).is_err());
+        assert!(
+            parse_credential_filename("not-a-credential")
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            parse_credential_filename(&format!("{}-{}.gkey", "0".repeat(32), "1".repeat(64)))
+                .is_err()
+        );
+        assert!(
+            parse_credential_filename(&format!("{}-{}.gkey", "1".repeat(32), "0".repeat(64)))
+                .is_err()
+        );
     }
 }
