@@ -140,6 +140,14 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         }
     }
 
+    pub fn active_client_record(
+        &self,
+        client_id: ClientId,
+        key_id: ClientKeyId,
+    ) -> Result<ClientRecord, KernelError> {
+        Ok(self.clients.resolve_active_record(client_id, key_id)?)
+    }
+
     fn require_client_enrollment_authority(
         &mut self,
         principal: Principal<'_>,
@@ -237,6 +245,13 @@ mod tests {
         );
         assert_eq!(enrolled.credential, generated);
         assert_eq!(enrolled.record.client_id, ClientId(702));
+        assert_eq!(
+            kernel
+                .active_client_record(generated.client_id, generated.key_id)
+                .unwrap()
+                .kind,
+            ClientKind::Cli
+        );
         drop(kernel);
         fs::remove_dir_all(runtime.root).unwrap();
     }
