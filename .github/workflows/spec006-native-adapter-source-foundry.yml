@@ -70,7 +70,7 @@ jobs:
               cat >>"$ROOT/Cargo.toml" <<'EOF'
 
           [dependencies]
-          uiautomation = { version = "=0.25.1", default-features = false, features = ["control"] }
+          windows = { version = "=0.62.2", default-features = false, features = ["std", "Win32_System_Com", "Win32_UI_Accessibility"] }
           wgc = { version = "=1.0.7", default-features = false }
           enigo = { version = "=0.6.1", default-features = false }
           arboard = { version = "=3.6.1", default-features = false }
@@ -107,13 +107,17 @@ jobs:
           cd "$ROOT"
           cargo +1.98.0 generate-lockfile
           cargo +1.98.0 fetch --locked
-          cargo +1.98.0 metadata --locked --format-version 1 >metadata.json
-          cargo +1.98.0 tree --locked --edges normal,build >tree.txt
-          cargo +1.98.0 tree --locked --edges normal,build,features >features.txt
+          HOST_TRIPLE="$(rustc +1.98.0 -vV | sed -n 's/^host: //p')"
+          test -n "$HOST_TRIPLE"
+          cargo +1.98.0 metadata --locked --filter-platform "$HOST_TRIPLE" --format-version 1 >metadata.json
+          cargo +1.98.0 tree --locked --target "$HOST_TRIPLE" --edges normal,build >tree.txt
+          cargo +1.98.0 tree --locked --target "$HOST_TRIPLE" --edges normal,build,features >features.txt
           cargo +1.98.0 check --locked
 
           echo "=== PLATFORM ==="
           echo "$PLATFORM"
+          echo "=== HOST_TRIPLE ==="
+          echo "$HOST_TRIPLE"
           echo "=== LOCK_SHA256 ==="
           if command -v sha256sum >/dev/null 2>&1; then sha256sum Cargo.lock; else shasum -a 256 Cargo.lock; fi
           echo "=== DIRECT_TREE ==="
@@ -149,8 +153,34 @@ jobs:
 
           case "$PLATFORM" in
             windows)
-              require_feature uiautomation control
-              for f in input clipboard screenshot process dialog event log all; do deny_feature uiautomation "$f"; done
+              python3 - <<'PY'
+          import json
+          import sys
+
+          metadata = json.load(open('metadata.json', encoding='utf-8'))
+          packages = {p['id']: p for p in metadata['packages']}
+          nodes = {n['id']: n for n in metadata['resolve']['nodes']}
+          matches = [
+              (pid, p) for pid, p in packages.items()
+              if p['name'] == 'windows' and p['version'] == '0.62.2'
+          ]
+          if len(matches) != 1:
+              sys.exit(f'WINDOWS_PROJECTION_PACKAGE_COUNT={len(matches)}')
+          pid, _ = matches[0]
+          features = set(nodes[pid].get('features', []))
+          required = {
+              'std', 'Win32', 'Win32_Foundation', 'Win32_System',
+              'Win32_System_Com', 'Win32_UI', 'Win32_UI_Accessibility'
+          }
+          allowed = set(required)
+          missing = sorted(required - features)
+          extra = sorted(features - allowed)
+          if missing:
+              sys.exit('WINDOWS_PROJECTION_REQUIRED_FEATURE_MISSING=' + ','.join(missing))
+          if extra:
+              sys.exit('WINDOWS_PROJECTION_UNEXPECTED_FEATURE=' + ','.join(extra))
+          print('WINDOWS_SEMANTIC_PROJECTION_FEATURE_SET=PASS')
+          PY
               deny_feature wgc tracing
               for f in x11rb wayland libei_smol libei_tokio xdo platform_specific serde tokio; do deny_feature enigo "$f"; done
               for f in image-data image core-graphics windows-sys wayland-data-control wl-clipboard-rs; do deny_feature arboard "$f"; done
@@ -178,7 +208,7 @@ jobs:
 
           echo "FEATURE_DENYLIST=PASS"
 
-      - name: Inventory license, build, native-link, and network closure
+      - name: Inventory active license, build, native-link, and network closure
         shell: bash
         env:
           PLATFORM: ${{ matrix.platform }}
@@ -198,41 +228,94 @@ jobs:
               'ISC', 'MIT', 'MIT-0', 'MPL-2.0', 'Unicode-3.0',
               'Unicode-DFS-2016', 'Unlicense', 'Zlib', 'Zlib-acknowledgement',
           }
-          forbidden_markers = (
-              'AGPL', 'GPL-1', 'GPL-2', 'GPL-3', 'LGPL', 'SSPL', 'BUSL',
-              'Commons-Clause', 'EUPL', 'OSL', 'CDDL', 'EPL'
-          )
           network_clients = {
               'reqwest', 'hyper', 'hyper-util', 'ureq', 'curl', 'curl-sys',
               'isahc', 'surf', 'attohttpc', 'awc'
           }
 
-          def leaves(expr):
-              return [
-                  p.strip()
-                  for p in re.split(r'\s+(?:OR|AND)\s+|\s*/\s*', expr.replace('(', ' ').replace(')', ' '))
-                  if p.strip()
-              ]
+          def strip_outer(expr):
+              expr = expr.strip()
+              while expr.startswith('(') and expr.endswith(')'):
+                  depth = 0
+                  wraps = True
+                  for i, ch in enumerate(expr):
+                      if ch == '(':
+                          depth += 1
+                      elif ch == ')':
+                          depth -= 1
+                          if depth == 0 and i != len(expr) - 1:
+                              wraps = False
+                              break
+                  if not wraps:
+                      break
+                  expr = expr[1:-1].strip()
+              return expr
 
+          def split_top(expr, operator):
+              parts = []
+              depth = 0
+              start = 0
+              marker = f' {operator} '
+              i = 0
+              while i <= len(expr) - len(marker):
+                  ch = expr[i]
+                  if ch == '(':
+                      depth += 1
+                      i += 1
+                      continue
+                  if ch == ')':
+                      depth -= 1
+                      i += 1
+                      continue
+                  if depth == 0 and expr.startswith(marker, i):
+                      parts.append(expr[start:i].strip())
+                      i += len(marker)
+                      start = i
+                      continue
+                  i += 1
+              if parts:
+                  parts.append(expr[start:].strip())
+              return parts
+
+          def acceptable(expr):
+              expr = strip_outer(expr.replace('/', ' OR '))
+              ors = split_top(expr, 'OR')
+              if ors:
+                  return any(acceptable(part) for part in ors)
+              ands = split_top(expr, 'AND')
+              if ands:
+                  return all(acceptable(part) for part in ands)
+              return expr in allowed
+
+          packages = {p['id']: p for p in metadata['packages']}
+          nodes = {n['id']: n for n in metadata['resolve']['nodes']}
+          reachable = set()
+          stack = [metadata['resolve']['root']]
+          while stack:
+              pid = stack.pop()
+              if pid in reachable:
+                  continue
+              reachable.add(pid)
+              node = nodes.get(pid)
+              if node:
+                  stack.extend(dep['pkg'] for dep in node.get('deps', []))
+
+          external = [packages[pid] for pid in reachable if packages[pid].get('source')]
           blocked = []
           network = []
           custom_build = []
           native_links = []
-          external = [p for p in metadata['packages'] if p.get('source')]
-          print(f'EXTERNAL_PACKAGE_COUNT={len(external)}')
+          print(f'ACTIVE_EXTERNAL_PACKAGE_COUNT={len(external)}')
           for p in sorted(external, key=lambda x: (x['name'], x['version'])):
               expr = (p.get('license') or '').strip()
               license_file = p.get('license_file') or ''
-              package_leaves = leaves(expr) if expr else []
-              if any(marker.lower() in expr.lower() for marker in forbidden_markers):
-                  disposition = 'REJECT_FORBIDDEN_LICENSE'
-                  blocked.append((p['name'], p['version'], disposition, expr))
-              elif expr and package_leaves and all(x in allowed for x in package_leaves):
-                  disposition = 'ACCEPT_PERMISSIVE_OR_MPL_EXPRESSION'
+              if expr and acceptable(expr):
+                  disposition = 'ACCEPT_VALID_ALLOWED_LICENSE_PATH'
               elif not expr and license_file:
                   disposition = 'REVIEW_LICENSE_FILE_REQUIRED'
+                  blocked.append((p['name'], p['version'], disposition, license_file))
               else:
-                  disposition = 'REJECT_UNKNOWN_OR_MISSING_LICENSE'
+                  disposition = 'REJECT_NO_ALLOWED_LICENSE_PATH'
                   blocked.append((p['name'], p['version'], disposition, expr or 'MISSING'))
 
               kinds = sorted({kind for target in p.get('targets', []) for kind in target.get('kind', [])})
@@ -265,9 +348,9 @@ jobs:
           for row in blocked: print('|'.join(row))
 
           if network:
-              sys.exit('network-capable HTTP client package entered the candidate closure')
+              sys.exit('network-capable HTTP client package entered the active candidate closure')
           if blocked:
-              sys.exit('license disposition requires reconciliation before admission')
+              sys.exit('active license disposition requires reconciliation before admission')
           PY
 
       - name: Prove product manifests remain unchanged
@@ -286,6 +369,7 @@ jobs:
           PRODUCT_RUNTIME_NETWORK_AUTHORITY=NO
           CAMERA_ADMISSION=NO
           MICROPHONE_ADMISSION=NO
+          AUDIO_CAPTURE_ADMISSION=NO
           OCR_ADMISSION=NO
           WAYLAND_BYPASS_ADMISSION=NO
           SOURCE_FOUNDRY_CANDIDATE_QUALIFICATION=PASS_PENDING_INDEPENDENT_REVIEW
