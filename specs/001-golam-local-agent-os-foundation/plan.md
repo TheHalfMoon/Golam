@@ -12,20 +12,27 @@ The GLM-5.3 review returned `APPROVE_WITH_MANDATORY_CHANGES`. All 2 BLOCKER and 
 
 Spec 001 does not authorize implementing the entire product in one PR. It freezes the program architecture and decomposes implementation into bounded follow-on Spec Kit features.
 
+### Additive program amendment PA-001 — Phone / Mobile / Voice / Channels
+
+Founder direction on 2026-08-28 expands the future Spec 007 scope so Golam is first-class reachable from a phone. `program-amendments/PA-001-phone-channel-access.md` and `contracts/phone-channel-access-contract.md` are the binding additive planning artifacts for this change.
+
+PA-001 supersedes only the previous deferral of **native mobile application** and **phone voice interaction**. It does not weaken existing authority/security contracts and it does not authorize implementation in the active earlier spec. Native Golam Mobile is a cryptographically paired GolamConnect device; Telegram/WhatsApp/WeChat/Slack/Discord/Matrix remain separately governed third-party channel transports.
+
 ## Technical Context
 
 **Language**: Rust stable for trusted/runtime code; TypeScript/React only for untrusted Tauri renderer; optional Python/Node adapters outside trusted/privileged paths.  
 **Runtime**: Tokio-based local daemon; exact crates pinned only after donor/dependency qualification.  
 **Desktop**: Tauri 2 + React/TypeScript renderer, Rust backend.  
+**Mobile**: future Spec 007 must preserve a Rust-owned GolamConnect client/protocol core and qualify Tauri 2 mobile versus a small native Swift/Kotlin shell around shared Rust before stack freeze.  
 **Local state**: SQLite for operational state; Markdown/files for canonical human knowledge; content-addressed large artifacts.  
 **Authorization**: Golam-owned capability/effect schema with Cedar as policy-engine candidate.  
 **Local IPC**: authenticated OS-native IPC; no unauthenticated localhost control surface.  
 **Sandbox**: explicit per-process/profile supervision; Wasmtime/WASI for bounded portable extensions, OS-native isolation for native tools.  
 **Local inference**: `mistral.rs` primary candidate; `llama.cpp` compatibility sidecar; optional adapters later.  
-**Networking**: kernel-authorized egress; Iroh/QUIC candidate for native GolamConnect.  
+**Networking**: kernel-authorized egress; Iroh/QUIC candidate for native GolamConnect; messaging and APNs/FCM are explicit non-strict-local egress capabilities.  
 **Protocols**: ACP stable v1, MCP 2026-07-28 semantics, Agent Skills-compatible packages; A2A later for external federation.  
 **Testing**: unit/property/fuzz/fault-injection/integration/on-device tests plus incremental GolamBench gates from Spec 002 onward.  
-**Target platforms**: Windows 11, supported macOS, and major Linux desktops with an explicit capability matrix rather than false parity.  
+**Target platforms**: Windows 11, supported macOS, major Linux desktops, plus iOS/Android for the future Golam Mobile client, all with explicit capability matrices rather than false parity.  
 **Constraints**: strict-local/no hidden fallback, small TCB, authenticated clients, crash-safe state, no blind duplicate effects, user-interruptible control.
 
 ## Constitution Check
@@ -51,15 +58,23 @@ Spec 001 does not authorize implementing the entire product in one PR. It freeze
 ## Enforceable Architecture
 
 ```text
-       Desktop / CLI / IDE                 Remote devices / Channels
+       Desktop / CLI / IDE                    Native Golam Mobile
                |                                      |
        Authenticated Local IPC                  GolamConnect transport
                |                                      |
                +------------------+-------------------+
                                   |
                                 golamd
+                                  ^
                                   |
-               unprivileged/replacable runtime services
+                 normalized untrusted ChannelEnvelope
+                                  |
+              Telegram / WhatsApp / WeChat-WeCom /
+                Slack / Discord / Matrix / later
+                                  |
+                        Channel Adapter boundary
+                                  |
+               unprivileged/replaceable runtime services
           +-----------+-----------+-----------+-------------+
           |           |           |           |             |
        Harness      Context      Memory     Tools/Control  Scheduler
@@ -89,6 +104,8 @@ Spec 001 does not authorize implementing the entire product in one PR. It freeze
    MCP/skills/helpers        browser/computer          local inference
 ```
 
+Native mobile and third-party channels deliberately do not share the same trust path. A mobile device may hold an explicit cryptographic GolamConnect device lease; channel content remains channel-untrusted even after account binding.
+
 ### Trusted path vs privileged kernel
 
 Rust trusted-path code may perform important local runtime work. Only the privileged kernel owns authority-bearing state/keys and may mint/validate capabilities, authorize effects/egress, broker secrets, authenticate clients, or commit/sign security-critical records. This distinction is binding.
@@ -102,6 +119,8 @@ A single-process v1 is allowed only with sealed authority types, protected kerne
 - `NO_GOLAM_MANAGED_EGRESS_WITHOUT_EGRESS_GATE`
 - `AGENT_CANNOT_EXPAND_OWN_AUTHORITY`
 - `CHANNEL != AUTHORITY`
+- `PUSH_DELIVERY != AUTHORITY_OR_CANONICAL_ORDER`
+- `VOICE_CONTENT != AUTHENTICATION`
 - `LOCALHOST != AUTHENTICATION`
 - `UNTRUSTED_DATA != INSTRUCTION_AUTHORITY`
 - `SAFETY_DENIAL_IS_MONOTONIC`
@@ -173,7 +192,9 @@ Taint propagates through summaries, memory candidates, code/scripts/files/artifa
 
 ### 6. Strict-Local Egress
 
-Network capability is denied by default in strict-local mode for every Golam-managed process: models, tools, MCP, skills, browser helpers, telemetry/update checks, adapters, and sidecars. Loopback is separately scoped. Components that need forbidden egress fail clearly. This is tested from outside Golam with sinkhole/network observation.
+Network capability is denied by default in strict-local mode for every Golam-managed process: models, tools, MCP, skills, browser helpers, telemetry/update checks, adapters, sidecars, channel bridges and push providers. Loopback is separately scoped. Components that need forbidden egress fail clearly. This is tested from outside Golam with sinkhole/network observation.
+
+Strict-local may still permit an explicitly qualified direct local/LAN native phone path if its transport profile is locally scoped and the owning spec proves the boundary; it never silently enables APNs, FCM, Telegram, WhatsApp, WeChat, Slack, Discord or other external provider traffic.
 
 ### 7. Harness and ExecutionProfile
 
@@ -209,19 +230,31 @@ Windows: UIA first; input only on unlocked interactive desktop; UAC/secure deskt
 
 Clipboard read is distinct. Camera/mic deny by default.
 
-### 12. GolamConnect
+### 12. Phone, GolamConnect, Push and Messaging Channels
 
 Native Connect is separate from messaging bridges. Pairing establishes cryptographic device identity. Every protected message is signed/replay-protected and checked against current short-lived lease, revocation, and generation. Newer control generation invalidates old input streams.
 
 Iroh/QUIC is the P0 transport candidate; do not build a custom relay. Relay payloads are E2E encrypted but endpoint/timing/IP metadata exposure is documented; relay selection/self-host config may be offered later without making custom relay infrastructure a P0 deliverable.
 
-Screen/media, input, clipboard, file transfer, reconnect, multi-monitor, visible indicator, local emergency stop and human takeover are independently permissioned. Human takeover suspends agent/other-controller input at lease level. Reconnect fully reauthenticates/revalidates; it is not a new auth path.
+**Native Golam Mobile** becomes part of future Spec 007 under PA-001. The phone is a GolamConnect `Device`, not a channel account. The mobile client reuses canonical sessions/tasks/workers and a Rust-owned protocol/crypto core. Pairing is local-user authorized; device key storage is platform protected; grants are bounded/revocable and revalidated at each protected request.
 
-Channel bindings use provider-stable IDs, never usernames/display names. Group/unbound participants have zero machine authority by default.
+**Push** is optional convenience infrastructure. APNs/FCM payloads are opaque wake/sync hints only and contain no raw prompt/answer/approval/effect/file/memory/secret/screenshot content. Push delivery order/reliability is not canonical state. Strict-local disables cloud push.
+
+**Voice** begins with push-to-talk/voice notes and governed ASR/TTS. Voice content is input, never identity or approval. Agent-initiated mic/camera access stays deny-by-default. Full-duplex call mode is evidence-gated after basic mobile reliability.
+
+**Channel bridges** use one typed adapter/envelope boundary but preserve provider truth. Channel bindings use provider-stable IDs, never usernames/display names. Group/unbound participants have zero machine authority by default. Free-form `yes`/emoji/reaction/voice never authorizes consequential work. High-risk approvals step up to Native Mobile or an authenticated local client.
+
+Official paths are binding defaults: Telegram Bot API; WhatsApp Business Platform/Cloud API rather than WhatsApp Web scraping; sanctioned WeChat/WeCom APIs rather than unsupported personal account automation; official Slack/Discord app APIs; Matrix as an open/self-hostable candidate. Every adapter publishes current identity/delivery/media/retry/privacy/relay/account constraints.
+
+Screen/media, input, clipboard, file transfer, reconnect, multi-monitor, visible indicator, local emergency stop and human takeover are independently permissioned through native GolamConnect. Human takeover suspends agent/other-controller input at lease level. Reconnect fully reauthenticates/revalidates; it is not a new auth path.
+
+See `program-amendments/PA-001-phone-channel-access.md`, `program-amendments/PA-001-provider-research.md`, and `contracts/phone-channel-access-contract.md` for the normative expansion.
 
 ### 13. Workers / Automations
 
 Workers use typed Rust supervision, narrow child leases, explicit workspace/worktree isolation, spawn/join/cancel/crash-adopt semantics, and bounded budgets. Single-worker reliability precedes swarm/collaboration complexity. Groups and teach-by-demonstration are late Spec 008/009 work.
+
+Phone/channel events may become worker/scheduler triggers only through typed policy-bound trigger definitions; receiving a message is not blanket automation authority. Worker/channel notifications remain ordinary external effects.
 
 ### 14. Verification / Receipts
 
@@ -236,16 +269,16 @@ Keep current order:
 - **004 Harness & Local Intelligence** — harness, mistral.rs/llama.cpp adapters, calibration, expanded ExecutionProfile, early model/harness separation benchmarks.
 - **005 Local Tools, Context & Memory** — filesystem/shell/git/browser, L0/L1 context, Markdown brain/governance, skills/MCP/ACP; injection/memory/no-egress gates. L2 graph intelligence justification-gated.
 - **006 Desktop & Computer Control** — Tauri, semantic OS adapters, platform matrix, human takeover, vision fallback.
-- **007 GolamConnect** — pairing, Iroh, screen/input/files/clipboard/reconnect/control generations, channel bridges.
-- **008 Workers & Automations** — scheduler, durable workers, triggers, worktrees, bounded parallelism.
+- **007 Phone, GolamConnect & Channel Access** — Connect Core/device pairing/Iroh; iOS/Android Golam Mobile; privacy-minimized push; mobile approval; push-to-talk/voice notes; native screen/input/files/clipboard/reconnect/control generations; common channel envelope; Telegram first; official WhatsApp Business and WeChat/WeCom paths; Slack/Discord/Matrix candidates; adversarial channel/mobile tests.
+- **008 Workers & Automations** — scheduler, durable workers, triggers, worktrees, bounded parallelism; policy-bound phone/channel triggers and outbound notifications consume Spec 007 contracts.
 - **009 Grok Public Parity** — complete evidence ledger and remaining independently implemented public domains/skills.
-- **010 GolamBench & Release Qualification** — full long-horizon, computer, memory, security, offline/privacy, recovery, remote-control and parity qualification.
+- **010 GolamBench & Release Qualification** — full long-horizon, computer, memory, security, offline/privacy, recovery, phone/mobile, channel, remote-control and parity qualification.
 
-Specs 007/008 may swap if implementation evidence makes that useful. Voice, native mobile app, A2A federation, media generation, custom relay, and multi-device CRDT memory sync are deferred through 010 unless a later reviewed spec explicitly changes scope.
+Specs 007/008 may swap if implementation evidence makes that useful. A2A federation, image/video generation, custom relay, multi-device CRDT memory sync, and always-on background wake-word/autonomous microphone listening remain deferred through 010 unless a later reviewed spec explicitly changes scope.
 
 ## Grok Public Parity Domains
 
-Initial ledger includes persistent agents/workers; persistent computer/workspace; files/terminal/browser/apps; parallel/background work; memory; approvals/security; local computer execution; desktop/channel continuity; skills/plugins/MCP/connectors; routines/schedules; teach-by-demonstration; groups/handoffs; rich artifacts; Documents/Presentations/Spreadsheets/PDFs/Skill Creator; multimodal document/image/PDF input; deep research with citations; search/web connectors; voice/media generation explicitly deferred or `NOT_APPLICABLE_WITH_RATIONALE` until a later spec.
+Initial ledger includes persistent agents/workers; persistent computer/workspace; files/terminal/browser/apps; parallel/background work; memory; approvals/security; local computer execution; desktop/native-mobile/channel continuity; skills/plugins/MCP/connectors; routines/schedules; teach-by-demonstration; groups/handoffs; rich artifacts; Documents/Presentations/Spreadsheets/PDFs/Skill Creator; multimodal document/image/PDF input; deep research with citations; search/web connectors; phone push-to-talk/voice-note continuity. Image/video generation and always-on voice/wake-word behavior remain deferred or `NOT_APPLICABLE_WITH_RATIONALE` until a later spec.
 
 Parity evidence is public-behavior/scenario based. No Grok internals/assets/prompts/reconstruction enter Golam.
 
@@ -262,6 +295,8 @@ Do not defer safety evidence to Spec 010.
 - Memory poisoning/FORGET starts in 005.
 - Computer-control safety starts in 006.
 - Connect replay/revocation/takeover/channel impersonation starts in 007.
+- Native mobile adds device-key/reconnect/stale-approval/push-content-leak/voice-approval-isolation gates in 007.
+- Provider adapters add webhook/stream/poll duplicate/reorder/edit/delete/outage/rate-limit/attachment/loop gates in 007.
 - Spec 010 aggregates full release qualification.
 
 ## Donor Strategy After GLM Review
@@ -283,11 +318,13 @@ Classifications are not code-admission approvals. Source Foundry exact qualifica
 - Restate/Temporal: durability pattern references only; no server dependency.
 - Golam-Research/Grok reconstruction: code `REJECT`, behavioral evidence only.
 
+Phone/mobile/channel architecture references such as Tauri mobile, Telegram/Meta/WeCom/Slack/Discord/Matrix official APIs and any donor client/channel implementations remain reference candidates until the exact Spec 007 Source Foundry/dependency qualification is performed.
+
 ## Complexity Discipline
 
-Accepted: small privileged kernel, canonical event/effect model, platform-specific control, native Connect protocol.
+Accepted: small privileged kernel, canonical event/effect model, platform-specific control, native Connect protocol, first-class mobile client, bounded official messaging adapters.
 
-Binding simplifications: <=8 initial crates; no custom relay; no mandatory L2 graph; no CRDT memory in P0; no huge swarm; no executable skill runtime before sandbox profile; no voice/mobile/A2A/media-generation scope creep through Spec 010; no wholesale donor forks.
+Binding simplifications: <=8 initial crates; no custom relay; no mandatory L2 graph; no CRDT memory in P0; no huge swarm; no executable skill runtime before sandbox profile; no always-on background microphone/wake-word through Spec 010; no unofficial WhatsApp Web/personal WeChat automation; no A2A/media-generation scope creep through Spec 010; no wholesale donor forks.
 
 ## Phase Exit Criteria for Spec 001
 
@@ -301,3 +338,5 @@ Spec 001 may be frozen and program `tasks.md` generated only when:
 6. finalization status records the GLM source-tail truncation honestly;
 7. live branch head is reverified;
 8. `tasks.md` authorizes only bounded next Spec Kit work, not an unreviewed all-product implementation.
+
+PA-001 is an additive post-freeze founder-scope amendment. Its own review/merge evidence governs the mobile/voice/channel expansion and does not retroactively alter the historical Spec 001 closeout evidence.
