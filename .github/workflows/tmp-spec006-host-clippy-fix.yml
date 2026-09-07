@@ -1,0 +1,48 @@
+name: tmp-spec006-host-clippy-fix
+
+on:
+  push:
+    branches:
+      - impl/006-desktop-computer-control
+    paths:
+      - .github/workflows/tmp-spec006-host-clippy-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/006-desktop-computer-control
+          fetch-depth: 0
+      - name: Apply bounded Clippy fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('apps/golam-desktop/src-tauri/src/host.rs')
+          text = path.read_text()
+          old = 'for (index, chunk) in value.as_bytes().chunks_exact(2).enumerate() {'
+          new = 'for (index, chunk) in value.as_bytes().as_chunks::<2>().0.iter().enumerate() {'
+          if text.count(old) != 1:
+              raise SystemExit(f'expected exactly one target, found {text.count(old)}')
+          path.write_text(text.replace(old, new))
+          PY
+          rustup toolchain install 1.98.0 --profile minimal --component rustfmt
+          cargo +1.98.0 fmt --all
+          rm .github/workflows/tmp-spec006-host-clippy-fix.yml
+          git diff --check
+          git diff -- apps/golam-desktop/src-tauri/src/host.rs .github/workflows/tmp-spec006-host-clippy-fix.yml
+      - name: Commit bounded fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/golam-desktop/src-tauri/src/host.rs .github/workflows/tmp-spec006-host-clippy-fix.yml
+          git commit -m 'fix(006): satisfy pinned Rust clippy'
+          git push origin HEAD:impl/006-desktop-computer-control
