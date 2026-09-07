@@ -103,7 +103,32 @@ Non-adoption:
 - container identity is not evidence of strong containment;
 - sandbox provider capability advertisement cannot raise Golam authority.
 
-## 3. Formal-assurance source
+### GitHub Agentic Workflows
+
+```text
+SOURCE=github/gh-aw
+PIN=b52dd75307b4233bd710ce0a0afd96766c2a48e3
+LICENSE_POSTURE_AT_REVIEWED_STATE=MIT
+DISPOSITION=HIGH_VALUE_AGENTIC_WORKFLOW_GUARDRAIL_AND_ISOLATION_REFERENCE
+TARGET=T133/T151/T173/T179/T182
+```
+
+Planning value:
+
+- source Markdown compiled into a hardened/reviewable execution workflow rather than interpreted as unrestricted runtime authority;
+- deterministic CI remains separate from agentic reasoning;
+- host-side network/API/MCP gateway patterns;
+- explicit cost/permission controls;
+- current stronger-isolation direction around hardware-virtualized microVM execution.
+
+Golam strengthening:
+
+- compiled workflow artifacts are still candidate/execution inputs, not protected authority;
+- isolation class is admitted through `ExecutionIsolationProfile` evidence rather than a runtime label;
+- Golam must remain usable outside GitHub and without mandatory cloud orchestration;
+- no workflow engine can bypass Effect Gate or strict-local/egress policy.
+
+## 3. Formal-assurance and workflow-verification sources
 
 ### Quint
 
@@ -133,6 +158,39 @@ Initial bounded targets:
 Non-claim:
 
 `FORMAL_MODEL_PASS != WHOLE_PRODUCT_FORMAL_VERIFICATION`.
+
+### Guardians of the Agents implementation
+
+```text
+SOURCE=metareflection/guardians
+PIN=59e52d9f1cbefdb344245304e260e647489a647b
+LICENSE_POSTURE_AT_REVIEWED_STATE=MIT
+DISPOSITION=HIGH_VALUE_PRE_EXECUTION_WORKFLOW_VERIFICATION_REFERENCE_AND_SELECTIVE_PORT_CANDIDATE
+TARGET=T149/T176/T177/T179/T181
+```
+
+Planning value:
+
+- structured workflow AST with symbolic references separating plan structure from attacker-controlled runtime data;
+- static taint analysis from source to sink;
+- security-automata checks over action sequences;
+- theorem/constraint checks for preconditions and frame conditions;
+- verifier-before-executor architecture with model adapters outside the verification core.
+
+Golam adoption direction:
+
+- reuse the **generate/verify/execute separation** for workflows that can be safely predeclared;
+- selectively port compact deterministic verifier ideas/tests to Rust where Source Foundry shows a net benefit;
+- integrate with existing Golam taint, ToolRequest, capability, Effect and VerificationReceipt structures instead of creating a second authority system;
+- preserve runtime immediate revalidation because external state can change after static verification;
+- adaptive/interactive work may require incremental verified plan fragments rather than one immutable whole-session plan.
+
+Hard boundary:
+
+```text
+STATIC_PLAN_VERIFIED != CURRENT_RUNTIME_AUTHORIZED
+STATIC_PLAN_VERIFIED != EXTERNAL_EFFECT_SUCCEEDED
+```
 
 ## 4. Security and trust standards
 
@@ -190,11 +248,13 @@ MANDATORY_BIOMETRIC_REQUIREMENT=NO
 
 ```text
 SOURCE=OPENTELEMETRY_GENAI_SEMANTIC_CONVENTIONS
+REVIEWED_CORE_SEMCONV_SERIES=1.44.x
+GENAI_CONVENTIONS_LOCATION=DEDICATED_GENAI_SEMANTIC_CONVENTIONS_PROJECT
 DISPOSITION=OBSERVABILITY_SCHEMA_REFERENCE
 TARGET=T178/T139/T159
 ```
 
-Use for interoperable local diagnostic/latency/token/cost projections when useful. Prompt/tool contents remain disabled by default; remote export requires separate explicit admission/consent.
+Use for interoperable local diagnostic/latency/token/cost projections when useful. Prompt/tool contents remain disabled by default; remote export requires separate explicit admission/consent. Reverify the dedicated GenAI semantic-conventions project/version in the owning implementation spec rather than assuming core semantic-convention version identity.
 
 ```text
 TRACE != EVIDENCE
@@ -202,7 +262,39 @@ TRACE != AUTHORITY
 SILENT_REMOTE_TELEMETRY=DENIED
 ```
 
-## 5. Historical Golam planning corpus
+## 5. Direct security-first competitor/reference
+
+### Comis
+
+```text
+SOURCE=comisai/comis
+PIN=641d4af18428ae35a6120304f871a8106f332b77
+LICENSE_POSTURE_AT_REVIEWED_STATE=Apache-2.0
+DISPOSITION=HIGH_VALUE_SECURITY_FIRST_AGENT_RUNTIME_COMPARATOR_AND_SELECTIVE_SOURCE_CANDIDATE
+TARGET=T120/T122/T127/T132/T149/T152/T156/T177
+```
+
+Why it matters:
+
+- persistent agents with governed learning;
+- capability/origin/tool/credential/approval/budget/lease controls outside model output;
+- source-linked correctable learned guidance;
+- typed parallel orchestration and autonomy budgets;
+- execution/security audit evidence and offline explanation surfaces;
+- explicit threat model and documented limitations.
+
+Golam differentiation target:
+
+- stronger durable Effect/`UNKNOWN_OUTCOME` semantics for consequential external mutation;
+- Rust protected authority kernel rather than TypeScript runtime as the primary authority root;
+- stricter fail-closed isolation/egress defaults and explicit Source Foundry admission;
+- independent VerificationReceipts before verified task completion;
+- user-owned canonical state and Authority Host topology;
+- model/learned guidance never self-expands authority.
+
+Use Comis as a serious comparator and possible bounded source of tests/behavioral ideas. Do not blindly copy its default tool-policy, sandbox fallback, retention or learning-evidence choices.
+
+## 6. Historical Golam planning corpus
 
 The following PRs are valuable source material but are not parallel current program authority:
 
@@ -215,7 +307,7 @@ The following PRs are valuable source material but are not parallel current prog
 
 Historical planning evidence remains provenance. After the current overlay is canonical, these branches must not be treated as independent successor authority merely because they remain open.
 
-## 6. Existing PR #22 reference corpus retained for future requalification
+## 7. Existing PR #22 reference corpus retained for future requalification
 
 The current overlay should retain research awareness of:
 
@@ -233,7 +325,7 @@ The current overlay should retain research awareness of:
 
 Do not reuse their old historical pins automatically. Re-fetch exact source state and license/NOTICE/dependency/runtime behavior in the owning spec.
 
-## 7. Reuse decision vocabulary
+## 8. Reuse decision vocabulary
 
 Every donor/component disposition in an owning spec should choose exactly one primary reuse strategy:
 
@@ -259,7 +351,7 @@ Required accompanying evidence:
 - independent Golam tests/security/benchmarks;
 - removal/rollback plan where practical.
 
-## 8. Program disposition
+## 9. Program disposition
 
 ```text
 ACTIVE_SPEC_006_PR_24_WIDENED=NO
