@@ -5,6 +5,7 @@ on:
     branches: [impl/006-desktop-computer-control]
     paths:
       - .github/workflows/spec006-source-foundry.yml
+      - scripts/prune-denied-native-optionals.mjs
       - specs/006-desktop-computer-control/implementation/desktop-shell-source-foundry-candidate.md
 
 permissions:
@@ -15,6 +16,8 @@ jobs:
     name: qualify-exact-desktop-dependency-closure
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: Record qualification toolchain
         shell: bash
         run: |
@@ -272,6 +275,23 @@ jobs:
           function archivePackageJson(archive) {
             return JSON.parse(cp.execFileSync('tar', ['-xOzf', archive, 'package/package.json'], {encoding: 'utf8'}));
           }
+          function verifyIntegrity(bytes, integrity) {
+            if (typeof integrity !== 'string' || integrity.trim() === '') return false;
+            for (const rawToken of integrity.trim().split(/\s+/)) {
+              const token = rawToken.split('?')[0];
+              const match = /^([A-Za-z0-9]+)-(.+)$/.exec(token);
+              if (!match) continue;
+              const algorithm = match[1].toLowerCase();
+              let actual;
+              try {
+                actual = crypto.createHash(algorithm).update(bytes).digest('base64');
+              } catch {
+                continue;
+              }
+              if (actual === match[2]) return true;
+            }
+            return false;
+          }
 
           const blocked = [];
           const lifecycle = [];
@@ -288,6 +308,10 @@ jobs:
             const archive = packArchive(spec);
             const archiveBytes = fs.readFileSync(archive);
             const archiveSha256 = crypto.createHash('sha256').update(archiveBytes).digest('hex');
+            const integrityMatchesLock = verifyIntegrity(archiveBytes, lockMeta.integrity);
+            if (!integrityMatchesLock) {
+              blocked.push([name, version, 'REJECT_ARCHIVE_SRI_MISMATCH', String(lockMeta.integrity || 'MISSING')]);
+            }
             const files = archiveFileList(archive);
             const pkg = archivePackageJson(archive);
             if (pkg.name !== name || pkg.version !== version) {
@@ -312,6 +336,8 @@ jobs:
               : [];
             archiveRows.push([
               name, version, lockMeta.optional ? 'OPTIONAL' : 'REQUIRED',
+              lockMeta.resolved || 'MISSING_RESOLVED', lockMeta.integrity || 'MISSING_INTEGRITY',
+              integrityMatchesLock ? 'SRI_MATCH' : 'SRI_MISMATCH',
               String(pkg.license || 'MISSING'), status, detail || 'NO_EXTRA_DISPOSITION_DETAIL',
               noticeFiles.length ? noticeFiles.join(',') : 'NO_ARCHIVE_TOP_LEVEL_LICENSE_NOTICE_FILE_OBSERVED',
               archiveSha256,
@@ -328,6 +354,9 @@ jobs:
           console.log('=== NPM_RELEVANT_LIFECYCLE_SCRIPTS ===');
           console.log(`count=${lifecycle.length}`);
           for (const row of lifecycle) console.log(row.join('|'));
+          console.log('=== NPM_ARCHIVE_SRI_BINDING ===');
+          console.log(`package_count=${archiveRows.length}`);
+          console.log(`all_match=${archiveRows.every(row => row[5] === 'SRI_MATCH') ? 'YES' : 'NO'}`);
           console.log('=== FSEVENTS_2_3_3_DISPOSITION ===');
           const fsevents = archiveRows.find(row => row[0] === 'fsevents' && row[1] === '2.3.3');
           if (fsevents) {
@@ -347,14 +376,15 @@ jobs:
           if (blocked.length) process.exitCode = 1;
           NODE
 
-      - name: Prove script-disabled frontend install and build on Linux and record product policy
+      - name: Prove repository prune control and frontend build on Linux
         shell: bash
         run: |
           set -euo pipefail
           cd /tmp/golam-spec006-js
           rm -rf node_modules
           npm ci --ignore-scripts --no-audit --no-fund
-          rm -rf node_modules/fsevents
+          node "$GITHUB_WORKSPACE/scripts/prune-denied-native-optionals.mjs" --root "$PWD"
+          node "$GITHUB_WORKSPACE/scripts/prune-denied-native-optionals.mjs" --root "$PWD"
           mkdir -p src
           cat >index.html <<'EOF'
           <div id="root"></div><script type="module" src="/src/main.jsx"></script>
@@ -365,12 +395,15 @@ jobs:
           createRoot(document.getElementById('root')).render(React.createElement('main', null, 'Golam Source Foundry'));
           EOF
           ./node_modules/.bin/vite build
+          node "$GITHUB_WORKSPACE/scripts/prune-denied-native-optionals.mjs" --root "$PWD"
           cat <<'EOF'
           PRODUCT_NPM_INSTALL_COMMAND=npm ci --ignore-scripts --no-audit --no-fund
           PRODUCT_POST_INSTALL_NATIVE_PRUNE=node scripts/prune-denied-native-optionals.mjs
           PRODUCT_DEPENDENCY_LIFECYCLE_EXECUTION=DENIED
           PRODUCT_FRONTEND_BUILD_COMMAND=npm run build --ignore-scripts
-          FSEVENTS_PRODUCT_NODE_MODULES=ABSENT_BEFORE_BUILD
+          REPOSITORY_PRUNE_CONTROL=QUALIFIED
+          REPOSITORY_PRUNE_CONTROL_IDEMPOTENT=PASS
+          FSEVENTS_PRODUCT_NODE_MODULES=ABSENT_BEFORE_AND_AFTER_BUILD
           FSEVENTS_INSTALL_SCRIPT_EXECUTION=DENIED
           FSEVENTS_NATIVE_ADDON_EXECUTION=DENIED
           EOF
@@ -394,7 +427,9 @@ jobs:
     name: prove-script-disabled-install-macos
     runs-on: macos-latest
     steps:
-      - name: Resolve exact frontend closure, prune denied native optional, and build
+      - uses: actions/checkout@v4
+
+      - name: Resolve exact frontend closure, apply repository prune control, and build
         shell: bash
         run: |
           set -euo pipefail
@@ -427,8 +462,8 @@ jobs:
           echo '=== FSEVENTS_PRE_PRUNE_NATIVE_FILES ==='
           find node_modules/fsevents -type f \( -name '*.node' -o -name 'binding.gyp' \) -print 2>/dev/null || true
           find node_modules/fsevents -type f -name '*.node' -exec shasum -a 256 {} \; 2>/dev/null || true
-          rm -rf node_modules/fsevents
-          test ! -e node_modules/fsevents
+          node "$GITHUB_WORKSPACE/scripts/prune-denied-native-optionals.mjs" --root "$PWD"
+          node "$GITHUB_WORKSPACE/scripts/prune-denied-native-optionals.mjs" --root "$PWD"
           cat >index.html <<'EOF'
           <div id="root"></div><script type="module" src="/src/main.jsx"></script>
           EOF
@@ -438,10 +473,11 @@ jobs:
           createRoot(document.getElementById('root')).render(React.createElement('main', null, 'Golam Source Foundry'));
           EOF
           npm run build --ignore-scripts
-          test ! -e node_modules/fsevents
+          node "$GITHUB_WORKSPACE/scripts/prune-denied-native-optionals.mjs" --root "$PWD"
           cat <<'EOF'
           MACOS_SCRIPT_DISABLED_INSTALL=PASS
-          MACOS_FSEVENTS_PRUNED_BEFORE_PRODUCT_BUILD=PASS
+          MACOS_REPOSITORY_PRUNE_CONTROL=PASS
+          MACOS_REPOSITORY_PRUNE_CONTROL_IDEMPOTENT=PASS
           MACOS_FRONTEND_BUILD_WITHOUT_FSEVENTS_PACKAGE=PASS
           FSEVENTS_INSTALL_SCRIPT_EXECUTION=DENIED
           FSEVENTS_NATIVE_ADDON_EXECUTION=DENIED
