@@ -1,11 +1,12 @@
 # Golam Canonical Current-State Pointer
 
-This file records only **durable canonical program state**. It is not a cache of live pull-request heads, CI conclusions, review comments or mergeability. Those facts MUST be re-fetched from GitHub immediately before any qualification, readiness, merge or successor-authority action.
+This file records only **durable canonical program state**. It is not a cache of the current `main` SHA, pull-request heads, CI conclusions, review comments or mergeability. Those mutable facts MUST be re-fetched from GitHub immediately before any qualification, readiness, merge or successor-authority action.
 
-## Canonical durable state at this proposal base
+## Durable lifecycle state
 
 ```text
-CANONICAL_MAIN=c85b4b8f0d6ffccb039645803542d75b3bd47f29
+CANONICAL_MAIN_SHA=FETCH_LIVE_FROM_GITHUB
+STATE_RECONCILIATION_BASE=c85b4b8f0d6ffccb039645803542d75b3bd47f29
 SPEC_005_IMPLEMENTATION_COMPLETE=YES
 SPEC_005_CLOSED_CANONICAL=YES
 SPEC_006_PLANNING_CLOSED_CANONICAL=YES
@@ -16,6 +17,8 @@ ACTIVE_IMPLEMENTATION_PR_IS_CANONICAL=NO_UNTIL_MERGED_AND_POST_MERGE_QUALIFIED
 PROGRAM_SUPERIORITY_OVERLAY=PLANNING_GOVERNANCE_ONLY
 PROGRAM_SUPERIORITY_OVERLAY_IMPL_AUTHORITY=NO
 ```
+
+`STATE_RECONCILIATION_BASE` identifies the canonical revision against which the durable declarations above were last reconciled. It is historical evidence, not a substitute for fetching the live `main` ref. A later main commit does not make the durable declarations false merely because this reconciliation anchor remains unchanged; update the anchor only when the durable lifecycle declarations themselves are re-reconciled.
 
 The active Spec 006 implementation branch/PR head, checks, reviews, changed files, task frontier and mergeability MUST be read live. Do not hardcode those values here.
 
@@ -35,7 +38,7 @@ A nonmerged proposal branch, open PR, issue, source candidate, benchmark result,
 
 ## Current implementation rule
 
-Spec 006 implementation is the only currently authorized product feature unit at this canonical base. Continue it only through `specs/006-desktop-computer-control/tasks.md` and its canonical governance.
+Spec 006 implementation is the only currently authorized product feature unit in the durable lifecycle state above. Continue it only through `specs/006-desktop-computer-control/tasks.md` and its canonical governance after verifying that live repository state has not superseded this declaration.
 
 The program-superiority roadmap may be researched, reviewed and canonicalized as planning/governance material in a separate PR. It MUST NOT widen PR #24, admit new product dependencies into PR #24, or authorize Browser/Application Semantic Control, Visual Semantics, Workers/Automations, GolamConnect or other future implementation by itself.
 
@@ -56,4 +59,4 @@ A branch mutation invalidates CI/review evidence bound to the prior head. Canoni
 
 ## Updating this file
 
-Update this file only when **durable canonical lifecycle state changes**, normally after a guarded merge and successful post-merge canonical-main qualification. Do not update it for every intermediate implementation commit.
+Update this file only when **durable canonical lifecycle state changes or is deliberately re-reconciled**, normally after a guarded merge and successful post-merge canonical-main qualification. Do not update it for every intermediate implementation commit or ordinary main advancement that leaves the durable lifecycle declarations unchanged.
