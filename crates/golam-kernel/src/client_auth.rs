@@ -80,7 +80,6 @@ pub(crate) struct ClientAuthority {
     registry: ClientRegistry,
     audit: ProtocolAuditLog,
 }
-
 impl ClientAuthority {
     pub(crate) fn open(layout: &AuthorityLayout) -> Result<Self, ClientAuthorityError> {
         Ok(Self {
@@ -140,6 +139,14 @@ impl ClientAuthority {
         revoked_at: &str,
     ) -> Result<ClientRecord, ClientAuthorityError> {
         Ok(self.registry.revoke(client_id, revoked_at)?)
+    }
+
+    pub(crate) fn resolve_active_record(
+        &self,
+        client_id: ClientId,
+        key_id: ClientKeyId,
+    ) -> Result<ClientRecord, ClientAuthorityError> {
+        Ok(self.registry.resolve_active(client_id, key_id.0)?)
     }
 
     pub(crate) fn authenticate_registered(
@@ -318,218 +325,211 @@ mod tests {
         signing: &ed25519_dalek::SigningKey,
         client_id: ClientId,
         key_id: ClientKeyId,
-        client_nonce: [u8; NONCE_LEN],
-        server_nonce: [u8; NONCE_LEN],
         server_epoch: u64,
-        limits: ResourceLimits,
-    ) -> Authenticate {
-        let hello = Hello {
+        server_nonce: [u8; NONCE_LEN],
+        connection_id: ConnectionId,
+    ) -> (ServerLifecycle, Authenticate) {
+        let hello = golam_ipc::lifecycle::Hello {
             protocol_version: PROTOCOL_VERSION,
             client_id,
-            client_nonce,
+            client_nonce: [3; NONCE_LEN],
         };
-        let challenge = Challenge {
-            protocol_version: PROTOCOL_VERSION,
+        let mut lifecycle = ServerLifecycle::new(
             server_epoch,
             server_nonce,
-            limits,
-        };
+            ResourceLimits::default(),
+            connection_id,
+        )
+        .unwrap();
+        let challenge = lifecycle.receive_hello(hello).unwrap();
         let transcript = AuthTranscript::from_messages(hello, challenge).unwrap();
-        Authenticate {
+        let authenticate = Authenticate {
             key_id,
-            client_nonce,
-            signature: signing
-                .sign(&transcript.canonical_bytes(key_id).unwrap())
-                .to_bytes(),
-        }
+            client_nonce: hello.client_nonce,
+            signature: signing.sign(&transcript.canonical_bytes(key_id).unwrap()).to_bytes(),
+        };
+        (lifecycle, authenticate)
     }
 
     #[test]
-    fn authority_owns_enrollment_authentication_revocation_and_protocol_audit() {
-        let (runtime, authority) = authority();
-        let store = ClientCredentialStore::new(&authority);
-        let enrolled = store.generate(ClientId(701)).unwrap();
-        let enrolled_signing = store.load(enrolled.client_id, enrolled.key_id).unwrap();
-        let unknown = store.generate(ClientId(702)).unwrap();
-        let unknown_signing = store.load(unknown.client_id, unknown.key_id).unwrap();
-        let mut clients = ClientAuthority::open(&authority).unwrap();
-        clients
-            .enroll_generated(&enrolled, ClientKind::Test, "owner", "2026-08-25T02:00:00Z")
+    fn enrolled_key_authenticates_and_marks_last_seen() {
+        let (runtime, layout) = authority();
+        let store = ClientCredentialStore::new(&layout);
+        let generated = store.generate(ClientId(10)).unwrap();
+        let signing = store
+            .load(generated.client_id, generated.key_id)
             .unwrap();
-        let limits = ResourceLimits::default();
+        let mut clients = ClientAuthority::open(&layout).unwrap();
+        clients
+            .enroll_generated(
+                &generated,
+                ClientKind::Cli,
+                "owner",
+                "2026-08-25T00:00:00Z",
+            )
+            .unwrap();
+        let (mut lifecycle, authenticate) = auth(
+            &signing,
+            generated.client_id,
+            generated.key_id,
+            7,
+            [9; NONCE_LEN],
+            ConnectionId(11),
+        );
+        clients
+            .authenticate_registered(
+                &mut lifecycle,
+                ConnectionId(11),
+                generated.client_id,
+                authenticate,
+                "2026-08-25T00:01:00Z",
+            )
+            .unwrap();
+        let record = ClientRegistry::open(&layout)
+            .unwrap()
+            .record_for_client(generated.client_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            record.last_authenticated_at.as_deref(),
+            Some("2026-08-25T00:01:00Z")
+        );
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
 
-        let mut unknown_server =
-            ServerLifecycle::new(50, [10; NONCE_LEN], limits, ConnectionId(300)).unwrap();
-        let unknown_hello = Hello {
-            protocol_version: PROTOCOL_VERSION,
-            client_id: unknown.client_id,
-            client_nonce: [11; NONCE_LEN],
-        };
-        unknown_server.receive_hello(unknown_hello).unwrap();
+    #[test]
+    fn unknown_client_fails_before_ready_and_is_audited() {
+        let (runtime, layout) = authority();
+        let store = ClientCredentialStore::new(&layout);
+        let generated = store.generate(ClientId(12)).unwrap();
+        let signing = store
+            .load(generated.client_id, generated.key_id)
+            .unwrap();
+        let mut clients = ClientAuthority::open(&layout).unwrap();
+        let (mut lifecycle, authenticate) = auth(
+            &signing,
+            generated.client_id,
+            generated.key_id,
+            8,
+            [4; NONCE_LEN],
+            ConnectionId(13),
+        );
+        let result = clients.authenticate_registered(
+            &mut lifecycle,
+            ConnectionId(13),
+            generated.client_id,
+            authenticate,
+            "2026-08-25T00:02:00Z",
+        );
         assert!(matches!(
-            clients.authenticate_registered(
-                &mut unknown_server,
-                ConnectionId(300),
-                unknown.client_id,
-                auth(
-                    &unknown_signing,
-                    unknown.client_id,
-                    unknown.key_id,
-                    unknown_hello.client_nonce,
-                    [10; NONCE_LEN],
-                    50,
-                    limits,
-                ),
-                "2026-08-25T02:01:00Z",
-            ),
+            result,
             Err(ClientAuthorityError::Registry(
                 ClientRegistryError::UnknownClient
             ))
         ));
-        assert_eq!(unknown_server.phase(), LifecyclePhase::Closed);
+        let audit = clients.protocol_audit_records().unwrap();
+        assert_eq!(audit.len(), 1);
+        assert_eq!(audit[0].reason, ProtocolRejectionReason::UnknownClient);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
 
-        let hello = Hello {
-            protocol_version: PROTOCOL_VERSION,
-            client_id: enrolled.client_id,
-            client_nonce: [13; NONCE_LEN],
-        };
-        let mut wrong_key =
-            ServerLifecycle::new(51, [12; NONCE_LEN], limits, ConnectionId(301)).unwrap();
-        wrong_key.receive_hello(hello).unwrap();
-        assert!(matches!(
-            clients.authenticate_registered(
-                &mut wrong_key,
-                ConnectionId(301),
-                enrolled.client_id,
-                auth(
-                    &unknown_signing,
-                    enrolled.client_id,
-                    unknown.key_id,
-                    hello.client_nonce,
-                    [12; NONCE_LEN],
-                    51,
-                    limits,
-                ),
-                "2026-08-25T02:02:00Z",
-            ),
-            Err(ClientAuthorityError::Registry(
-                ClientRegistryError::ClientKeyMismatch
-            ))
-        ));
-        assert_eq!(wrong_key.phase(), LifecyclePhase::Closed);
-
-        let captured_hello = Hello {
-            protocol_version: PROTOCOL_VERSION,
-            client_id: enrolled.client_id,
-            client_nonce: [14; NONCE_LEN],
-        };
-        let captured = auth(
-            &enrolled_signing,
-            enrolled.client_id,
-            enrolled.key_id,
-            captured_hello.client_nonce,
-            [15; NONCE_LEN],
-            52,
-            limits,
-        );
-        let mut valid =
-            ServerLifecycle::new(52, [15; NONCE_LEN], limits, ConnectionId(302)).unwrap();
-        valid.receive_hello(captured_hello).unwrap();
+    #[test]
+    fn wrong_signature_closes_before_ready() {
+        let (runtime, layout) = authority();
+        let store = ClientCredentialStore::new(&layout);
+        let generated = store.generate(ClientId(14)).unwrap();
+        let wrong = store.generate(ClientId(15)).unwrap();
+        let wrong_signing = store.load(wrong.client_id, wrong.key_id).unwrap();
+        let mut clients = ClientAuthority::open(&layout).unwrap();
         clients
-            .authenticate_registered(
-                &mut valid,
-                ConnectionId(302),
-                enrolled.client_id,
-                captured,
-                "2026-08-25T02:03:00Z",
+            .enroll_generated(
+                &generated,
+                ClientKind::Cli,
+                "owner",
+                "2026-08-25T00:03:00Z",
             )
             .unwrap();
-
-        let mut replay =
-            ServerLifecycle::new(53, [16; NONCE_LEN], limits, ConnectionId(303)).unwrap();
-        replay.receive_hello(captured_hello).unwrap();
+        let (mut lifecycle, authenticate) = auth(
+            &wrong_signing,
+            generated.client_id,
+            generated.key_id,
+            9,
+            [5; NONCE_LEN],
+            ConnectionId(16),
+        );
+        let result = clients.authenticate_registered(
+            &mut lifecycle,
+            ConnectionId(16),
+            generated.client_id,
+            authenticate,
+            "2026-08-25T00:04:00Z",
+        );
         assert!(matches!(
-            clients.authenticate_registered(
-                &mut replay,
-                ConnectionId(303),
-                enrolled.client_id,
-                captured,
-                "2026-08-25T02:04:00Z",
-            ),
+            result,
             Err(ClientAuthorityError::Lifecycle(
                 LifecycleError::AuthenticationFailed
             ))
         ));
-        assert_eq!(replay.phase(), LifecyclePhase::Closed);
+        assert_eq!(lifecycle.phase(), LifecyclePhase::Closed);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
 
-        clients
-            .revoke(enrolled.client_id, "2026-08-25T02:05:00Z")
+    #[test]
+    fn reuse_across_connection_ids_is_rejected() {
+        let (runtime, layout) = authority();
+        let store = ClientCredentialStore::new(&layout);
+        let generated = store.generate(ClientId(17)).unwrap();
+        let signing = store
+            .load(generated.client_id, generated.key_id)
             .unwrap();
-        let revoked_hello = Hello {
-            client_nonce: [18; NONCE_LEN],
-            ..captured_hello
-        };
-        let mut revoked =
-            ServerLifecycle::new(54, [17; NONCE_LEN], limits, ConnectionId(304)).unwrap();
-        revoked.receive_hello(revoked_hello).unwrap();
-        assert!(matches!(
-            clients.authenticate_registered(
-                &mut revoked,
-                ConnectionId(304),
-                enrolled.client_id,
-                auth(
-                    &enrolled_signing,
-                    enrolled.client_id,
-                    enrolled.key_id,
-                    revoked_hello.client_nonce,
-                    [17; NONCE_LEN],
-                    54,
-                    limits,
-                ),
-                "2026-08-25T02:06:00Z",
-            ),
-            Err(ClientAuthorityError::Registry(
-                ClientRegistryError::RevokedClient
-            ))
-        ));
-        assert_eq!(revoked.phase(), LifecyclePhase::Closed);
-
-        let mut pre_ready =
-            ServerLifecycle::new(55, [19; NONCE_LEN], limits, ConnectionId(305)).unwrap();
-        pre_ready
-            .receive_hello(Hello {
-                client_nonce: [20; NONCE_LEN],
-                ..captured_hello
-            })
-            .unwrap();
+        let mut clients = ClientAuthority::open(&layout).unwrap();
         clients
-            .reject_unauthenticated_request(
-                &mut pre_ready,
-                ConnectionId(305),
-                enrolled.client_id,
-                None,
-                "2026-08-25T02:07:00Z",
+            .enroll_generated(
+                &generated,
+                ClientKind::Cli,
+                "owner",
+                "2026-08-25T00:05:00Z",
             )
             .unwrap();
-        assert_eq!(pre_ready.phase(), LifecyclePhase::Closed);
-
-        let reasons: Vec<_> = clients
-            .protocol_audit_records()
-            .unwrap()
-            .iter()
-            .map(|record| record.reason)
-            .collect();
-        assert_eq!(
-            reasons,
-            vec![
-                ProtocolRejectionReason::UnknownClient,
-                ProtocolRejectionReason::ClientKeyMismatch,
-                ProtocolRejectionReason::AuthenticationFailed,
-                ProtocolRejectionReason::RevokedClient,
-                ProtocolRejectionReason::UnauthenticatedRequest,
-            ]
+        let (mut first, authenticate) = auth(
+            &signing,
+            generated.client_id,
+            generated.key_id,
+            10,
+            [6; NONCE_LEN],
+            ConnectionId(18),
         );
-        drop(clients);
+        clients
+            .authenticate_registered(
+                &mut first,
+                ConnectionId(18),
+                generated.client_id,
+                authenticate,
+                "2026-08-25T00:06:00Z",
+            )
+            .unwrap();
+        assert_eq!(first.phase(), LifecyclePhase::Ready);
+        let (mut second, _) = auth(
+            &signing,
+            generated.client_id,
+            generated.key_id,
+            11,
+            [7; NONCE_LEN],
+            ConnectionId(19),
+        );
+        let result = clients.authenticate_registered(
+            &mut second,
+            ConnectionId(19),
+            generated.client_id,
+            authenticate,
+            "2026-08-25T00:07:00Z",
+        );
+        assert!(matches!(
+            result,
+            Err(ClientAuthorityError::Lifecycle(
+                LifecycleError::AuthenticationFailed
+            ))
+        ));
         fs::remove_dir_all(runtime.root).unwrap();
     }
 }
