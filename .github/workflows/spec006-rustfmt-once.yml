@@ -1,0 +1,35 @@
+name: spec006-rustfmt-once
+
+on:
+  push:
+    branches: [impl/006-desktop-computer-control]
+    paths:
+      - .github/workflows/spec006-rustfmt-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  format-and-remove-self:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: impl/006-desktop-computer-control
+          fetch-depth: 0
+      - name: Install pinned Rust formatter
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt
+      - name: Format exact workspace
+        run: cargo +1.98.0 fmt --all
+      - name: Remove one-shot workflow and commit formatter output only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/spec006-rustfmt-once.yml
+          git add -u
+          changed="$(git diff --cached --name-only)"
+          printf 'FORMATTED_PATHS<<EOF\n%s\nEOF\n' "$changed"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'style(006): apply pinned rustfmt'
+          git push origin HEAD:impl/006-desktop-computer-control
