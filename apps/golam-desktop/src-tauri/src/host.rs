@@ -345,7 +345,7 @@ fn decode_hex_32(value: &str) -> Result<[u8; 32], Box<dyn Error>> {
         return Err("client key id must contain exactly 64 hexadecimal characters".into());
     }
     let mut bytes = [0_u8; 32];
-    for (index, chunk) in value.as_bytes().chunks_exact(2).enumerate() {
+    for (index, chunk) in value.as_bytes().as_chunks::<2>().0.iter().enumerate() {
         let high = hex_digit(chunk[0]).ok_or("client key id contains non-hexadecimal data")?;
         let low = hex_digit(chunk[1]).ok_or("client key id contains non-hexadecimal data")?;
         bytes[index] = (high << 4) | low;
