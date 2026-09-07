@@ -8,6 +8,7 @@ members = [
   "crates/golam-kernel",
   "crates/golamd",
   "crates/golam",
+  "apps/golam-desktop/src-tauri",
 ]
 
 [workspace.package]
