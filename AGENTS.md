@@ -21,10 +21,10 @@ A branch mutation invalidates CI/review evidence bound to the prior head.
 
 ## Current canonical program posture
 
-At the canonical base represented by this planning update:
+The current `main` SHA is always a live GitHub fact and MUST be fetched rather than hardcoded here. At the durable lifecycle reconciliation base recorded in `specs/CURRENT.md`:
 
 ```text
-CANONICAL_MAIN=c85b4b8f0d6ffccb039645803542d75b3bd47f29
+CANONICAL_MAIN_SHA=FETCH_LIVE_FROM_GITHUB
 SPEC_005_IMPLEMENTATION_COMPLETE=YES
 SPEC_005_CLOSED_CANONICAL=YES
 SPEC_006_PLANNING_CLOSED_CANONICAL=YES
