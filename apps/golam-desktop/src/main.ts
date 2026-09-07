@@ -8,6 +8,7 @@ interface DesktopStatus {
   clientId: string | null;
   reason: string | null;
   controlState: string;
+  visibleChannelQualified: boolean;
 }
 
 type ControlOperation = 'desktop_pause' | 'desktop_stop' | 'desktop_takeover';
@@ -17,6 +18,7 @@ const initialStatus: DesktopStatus = {
   clientId: null,
   reason: 'Authenticating native host…',
   controlState: 'authentication-disconnected',
+  visibleChannelQualified: false,
 };
 
 async function readStatus(): Promise<DesktopStatus> {
@@ -44,6 +46,7 @@ function App() {
             clientId: null,
             reason: String(error),
             controlState: 'authentication-disconnected',
+            visibleChannelQualified: false,
           });
         }
       }
@@ -69,6 +72,7 @@ function App() {
       setStatus(await readStatus());
     } catch (error) {
       setControlMessage(`${label} denied: ${String(error)}`);
+      setStatus(await readStatus());
     }
   };
 
@@ -76,6 +80,8 @@ function App() {
   const statusDetail = status.connected
     ? `Protected desktop client ${status.clientId ?? 'unknown'}`
     : status.reason ?? 'No protected desktop credential is available.';
+  const controlAvailable = status.connected && status.visibleChannelQualified;
+  const visibleChannelLabel = status.visibleChannelQualified ? 'VISIBLE · QUALIFIED' : 'NOT QUALIFIED';
 
   return createElement(
     'main',
@@ -108,7 +114,13 @@ function App() {
       createElement(
         'div',
         { className: 'control-heading' },
-        createElement('div', null, createElement('span', { className: 'label' }, 'VISIBLE CONTROL CHANNEL'), createElement('h2', null, status.controlState)),
+        createElement(
+          'div',
+          null,
+          createElement('span', { className: 'label' }, 'VISIBLE CONTROL CHANNEL'),
+          createElement('h2', null, status.controlState),
+          createElement('p', null, visibleChannelLabel)
+        ),
         createElement('span', { className: 'local-badge' }, 'LOCAL ONLY')
       ),
       createElement(
@@ -118,7 +130,7 @@ function App() {
           'button',
           {
             className: 'control-button pause',
-            disabled: !status.connected,
+            disabled: !controlAvailable,
             onClick: () => void invokeControl('desktop_pause', 'Pause'),
           },
           'Pause'
@@ -127,7 +139,7 @@ function App() {
           'button',
           {
             className: 'control-button stop',
-            disabled: !status.connected,
+            disabled: !controlAvailable,
             onClick: () => void invokeControl('desktop_stop', 'Stop'),
           },
           'Stop'
@@ -136,7 +148,7 @@ function App() {
           'button',
           {
             className: 'control-button takeover',
-            disabled: !status.connected,
+            disabled: !controlAvailable,
             onClick: () => void invokeControl('desktop_takeover', 'Take over'),
           },
           'Take over'
