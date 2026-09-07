@@ -230,10 +230,9 @@ pub fn serve_connection<S: Read + Write, A: BootstrapApprover, P: AuthorizationP
                             &request,
                             now_unix_ms,
                         ),
-                        None => desktop_error_reply(
-                            ReplyStatus::Failed,
-                            "desktop_clock_unavailable",
-                        ),
+                        None => {
+                            desktop_error_reply(ReplyStatus::Failed, "desktop_clock_unavailable")
+                        }
                     }
                 } else {
                     router.route(principal, &request, &timestamp_now(), "local-ipc")
@@ -273,49 +272,50 @@ fn route_desktop_control<P: AuthorizationPolicy>(
         }
     };
 
-    let result = match request {
-        DesktopControlRequest::Status => kernel
-            .desktop_control_surface_snapshot(now_unix_ms)
-            .map(|snapshot| {
-                desktop_surface_reply(snapshot.mode, snapshot.visible_channel_qualified)
-            }),
-        DesktopControlRequest::Heartbeat => kernel
-            .observe_desktop_native_visible_channel(principal, true, now_unix_ms)
-            .and_then(|_| kernel.desktop_control_surface_snapshot(now_unix_ms))
-            .map(|snapshot| {
-                desktop_surface_reply(snapshot.mode, snapshot.visible_channel_qualified)
-            }),
-        DesktopControlRequest::Pause => kernel
-            .apply_native_desktop_human_interrupt(
-                principal,
-                HumanInterruptOperation::Pause,
-                now_unix_ms,
-                now_unix_ms,
-            )
-            .map(|snapshot| {
-                desktop_surface_reply(snapshot.mode, snapshot.visible_channel_qualified)
-            }),
-        DesktopControlRequest::Stop => kernel
-            .apply_native_desktop_human_interrupt(
-                principal,
-                HumanInterruptOperation::Stop,
-                now_unix_ms,
-                now_unix_ms,
-            )
-            .map(|snapshot| {
-                desktop_surface_reply(snapshot.mode, snapshot.visible_channel_qualified)
-            }),
-        DesktopControlRequest::Takeover => kernel
-            .apply_native_desktop_human_interrupt(
-                principal,
-                HumanInterruptOperation::Takeover,
-                now_unix_ms,
-                now_unix_ms,
-            )
-            .map(|snapshot| {
-                desktop_surface_reply(snapshot.mode, snapshot.visible_channel_qualified)
-            }),
-    };
+    let result =
+        match request {
+            DesktopControlRequest::Status => kernel
+                .desktop_control_surface_snapshot(now_unix_ms)
+                .map(|snapshot| {
+                    desktop_surface_reply(snapshot.mode, snapshot.visible_channel_qualified)
+                }),
+            DesktopControlRequest::Heartbeat => kernel
+                .observe_desktop_native_visible_channel(principal, true, now_unix_ms)
+                .and_then(|_| kernel.desktop_control_surface_snapshot(now_unix_ms))
+                .map(|snapshot| {
+                    desktop_surface_reply(snapshot.mode, snapshot.visible_channel_qualified)
+                }),
+            DesktopControlRequest::Pause => kernel
+                .apply_native_desktop_human_interrupt(
+                    principal,
+                    HumanInterruptOperation::Pause,
+                    now_unix_ms,
+                    now_unix_ms,
+                )
+                .map(|snapshot| {
+                    desktop_surface_reply(snapshot.mode, snapshot.visible_channel_qualified)
+                }),
+            DesktopControlRequest::Stop => kernel
+                .apply_native_desktop_human_interrupt(
+                    principal,
+                    HumanInterruptOperation::Stop,
+                    now_unix_ms,
+                    now_unix_ms,
+                )
+                .map(|snapshot| {
+                    desktop_surface_reply(snapshot.mode, snapshot.visible_channel_qualified)
+                }),
+            DesktopControlRequest::Takeover => kernel
+                .apply_native_desktop_human_interrupt(
+                    principal,
+                    HumanInterruptOperation::Takeover,
+                    now_unix_ms,
+                    now_unix_ms,
+                )
+                .map(|snapshot| {
+                    desktop_surface_reply(snapshot.mode, snapshot.visible_channel_qualified)
+                }),
+        };
 
     match result {
         Ok(reply) => ReplyMessage {
@@ -454,7 +454,10 @@ fn write_reply<S: Write>(
 }
 
 fn unix_time_ms() -> Option<u64> {
-    let millis = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_millis();
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()?
+        .as_millis();
     u64::try_from(millis).ok().filter(|value| *value != 0)
 }
 
@@ -478,7 +481,9 @@ mod tests {
     use golam_ipc::client_handshake::sign_authenticate;
     use golam_ipc::command::{Command, encode_command};
     use golam_ipc::credentials::ClientCredentialStore;
-    use golam_ipc::desktop_control::{decode_desktop_control_reply, encode_desktop_control_request};
+    use golam_ipc::desktop_control::{
+        decode_desktop_control_reply, encode_desktop_control_request,
+    };
     use golam_ipc::lifecycle::{Challenge, ShutdownReason};
     use golam_ipc::request::{ReplyStatus, decode_reply, encode_request};
     use golam_ipc::wire::read_frame;
@@ -797,13 +802,11 @@ mod tests {
                 DesktopControlSurfaceState::Revoked,
             ]
         );
-        assert!(
-            replies
-                .iter()
-                .all(|reply| decode_desktop_control_reply(&reply.body)
-                    .unwrap()
-                    .visible_channel_qualified)
-        );
+        assert!(replies.iter().all(|reply| {
+            decode_desktop_control_reply(&reply.body)
+                .unwrap()
+                .visible_channel_qualified
+        }));
 
         let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
         let state = kernel
@@ -852,10 +855,7 @@ mod tests {
             .restore_desktop_control_state(lease_id)
             .unwrap()
             .unwrap();
-        assert_eq!(
-            state.current_lease().mode,
-            DesktopControlMode::AgentAllowed
-        );
+        assert_eq!(state.current_lease().mode, DesktopControlMode::AgentAllowed);
         let stale_at = unix_time_ms().unwrap().checked_add(10_000).unwrap();
         assert!(!state.autonomous_actuation_allowed(stale_at));
         assert!(
@@ -875,7 +875,9 @@ mod tests {
         let authority = AuthorityLayout::initialize(&runtime).unwrap();
         let store = ClientCredentialStore::new(&authority);
         let generated = store.generate(ClientId(2013)).unwrap();
-        let requests = [encode_desktop_control_request(DesktopControlRequest::Status)];
+        let requests = [encode_desktop_control_request(
+            DesktopControlRequest::Status,
+        )];
         let mut io = ScriptedIo::new(authenticated_requests_input(
             &store,
             generated.client_id,
@@ -921,10 +923,7 @@ mod tests {
         serve_connection(&mut io, &runtime, &mut router, material(), &mut approval).unwrap();
         let replies = decoded_replies(io.output, 1);
         assert_eq!(replies[0].status, ReplyStatus::InvalidRequest);
-        assert_eq!(
-            replies[0].body,
-            b"error=desktop_control_request_invalid\n"
-        );
+        assert_eq!(replies[0].body, b"error=desktop_control_request_invalid\n");
         drop(router);
         fs::remove_dir_all(runtime.root).unwrap();
     }
