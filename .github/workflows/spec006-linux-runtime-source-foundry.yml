@@ -124,10 +124,16 @@ jobs:
           def load(root):
               return json.loads((root / 'metadata.json').read_text(encoding='utf-8'))
 
-          def package_map(metadata):
+          def external_packages(metadata):
               return {
-                  package['id']: (package['name'], package['version'], package.get('source'))
+                  (
+                      package['name'],
+                      package['version'],
+                      package.get('source'),
+                      package.get('checksum'),
+                  )
                   for package in metadata['packages']
+                  if package.get('source') is not None
               }
 
           def tokio_node(metadata):
@@ -146,7 +152,11 @@ jobs:
 
           base_metadata = load(base)
           candidate_metadata = load(candidate)
-          if package_map(base_metadata) != package_map(candidate_metadata):
+          base_external = external_packages(base_metadata)
+          candidate_external = external_packages(candidate_metadata)
+          if base_external != candidate_external:
+              print(f'DIRECT_RUNTIME_EXTERNAL_PACKAGES_ONLY_BASELINE={sorted(base_external - candidate_external)}')
+              print(f'DIRECT_RUNTIME_EXTERNAL_PACKAGES_ONLY_CANDIDATE={sorted(candidate_external - base_external)}')
               raise SystemExit('DIRECT_RUNTIME_PACKAGE_CLOSURE_CHANGED')
 
           base_features = tokio_node(base_metadata)
@@ -163,6 +173,8 @@ jobs:
           if base_lock != candidate_lock:
               raise SystemExit('DIRECT_RUNTIME_LOCK_BYTES_CHANGED')
 
+          print(f'BASELINE_EXTERNAL_PACKAGE_COUNT={len(base_external)}')
+          print(f'CANDIDATE_EXTERNAL_PACKAGE_COUNT={len(candidate_external)}')
           print(f'BASELINE_LOCK_BYTES={len(base_lock)}')
           print(f'BASELINE_LOCK_SHA256={hashlib.sha256(base_lock).hexdigest()}')
           print(f'CANDIDATE_LOCK_BYTES={len(candidate_lock)}')
