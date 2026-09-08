@@ -1,0 +1,74 @@
+name: spec006-phase-e-capture-wire-materialize
+
+on:
+  push:
+    branches:
+      - impl/006-desktop-computer-control
+    paths:
+      - .github/workflows/spec006-phase-e-capture-wire-materialize.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact helper-only arm commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "5a033588c14118dd0baf91b5fe64f2655c9d247f"
+          helper=".github/workflows/spec006-phase-e-capture-wire-materialize.yml"
+          test "$(git diff --name-only HEAD^ HEAD)" = "${helper}"
+          echo 'PHASE_E_CAPTURE_WIRE_ARM_EXACT=YES'
+
+      - name: Install Linux build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libpipewire-0.3-dev build-essential libxdo-dev
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+
+      - name: Wire capture runtime module
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("crates/golamd/src/lib.rs")
+          text = path.read_text()
+          old = "pub mod acp_adapter;\npub mod desktop_observation;"
+          new = "pub mod acp_adapter;\npub(crate) mod desktop_capture;\npub mod desktop_observation;"
+          if text.count(old) != 1:
+              raise SystemExit("golamd module insertion point changed")
+          path.write_text(text.replace(old, new, 1))
+          PY
+          test "$(git diff --name-only HEAD)" = "crates/golamd/src/lib.rs"
+
+      - name: Qualify capture module wiring
+        run: |
+          set -euo pipefail
+          cargo +1.98.0 fmt --all -- --check
+          cargo +1.98.0 clippy --locked -p golamd --all-targets -- -D warnings
+          cargo +1.98.0 test --locked -p golamd --all-targets
+          echo 'PHASE_E_CAPTURE_MODULE_WIRING_QUALIFIED=YES'
+
+      - name: Self-remove and commit qualified product patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          helper=".github/workflows/spec006-phase-e-capture-wire-materialize.yml"
+          rm "${helper}"
+          git fetch origin impl/006-desktop-computer-control
+          test "$(git rev-parse origin/impl/006-desktop-computer-control)" = "$(git rev-parse HEAD)"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat(006): wire bounded capture runtime module'
+          git push origin HEAD:impl/006-desktop-computer-control
