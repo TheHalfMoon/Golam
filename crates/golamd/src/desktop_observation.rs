@@ -1077,6 +1077,7 @@ fn observe_platform(
     )
 }
 
+#[cfg(any(not(target_os = "macos"), test))]
 fn empty_platform_snapshot(
     request: NativeObservationRequest,
     disposition: NativeObservationDisposition,
