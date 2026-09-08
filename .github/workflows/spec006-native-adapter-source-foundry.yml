@@ -104,7 +104,7 @@ jobs:
           ashpd = { version = "=0.13.13", default-features = false, features = ["tokio", "remote_desktop", "screencast"] }
           pipewire = { version = "=0.9.2" }
           enigo = { version = "=0.6.1", default-features = false, features = ["x11rb"] }
-          arboard = { version = "=3.6.1", default-features = false }
+          x11-clipboard = { version = "=0.9.3" }
           EOF
               printf '#![forbid(unsafe_code)]\nfn main() {}\n' >"$ROOT/src/main.rs"
               ;;
@@ -173,8 +173,7 @@ jobs:
           if len(packages) != 1:
               sys.exit(f'XA11Y_WINDOWS_PACKAGE_COUNT={len(packages)}')
           manifest = pathlib.Path(packages[0]['manifest_path'])
-          source_root = manifest.parent
-          lib_rs = source_root / 'src' / 'lib.rs'
+          lib_rs = manifest.parent / 'src' / 'lib.rs'
           text = lib_rs.read_text(encoding='utf-8')
           if 'WindowsProvider' not in text:
               sys.exit('XA11Y_WINDOWS_PROVIDER_SURFACE_MISSING')
@@ -202,12 +201,18 @@ jobs:
               for f in frontend backend background camera clipboard input_capture location network_monitor notification open_uri print proxy_resolver screenshot secret usb wallpaper wayland raw_handle; do deny_feature ashpd "$f"; done
               require_feature enigo x11rb
               for f in wayland libei_smol libei_tokio xdo platform_specific serde tokio; do deny_feature enigo "$f"; done
-              for f in image-data image core-graphics windows-sys wayland-data-control wl-clipboard-rs; do deny_feature arboard "$f"; done
-              if grep -F 'wl-clipboard-rs ' tree.txt >/dev/null || grep -F 'arboard feature "wayland-data-control"' features.txt >/dev/null; then
-                echo 'LINUX_DIRECT_WAYLAND_CLIPBOARD_CLOSURE=REJECTED_PRESENT' >&2
+
+              grep -F 'x11-clipboard v0.9.3' tree.txt >/dev/null || {
+                echo 'LINUX_X11_CLIPBOARD_CANDIDATE_MISSING' >&2
                 exit 1
-              fi
-              echo 'LINUX_CLIPBOARD_CANDIDATE=X11_ONLY'
+              }
+              for denied in 'clipboard_wayland ' 'wl-clipboard-rs ' 'wayland-data-control ' 'arboard '; do
+                if grep -F "$denied" tree.txt >/dev/null; then
+                  echo "LINUX_DENIED_CLIPBOARD_CLOSURE_PRESENT=${denied}" >&2
+                  exit 1
+                fi
+              done
+              echo 'LINUX_CLIPBOARD_CANDIDATE=X11_CLIPBOARD_0_9_3_ONLY'
               echo 'LINUX_PURE_WAYLAND_CLIPBOARD=NOT_SUPPORTED_PENDING_SEPARATE_SESSION_BOUND_ADMISSION'
               ;;
           esac
@@ -230,6 +235,7 @@ jobs:
           import sys
           import tarfile
           import tomllib
+          import urllib.request
           from pathlib import Path, PurePosixPath
 
           metadata = json.load(open('metadata.json', encoding='utf-8'))
@@ -248,6 +254,27 @@ jobs:
           }
           license_name = re.compile(r'^(LICENSE|LICENCE|COPYING)(?:[-._].*)?$', re.I)
           notice_name = re.compile(r'^(NOTICE|COPYRIGHT)(?:[-._].*)?$', re.I)
+          vcs_sha_re = re.compile(r'^[0-9a-f]{40}$')
+
+          # These are the only package families allowed to use exact-VCS fallback
+          # when the checksum-bound .crate intentionally omits the repository
+          # license file. The source commit itself is read from that archive's
+          # .cargo_vcs_info.json; repository location and license path are not
+          # taken from untrusted package metadata.
+          vcs_license_allowlist = {
+              'clipboard-win': ('github', 'DoumanAsh', 'clipboard-win', 'LICENSE', {'BSL-1.0'}),
+              'xa11y-core': ('github', 'xa11y', 'xa11y', 'LICENSE', {'MIT'}),
+              'xa11y-windows': ('github', 'xa11y', 'xa11y', 'LICENSE', {'MIT'}),
+              'objc2': ('github', 'madsmtm', 'objc2', 'LICENSE-MIT.txt', {'MIT'}),
+              'objc2-app-kit': ('github', 'madsmtm', 'objc2', 'LICENSE-MIT.txt', {'MIT'}),
+              'objc2-core-foundation': ('github', 'madsmtm', 'objc2', 'LICENSE-MIT.txt', {'MIT'}),
+              'objc2-core-graphics': ('github', 'madsmtm', 'objc2', 'LICENSE-MIT.txt', {'MIT'}),
+              'objc2-core-image': ('github', 'madsmtm', 'objc2', 'LICENSE-MIT.txt', {'MIT'}),
+              'objc2-core-video': ('github', 'madsmtm', 'objc2', 'LICENSE-MIT.txt', {'MIT'}),
+              'objc2-foundation': ('github', 'madsmtm', 'objc2', 'LICENSE-MIT.txt', {'MIT'}),
+              'objc2-quartz-core': ('github', 'madsmtm', 'objc2', 'LICENSE-MIT.txt', {'MIT'}),
+              'libspa-sys': ('gitlab-freedesktop', 'pipewire', 'pipewire-rs', 'LICENSE', {'MIT'}),
+          }
 
           def strip_outer(expr):
               expr = expr.strip()
@@ -326,6 +353,65 @@ jobs:
                   obligations.append('PRESERVE_OBSERVED_UPSTREAM_NOTICE_FILES')
               return '+'.join(dict.fromkeys(obligations))
 
+          def read_vcs_info(tf):
+              matches = []
+              for member in tf.getmembers():
+                  if not member.isfile():
+                      continue
+                  parts = PurePosixPath(member.name).parts
+                  if len(parts) == 2 and parts[1] == '.cargo_vcs_info.json':
+                      matches.append(member)
+              if len(matches) != 1:
+                  return None
+              fh = tf.extractfile(matches[0])
+              if fh is None:
+                  return None
+              try:
+                  return json.loads(fh.read().decode('utf-8'))
+              except (UnicodeDecodeError, json.JSONDecodeError):
+                  return None
+
+          def exact_vcs_license(name, selected, vcs_info):
+              mapping = vcs_license_allowlist.get(name)
+              if mapping is None or not selected or vcs_info is None:
+                  return None
+              host, owner, repo, path, allowed_selected = mapping
+              if set(selected) - allowed_selected:
+                  return None
+              git = vcs_info.get('git') or {}
+              sha = (git.get('sha1') or '').lower()
+              if not vcs_sha_re.fullmatch(sha):
+                  return None
+              if git.get('dirty') is True:
+                  return None
+
+              if host == 'github':
+                  url = f'https://raw.githubusercontent.com/{owner}/{repo}/{sha}/{path}'
+              elif host == 'gitlab-freedesktop':
+                  url = f'https://gitlab.freedesktop.org/{owner}/{repo}/-/raw/{sha}/{path}'
+              else:
+                  return None
+
+              request = urllib.request.Request(
+                  url,
+                  headers={'User-Agent': 'Golam-Spec006-Source-Foundry/1'},
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      body = response.read(256 * 1024 + 1)
+              except Exception:
+                  return None
+              if len(body) < 128 or len(body) > 256 * 1024:
+                  return None
+              return {
+                  'sha': sha,
+                  'path_in_vcs': vcs_info.get('path_in_vcs') or '',
+                  'url': url,
+                  'path': path,
+                  'bytes': len(body),
+                  'sha256': hashlib.sha256(body).hexdigest(),
+              }
+
           lock_packages = cargo_lock.get('package', [])
           packages = {p['id']: p for p in metadata['packages']}
           nodes = {n['id']: n for n in metadata['resolve']['nodes']}
@@ -345,6 +431,7 @@ jobs:
           network = []
           custom_build = []
           native_links = []
+          vcs_fallbacks = []
           cargo_home = Path(os.environ.get('CARGO_HOME') or (Path.home() / '.cargo'))
           cache_root = cargo_home / 'registry' / 'cache'
 
@@ -364,17 +451,19 @@ jobs:
 
               archive_candidates = list(cache_root.glob(f'*/{name}-{version}.crate')) if cache_root.exists() else []
               verified_archives = []
-              for archive in archive_candidates:
-                  digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+              for archive_path in archive_candidates:
+                  digest = hashlib.sha256(archive_path.read_bytes()).hexdigest()
                   if lock_checksum and digest == lock_checksum:
-                      verified_archives.append((archive, digest))
+                      verified_archives.append((archive_path, digest))
               archive = verified_archives[0][0] if len(verified_archives) == 1 else None
               archive_sha = verified_archives[0][1] if len(verified_archives) == 1 else ''
 
               license_files = []
               notice_files = []
+              vcs_info = None
               if archive is not None:
                   with tarfile.open(archive, mode='r:*') as tf:
+                      vcs_info = read_vcs_info(tf)
                       for member in tf.getmembers():
                           if not member.isfile():
                               continue
@@ -392,6 +481,12 @@ jobs:
               license_files = sorted(set(license_files))
               notice_files = sorted(set(notice_files))
 
+              vcs_license = None
+              if not license_files:
+                  vcs_license = exact_vcs_license(name, selected, vcs_info)
+                  if vcs_license is not None:
+                      vcs_fallbacks.append((name, version, vcs_license))
+
               problems = []
               if not source.startswith('registry+'):
                   problems.append('NON_REGISTRY_SOURCE_REQUIRES_SEPARATE_SOURCE_IDENTITY_REVIEW')
@@ -403,11 +498,13 @@ jobs:
                   problems.append('CHECKSUM_BOUND_CRATE_ARCHIVE_NOT_UNIQUELY_RESOLVED')
               if selected is None:
                   problems.append('NO_ALLOWED_SPDX_PATH')
-              if not license_files:
-                  problems.append('TOP_LEVEL_LICENSE_FILE_NOT_OBSERVED_IN_ARCHIVE')
+              if not license_files and vcs_license is None:
+                  problems.append('NO_ARCHIVE_LICENSE_OR_ALLOWLISTED_EXACT_VCS_LICENSE_EVIDENCE')
 
               obligation = distribution_obligation(selected or [], notice_files) if selected else 'UNRESOLVED'
               disposition = 'ACCEPT_ARCHIVE_BOUND_LICENSE_EVIDENCE' if not problems else 'REVIEW_REQUIRED:' + ','.join(problems)
+              if not problems and vcs_license is not None:
+                  disposition = 'ACCEPT_CHECKSUM_ARCHIVE_PLUS_EXACT_VCS_LICENSE_EVIDENCE'
               if problems:
                   blocked.append((name, version, disposition))
 
@@ -420,6 +517,11 @@ jobs:
               if name in network_clients:
                   network.append((name, version))
 
+              evidence_location = ','.join(license_files) if license_files else (
+                  f"VCS:{vcs_license['sha']}:{vcs_license['path']}:{vcs_license['sha256']}"
+                  if vcs_license is not None else 'NO_LICENSE_EVIDENCE'
+              )
+              vcs_path = vcs_license['path_in_vcs'] if vcs_license is not None else ''
               print('|'.join([
                   name,
                   version,
@@ -428,8 +530,9 @@ jobs:
                   archive_sha or 'NO_VERIFIED_ARCHIVE_SHA256',
                   expr or 'NO_SPDX_EXPRESSION',
                   ' AND '.join(selected) if selected else 'NO_SELECTED_ALLOWED_PATH',
-                  ','.join(license_files) if license_files else 'NO_TOP_LEVEL_LICENSE_FILE',
+                  evidence_location,
                   ','.join(notice_files) if notice_files else 'NO_TOP_LEVEL_NOTICE_FILE',
+                  vcs_path,
                   obligation,
                   disposition,
                   'CUSTOM_BUILD' if has_build else 'NO_CUSTOM_BUILD',
@@ -437,6 +540,19 @@ jobs:
                   p.get('repository') or ''
               ]))
 
+          print('=== EXACT_VCS_LICENSE_FALLBACKS ===')
+          print(f'count={len(vcs_fallbacks)}')
+          for name, version, evidence in vcs_fallbacks:
+              print('|'.join([
+                  name,
+                  version,
+                  evidence['sha'],
+                  evidence['path_in_vcs'],
+                  evidence['path'],
+                  str(evidence['bytes']),
+                  evidence['sha256'],
+                  evidence['url'],
+              ]))
           print('=== CUSTOM_BUILD_PACKAGES ===')
           print(f'count={len(custom_build)}')
           for row in custom_build: print('|'.join(row))
@@ -453,7 +569,7 @@ jobs:
           if network:
               sys.exit('network-capable HTTP client package entered the active candidate closure')
           if blocked:
-              sys.exit('checksum-bound package archive/license evidence requires reconciliation before admission')
+              sys.exit('checksum-bound archive or exact-VCS license evidence requires reconciliation before admission')
           PY
 
       - name: Prove product manifests remain unchanged
