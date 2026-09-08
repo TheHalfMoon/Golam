@@ -287,7 +287,7 @@ fn finalize(
         schema_version: DESKTOP_CONTROL_SCHEMA_VERSION,
         observation_id: DesktopObservationId::from_u128(id_from_parts(&[
             OBSERVATION_ADAPTER_DOMAIN,
-            request.capability_session_evidence.bytes(),
+            &request.capability_session_evidence.bytes(),
             &request.observed_at_unix_ms.to_le_bytes(),
             &request.observation_generation.to_le_bytes(),
         ])),
@@ -366,7 +366,7 @@ fn make_semantic_element(
         parent_work_surface_digest,
         element_id: SemanticElementId::from_u128(id_from_parts(&[
             SEMANTIC_ID_DOMAIN,
-            parent_work_surface_digest.bytes(),
+            &parent_work_surface_digest.bytes(),
             platform_reference.as_bytes(),
         ])),
         platform_reference_digest: digest(platform_reference.as_bytes()),
@@ -417,7 +417,7 @@ fn observe_platform(
 ) -> Result<PlatformSnapshot, NativeObservationError> {
     use std::sync::Arc;
 
-    use xa11y_core::{App, Element, Provider};
+    use xa11y_core::{App, Provider};
     use xa11y_windows::WindowsProvider;
 
     if request.platform != DesktopPlatform::Windows
@@ -806,7 +806,6 @@ fn observe_platform(
 fn observe_platform(
     request: NativeObservationRequest,
 ) -> Result<PlatformSnapshot, NativeObservationError> {
-    use atspi::proxy::accessible::ObjectRefExt;
     use golam_bounded_linux_async::{BoundedAsyncError, run_bounded};
 
     if request.platform != DesktopPlatform::Linux
@@ -876,7 +875,7 @@ async fn observe_linux_async(
         .take(usize::from(request.limits.max_work_surfaces))
     {
         let bus = application_ref.name_as_str().unwrap_or("unknown-bus");
-        let path = application_ref.path_as_str().unwrap_or("/unknown");
+        let path = application_ref.path_as_str();
         let surface_reference = format!("linux-atspi:{bus}:{path}");
         let identity = make_surface(
             request,
@@ -967,7 +966,7 @@ async fn observe_linux_async(
                 continue;
             }
             let bus = object_ref.name_as_str().unwrap_or("unknown-bus");
-            let path = object_ref.path_as_str().unwrap_or("/unknown");
+            let path = object_ref.path_as_str();
             let platform_reference = format!("linux-atspi:{bus}:{path}");
             let proxy = match object_ref
                 .as_accessible_proxy(connection.connection())
@@ -1124,8 +1123,10 @@ mod tests {
 
     #[test]
     fn sanitizer_drops_controls_and_attests_truncation() {
-        let mut limits = DesktopLimits::default();
-        limits.max_string_bytes = 4;
+        let limits = DesktopLimits {
+            max_string_bytes: 4,
+            ..DesktopLimits::default()
+        };
         let mut summary = SummaryAccumulator::new(limits);
         assert!(summary.record_node("ref", "button", Some("a\u{202e}bcdef"), None, &[], "state"));
         assert!(summary.strings_truncated);
@@ -1134,8 +1135,10 @@ mod tests {
 
     #[test]
     fn node_budget_fails_closed_to_explicit_truncation() {
-        let mut limits = DesktopLimits::default();
-        limits.max_semantic_nodes = 1;
+        let limits = DesktopLimits {
+            max_semantic_nodes: 1,
+            ..DesktopLimits::default()
+        };
         let mut summary = SummaryAccumulator::new(limits);
         assert!(summary.record_node("one", "button", None, None, &[], "state"));
         assert!(!summary.record_node("two", "button", None, None, &[], "state"));
