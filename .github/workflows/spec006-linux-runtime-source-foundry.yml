@@ -114,6 +114,7 @@ jobs:
           import json
           import pathlib
           import sys
+          import tomllib
 
           base = pathlib.Path(sys.argv[1])
           candidate = pathlib.Path(sys.argv[2])
@@ -130,11 +131,23 @@ jobs:
                       package['name'],
                       package['version'],
                       package.get('source'),
-                      package.get('checksum'),
                   )
                   for package in metadata['packages']
                   if package.get('source') is not None
               }
+
+          def lock_checksum(root, name, version):
+              lock = tomllib.loads((root / 'Cargo.lock').read_text(encoding='utf-8'))
+              matches = [
+                  package for package in lock.get('package', [])
+                  if package.get('name') == name and package.get('version') == version
+              ]
+              if len(matches) != 1:
+                  raise SystemExit(f'{name.upper()}_LOCK_PACKAGE_COUNT={len(matches)}')
+              checksum = matches[0].get('checksum')
+              if checksum != expected_tokio_checksum:
+                  raise SystemExit(f'TOKIO_LOCK_CHECKSUM_MISMATCH={checksum}')
+              return checksum
 
           def tokio_node(metadata):
               packages = {package['id']: package for package in metadata['packages']}
@@ -145,9 +158,6 @@ jobs:
               ]
               if len(matches) != 1:
                   raise SystemExit(f'TOKIO_RESOLVE_NODE_COUNT={len(matches)}')
-              package = packages[matches[0]['id']]
-              if package.get('checksum') != expected_tokio_checksum:
-                  raise SystemExit(f'TOKIO_CHECKSUM_MISMATCH={package.get("checksum")}')
               return set(matches[0]['features'])
 
           base_metadata = load(base)
@@ -158,6 +168,11 @@ jobs:
               print(f'DIRECT_RUNTIME_EXTERNAL_PACKAGES_ONLY_BASELINE={sorted(base_external - candidate_external)}')
               print(f'DIRECT_RUNTIME_EXTERNAL_PACKAGES_ONLY_CANDIDATE={sorted(candidate_external - base_external)}')
               raise SystemExit('DIRECT_RUNTIME_PACKAGE_CLOSURE_CHANGED')
+
+          base_checksum = lock_checksum(base, 'tokio', expected_tokio_version)
+          candidate_checksum = lock_checksum(candidate, 'tokio', expected_tokio_version)
+          if base_checksum != candidate_checksum:
+              raise SystemExit('DIRECT_RUNTIME_TOKIO_CHECKSUM_CHANGED')
 
           base_features = tokio_node(base_metadata)
           candidate_features = tokio_node(candidate_metadata)
@@ -179,6 +194,7 @@ jobs:
           print(f'BASELINE_LOCK_SHA256={hashlib.sha256(base_lock).hexdigest()}')
           print(f'CANDIDATE_LOCK_BYTES={len(candidate_lock)}')
           print(f'CANDIDATE_LOCK_SHA256={hashlib.sha256(candidate_lock).hexdigest()}')
+          print(f'TOKIO_LOCK_CHECKSUM={candidate_checksum}')
           print('TOKIO_DIRECT_VERSION=1.53.1')
           print(f'TOKIO_BASELINE_FEATURES={sorted(base_features)}')
           print(f'TOKIO_CANDIDATE_FEATURES={sorted(candidate_features)}')
@@ -199,24 +215,12 @@ jobs:
           CANDIDATE="${RUNNER_TEMP}/golam-spec006-linux-runtime-candidate"
           python3 - "$CANDIDATE" <<'PY'
           import hashlib
-          import json
           import pathlib
           import sys
           import tarfile
 
           root = pathlib.Path(sys.argv[1])
-          metadata = json.loads((root / 'metadata.json').read_text(encoding='utf-8'))
-          matches = [
-              package for package in metadata['packages']
-              if package['name'] == 'tokio' and package['version'] == '1.53.1'
-          ]
-          if len(matches) != 1:
-              raise SystemExit(f'TOKIO_PACKAGE_COUNT={len(matches)}')
-          package = matches[0]
           expected = '202caea871b69668250d242070849eb495be178ed697a3e98aebce5bc81a0bed'
-          if package.get('checksum') != expected:
-              raise SystemExit(f'TOKIO_METADATA_CHECKSUM_MISMATCH={package.get("checksum")}')
-
           cargo_home = pathlib.Path.home() / '.cargo' / 'registry' / 'cache'
           archives = list(cargo_home.glob('*/tokio-1.53.1.crate'))
           if len(archives) != 1:
@@ -236,7 +240,10 @@ jobs:
                   raise SystemExit('TOKIO_ARCHIVE_LICENSE_EVIDENCE_MISSING')
               selected = license_candidates[0]
               member = tar.getmember(selected)
-              data = tar.extractfile(member).read()
+              extracted = tar.extractfile(member)
+              if extracted is None:
+                  raise SystemExit('TOKIO_LICENSE_EVIDENCE_UNREADABLE')
+              data = extracted.read()
 
           print(f'TOKIO_ARCHIVE_SHA256={digest}')
           print(f'TOKIO_LICENSE_EVIDENCE_PATH={selected}')
