@@ -87,14 +87,15 @@ jobs:
                   .enable_time()
                   .build()
                   .expect("bounded current-thread Tokio runtime must construct");
-              let completed = runtime.block_on(tokio::time::timeout(
-                  Duration::from_millis(25),
-                  async { 7_u8 },
-              ));
+              let completed = runtime.block_on(async {
+                  tokio::time::timeout(Duration::from_millis(25), async { 7_u8 }).await
+              });
               assert_eq!(completed.expect("bounded probe must complete"), 7);
 
-              let atspi_future = atspi::AccessibilityConnection::new();
-              drop(atspi_future);
+              runtime.block_on(async {
+                  let atspi_future = atspi::AccessibilityConnection::new();
+                  drop(atspi_future);
+              });
           }
           EOF
 
