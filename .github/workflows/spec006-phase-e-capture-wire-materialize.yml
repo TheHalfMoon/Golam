@@ -96,9 +96,9 @@ jobs:
         run: |
           set -euo pipefail
           helper=".github/workflows/spec006-phase-e-capture-wire-materialize.yml"
+          remote_head="$(git ls-remote origin refs/heads/impl/006-desktop-computer-control | cut -f1)"
+          test "${remote_head}" = "$(git rev-parse HEAD)"
           rm "${helper}"
-          timeout 60s git fetch origin impl/006-desktop-computer-control
-          test "$(git rev-parse origin/impl/006-desktop-computer-control)" = "$(git rev-parse HEAD)"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
