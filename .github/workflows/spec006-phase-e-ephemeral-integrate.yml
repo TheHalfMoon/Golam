@@ -1,0 +1,67 @@
+name: spec006-phase-e-ephemeral-integrate
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    if: github.event.pull_request.head.ref == 'impl/006-desktop-computer-control'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - name: Guard helper-only trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse 0c0f6acc937402ada4143e83e2ff9d187774fbc1)" = "0c0f6acc937402ada4143e83e2ff9d187774fbc1"
+          mapfile -t changed < <(git diff --name-only 0c0f6acc937402ada4143e83e2ff9d187774fbc1..HEAD)
+          test "${#changed[@]}" -eq 1
+          test "${changed[0]}" = ".github/workflows/spec006-phase-e-ephemeral-integrate.yml"
+      - name: Install Linux build prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libpipewire-0.3-dev libxdo-dev
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+      - name: Integrate module
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('crates/golamd/src/lib.rs')
+          text = path.read_text()
+          needle = 'pub mod local_fs;\n'
+          insertion = 'pub mod local_fs;\npub(crate) mod desktop_capture;\n'
+          if 'mod desktop_capture;' not in text:
+              if text.count(needle) != 1:
+                  raise SystemExit('unexpected lib.rs module anchor')
+              text = text.replace(needle, insertion, 1)
+              path.write_text(text)
+          PY
+          cargo +1.98.0 fmt --all
+          cargo +1.98.0 fmt --all -- --check
+          cargo +1.98.0 clippy --locked -p golamd --all-targets -- -D warnings
+          cargo +1.98.0 test --locked -p golamd --lib desktop_capture::
+      - name: Commit bounded product integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/spec006-phase-e-ephemeral-integrate.yml
+          mapfile -t changed < <(git status --short | sed 's/^...//')
+          printf '%s\n' "${changed[@]}" | sort > /tmp/changed
+          printf '%s\n' ".github/workflows/spec006-phase-e-ephemeral-integrate.yml" "crates/golamd/src/lib.rs" | sort > /tmp/expected
+          diff -u /tmp/expected /tmp/changed
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/golamd/src/lib.rs
+          git commit -m 'feat(006): integrate ephemeral capture boundary'
+          git push origin HEAD:impl/006-desktop-computer-control
