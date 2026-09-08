@@ -18,13 +18,14 @@ jobs:
           ref: impl/006-desktop-computer-control
           fetch-depth: 0
 
-      - name: Bind exact helper-only trigger
+      - name: Bind exact helper-only chain
         shell: bash
         run: |
           set -euo pipefail
+          BASE=8c8e7bce31807cf2ec53d08b637e11634f13379e
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse HEAD^)" = "8c8e7bce31807cf2ec53d08b637e11634f13379e"
-          mapfile -t changed < <(git diff --name-only HEAD^ HEAD | sort)
+          test "$(git merge-base "$BASE" HEAD)" = "$BASE"
+          mapfile -t changed < <(git diff --name-only "$BASE" HEAD | sort)
           test "${#changed[@]}" -eq 1
           test "${changed[0]}" = ".github/workflows/spec006-phase-d-clippy-repair-materialize.yml"
           test -z "$(git status --porcelain)"
@@ -64,6 +65,16 @@ jobs:
                   '.path_as_str().unwrap_or("/unknown")',
                   '.path_as_str()',
                   2,
+              ),
+              (
+                  '        let mut limits = DesktopLimits::default();\n        limits.max_string_bytes = 4;',
+                  '        let limits = DesktopLimits {\n            max_string_bytes: 4,\n            ..DesktopLimits::default()\n        };',
+                  1,
+              ),
+              (
+                  '        let mut limits = DesktopLimits::default();\n        limits.max_semantic_nodes = 1;',
+                  '        let limits = DesktopLimits {\n            max_semantic_nodes: 1,\n            ..DesktopLimits::default()\n        };',
+                  1,
               ),
           ]
 
