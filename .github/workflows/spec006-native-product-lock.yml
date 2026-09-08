@@ -7,14 +7,16 @@ on:
       - .github/workflows/spec006-native-product-lock.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  extract:
-    name: extract-linux-product-lock
+  materialize:
+    name: materialize-admitted-native-product-lock
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
 
       - name: Install Linux native qualification prerequisites
         shell: bash
@@ -35,15 +37,10 @@ jobs:
         shell: bash
         run: rustup toolchain install 1.98.0 --profile minimal
 
-      - name: Extract exact admitted workspace lock from temporary archive
+      - name: Materialize exact admitted manifest and Cargo lock
         shell: bash
         run: |
           set -euo pipefail
-          ROOT="${RUNNER_TEMP}/golam-spec006-native-product-lock"
-          rm -rf "$ROOT"
-          mkdir -p "$ROOT"
-          git archive HEAD | tar -x -C "$ROOT"
-          cd "$ROOT"
 
           python3 - <<'PY'
           from pathlib import Path
@@ -101,26 +98,42 @@ jobs:
           import hashlib
           from pathlib import Path
 
+          expected_bytes = 163438
+          expected_sha = 'cf9e1f0e8cb40e5f1e841d230bd4defbabf6047f32fe469b2bf735999c37d4a0'
           data = Path('Cargo.lock').read_bytes()
-          print('=== PRODUCT_LOCK_EVIDENCE ===')
+          actual_sha = hashlib.sha256(data).hexdigest()
           print(f'PRODUCT_LOCK_BYTES={len(data)}')
-          print(f'PRODUCT_LOCK_SHA256={hashlib.sha256(data).hexdigest()}')
-          print('PRODUCT_MANIFEST_SOURCE=TEMP_GIT_ARCHIVE_ONLY')
-          print('PRODUCT_DEPENDENCY_SET=EXACT_ADMITTED_T006_016_T006_033')
+          print(f'PRODUCT_LOCK_SHA256={actual_sha}')
+          if len(data) != expected_bytes or actual_sha != expected_sha:
+              raise SystemExit('GENERATED_PRODUCT_LOCK_DOES_NOT_MATCH_ADMITTED_CROSS_HOST_EVIDENCE')
           PY
 
-      - name: Upload exact generated product lock
-        uses: actions/upload-artifact@v4
-        with:
-          name: spec006-admitted-product-lock
-          path: ${{ runner.temp }}/golam-spec006-native-product-lock/Cargo.lock
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Prove checked-out product remains unchanged
+      - name: Commit only exact admitted product mutation and remove helper
         shell: bash
         run: |
           set -euo pipefail
-          git diff --exit-code -- Cargo.toml Cargo.lock crates/golamd/Cargo.toml
-          echo 'CHECKED_OUT_PRODUCT_MANIFEST_MUTATION=NO'
-          echo 'CHECKED_OUT_PRODUCT_LOCK_MUTATION=NO'
+          rm .github/workflows/spec006-native-product-lock.yml
+
+          python3 - <<'PY'
+          import subprocess
+
+          expected = {
+              '.github/workflows/spec006-native-product-lock.yml',
+              'Cargo.lock',
+              'crates/golamd/Cargo.toml',
+          }
+          actual = set(
+              subprocess.check_output(['git', 'diff', '--name-only'], text=True).splitlines()
+          )
+          print('PRODUCT_MUTATION_PATHS=' + ','.join(sorted(actual)))
+          if actual != expected:
+              raise SystemExit(f'UNEXPECTED_PRODUCT_MUTATION_PATHS={sorted(actual)}')
+          PY
+
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Cargo.lock crates/golamd/Cargo.toml .github/workflows/spec006-native-product-lock.yml
+          git diff --cached --check
+          git commit -m 'build(006): admit native desktop adapter dependencies'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
