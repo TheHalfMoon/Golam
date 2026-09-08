@@ -35,38 +35,230 @@ jobs:
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
 
-      - name: Wire and canonically format capture runtime module
+      - name: Wire bounded capture runtime seam
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
-          path = Path("crates/golamd/src/lib.rs")
-          text = path.read_text()
+
+          lib = Path("crates/golamd/src/lib.rs")
+          text = lib.read_text()
           old = "pub mod acp_adapter;\npub mod desktop_observation;"
-          new = "pub mod acp_adapter;\npub(crate) mod desktop_capture;\npub mod desktop_observation;"
+          new = "pub mod acp_adapter;\npub mod desktop_capture;\npub mod desktop_observation;"
           if text.count(old) != 1:
               raise SystemExit("golamd module insertion point changed")
-          path.write_text(text.replace(old, new, 1))
+          lib.write_text(text.replace(old, new, 1))
+
+          capture = Path("crates/golamd/src/desktop_capture.rs")
+          text = capture.read_text()
+          if text.count("pub(crate)") != 6:
+              raise SystemExit("desktop capture visibility surface changed")
+          capture.write_text(text.replace("pub(crate)", "pub"))
+
+          test = Path("crates/golamd/tests/desktop_capture_runtime.rs")
+          if test.exists():
+              raise SystemExit("desktop capture runtime integration test already exists")
+          lines = [
+              "#![forbid(unsafe_code)]",
+              "",
+              "use golam_core::EffectId;",
+              "use golam_core::desktop_backend::{CaptureDispatchContext, DesktopBackendError};",
+              "use golam_core::desktop_control::{",
+              "    DESKTOP_CONTROL_SCHEMA_VERSION, DesktopCapabilitySet, DesktopPlatform,",
+              "    DesktopSessionKind,",
+              "};",
+              "use golam_core::desktop_intent::{",
+              "    AuthorityBindings, CaptureIntent, CaptureLimits, CaptureRetentionPolicy,",
+              "    EffectBinding, RequestBinding,",
+              "};",
+              "use golam_core::tool_request::{BindingDigest, ToolRequestId};",
+              "use golamd::desktop_capture::{EphemeralCaptureSlot, NativeCaptureError};",
+              "",
+              "fn digest(byte: u8) -> BindingDigest {",
+              "    BindingDigest::new([byte; 32])",
+              "}",
+              "",
+              "fn authority() -> AuthorityBindings {",
+              "    AuthorityBindings {",
+              "        capability_ref: digest(5),",
+              "        policy_ref: digest(6),",
+              "        approval_ref: digest(7),",
+              "    }",
+              "}",
+              "",
+              "fn capabilities() -> DesktopCapabilitySet {",
+              "    DesktopCapabilitySet {",
+              "        schema_version: DESKTOP_CONTROL_SCHEMA_VERSION,",
+              "        platform: DesktopPlatform::Linux,",
+              "        session_kind: DesktopSessionKind::LinuxWayland,",
+              "        observation_kinds: 0,",
+              "        semantic_action_kinds: 0,",
+              "        capture_source_kinds: 1,",
+              "        raw_fallback_supported: false,",
+              "        pixel_hint_supported: false,",
+              "        clipboard_read_supported: false,",
+              "        clipboard_write_supported: false,",
+              "        human_interrupt_supported: false,",
+              "        visible_control_supported: false,",
+              "        permission_session_evidence: digest(8),",
+              "    }",
+              "}",
+              "",
+              "fn intent() -> CaptureIntent {",
+              "    CaptureIntent {",
+              "        schema_version: DESKTOP_CONTROL_SCHEMA_VERSION,",
+              "        request: RequestBinding {",
+              "            request_id: ToolRequestId::from_u128(1),",
+              "            canonical_request_digest: digest(1),",
+              "        },",
+              "        effect: EffectBinding {",
+              "            effect_id: EffectId(2),",
+              "            immutable_effect_digest: digest(2),",
+              "            gate_authorization_digest: digest(3),",
+              "        },",
+              "        selected_source_identity_digest: digest(4),",
+              "        authority: authority(),",
+              "        limits: CaptureLimits {",
+              "            max_width: 16,",
+              "            max_height: 16,",
+              "            max_frame_bytes: 1_024,",
+              "            max_duration_ms: 1_000,",
+              "        },",
+              "        include_cursor: false,",
+              "        audio_enabled: false,",
+              "        prepared_permission_session_evidence_ref: digest(8),",
+              "        retention_policy: CaptureRetentionPolicy::EphemeralOnly,",
+              "        expires_at_unix_ms: 1_000,",
+              "    }",
+              "}",
+              "",
+              "fn context<'a>(",
+              "    intent: &'a CaptureIntent,",
+              "    capabilities: &'a DesktopCapabilitySet,",
+              ") -> CaptureDispatchContext<'a> {",
+              "    CaptureDispatchContext {",
+              "        intent,",
+              "        now_unix_ms: 100,",
+              "        current_request_digest: digest(1),",
+              "        current_effect_digest: digest(2),",
+              "        current_gate_authorization_digest: digest(3),",
+              "        current_authority: authority(),",
+              "        current_capabilities: capabilities,",
+              "        current_source_identity_digest: digest(4),",
+              "        unresolved_conflicting_unknown_outcome: false,",
+              "    }",
+              "}",
+              "",
+              "#[test]",
+              "fn validated_capture_stages_metadata_only_and_consumes_once() {",
+              "    let intent = intent();",
+              "    let capabilities = capabilities();",
+              "    let validated = context(&intent, &capabilities).authorize().unwrap();",
+              "    let mut slot = EphemeralCaptureSlot::default();",
+              "    let receipt = slot.stage_validated(validated, 2, 2, vec![11; 16]).unwrap();",
+              "",
+              "    assert_eq!(receipt.source_identity_digest, intent.selected_source_identity_digest);",
+              "    assert_eq!(receipt.payload_bytes, 16);",
+              "    assert_ne!(receipt.payload_digest.bytes(), [0; 32]);",
+              "",
+              "    let consumed = slot",
+              "        .consume_exact(",
+              "            receipt.source_identity_digest,",
+              "            receipt.payload_digest,",
+              "            |bytes, metadata| (bytes.to_vec(), metadata),",
+              "        )",
+              "        .unwrap();",
+              "    assert_eq!(consumed.0, vec![11; 16]);",
+              "    assert_eq!(consumed.1.payload_bytes, 16);",
+              "    assert!(matches!(",
+              "        slot.consume_exact(receipt.source_identity_digest, receipt.payload_digest, |_, _| ()),",
+              "        Err(NativeCaptureError::NoEphemeralPayload)",
+              "    ));",
+              "}",
+              "",
+              "#[test]",
+              "fn capture_revalidation_rejects_gate_source_session_and_unknown_drift() {",
+              "    let intent = intent();",
+              "    let capabilities = capabilities();",
+              "",
+              "    let mut missing_gate = context(&intent, &capabilities);",
+              "    missing_gate.current_gate_authorization_digest = BindingDigest::new([0; 32]);",
+              "    assert_eq!(",
+              "        missing_gate.authorize().unwrap_err(),",
+              "        DesktopBackendError::MissingGateAuthorization",
+              "    );",
+              "",
+              "    let mut substituted_source = context(&intent, &capabilities);",
+              "    substituted_source.current_source_identity_digest = digest(99);",
+              "    assert_eq!(",
+              "        substituted_source.authorize().unwrap_err(),",
+              "        DesktopBackendError::StaleOrSubstitutedTarget",
+              "    );",
+              "",
+              "    let mut drifted_capabilities = capabilities;",
+              "    drifted_capabilities.permission_session_evidence = digest(99);",
+              "    assert_eq!(",
+              "        context(&intent, &drifted_capabilities).authorize().unwrap_err(),",
+              "        DesktopBackendError::PermissionOrSessionDrift",
+              "    );",
+              "",
+              "    let mut unresolved = context(&intent, &capabilities);",
+              "    unresolved.unresolved_conflicting_unknown_outcome = true;",
+              "    assert_eq!(",
+              "        unresolved.authorize().unwrap_err(),",
+              "        DesktopBackendError::UnknownOutcomeBlocksDispatch",
+              "    );",
+              "}",
+              "",
+              "#[test]",
+              "fn capture_runtime_bounds_and_consumer_bindings_fail_closed() {",
+              "    let intent = intent();",
+              "    let capabilities = capabilities();",
+              "    let validated = context(&intent, &capabilities).authorize().unwrap();",
+              "    let mut slot = EphemeralCaptureSlot::default();",
+              "",
+              "    assert!(matches!(",
+              "        slot.stage_validated(validated, 17, 2, vec![1; 16]),",
+              "        Err(NativeCaptureError::DimensionLimitExceeded)",
+              "    ));",
+              "    assert!(matches!(",
+              "        slot.stage_validated(validated, 2, 2, vec![1; 1_025]),",
+              "        Err(NativeCaptureError::PayloadLimitExceeded)",
+              "    ));",
+              "",
+              "    let receipt = slot.stage_validated(validated, 2, 2, vec![22; 16]).unwrap();",
+              "    assert!(matches!(",
+              "        slot.consume_exact(digest(99), receipt.payload_digest, |_, _| ()),",
+              "        Err(NativeCaptureError::SourceBindingMismatch)",
+              "    ));",
+              "    assert!(matches!(",
+              "        slot.consume_exact(receipt.source_identity_digest, receipt.payload_digest, |_, _| ()),",
+              "        Err(NativeCaptureError::NoEphemeralPayload)",
+              "    ));",
+              "}",
+              "",
+          ]
+          test.write_text("\n".join(lines))
           PY
           cargo +1.98.0 fmt --all
-          expected="$(printf '%s\n' crates/golamd/src/desktop_capture.rs crates/golamd/src/lib.rs | sort)"
+          expected="$(printf '%s\n' crates/golamd/src/desktop_capture.rs crates/golamd/src/lib.rs crates/golamd/tests/desktop_capture_runtime.rs | sort)"
           actual="$(git diff --name-only HEAD | sort)"
           test "${actual}" = "${expected}"
 
-      - name: Qualify capture module wiring
+      - name: Qualify capture runtime seam
         run: |
           set -euo pipefail
           cargo +1.98.0 fmt --all -- --check
           cargo +1.98.0 clippy --locked -p golamd --all-targets -- -D warnings
           cargo +1.98.0 test --locked -p golamd --all-targets
-          echo 'PHASE_E_CAPTURE_MODULE_WIRING_QUALIFIED=YES'
+          echo 'T006_020_CAPTURE_RUNTIME_SEAM_QUALIFIED=YES'
 
       - name: Verify bounded product diff
         shell: bash
         run: |
           set -euo pipefail
-          expected="$(printf '%s\n' crates/golamd/src/desktop_capture.rs crates/golamd/src/lib.rs | sort)"
+          expected="$(printf '%s\n' crates/golamd/src/desktop_capture.rs crates/golamd/src/lib.rs crates/golamd/tests/desktop_capture_runtime.rs | sort)"
           actual="$(git diff --name-only HEAD | sort)"
           test "${actual}" = "${expected}"
 
@@ -81,5 +273,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          git commit -m 'feat(006): wire bounded capture runtime module'
+          git commit -m 'feat(006): wire bounded capture runtime seam'
           git push origin HEAD:impl/006-desktop-computer-control
