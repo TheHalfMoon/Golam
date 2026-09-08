@@ -13,6 +13,7 @@ permissions:
 jobs:
   materialize:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -90,14 +91,16 @@ jobs:
 
       - name: Self-remove and commit qualified product patch
         shell: bash
+        env:
+          GIT_TERMINAL_PROMPT: "0"
         run: |
           set -euo pipefail
           helper=".github/workflows/spec006-phase-e-capture-wire-materialize.yml"
           rm "${helper}"
-          git fetch origin impl/006-desktop-computer-control
+          timeout 60s git fetch origin impl/006-desktop-computer-control
           test "$(git rev-parse origin/impl/006-desktop-computer-control)" = "$(git rev-parse HEAD)"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
           git commit -m 'feat(006): wire bounded capture runtime seam'
-          git push origin HEAD:impl/006-desktop-computer-control
+          timeout 90s git push origin HEAD:impl/006-desktop-computer-control
