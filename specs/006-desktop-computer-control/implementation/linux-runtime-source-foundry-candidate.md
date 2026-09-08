@@ -35,17 +35,34 @@ The direct role is limited to a bounded current-thread Linux async driver for al
 The gate requires:
 
 - Rust `1.98.0`;
-- exact `tokio 1.53.1` checksum `202caea871b69668250d242070849eb495be178ed697a3e98aebce5bc81a0bed`;
-- identical resolved package closure between baseline and candidate;
-- byte-identical generated Cargo locks between baseline and candidate;
-- no Tokio feature delta beyond the explicitly requested `rt` and `time` features;
+- exact `tokio 1.53.1` checksum `202caea871b69668250d242070849eb495be178ed697a3e98aebce5bc81a0bed` from the generated lock and downloaded crate archive;
+- identical resolved external package closure between baseline and candidate;
+- identical external Cargo lock package records, including versions, sources, checksums, and dependency edges;
+- no local scratch package field change except one added direct Tokio dependency edge;
+- no Tokio feature delta beyond explicitly requested `rt` and `time` features;
 - successful `#![forbid(unsafe_code)]` caller compilation;
 - a successful bounded current-thread runtime/timeout probe;
 - successful construction and dropping of the admitted AT-SPI connection future without transitive-import tricks;
 - checksum-bound `.crate` archive identity and embedded license/notice evidence;
 - no product-manifest mutation.
 
+The full scratch lock bytes are expected to differ because Cargo records the candidate's new direct dependency edge on the local scratch package. That byte difference is not admitted as an unconstrained lock change: the workflow must prove that every external lock package record is unchanged and that the local package delta is exactly one direct Tokio edge and nothing else.
+
 Workflow success is qualification evidence only. It is not admission.
+
+## Evidence interpretation
+
+A successful isolation run must report the exact baseline and candidate lock sizes and SHA-256 hashes, plus all of:
+
+```text
+DIRECT_RUNTIME_PACKAGE_CLOSURE_CHANGED=NO
+DIRECT_RUNTIME_EXTERNAL_LOCK_PACKAGE_CLOSURE_CHANGED=NO
+DIRECT_RUNTIME_LOCAL_ROOT_OTHER_FIELDS_CHANGED=NO
+DIRECT_RUNTIME_LOCAL_ROOT_DEPENDENCY_ADDED=tokio...
+DIRECT_RUNTIME_FULL_LOCK_BYTES_CHANGED=YES_EXPECTED_LOCAL_ROOT_DIRECT_EDGE_ONLY
+```
+
+This replaces the earlier invalid full-lock-byte-identity assumption exposed by the first-attempt evidence. No failed attempt is reclassified or erased.
 
 ## Immutable authority constraints
 
@@ -71,7 +88,9 @@ ADMIT_SPEC006_LINUX_BOUNDED_ASYNC_DRIVER=YES
 TOKIO_DIRECT_VERSION=1.53.1
 TOKIO_DIRECT_ROLE=BOUNDED_LINUX_ASYNC_DRIVER_ONLY
 DIRECT_RUNTIME_PACKAGE_CLOSURE_CHANGED=NO
-DIRECT_RUNTIME_LOCK_BYTES_CHANGED=NO
+DIRECT_RUNTIME_EXTERNAL_LOCK_PACKAGE_CLOSURE_CHANGED=NO
+DIRECT_RUNTIME_FULL_LOCK_BYTES_CHANGED=YES_EXPECTED_LOCAL_ROOT_DIRECT_EDGE_ONLY
+DIRECT_RUNTIME_LOCAL_ROOT_DEPENDENCY_DELTA=TOKIO_DIRECT_EDGE_ONLY
 PRODUCT_MANIFEST_MUTATION=AUTHORIZED_ONLY_FOR_EXACT_REVIEWED_TOKIO_DECLARATION
 T006_016_T006_033_IMPLEMENTATION_CORRECTNESS=NOT_PREAPPROVED
 FINAL_SPEC006_REVIEW=NOT_PREAPPROVED
