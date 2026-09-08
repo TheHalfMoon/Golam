@@ -18,23 +18,34 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Verify exact helper-only arm commit
+      - name: Verify exact helper-only repair chain
         shell: bash
         run: |
           set -euo pipefail
-          expected_parent="4701d21eb39e288c258ddf00526f2784844a92de"
+          product_base="4701d21eb39e288c258ddf00526f2784844a92de"
+          expected_parent="674a05989960590d25827e78a19001d2cbd87527"
           actual_parent="$(git rev-parse HEAD^)"
           if [[ "${actual_parent}" != "${expected_parent}" ]]; then
             echo "expected parent ${expected_parent}, got ${actual_parent}" >&2
             exit 1
           fi
           helper=".github/workflows/spec006-phase-d-macos-deadcode-repair.yml"
-          actual="$(git diff --name-only HEAD^ HEAD)"
+          actual="$(git diff --name-only "${product_base}" HEAD)"
           if [[ "${actual}" != "${helper}" ]]; then
-            echo "arm commit is not helper-only: ${actual}" >&2
+            echo "repair chain is not helper-only: ${actual}" >&2
             exit 1
           fi
-          echo 'PHASE_D_MACOS_CFG_REPAIR_ARM_EXACT=YES'
+          echo 'PHASE_D_MACOS_CFG_REPAIR_CHAIN_EXACT=YES'
+
+      - name: Qualify admitted desktop frontend closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd apps/golam-desktop
+          npm ci --ignore-scripts --no-audit --no-fund
+          node ../../scripts/prune-denied-native-optionals.mjs --root .
+          npm run build --ignore-scripts
+          git diff --exit-code -- package-lock.json package.json
 
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
@@ -68,6 +79,7 @@ jobs:
           grep -q '^#\[cfg(any(not(target_os = "macos"), test))\]$' crates/golamd/src/desktop_observation.rs
 
       - name: Qualify macOS repair
+        shell: bash
         run: |
           set -euo pipefail
           cargo +1.98.0 fmt --all -- --check
