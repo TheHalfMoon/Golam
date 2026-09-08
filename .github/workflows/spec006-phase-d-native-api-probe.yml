@@ -72,7 +72,12 @@ jobs:
               for display in content.displays().into_iter().take(2) {
                   let _ = (display.display_id(), display.width(), display.height());
               }
-              for window in content.windows().into_iter().filter(|window| window.is_on_screen()).take(2) {
+              for window in content
+                  .windows()
+                  .into_iter()
+                  .filter(|window| window.is_on_screen())
+                  .take(2)
+              {
                   let _ = (
                       window.window_id(),
                       window.title(),
@@ -85,8 +90,12 @@ jobs:
                       let _ = app.pid()?;
                       let children = app.children()?;
                       for child in children.into_iter().take(2) {
-                          let _ = child.string_attribute(axuielement::ax_attribute::AX_ROLE_ATTRIBUTE)?;
-                          let _ = child.string_attribute(axuielement::ax_attribute::AX_TITLE_ATTRIBUTE)?;
+                          let _ = child.string_attribute(
+                              axuielement::ax_attribute::AX_ROLE_ATTRIBUTE,
+                          )?;
+                          let _ = child.string_attribute(
+                              axuielement::ax_attribute::AX_TITLE_ATTRIBUTE,
+                          )?;
                           let _ = child.action_names()?;
                       }
                   }
@@ -98,6 +107,8 @@ jobs:
           #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
           fn probe() -> Result<(), Box<dyn std::error::Error>> {
               use std::time::Duration;
+
+              use atspi::proxy::accessible::ObjectRefExt;
               use golam_bounded_linux_async::run_bounded;
 
               let result = run_bounded(Duration::from_millis(250), async {
@@ -105,9 +116,11 @@ jobs:
                   let root = connection.root_accessible_on_registry().await?;
                   let children = root.get_children().await?;
                   for child in children.into_iter().take(2) {
-                      let _ = child.get_name().await?;
-                      let _ = child.get_role_name().await?;
-                      let _ = child.get_children().await?;
+                      let proxy = child.as_accessible_proxy(connection.connection()).await?;
+                      let _ = proxy.name().await?;
+                      let _ = proxy.get_role_name().await?;
+                      let _ = proxy.get_children().await?;
+                      let _ = (child.name_as_str(), child.path_as_str());
                   }
                   Ok::<(), atspi::AtspiError>(())
               });
@@ -142,9 +155,11 @@ jobs:
           ! grep -Eq 'tokio::|raw_ffi|post_keyboard_event|perform_action' "$PROBE"
           grep -q 'WindowsProvider' "$PROBE"
           grep -q 'golam_bounded_linux_async::run_bounded' "$PROBE"
+          grep -q 'ObjectRefExt' "$PROBE"
           echo 'WINDOWS_SEMANTIC_PROVIDER_ONLY=YES'
           echo 'WINDOWS_INPUT_SCREENSHOT_SURFACES_REFERENCED=NO'
           echo 'LINUX_DIRECT_TOKIO_REFERENCED=NO'
+          echo 'LINUX_OBJECT_REFS_CONVERTED_TO_ACCESSIBLE_PROXY=YES'
           echo 'MACOS_RAW_OR_ACTUATION_API_REFERENCED=NO'
 
       - name: Prove helper-only repository state
@@ -152,7 +167,14 @@ jobs:
         run: |
           set -euo pipefail
           rm crates/golamd/src/bin/spec006-phase-d-native-api-probe.rs
+          rm -rf target
+          STATUS="$(git status --porcelain --untracked-files=all)"
+          if [ -n "$STATUS" ]; then
+            printf '%s\n' "$STATUS" >&2
+            echo 'HELPER_ONLY_REPOSITORY_STATE=NO' >&2
+            exit 1
+          fi
           git diff --exit-code
-          test -z "$(git status --porcelain)"
+          echo 'HELPER_ONLY_REPOSITORY_STATE=YES'
           echo 'PRODUCT_SOURCE_MUTATION=NO'
           echo 'PRODUCT_MANIFEST_MUTATION=NO'
