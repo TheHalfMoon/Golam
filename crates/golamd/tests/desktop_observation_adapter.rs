@@ -4,9 +4,7 @@
 pub mod desktop_observation;
 
 use desktop_observation::{NativeObservationRequest, observe_native_desktop};
-use golam_core::desktop_control::{
-    DesktopLimits, DesktopPlatform, DesktopSessionKind,
-};
+use golam_core::desktop_control::{DesktopLimits, DesktopPlatform, DesktopSessionKind};
 use golam_core::tool_request::BindingDigest;
 
 #[test]

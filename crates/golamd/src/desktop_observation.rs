@@ -7,8 +7,8 @@ use std::time::Duration;
 
 use golam_core::desktop_control::{
     DESKTOP_CONTROL_SCHEMA_VERSION, DesktopLimits, DesktopObservation, DesktopObservationId,
-    DesktopPlatform, DesktopSessionKind, SemanticElementId, SemanticElementIdentity,
-    WorkSurfaceId, WorkSurfaceIdentity,
+    DesktopPlatform, DesktopSessionKind, SemanticElementId, SemanticElementIdentity, WorkSurfaceId,
+    WorkSurfaceIdentity,
 };
 use golam_core::digest::sha256;
 use golam_core::tool_request::BindingDigest;
@@ -55,7 +55,12 @@ impl NativeObservationRequest {
                 "observation time and generation must be nonzero",
             ));
         }
-        if self.capability_session_evidence.bytes().iter().all(|byte| *byte == 0) {
+        if self
+            .capability_session_evidence
+            .bytes()
+            .iter()
+            .all(|byte| *byte == 0)
+        {
             return Err(NativeObservationError::InvalidRequest(
                 "capability/session evidence must be nonzero",
             ));
@@ -111,8 +116,12 @@ impl fmt::Display for NativeObservationError {
         match self {
             Self::InvalidRequest(message) => write!(formatter, "invalid request: {message}"),
             Self::TimedOut => formatter.write_str("native desktop observation timed out"),
-            Self::WorkerUnavailable => formatter.write_str("native desktop observation worker unavailable"),
-            Self::InternalInvariant => formatter.write_str("native desktop observation invariant failed"),
+            Self::WorkerUnavailable => {
+                formatter.write_str("native desktop observation worker unavailable")
+            }
+            Self::InternalInvariant => {
+                formatter.write_str("native desktop observation invariant failed")
+            }
         }
     }
 }
@@ -261,9 +270,12 @@ fn finalize(
         .surfaces
         .iter()
         .find(|surface| surface.focused)
-        .and_then(|surface| surface.semantic_elements.iter().find(|element| {
-            element.state_geometry_digest == digest(b"focused")
-        }))
+        .and_then(|surface| {
+            surface
+                .semantic_elements
+                .iter()
+                .find(|element| element.state_geometry_digest == digest(b"focused"))
+        })
         .map(|element| {
             element
                 .binding_digest()
@@ -450,10 +462,8 @@ fn observe_platform(
     {
         let surface_reference = windows_surface_reference(&app);
         let application_reference = format!("windows-pid:{:?}", app.pid);
-        let incarnation_reference = format!(
-            "windows-incarnation:{:?}:{:?}",
-            app.pid, app.data.stable_id
-        );
+        let incarnation_reference =
+            format!("windows-incarnation:{:?}:{:?}", app.pid, app.data.stable_id);
         let geometry_reference = format!("windows-bounds:{:?}", app.data.bounds);
         let identity = make_surface(
             request,
@@ -482,7 +492,8 @@ fn observe_platform(
                 semantic_truncated = true;
                 continue;
             }
-            let platform_reference = windows_element_reference(&element, request.observation_generation);
+            let platform_reference =
+                windows_element_reference(&element, request.observation_generation);
             let role = format!("{:?}", element.role);
             let state_geometry = if element.states.focused {
                 "focused".to_owned()
@@ -515,7 +526,8 @@ fn observe_platform(
                         let remaining = request
                             .limits
                             .max_semantic_nodes
-                            .saturating_sub(summary.node_count) as usize;
+                            .saturating_sub(summary.node_count)
+                            as usize;
                         if children.len() > remaining {
                             semantic_truncated = true;
                             summary.nodes_truncated = true;
@@ -611,13 +623,7 @@ fn observe_platform(
             {
                 let reference = format!("macos-display:{}", display.display_id());
                 let geometry = format!("{}x{}", display.width(), display.height());
-                let identity = make_surface(
-                    request,
-                    &reference,
-                    None,
-                    &reference,
-                    &geometry,
-                )?;
+                let identity = make_surface(request, &reference, None, &reference, &geometry)?;
                 surfaces.push(ObservedWorkSurface {
                     identity,
                     semantic_elements: Vec::new(),
@@ -626,7 +632,11 @@ fn observe_platform(
                 });
             }
 
-            for window in content.windows().into_iter().filter(|window| window.is_on_screen()) {
+            for window in content
+                .windows()
+                .into_iter()
+                .filter(|window| window.is_on_screen())
+            {
                 if surfaces.len() >= usize::from(request.limits.max_work_surfaces) {
                     surfaces_truncated = true;
                     break;
@@ -959,7 +969,10 @@ async fn observe_linux_async(
             let bus = object_ref.name_as_str().unwrap_or("unknown-bus");
             let path = object_ref.path_as_str().unwrap_or("/unknown");
             let platform_reference = format!("linux-atspi:{bus}:{path}");
-            let proxy = match object_ref.as_accessible_proxy(connection.connection()).await {
+            let proxy = match object_ref
+                .as_accessible_proxy(connection.connection())
+                .await
+            {
                 Ok(proxy) => proxy,
                 Err(_) => {
                     disposition = NativeObservationDisposition::Partial;
@@ -1008,7 +1021,8 @@ async fn observe_linux_async(
                         let remaining = request
                             .limits
                             .max_semantic_nodes
-                            .saturating_sub(summary.node_count) as usize;
+                            .saturating_sub(summary.node_count)
+                            as usize;
                         if children.len() > remaining {
                             semantic_truncated = true;
                             summary.nodes_truncated = true;
@@ -1158,6 +1172,9 @@ mod tests {
             request.capability_session_evidence
         );
         assert!(report.observation.work_surface_digests.is_empty());
-        assert_eq!(report.disposition, NativeObservationDisposition::NotSupported);
+        assert_eq!(
+            report.disposition,
+            NativeObservationDisposition::NotSupported
+        );
     }
 }
