@@ -1,0 +1,88 @@
+name: spec006-phase-d-macos-deadcode-repair
+
+on:
+  push:
+    branches:
+      - impl/006-desktop-computer-control
+    paths:
+      - .github/workflows/spec006-phase-d-macos-deadcode-repair.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact helper-only arm commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_parent="4701d21eb39e288c258ddf00526f2784844a92de"
+          actual_parent="$(git rev-parse HEAD^)"
+          if [[ "${actual_parent}" != "${expected_parent}" ]]; then
+            echo "expected parent ${expected_parent}, got ${actual_parent}" >&2
+            exit 1
+          fi
+          helper=".github/workflows/spec006-phase-d-macos-deadcode-repair.yml"
+          actual="$(git diff --name-only HEAD^ HEAD)"
+          if [[ "${actual}" != "${helper}" ]]; then
+            echo "arm commit is not helper-only: ${actual}" >&2
+            exit 1
+          fi
+          echo 'PHASE_D_MACOS_CFG_REPAIR_ARM_EXACT=YES'
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
+
+      - name: Apply exact macOS cfg repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("crates/golamd/src/desktop_observation.rs")
+          text = path.read_text()
+          old = "\nfn empty_platform_snapshot(\n"
+          new = "\n#[cfg(any(not(target_os = \"macos\"), test))]\nfn empty_platform_snapshot(\n"
+          if text.count(old) != 1:
+              raise SystemExit("empty_platform_snapshot insertion point changed")
+          path.write_text(text.replace(old, new, 1))
+          PY
+
+      - name: Verify exact product diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git diff --name-only HEAD)"
+          expected="crates/golamd/src/desktop_observation.rs"
+          if [[ "${actual}" != "${expected}" ]]; then
+            echo "unexpected product diff: ${actual}" >&2
+            exit 1
+          fi
+          grep -q '^#\[cfg(any(not(target_os = "macos"), test))\]$' crates/golamd/src/desktop_observation.rs
+
+      - name: Qualify macOS repair
+        run: |
+          set -euo pipefail
+          cargo +1.98.0 fmt --all -- --check
+          cargo +1.98.0 clippy --locked --workspace --all-targets -- -D warnings
+          cargo +1.98.0 test --locked -p golamd --test desktop_observation_adapter
+          echo 'PHASE_D_MACOS_CFG_REPAIR_QUALIFIED=YES'
+
+      - name: Commit exact qualified product diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin impl/006-desktop-computer-control
+          test "$(git rev-parse origin/impl/006-desktop-computer-control)" = "$(git rev-parse HEAD)"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/golamd/src/desktop_observation.rs
+          git commit -m 'fix(006): scope empty observation snapshot on macOS'
+          git push origin HEAD:impl/006-desktop-computer-control
