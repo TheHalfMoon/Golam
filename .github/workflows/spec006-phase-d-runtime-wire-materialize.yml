@@ -2,7 +2,8 @@ name: spec006-phase-d-runtime-wire-materialize
 
 on:
   push:
-    branches: [impl/006-desktop-computer-control]
+    branches:
+      - impl/006-desktop-computer-control
     paths:
       - .github/workflows/spec006-phase-d-runtime-wire-materialize.yml
 
@@ -10,121 +11,47 @@ permissions:
   contents: write
 
 jobs:
-  qualify-runtime-wiring:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-
-      - name: Install Linux build prerequisites
-        if: runner.os == 'Linux'
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libpipewire-0.3-dev build-essential libxdo-dev
-
-      - name: Install pinned Rust toolchain
-        shell: bash
-        run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
-
-      - name: Verify exact helper-only trigger
-        shell: bash
-        run: |
-          set -euo pipefail
-          BASE=f1703fb52245b27ce6ab98a6362d541fbb98b6f8
-          HELPER=.github/workflows/spec006-phase-d-runtime-wire-materialize.yml
-          test "$(git rev-parse HEAD^)" = "$BASE"
-          test "$(git diff --name-only "$BASE" HEAD)" = "$HELPER"
-          echo 'PHASE_D_RUNTIME_WIRE_BASE_BOUND=YES'
-
-      - name: Apply exact runtime-wiring patch
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-
-          lib = Path('crates/golamd/src/lib.rs')
-          text = lib.read_text()
-          old = 'pub mod acp_adapter;\npub mod local_fs;'
-          new = 'pub mod acp_adapter;\npub mod desktop_observation;\npub mod local_fs;'
-          assert text.count(old) == 1
-          lib.write_text(text.replace(old, new, 1))
-
-          test = Path('crates/golamd/tests/desktop_observation_adapter.rs')
-          text = test.read_text()
-          old = '''#[path = "../src/desktop_observation.rs"]
-pub mod desktop_observation;
-
-use desktop_observation::{NativeObservationRequest, observe_native_desktop};'''
-          new = '''use golamd::desktop_observation::{self, NativeObservationRequest, observe_native_desktop};'''
-          assert text.count(old) == 1
-          test.write_text(text.replace(old, new, 1))
-          PY
-
-      - name: Qualify product module wiring
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo +1.98.0 fmt --all -- --check
-          cargo +1.98.0 clippy --locked -p golamd --all-targets -- -D warnings
-          cargo +1.98.0 test --locked -p golamd --test desktop_observation_adapter
-          grep -q '^pub mod desktop_observation;$' crates/golamd/src/lib.rs
-          ! grep -q '^#\[path = "../src/desktop_observation.rs"\]' crates/golamd/tests/desktop_observation_adapter.rs
-          grep -q 'golamd::desktop_observation' crates/golamd/tests/desktop_observation_adapter.rs
-          echo 'PHASE_D_RUNTIME_MODULE_WIRING_QUALIFIED=YES'
-
-  materialize-runtime-wiring:
-    needs: qualify-runtime-wiring
+  materialize:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Install Linux build prerequisites
-        shell: bash
         run: |
-          set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libpipewire-0.3-dev build-essential libxdo-dev
 
       - name: Install pinned Rust toolchain
-        shell: bash
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
 
-      - name: Reverify trigger and materialize exact patch
-        shell: bash
+      - name: Verify helper-only chain
         run: |
           set -euo pipefail
           BASE=f1703fb52245b27ce6ab98a6362d541fbb98b6f8
           HELPER=.github/workflows/spec006-phase-d-runtime-wire-materialize.yml
-          test "$(git rev-parse HEAD^)" = "$BASE"
-          test "$(git diff --name-only "$BASE" HEAD)" = "$HELPER"
+          FILES="$(git diff --name-only "$BASE" HEAD)"
+          test "$FILES" = "$HELPER"
+          echo 'PHASE_D_RUNTIME_WIRE_HELPER_ONLY_CHAIN=YES'
 
+      - name: Materialize and qualify runtime wiring
+        run: |
+          set -euo pipefail
           python - <<'PY'
           from pathlib import Path
 
-          lib = Path('crates/golamd/src/lib.rs')
+          lib = Path("crates/golamd/src/lib.rs")
           text = lib.read_text()
-          old = 'pub mod acp_adapter;\npub mod local_fs;'
-          new = 'pub mod acp_adapter;\npub mod desktop_observation;\npub mod local_fs;'
+          old = "pub mod acp_adapter;\npub mod local_fs;"
+          new = "pub mod acp_adapter;\npub mod desktop_observation;\npub mod local_fs;"
           assert text.count(old) == 1
           lib.write_text(text.replace(old, new, 1))
 
-          test = Path('crates/golamd/tests/desktop_observation_adapter.rs')
+          test = Path("crates/golamd/tests/desktop_observation_adapter.rs")
           text = test.read_text()
-          old = '''#[path = "../src/desktop_observation.rs"]
-pub mod desktop_observation;
-
-use desktop_observation::{NativeObservationRequest, observe_native_desktop};'''
-          new = '''use golamd::desktop_observation::{self, NativeObservationRequest, observe_native_desktop};'''
+          old = "#[path = \"../src/desktop_observation.rs\"]\npub mod desktop_observation;\n\nuse desktop_observation::{NativeObservationRequest, observe_native_desktop};"
+          new = "use golamd::desktop_observation::{self, NativeObservationRequest, observe_native_desktop};"
           assert text.count(old) == 1
           test.write_text(text.replace(old, new, 1))
           PY
@@ -132,15 +59,21 @@ use desktop_observation::{NativeObservationRequest, observe_native_desktop};'''
           cargo +1.98.0 fmt --all -- --check
           cargo +1.98.0 clippy --locked -p golamd --all-targets -- -D warnings
           cargo +1.98.0 test --locked -p golamd --test desktop_observation_adapter
+          grep -q '^pub mod desktop_observation;$' crates/golamd/src/lib.rs
+          grep -q 'golamd::desktop_observation' crates/golamd/tests/desktop_observation_adapter.rs
+          if grep -q '^#\[path = "../src/desktop_observation.rs"\]' crates/golamd/tests/desktop_observation_adapter.rs; then
+            exit 1
+          fi
+          echo 'PHASE_D_RUNTIME_MODULE_WIRING_LINUX_QUALIFIED=YES'
 
+      - name: Self-remove and commit product patch
+        run: |
+          set -euo pipefail
+          HELPER=.github/workflows/spec006-phase-d-runtime-wire-materialize.yml
           rm "$HELPER"
-          EXPECTED="$(printf '%s\n' \
-            '.github/workflows/spec006-phase-d-runtime-wire-materialize.yml' \
-            'crates/golamd/src/lib.rs' \
-            'crates/golamd/tests/desktop_observation_adapter.rs' | sort)"
+          EXPECTED="$(printf '%s\n' "$HELPER" crates/golamd/src/lib.rs crates/golamd/tests/desktop_observation_adapter.rs | sort)"
           ACTUAL="$(git diff --name-only HEAD | sort)"
           test "$ACTUAL" = "$EXPECTED"
-
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
