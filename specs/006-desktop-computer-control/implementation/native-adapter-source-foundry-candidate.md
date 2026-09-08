@@ -26,6 +26,19 @@ Candidate libraries provide platform mechanics only. They cannot:
 - bypass Windows locked/UAC/secure-desktop boundaries or a Wayland compositor/XDG portal grant;
 - introduce camera, microphone, audio capture, OCR, hidden HTTP/cloud/network fallback, keylogging, or background clipboard polling.
 
+## Current independent-review reconciliation
+
+The fresh review of exact head `b799b4e0892f4ac526f577d3f74aa8246c19fe2c` verified cross-platform CI and candidate qualification but returned `DO_NOT_ADMIT_SPEC006_NATIVE_ADAPTER_DEPENDENCIES` for two material reasons:
+
+1. license/notice evidence was based on Cargo metadata and did not inspect checksum-bound `.crate` package archives;
+2. Linux clipboard enabled `arboard/wayland-data-control`, creating a direct Wayland data-control closure without a separately qualified session boundary.
+
+This revision repairs only those Source Foundry blockers. It does not admit dependencies or product implementation.
+
+The workflow now verifies each host-active registry package against the `Cargo.lock` package checksum, inspects the checksum-matching `.crate` archive, records top-level license/notice files, selects an allowed SPDX path deterministically, records the distribution obligation, and fails closed when archive identity or license evidence is missing or ambiguous.
+
+The Linux candidate removes `arboard/wayland-data-control` entirely. Linux clipboard candidate behavior is X11/XWayland only. Pure Wayland clipboard is `NotSupported` under this candidate and requires a separate future session-bound Source Foundry admission rather than a direct protocol exception.
+
 ## Windows semantic-candidate history
 
 ### Rejected: `uiautomation 0.25.0`
@@ -121,14 +134,16 @@ atspi = { version = "=0.30.0", default-features = false, features = ["proxies", 
 ashpd = { version = "=0.13.13", default-features = false, features = ["tokio", "remote_desktop", "screencast"] }
 pipewire = { version = "=0.9.2" }
 enigo = { version = "=0.6.1", default-features = false, features = ["x11rb"] }
-arboard = { version = "=3.6.1", default-features = false, features = ["wayland-data-control"] }
+arboard = { version = "=3.6.1", default-features = false }
 ```
 
-AT-SPI is the semantic layer. XDG ScreenCast/RemoteDesktop is user/compositor-granted authority only; denied `ashpd` features include camera, clipboard, `input_capture`, screenshot, background and unrelated portal surfaces. PipeWire is frame transport only for a granted ScreenCast session. Enigo is X11-only; Wayland/libei paths are denied. Clipboard remains explicit text-only and non-polling.
+AT-SPI is the semantic layer. XDG ScreenCast/RemoteDesktop is user/compositor-granted authority only; denied `ashpd` features include camera, clipboard, `input_capture`, screenshot, background and unrelated portal surfaces. PipeWire is frame transport only for a granted ScreenCast session. Enigo is X11-only; Wayland/libei paths are denied.
+
+Linux clipboard in this candidate is X11/XWayland-only through Arboard's default Linux X11 backend with optional image support disabled. `arboard/wayland-data-control` and `wl-clipboard-rs` are denied and must be absent from the active closure. A pure Wayland session must report clipboard `NotSupported` until a separate compositor/portal-session-bound clipboard mechanism receives its own Source Foundry qualification and authority integration. No direct Wayland clipboard protocol exception is admitted here.
 
 Run `34170134934`, Linux job `101888717883`, proved build + feature denylist + `NETWORK_CLIENT_PACKAGES=0` before the original SPDX checker falsely rejected `r-efi 6.0.0`'s `MIT OR Apache-2.0 OR LGPL-2.1-or-later`. The repaired evaluator preserves SPDX `OR`/`AND` semantics, does not whitelist LGPL, and evaluates only the host-active resolve graph.
 
-Run `34170554684`, Linux job `101889890984`, completed SUCCESS with the repaired evaluator and product-manifest non-mutation proof. This remains historical candidate evidence until the final exact-head run succeeds.
+Run `34170554684`, Linux job `101889890984`, completed SUCCESS with the repaired evaluator and product-manifest non-mutation proof. This remains historical candidate evidence until the repaired exact-head run succeeds.
 
 ## Candidate qualification workflow
 
@@ -141,26 +156,30 @@ Run `34170554684`, Linux job `101889890984`, completed SUCCESS with the repaired
 5. compile exact aggregate closures on the matching platform;
 6. on Windows, compile a `#![forbid(unsafe_code)]` caller probe that references `xa11y_windows::WindowsProvider`;
 7. fail if denied features enter WGC/Enigo/arboard/macOS/Linux candidate paths;
-8. inventory active licenses, custom build scripts, native `links` declarations, and known HTTP-client packages;
-9. require at least one allowed path through every SPDX expression, preserving `OR`/`AND` semantics rather than substring matching;
-10. surface third-party unsafe/FFI/native/build boundaries for independent review rather than translating dependency-internal unsafe into Golam-authored unsafe authority;
-11. prove repository product manifests remain unchanged;
-12. emit candidate-only status. Workflow success cannot itself change this record to admitted.
+8. on Linux, fail if `arboard/wayland-data-control` or `wl-clipboard-rs` enters the candidate closure;
+9. bind every host-active registry package to the exact `Cargo.lock` checksum and matching cached `.crate` archive SHA-256;
+10. inspect checksum-bound archives for top-level license/notice files, record the selected allowed SPDX path and distribution obligations, and fail closed for missing, ambiguous or unverified archive/license evidence;
+11. inventory active custom build scripts, native `links` declarations, and known HTTP-client packages;
+12. surface third-party unsafe/FFI/native/build boundaries for independent review rather than translating dependency-internal unsafe into Golam-authored unsafe authority;
+13. prove repository product manifests remain unchanged;
+14. emit candidate-only status. Workflow success cannot itself change this record to admitted.
 
 ## Required independent review questions
 
 A fresh exact-head security/governance review must answer at least:
 
+- Does each host-active registry package have a unique checksum-bound `.crate` archive whose SHA-256 equals its `Cargo.lock` checksum?
+- Are top-level license/notice files and selected SPDX paths sufficient to determine distribution obligations without ambiguity?
 - Does `xa11y-windows 0.13.0` provide a sufficiently bounded safe caller-facing UIA provider for Spec 006 while preserving Golam's `unsafe_code = "forbid"` policy?
 - Can Golam's semantic adapter be kept structurally limited to `WindowsProvider`/semantic provider behavior so `WindowsInputProvider` and `WindowsScreenshot` remain unreachable from the semantic route?
 - Are xa11y's dependency-internal unsafe/FFI boundaries, recent-release maturity, license/notice obligations and platform verification posture acceptable?
 - Does the broad WGC closure remain safely encapsulated behind selected window/display capture only?
 - Does `axuielement` exclude `raw-ffi`, and can compatibility keyboard helpers remain unreachable from semantic dispatch?
 - Can ScreenCaptureKit be configured deterministically as screen-only, audio-off, microphone-absent?
-- Are native/FFI/build-script and source/license obligations acceptable?
 - Does Linux ScreenCast use only the user-granted portal PipeWire remote rather than ambient source enumeration?
 - Can XDG RemoteDesktop remain user/compositor-granted without camera, clipboard, `input_capture`, or unrelated portal surfaces?
-- Is X11 input explicitly session-scoped while Wayland bypass remains impossible?
+- Is X11 input explicitly session-scoped while Wayland input bypass remains impossible?
+- Is Linux clipboard restricted to X11/XWayland while pure Wayland clipboard fails closed as `NotSupported`?
 - Does text-only clipboard remain separate from observation/capture/raw authority and avoid polling?
 - Does any active candidate introduce hidden HTTP/cloud/network-client behavior or product runtime network authority?
 
@@ -176,6 +195,8 @@ WINDOWS_0_62_2_DIRECT_UIA_CALLSITE=REJECTED_UNDER_CURRENT_GOLAM_SAFE_RUST_POLICY
 XA11Y_WINDOWS_0_13_0_SEMANTIC_ADAPTER=CANDIDATE_PENDING_QUALIFICATION_AND_REVIEW
 XA11Y_WINDOWS_INPUT_PROVIDER_FOR_SEMANTIC_ROUTE=DENIED
 XA11Y_WINDOWS_SCREENSHOT_FOR_SEMANTIC_ROUTE=DENIED
+LINUX_WAYLAND_CLIPBOARD=NOT_ADMITTED
+LINUX_DIRECT_WAYLAND_CLIPBOARD_PROTOCOL=DENIED
 PRODUCT_MANIFEST_MUTATION=BLOCKED
 PLATFORM_DISPATCH=BLOCKED
 CAMERA=DENIED
@@ -194,7 +215,7 @@ WAIVER_TAKEN=NO
 
 ```text
 SPEC006_NATIVE_SOURCE_FOUNDRY_CANDIDATE=OPEN
-EXACT_VERSION_SET=REPAIRED_TO_SAFE_CALLER_FACING_WINDOWS_UIA_CANDIDATE
+EXACT_VERSION_SET=REPAIRED_FOR_ARCHIVE_LICENSE_AND_WAYLAND_CLIPBOARD_BLOCKERS
 WORKFLOW_QUALIFICATION=PENDING
 INDEPENDENT_REVIEW=PENDING
 SOURCE_FOUNDRY_ADMISSION=NO

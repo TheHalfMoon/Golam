@@ -104,7 +104,7 @@ jobs:
           ashpd = { version = "=0.13.13", default-features = false, features = ["tokio", "remote_desktop", "screencast"] }
           pipewire = { version = "=0.9.2" }
           enigo = { version = "=0.6.1", default-features = false, features = ["x11rb"] }
-          arboard = { version = "=3.6.1", default-features = false, features = ["wayland-data-control"] }
+          arboard = { version = "=3.6.1", default-features = false }
           EOF
               printf '#![forbid(unsafe_code)]\nfn main() {}\n' >"$ROOT/src/main.rs"
               ;;
@@ -202,14 +202,19 @@ jobs:
               for f in frontend backend background camera clipboard input_capture location network_monitor notification open_uri print proxy_resolver screenshot secret usb wallpaper wayland raw_handle; do deny_feature ashpd "$f"; done
               require_feature enigo x11rb
               for f in wayland libei_smol libei_tokio xdo platform_specific serde tokio; do deny_feature enigo "$f"; done
-              require_feature arboard wayland-data-control
-              for f in image-data image core-graphics windows-sys; do deny_feature arboard "$f"; done
+              for f in image-data image core-graphics windows-sys wayland-data-control wl-clipboard-rs; do deny_feature arboard "$f"; done
+              if grep -F 'wl-clipboard-rs ' tree.txt >/dev/null || grep -F 'arboard feature "wayland-data-control"' features.txt >/dev/null; then
+                echo 'LINUX_DIRECT_WAYLAND_CLIPBOARD_CLOSURE=REJECTED_PRESENT' >&2
+                exit 1
+              fi
+              echo 'LINUX_CLIPBOARD_CANDIDATE=X11_ONLY'
+              echo 'LINUX_PURE_WAYLAND_CLIPBOARD=NOT_SUPPORTED_PENDING_SEPARATE_SESSION_BOUND_ADMISSION'
               ;;
           esac
 
           echo "FEATURE_DENYLIST=PASS"
 
-      - name: Inventory active license, build, native-link, and network closure
+      - name: Inventory checksum-bound package archives, licenses, builds, native links, and network closure
         shell: bash
         env:
           PLATFORM: ${{ matrix.platform }}
@@ -218,10 +223,19 @@ jobs:
           ROOT="${RUNNER_TEMP}/golam-spec006-native-${PLATFORM}"
           cd "$ROOT"
           python3 - <<'PY'
+          import hashlib
           import json
+          import os
+          import re
           import sys
+          import tarfile
+          import tomllib
+          from pathlib import Path, PurePosixPath
 
           metadata = json.load(open('metadata.json', encoding='utf-8'))
+          with open('Cargo.lock', 'rb') as fh:
+              cargo_lock = tomllib.load(fh)
+
           allowed = {
               '0BSD', 'Apache-2.0', 'Apache-2.0 WITH LLVM-exception',
               'BSD-2-Clause', 'BSD-3-Clause', 'BSL-1.0', 'CC0-1.0',
@@ -232,6 +246,8 @@ jobs:
               'reqwest', 'hyper', 'hyper-util', 'ureq', 'curl', 'curl-sys',
               'isahc', 'surf', 'attohttpc', 'awc'
           }
+          license_name = re.compile(r'^(LICENSE|LICENCE|COPYING)(?:[-._].*)?$', re.I)
+          notice_name = re.compile(r'^(NOTICE|COPYRIGHT)(?:[-._].*)?$', re.I)
 
           def strip_outer(expr):
               expr = expr.strip()
@@ -277,16 +293,40 @@ jobs:
                   parts.append(expr[start:].strip())
               return parts
 
-          def acceptable(expr):
+          def select_allowed_path(expr):
               expr = strip_outer(expr.replace('/', ' OR '))
               ors = split_top(expr, 'OR')
               if ors:
-                  return any(acceptable(part) for part in ors)
+                  for part in ors:
+                      selected = select_allowed_path(part)
+                      if selected is not None:
+                          return selected
+                  return None
               ands = split_top(expr, 'AND')
               if ands:
-                  return all(acceptable(part) for part in ands)
-              return expr in allowed
+                  selected = []
+                  for part in ands:
+                      branch = select_allowed_path(part)
+                      if branch is None:
+                          return None
+                      selected.extend(branch)
+                  return selected
+              return [expr] if expr in allowed else None
 
+          def distribution_obligation(selected, notice_files):
+              obligations = []
+              for license_id in selected:
+                  if license_id == 'MPL-2.0':
+                      obligations.append('FILE_LEVEL_SOURCE_AVAILABILITY_AND_LICENSE_NOTICE_REQUIRED')
+                  elif license_id.startswith('Apache-2.0'):
+                      obligations.append('LICENSE_AND_COPYRIGHT_NOTICE_REQUIRED')
+                  else:
+                      obligations.append('LICENSE_OR_COPYRIGHT_NOTICE_REQUIRED')
+              if notice_files:
+                  obligations.append('PRESERVE_OBSERVED_UPSTREAM_NOTICE_FILES')
+              return '+'.join(dict.fromkeys(obligations))
+
+          lock_packages = cargo_lock.get('package', [])
           packages = {p['id']: p for p in metadata['packages']}
           nodes = {n['id']: n for n in metadata['resolve']['nodes']}
           reachable = set()
@@ -305,33 +345,96 @@ jobs:
           network = []
           custom_build = []
           native_links = []
+          cargo_home = Path(os.environ.get('CARGO_HOME') or (Path.home() / '.cargo'))
+          cache_root = cargo_home / 'registry' / 'cache'
+
           print(f'ACTIVE_EXTERNAL_PACKAGE_COUNT={len(external)}')
-          for p in sorted(external, key=lambda x: (x['name'], x['version'])):
+          print('=== ARCHIVE_BOUND_LICENSE_NOTICE_INVENTORY ===')
+          for p in sorted(external, key=lambda x: (x['name'], x['version'], x.get('source') or '')):
+              name = p['name']
+              version = p['version']
+              source = p.get('source') or ''
               expr = (p.get('license') or '').strip()
-              license_file = p.get('license_file') or ''
-              if expr and acceptable(expr):
-                  disposition = 'ACCEPT_VALID_ALLOWED_LICENSE_PATH'
-              elif not expr and license_file:
-                  disposition = 'REVIEW_LICENSE_FILE_REQUIRED'
-                  blocked.append((p['name'], p['version'], disposition, license_file))
-              else:
-                  disposition = 'REJECT_NO_ALLOWED_LICENSE_PATH'
-                  blocked.append((p['name'], p['version'], disposition, expr or 'MISSING'))
+              selected = select_allowed_path(expr) if expr else None
+
+              lock_rows = [row for row in lock_packages if row.get('name') == name and str(row.get('version')) == version]
+              exact_rows = [row for row in lock_rows if (row.get('source') or '') == source]
+              lock_row = exact_rows[0] if len(exact_rows) == 1 else (lock_rows[0] if len(lock_rows) == 1 else None)
+              lock_checksum = (lock_row or {}).get('checksum') or ''
+
+              archive_candidates = list(cache_root.glob(f'*/{name}-{version}.crate')) if cache_root.exists() else []
+              verified_archives = []
+              for archive in archive_candidates:
+                  digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+                  if lock_checksum and digest == lock_checksum:
+                      verified_archives.append((archive, digest))
+              archive = verified_archives[0][0] if len(verified_archives) == 1 else None
+              archive_sha = verified_archives[0][1] if len(verified_archives) == 1 else ''
+
+              license_files = []
+              notice_files = []
+              if archive is not None:
+                  with tarfile.open(archive, mode='r:*') as tf:
+                      for member in tf.getmembers():
+                          if not member.isfile():
+                              continue
+                          parts = PurePosixPath(member.name).parts
+                          if len(parts) < 2:
+                              continue
+                          rel = PurePosixPath(*parts[1:])
+                          if len(rel.parts) != 1:
+                              continue
+                          base = rel.name
+                          if license_name.match(base):
+                              license_files.append(base)
+                          if notice_name.match(base):
+                              notice_files.append(base)
+              license_files = sorted(set(license_files))
+              notice_files = sorted(set(notice_files))
+
+              problems = []
+              if not source.startswith('registry+'):
+                  problems.append('NON_REGISTRY_SOURCE_REQUIRES_SEPARATE_SOURCE_IDENTITY_REVIEW')
+              if lock_row is None:
+                  problems.append('LOCK_IDENTITY_AMBIGUOUS_OR_MISSING')
+              if not lock_checksum:
+                  problems.append('LOCK_CHECKSUM_MISSING')
+              if archive is None:
+                  problems.append('CHECKSUM_BOUND_CRATE_ARCHIVE_NOT_UNIQUELY_RESOLVED')
+              if selected is None:
+                  problems.append('NO_ALLOWED_SPDX_PATH')
+              if not license_files:
+                  problems.append('TOP_LEVEL_LICENSE_FILE_NOT_OBSERVED_IN_ARCHIVE')
+
+              obligation = distribution_obligation(selected or [], notice_files) if selected else 'UNRESOLVED'
+              disposition = 'ACCEPT_ARCHIVE_BOUND_LICENSE_EVIDENCE' if not problems else 'REVIEW_REQUIRED:' + ','.join(problems)
+              if problems:
+                  blocked.append((name, version, disposition))
 
               kinds = sorted({kind for target in p.get('targets', []) for kind in target.get('kind', [])})
               has_build = 'custom-build' in kinds
               if has_build:
-                  custom_build.append((p['name'], p['version']))
+                  custom_build.append((name, version))
               if p.get('links'):
-                  native_links.append((p['name'], p['version'], p['links']))
-              if p['name'] in network_clients:
-                  network.append((p['name'], p['version']))
+                  native_links.append((name, version, p['links']))
+              if name in network_clients:
+                  network.append((name, version))
 
               print('|'.join([
-                  p['name'], p['version'], expr or 'NO_SPDX_EXPRESSION',
-                  license_file or 'NO_LICENSE_FILE_METADATA', disposition,
+                  name,
+                  version,
+                  source,
+                  lock_checksum or 'NO_LOCK_CHECKSUM',
+                  archive_sha or 'NO_VERIFIED_ARCHIVE_SHA256',
+                  expr or 'NO_SPDX_EXPRESSION',
+                  ' AND '.join(selected) if selected else 'NO_SELECTED_ALLOWED_PATH',
+                  ','.join(license_files) if license_files else 'NO_TOP_LEVEL_LICENSE_FILE',
+                  ','.join(notice_files) if notice_files else 'NO_TOP_LEVEL_NOTICE_FILE',
+                  obligation,
+                  disposition,
                   'CUSTOM_BUILD' if has_build else 'NO_CUSTOM_BUILD',
-                  p.get('links') or 'NO_NATIVE_LINKS', p.get('repository') or ''
+                  p.get('links') or 'NO_NATIVE_LINKS',
+                  p.get('repository') or ''
               ]))
 
           print('=== CUSTOM_BUILD_PACKAGES ===')
@@ -343,14 +446,14 @@ jobs:
           print('=== NETWORK_CLIENT_PACKAGES ===')
           print(f'count={len(network)}')
           for row in network: print('|'.join(row))
-          print('=== BLOCKED_LICENSES ===')
+          print('=== BLOCKED_ARCHIVE_OR_LICENSE_EVIDENCE ===')
           print(f'count={len(blocked)}')
           for row in blocked: print('|'.join(row))
 
           if network:
               sys.exit('network-capable HTTP client package entered the active candidate closure')
           if blocked:
-              sys.exit('active license disposition requires reconciliation before admission')
+              sys.exit('checksum-bound package archive/license evidence requires reconciliation before admission')
           PY
 
       - name: Prove product manifests remain unchanged
@@ -371,6 +474,7 @@ jobs:
           MICROPHONE_ADMISSION=NO
           AUDIO_CAPTURE_ADMISSION=NO
           OCR_ADMISSION=NO
+          LINUX_DIRECT_WAYLAND_CLIPBOARD_ADMISSION=NO
           WAYLAND_BYPASS_ADMISSION=NO
           SOURCE_FOUNDRY_CANDIDATE_QUALIFICATION=PASS_PENDING_INDEPENDENT_REVIEW
           EOF
