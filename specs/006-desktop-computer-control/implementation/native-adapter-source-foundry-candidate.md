@@ -107,15 +107,30 @@ xa11y-windows|0.13.0|6c3a5878e5e9a36942144854914985dbc7aaaf88|xa11y-windows|LICE
 ### Exact macOS fallback evidence
 
 ```text
-dispatch2|0.3.1|97ec97bbb9fe29d765f293778496113b9f2e48da|crates/dispatch2|LICENSE.md|1374|c1b95e7cdc3c3b8faebf0a9f48463ba6810dafeed6efee1dcbbbfe666441c336
-objc2|0.6.4|8852b424193ca41602281b3d7540d7c8ed51e49a|crates/objc2|LICENSE.md|1374|c1b95e7cdc3c3b8faebf0a9f48463ba6810dafeed6efee1dcbbbfe666441c336
-objc2-app-kit|0.3.2|efbc911141072335525d86b86981078c3f667da8|framework-crates/objc2-app-kit|LICENSE.md|1374|c1b95e7cdc3c3b8faebf0a9f48463ba6810dafeed6efee1dcbbbfe666441c336
-objc2-core-foundation|0.3.2|cc83c200dd51d264e548b50160de52d002f099c6|framework-crates/objc2-core-foundation|LICENSE.md|1374|c1b95e7cdc3c3b8faebf0a9f48463ba6810dafeed6efee1dcbbbfe666441c336
-objc2-core-graphics|0.3.2|f76fcccddd86cb516f816bffddb96efc7b18396b|framework-crates/objc2-core-graphics|LICENSE.md|1374|c1b95e7cdc3c3b8faebf0a9f48463ba6810dafeed6efee1dcbbbfe666441c336
-objc2-encode|4.1.0|8d214f5477365ffcbcbb7de058c86ed9a518efb7|crates/objc2-encode|LICENSE.md|1374|c1b95e7cdc3c3b8faebf0a9f48463ba6810dafeed6efee1dcbbbfe666441c336
-objc2-foundation|0.3.2|56390d96346ac06a3a3dec8e4b9e16d9673b0977|framework-crates/objc2-foundation|LICENSE.md|1374|c1b95e7cdc3c3b8faebf0a9f48463ba6810dafeed6efee1dcbbbfe666441c336
-objc2-io-surface|0.3.2|096f0ba75a29af04eb35b63fddb3de9b78e4e692|framework-crates/objc2-io-surface|LICENSE.md|1374|c1b95e7cdc3c3b8faebf0a9f48463ba6810dafeed6efee1dcbbbfe666441c336
+dispatch2|0.3.1|8852b424193ca41602281b3d7540d7c8ed51e49a|crates/dispatch2|LICENSE.md|1339|7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54
+objc2|0.6.4|8852b424193ca41602281b3d7540d7c8ed51e49a|crates/objc2|LICENSE.md|1339|7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54
+objc2-app-kit|0.3.2|7b1abfd750a2cacaea71d6a56ecfb83cb7de560b|framework-crates/objc2-app-kit|LICENSE.md|1339|7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54
+objc2-core-foundation|0.3.2|7b1abfd750a2cacaea71d6a56ecfb83cb7de560b|framework-crates/objc2-core-foundation|LICENSE.md|1339|7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54
+objc2-core-graphics|0.3.2|7b1abfd750a2cacaea71d6a56ecfb83cb7de560b|framework-crates/objc2-core-graphics|LICENSE.md|1339|7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54
+objc2-encode|4.1.0|8d214f5477365ffcbcbb7de058c86ed9a518efb7|crates/objc2-encode|LICENSE.md|1339|7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54
+objc2-foundation|0.3.2|7b1abfd750a2cacaea71d6a56ecfb83cb7de560b|framework-crates/objc2-foundation|LICENSE.md|1339|7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54
+objc2-io-surface|0.3.2|7b1abfd750a2cacaea71d6a56ecfb83cb7de560b|framework-crates/objc2-io-surface|LICENSE.md|1339|7f976f7e9cb2d87df7230606feb932c3f21ac0e664045a775b600046ff850c54
 ```
+
+### Exact macOS checksum-bound archive identity
+
+The successful exact-head macOS Source Foundry job `101904425012` in run `34175667738` resolved the following `Cargo.lock` checksum and cached `.crate` archive SHA-256 identities. Each archive SHA-256 exactly equals its lock checksum.
+
+| Package | Version | `Cargo.lock` checksum | `.crate` archive SHA-256 |
+|---|---:|---|---|
+| `dispatch2` | `0.3.1` | `1e0e367e4e7da84520dedcac1901e4da967309406d1e51017ae1abfb97adbd38` | `1e0e367e4e7da84520dedcac1901e4da967309406d1e51017ae1abfb97adbd38` |
+| `objc2` | `0.6.4` | `3a12a8ed07aefc768292f076dc3ac8c48f3781c8f2d5851dd3d98950e8c5a89f` | `3a12a8ed07aefc768292f076dc3ac8c48f3781c8f2d5851dd3d98950e8c5a89f` |
+| `objc2-app-kit` | `0.3.2` | `d49e936b501e5c5bf01fda3a9452ff86dc3ea98ad5f283e1455153142d97518c` | `d49e936b501e5c5bf01fda3a9452ff86dc3ea98ad5f283e1455153142d97518c` |
+| `objc2-core-foundation` | `0.3.2` | `2a180dd8642fa45cdb7dd721cd4c11b1cadd4929ce112ebd8b9f5803cc79d536` | `2a180dd8642fa45cdb7dd721cd4c11b1cadd4929ce112ebd8b9f5803cc79d536` |
+| `objc2-core-graphics` | `0.3.2` | `e022c9d066895efa1345f8e33e584b9f958da2fd4cd116792e15e07e4720a807` | `e022c9d066895efa1345f8e33e584b9f958da2fd4cd116792e15e07e4720a807` |
+| `objc2-encode` | `4.1.0` | `ef25abbcd74fb2609453eb695bd2f860d389e457f67dc17cafc8b8cbc89d0c33` | `ef25abbcd74fb2609453eb695bd2f860d389e457f67dc17cafc8b8cbc89d0c33` |
+| `objc2-foundation` | `0.3.2` | `e3e0adef53c21f888deb4fa59fc59f7eb17404926ee8a6f59f5df0fd7f9f3272` | `e3e0adef53c21f888deb4fa59fc59f7eb17404926ee8a6f59f5df0fd7f9f3272` |
+| `objc2-io-surface` | `0.3.2` | `180788110936d59bab6bd83b6060ffdfffb3b922ba1396b312ae795e1de9d81d` | `180788110936d59bab6bd83b6060ffdfffb3b922ba1396b312ae795e1de9d81d` |
 
 The exact release `LICENSE.md` is the repository-level license declaration/mapping evidence used by these published packages. It is not treated as automatic proof that every downstream redistribution concern is resolved. In particular, `objc2` framework bindings are derived from Apple SDK declarations; independent review must determine whether the candidate evidence and planned packaging obligations are sufficient before admission.
 
