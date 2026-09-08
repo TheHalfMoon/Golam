@@ -50,7 +50,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ROOT="${RUNNER_TEMP}/golam-spec006-native-product-lock"
+          TEMP_ROOT="$RUNNER_TEMP"
+          if command -v cygpath >/dev/null 2>&1; then
+            TEMP_ROOT="$(cygpath -u "$RUNNER_TEMP")"
+          fi
+          ROOT="${TEMP_ROOT}/golam-spec006-native-product-lock"
           rm -rf "$ROOT"
           mkdir -p "$ROOT"
           git archive HEAD | tar -x -C "$ROOT"
