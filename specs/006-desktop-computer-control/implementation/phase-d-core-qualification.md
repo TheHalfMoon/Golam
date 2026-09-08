@@ -2,7 +2,7 @@
 
 ## Authority and scope
 
-This record binds only the Phase D core hardening and native-observation qualification evidence accumulated before canonical Phase D closeout. It does not mark T006-016 through T006-019 complete, does not preapprove adapter correctness, and does not satisfy final Spec 006 review or closeout gates.
+This record binds the Phase D core hardening and native-observation qualification evidence through canonical Phase D closeout. It marks only T006-016 through T006-019 complete after exact clean-head tri-OS CI; it does not preapprove final Spec 006 review, merge, post-merge qualification or project closure.
 
 ## Qualified baseline
 
@@ -146,15 +146,29 @@ This is recorded as platform non-execution, not as successful product qualificat
 - The helper proved the product diff contained only `crates/golamd/src/desktop_observation.rs`, removed itself, proved the final diff contained only the helper deletion plus that source file, and created forward-only bot commit `a7f3caba6a993b3e15332d6d7454edb5b9cd979b` (`fix(006): correct native observation adapter compile errors`).
 - The temporary Clippy-repair helper is absent from the resulting product tree.
 
+## Final runtime-wiring and clean-head qualification
+
+- Runtime module wiring product commit: `c2cdf62d6bf19b2a70897774844e80f37d961282`.
+- Clean wired descendant: `4701d21eb39e288c258ddf00526f2784844a92de`.
+- Preserved regular CI run `34285589422`: Ubuntu SUCCESS, Windows SUCCESS, macOS FAILURE at Clippy due a macOS-production dead-code cfg mismatch.
+- Preserved first cfg-repair run `34287393002`: FAILURE before product commit because the helper omitted the Tauri frontend build required by workspace Clippy; no product commit was created.
+- Corrected cfg-repair helper run `34287724816`: SUCCESS after frontend closure, format, workspace all-target Clippy and adapter-test qualification.
+- Product cfg repair: `3125190fb9859dbcb9c4887d0662dc6bb296aa4a`.
+- Exact clean human descendant: `02db0ce8cb1e0d6ba13aec6da57c1f76e743cc10`.
+- Exact-head regular CI run `34288135133`: SUCCESS on Ubuntu job `102268344321`, Windows job `102268344391` and macOS job `102268344457`.
+
+The exact clean head compiles the observation adapter through the real `golamd` library module graph and the integration test imports that product module. Observation remains non-authoritative, bounded and separate from later capture/actuation/clipboard authority. Focus terminal success remains conditioned on fresh readback of the intended focused surface; missing or conflicting readback remains `UNKNOWN_OUTCOME`.
+
 ## Current disposition
 
 `PHASE_D_CORE_HARDENING_MATERIALIZED=YES`
-`PHASE_D_CORE_EXACT_HEAD_REGULAR_CI=SUCCESS_ON_F5760C06_PRE_ADAPTER_HEAD`
 `PHASE_D_NATIVE_API_PROBE=SUCCESS_TRI_OS`
 `PHASE_D_NATIVE_OBSERVATION_ADAPTER_MATERIALIZED=YES`
-`PHASE_D_NATIVE_OBSERVATION_ADAPTER_LINUX_CLIPPY_TEST=SUCCESS_ON_A7F3CABA_PRODUCT_LOGIC`
-`PHASE_D_NATIVE_OBSERVATION_ADAPTER_EXACT_HEAD_REGULAR_CI=PENDING`
-`T006_016_T006_019_COMPLETE=NO`
+`PHASE_D_RUNTIME_MODULE_WIRING=YES`
+`PHASE_D_EXACT_CLEAN_HEAD=02db0ce8cb1e0d6ba13aec6da57c1f76e743cc10`
+`PHASE_D_EXACT_HEAD_REGULAR_CI=SUCCESS_TRI_OS_RUN_34288135133`
+`T006_016_T006_019_COMPLETE=YES`
+`PHASE_D_COMPLETE=YES`
 `FINAL_SPEC006_REVIEW=NOT_PREAPPROVED`
 `SPEC_006_IMPLEMENTATION_COMPLETE=NO`
 `SPEC_006_CLOSED_CANONICAL=NO`
