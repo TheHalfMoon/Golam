@@ -143,7 +143,7 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         )
         .map_err(ToolEffectError::MutationEvidence)?;
 
-        let receipt = match input.backend.dispatch_action(validated) {
+        let mut receipt = match input.backend.dispatch_action(validated) {
             Ok(receipt) => receipt,
             Err(error) => {
                 self.complete_desktop_dispatch(
@@ -163,6 +163,26 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
                 return Err(DesktopDispatchError::AdapterUncertain(error));
             }
         };
+
+        if input.prepared.intent().operation_kind == DesktopActionKind::Focus
+            && receipt.status == DesktopBackendTerminalStatus::Committed
+        {
+            receipt.post_observation_digest = match input.backend.observe(input.observation_limits)
+            {
+                Ok(post_observation)
+                    if post_observation.capability_session_evidence
+                        == input
+                            .prepared
+                            .intent()
+                            .prepared_permission_session_evidence_ref
+                        && post_observation.focused_surface_digest
+                            == Some(input.prepared.intent().exact_target_identity_digest) =>
+                {
+                    post_observation.binding_digest().ok()
+                }
+                Ok(_) | Err(_) => None,
+            };
+        }
 
         let receipt_bytes = action_receipt_bytes(&receipt)?;
         let completion = classify_action_receipt(input.prepared, &receipt);

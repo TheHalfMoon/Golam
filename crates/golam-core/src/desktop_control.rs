@@ -104,7 +104,9 @@ impl VisibleControlChannelId {
 pub struct DesktopLimits {
     pub max_work_surfaces: u16,
     pub max_semantic_nodes: u32,
+    pub max_semantic_depth: u16,
     pub max_string_bytes: u32,
+    pub max_observation_duration_ms: u64,
     pub max_capture_width: u32,
     pub max_capture_height: u32,
     pub max_capture_bytes: u32,
@@ -117,7 +119,9 @@ impl Default for DesktopLimits {
         Self {
             max_work_surfaces: 32,
             max_semantic_nodes: 2_048,
+            max_semantic_depth: 32,
             max_string_bytes: 16 * 1024,
+            max_observation_duration_ms: 5_000,
             max_capture_width: 7_680,
             max_capture_height: 4_320,
             max_capture_bytes: 64 * 1024 * 1024,
@@ -133,8 +137,12 @@ impl DesktopLimits {
             || self.max_work_surfaces as usize > MAX_OBSERVED_SURFACES
             || self.max_semantic_nodes == 0
             || self.max_semantic_nodes > 65_536
+            || self.max_semantic_depth == 0
+            || self.max_semantic_depth > 256
             || self.max_string_bytes == 0
             || self.max_string_bytes > 1024 * 1024
+            || self.max_observation_duration_ms == 0
+            || self.max_observation_duration_ms > 30_000
             || self.max_capture_width == 0
             || self.max_capture_width > 16_384
             || self.max_capture_height == 0
@@ -154,7 +162,9 @@ impl DesktopLimits {
     fn encode(&self, encoder: &mut CanonicalEncoder) {
         encoder.push_u16(self.max_work_surfaces);
         encoder.push_u64(u64::from(self.max_semantic_nodes));
+        encoder.push_u16(self.max_semantic_depth);
         encoder.push_u64(u64::from(self.max_string_bytes));
+        encoder.push_u64(self.max_observation_duration_ms);
         encoder.push_u64(u64::from(self.max_capture_width));
         encoder.push_u64(u64::from(self.max_capture_height));
         encoder.push_u64(u64::from(self.max_capture_bytes));
@@ -1006,6 +1016,33 @@ mod tests {
     #[test]
     fn defaults_are_bounded() {
         assert!(DesktopLimits::default().validate().is_ok());
+    }
+
+    #[test]
+    fn semantic_observation_limits_are_explicit_and_bounded() {
+        let limits = DesktopLimits {
+            max_semantic_depth: 0,
+            ..DesktopLimits::default()
+        };
+        assert_eq!(limits.validate(), Err(DesktopControlError::InvalidLimits));
+
+        let limits = DesktopLimits {
+            max_semantic_depth: 257,
+            ..DesktopLimits::default()
+        };
+        assert_eq!(limits.validate(), Err(DesktopControlError::InvalidLimits));
+
+        let limits = DesktopLimits {
+            max_observation_duration_ms: 0,
+            ..DesktopLimits::default()
+        };
+        assert_eq!(limits.validate(), Err(DesktopControlError::InvalidLimits));
+
+        let limits = DesktopLimits {
+            max_observation_duration_ms: 30_001,
+            ..DesktopLimits::default()
+        };
+        assert_eq!(limits.validate(), Err(DesktopControlError::InvalidLimits));
     }
 
     #[test]
