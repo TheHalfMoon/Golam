@@ -14,6 +14,7 @@ miniz_oxide_read = { package = "miniz_oxide", version = "=0.9.1", default-featur
 serde_json.workspace = true
 
 [target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dependencies]
+golam-bounded-linux-async = { path = "../golam-bounded-linux-async" }
 landlock.workspace = true
 libc.workspace = true
 nix.workspace = true

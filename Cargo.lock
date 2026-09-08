@@ -2004,6 +2004,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "golam-bounded-linux-async"
+version = "0.1.0"
+dependencies = [
+ "tokio",
+]
+
+[[package]]
 name = "golam-core"
 version = "0.1.0"
 dependencies = [
@@ -2077,6 +2084,7 @@ dependencies = [
  "atspi",
  "axuielement",
  "enigo",
+ "golam-bounded-linux-async",
  "golam-core",
  "golam-effects",
  "golam-ipc",
