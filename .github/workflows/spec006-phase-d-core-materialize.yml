@@ -16,15 +16,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: impl/006-desktop-computer-control
-          fetch-depth: 2
+          fetch-depth: 3
 
-      - name: Guard exact parent and helper-only trigger
+      - name: Guard exact product base and helper-only chain
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "773f79cbbe58d9784e4a1b43351fca4b91d275c3"
-          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/spec006-phase-d-core-materialize.yml"
-          echo 'PHASE_D_CORE_EXPECTED_PARENT=YES'
+          test "$(git rev-parse HEAD^^)" = "773f79cbbe58d9784e4a1b43351fca4b91d275c3"
+          test "$(git diff --name-only 773f79cbbe58d9784e4a1b43351fca4b91d275c3 HEAD)" = ".github/workflows/spec006-phase-d-core-materialize.yml"
+          echo 'PHASE_D_CORE_EXPECTED_PRODUCT_BASE=YES'
 
       - name: Apply bounded observation and focus readback hardening
         shell: bash
@@ -59,7 +59,7 @@ jobs:
               ),
               (
                   '    fn work_surface_identity_changes_when_incarnation_changes() {\n',
-                  '    fn semantic_observation_limits_are_explicit_and_bounded() {\n        let mut limits = DesktopLimits::default();\n        limits.max_semantic_depth = 0;\n        assert_eq!(limits.validate(), Err(DesktopControlError::InvalidLimits));\n\n        let mut limits = DesktopLimits::default();\n        limits.max_semantic_depth = 257;\n        assert_eq!(limits.validate(), Err(DesktopControlError::InvalidLimits));\n\n        let mut limits = DesktopLimits::default();\n        limits.max_observation_duration_ms = 0;\n        assert_eq!(limits.validate(), Err(DesktopControlError::InvalidLimits));\n\n        let mut limits = DesktopLimits::default();\n        limits.max_observation_duration_ms = 30_001;\n        assert_eq!(limits.validate(), Err(DesktopControlError::InvalidLimits));\n    }\n\n    #[test]\n    fn work_surface_identity_changes_when_incarnation_changes() {\n',
+                  '    fn semantic_observation_limits_are_explicit_and_bounded() {\n        let limits = DesktopLimits {\n            max_semantic_depth: 0,\n            ..DesktopLimits::default()\n        };\n        assert_eq!(limits.validate(), Err(DesktopControlError::InvalidLimits));\n\n        let limits = DesktopLimits {\n            max_semantic_depth: 257,\n            ..DesktopLimits::default()\n        };\n        assert_eq!(limits.validate(), Err(DesktopControlError::InvalidLimits));\n\n        let limits = DesktopLimits {\n            max_observation_duration_ms: 0,\n            ..DesktopLimits::default()\n        };\n        assert_eq!(limits.validate(), Err(DesktopControlError::InvalidLimits));\n\n        let limits = DesktopLimits {\n            max_observation_duration_ms: 30_001,\n            ..DesktopLimits::default()\n        };\n        assert_eq!(limits.validate(), Err(DesktopControlError::InvalidLimits));\n    }\n\n    #[test]\n    fn work_surface_identity_changes_when_incarnation_changes() {\n',
               ),
           ]
           for old, new in replacements:
