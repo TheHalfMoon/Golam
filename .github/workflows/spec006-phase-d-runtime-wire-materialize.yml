@@ -22,7 +22,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          expected_parent="3f4f64082fb3ad9ea51a102ef3d44d9d657e95d8"
+          expected_parent="e4c5b8b58870b8ecd7b2de500cc0d7815e381100"
           actual_parent="$(git rev-parse HEAD^)"
           if [[ "${actual_parent}" != "${expected_parent}" ]]; then
             echo "expected parent ${expected_parent}, got ${actual_parent}" >&2
@@ -61,11 +61,15 @@ jobs:
 
           test = Path("crates/golamd/tests/desktop_observation_adapter.rs")
           text = test.read_text()
-          old = "#[path = \"../src/desktop_observation.rs\"]\npub mod desktop_observation;\n\nuse desktop_observation::{NativeObservationRequest, observe_native_desktop};"
-          new = "use golamd::desktop_observation::{self, NativeObservationRequest, observe_native_desktop};"
-          if text.count(old) != 1:
-              raise SystemExit("observation integration-test import block changed")
-          test.write_text(text.replace(old, new, 1))
+          old_module = "#[path = \"../src/desktop_observation.rs\"]\npub mod desktop_observation;\n\nuse desktop_observation::{NativeObservationRequest, observe_native_desktop};\n"
+          if text.count(old_module) != 1:
+              raise SystemExit("observation integration-test module block changed")
+          text = text.replace(old_module, "", 1)
+          anchor = "use golam_core::tool_request::{BindingDigest, ToolRequestId};\n"
+          import_line = "use golamd::desktop_observation::{self, NativeObservationRequest, observe_native_desktop};\n"
+          if text.count(anchor) != 1:
+              raise SystemExit("observation integration-test import anchor changed")
+          test.write_text(text.replace(anchor, anchor + import_line, 1))
           PY
 
       - name: Verify exact product diff
