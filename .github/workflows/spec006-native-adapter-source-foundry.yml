@@ -257,22 +257,27 @@ jobs:
           vcs_sha_re = re.compile(r'^[0-9a-f]{40}$')
 
           # These are the only package families allowed to use exact-VCS fallback
-          # when the checksum-bound .crate intentionally omits the repository
-          # license file. The source commit itself is read from that archive's
-          # .cargo_vcs_info.json; repository location and license path are not
+          # when the checksum-bound .crate intentionally omits repository license
+          # evidence. The source commit itself is read from that archive's
+          # .cargo_vcs_info.json; repository location and evidence path are not
           # taken from untrusted package metadata.
+          objc2_trio = {'Zlib', 'Apache-2.0', 'MIT'}
           vcs_license_allowlist = {
               'clipboard-win': ('github', 'DoumanAsh', 'clipboard-win', 'LICENSE', {'BSL-1.0'}),
               'xa11y-core': ('github', 'xa11y', 'xa11y', 'LICENSE', {'MIT'}),
               'xa11y-windows': ('github', 'xa11y', 'xa11y', 'LICENSE', {'MIT'}),
-              'objc2': ('github', 'madsmtm', 'objc2', 'LICENSE-MIT.txt', {'MIT'}),
-              'objc2-app-kit': ('github', 'madsmtm', 'objc2', 'LICENSE-MIT.txt', {'MIT'}),
-              'objc2-core-foundation': ('github', 'madsmtm', 'objc2', 'LICENSE-MIT.txt', {'MIT'}),
-              'objc2-core-graphics': ('github', 'madsmtm', 'objc2', 'LICENSE-MIT.txt', {'MIT'}),
-              'objc2-core-image': ('github', 'madsmtm', 'objc2', 'LICENSE-MIT.txt', {'MIT'}),
-              'objc2-core-video': ('github', 'madsmtm', 'objc2', 'LICENSE-MIT.txt', {'MIT'}),
-              'objc2-foundation': ('github', 'madsmtm', 'objc2', 'LICENSE-MIT.txt', {'MIT'}),
-              'objc2-quartz-core': ('github', 'madsmtm', 'objc2', 'LICENSE-MIT.txt', {'MIT'}),
+              'cookie-factory': ('github', 'rust-bakery', 'cookie-factory', 'LICENSES/MIT.txt', {'MIT'}),
+              'objc2': ('github', 'madsmtm', 'objc2', 'LICENSE.md', {'MIT'}),
+              'objc2-encode': ('github', 'madsmtm', 'objc2', 'LICENSE.md', {'MIT'}),
+              'objc2-foundation': ('github', 'madsmtm', 'objc2', 'LICENSE.md', {'MIT'}),
+              'dispatch2': ('github', 'madsmtm', 'objc2', 'LICENSE.md', objc2_trio),
+              'objc2-app-kit': ('github', 'madsmtm', 'objc2', 'LICENSE.md', objc2_trio),
+              'objc2-core-foundation': ('github', 'madsmtm', 'objc2', 'LICENSE.md', objc2_trio),
+              'objc2-core-graphics': ('github', 'madsmtm', 'objc2', 'LICENSE.md', objc2_trio),
+              'objc2-core-image': ('github', 'madsmtm', 'objc2', 'LICENSE.md', objc2_trio),
+              'objc2-core-video': ('github', 'madsmtm', 'objc2', 'LICENSE.md', objc2_trio),
+              'objc2-io-surface': ('github', 'madsmtm', 'objc2', 'LICENSE.md', objc2_trio),
+              'objc2-quartz-core': ('github', 'madsmtm', 'objc2', 'LICENSE.md', objc2_trio),
               'libspa-sys': ('gitlab-freedesktop', 'pipewire', 'pipewire-rs', 'LICENSE', {'MIT'}),
           }
 
