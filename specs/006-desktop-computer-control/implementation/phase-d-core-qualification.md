@@ -112,12 +112,47 @@ This is recorded as platform non-execution, not as successful product qualificat
 - The helper then removed `.github/workflows/spec006-phase-d-format-materialize.yml`, proved the final bounded diff contained only the helper deletion plus those two formatted files, and created forward-only commit `33466023e8c696f1fd430a8e70dc41a547a2bb54` (`style(006): format native observation adapter`).
 - The temporary formatter workflow is absent from the resulting product tree.
 
+### Preserved exact-head tri-OS Clippy failure
+
+- Human evidence anchor: `8c8e7bce31807cf2ec53d08b637e11634f13379e`.
+- Exact-head regular CI run: `34264531350`.
+- Result: FAILURE on Windows, macOS, and Ubuntu after all three platforms passed format.
+- The common Clippy failures were two missing slice borrows in opaque observation identity construction.
+- Windows additionally reported an unused `xa11y_core::Element` import.
+- Ubuntu additionally reported an unused outer `ObjectRefExt` import and two redundant `unwrap_or` calls on `path_as_str()` values that are already `&str`.
+- This failed run is preserved and was not rerun-to-green.
+
+### Preserved first Clippy-repair materializer failure
+
+- Helper trigger: `a61e50d48942625ac5c2c96ee09ab818cd658eaa`.
+- Materializer run: `34265116095`.
+- Result: FAILURE before product commit.
+- Exact helper-chain binding and all five evidence-driven compile corrections succeeded.
+- Linux qualification then reached two test-only `field_reassign_with_default` Clippy failures in the sanitizer and semantic-node-budget tests.
+- Because qualification failed, the bounded-diff/self-removal/commit step was skipped and no product repair was pushed by this attempt.
+- The failed run remains preserved and was not rerun-to-green.
+
+### Forward-only corrected Clippy repair
+
+- Updated helper trigger: `975d1a90e6c141fbc140c9549b89b98a0f318c8e`.
+- Materializer run: `34265458551`.
+- Result: SUCCESS.
+- The helper proved the complete chain from `8c8e7bce31807cf2ec53d08b637e11634f13379e` through the helper trigger changed only `.github/workflows/spec006-phase-d-clippy-repair-materialize.yml` before applying product corrections.
+- It applied exactly the five previously evidenced compile corrections plus two test-only struct-initializer corrections, each guarded by exact replacement counts.
+- Linux qualification completed:
+  - `cargo +1.98.0 fmt --all -- --check`;
+  - `cargo +1.98.0 clippy --locked -p golamd --tests -- -D warnings`;
+  - `cargo +1.98.0 test --locked -p golamd --test desktop_observation_adapter`.
+- The helper proved the product diff contained only `crates/golamd/src/desktop_observation.rs`, removed itself, proved the final diff contained only the helper deletion plus that source file, and created forward-only bot commit `a7f3caba6a993b3e15332d6d7454edb5b9cd979b` (`fix(006): correct native observation adapter compile errors`).
+- The temporary Clippy-repair helper is absent from the resulting product tree.
+
 ## Current disposition
 
 `PHASE_D_CORE_HARDENING_MATERIALIZED=YES`
 `PHASE_D_CORE_EXACT_HEAD_REGULAR_CI=SUCCESS_ON_F5760C06_PRE_ADAPTER_HEAD`
 `PHASE_D_NATIVE_API_PROBE=SUCCESS_TRI_OS`
 `PHASE_D_NATIVE_OBSERVATION_ADAPTER_MATERIALIZED=YES`
+`PHASE_D_NATIVE_OBSERVATION_ADAPTER_LINUX_CLIPPY_TEST=SUCCESS_ON_A7F3CABA_PRODUCT_LOGIC`
 `PHASE_D_NATIVE_OBSERVATION_ADAPTER_EXACT_HEAD_REGULAR_CI=PENDING`
 `T006_016_T006_019_COMPLETE=NO`
 `FINAL_SPEC006_REVIEW=NOT_PREAPPROVED`
