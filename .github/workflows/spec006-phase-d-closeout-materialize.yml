@@ -1,0 +1,181 @@
+name: spec006-phase-d-closeout-materialize
+
+on:
+  push:
+    branches:
+      - impl/006-desktop-computer-control
+    paths:
+      - .github/workflows/spec006-phase-d-closeout-materialize.yml
+
+permissions:
+  contents: write
+
+jobs:
+  closeout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact helper-only arm commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_parent="02db0ce8cb1e0d6ba13aec6da57c1f76e743cc10"
+          actual_parent="$(git rev-parse HEAD^)"
+          test "${actual_parent}" = "${expected_parent}"
+          helper=".github/workflows/spec006-phase-d-closeout-materialize.yml"
+          test "$(git diff --name-only HEAD^ HEAD)" = "${helper}"
+          echo 'PHASE_D_CLOSEOUT_ARM_EXACT=YES'
+
+      - name: Materialize canonical Phase D closeout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          closeout = Path("specs/006-desktop-computer-control/implementation/phase-d-closeout.md")
+          text = closeout.read_text()
+          marker = "## Current disposition\n\n```text\nPHASE_D_RUNTIME_WIRING_AUDIT=GAP_FOUND"
+          if text.count(marker) != 1:
+              raise SystemExit("Phase D closeout disposition marker changed")
+          prefix, _ = text.split("## Current disposition\n", 1)
+          final = r'''## Runtime-wiring reconciliation evidence
+
+The runtime-wiring audit is now reconciled forward-only. No historical CI or failed qualification attempt was rewritten or discarded.
+
+### Product runtime wiring
+
+- Initial runtime-wiring materializer run `34285130893` failed before product commit because `cargo fmt --check` required the integration-test import to be reordered. No product commit was created by that failed run.
+- Corrected materializer run `34285237017` succeeded after exact helper-chain, bounded-diff, format, Clippy and adapter-test qualification.
+- Product commit `c2cdf62d6bf19b2a70897774844e80f37d961282` (`fix(006): wire native observation into golamd runtime`) exported `desktop_observation` through the `golamd` library module graph and changed the integration test to import `golamd::desktop_observation` instead of compiling a path-local duplicate.
+- Human cleanup commit `4701d21eb39e288c258ddf00526f2784844a92de` removed the temporary runtime-wiring helper.
+
+### Preserved clean-head macOS failure and forward-only repair
+
+- Regular CI run `34285589422` on clean head `4701d21eb39e288c258ddf00526f2784844a92de` succeeded on Ubuntu and Windows but failed on macOS Clippy because `empty_platform_snapshot` was unused in non-test macOS builds.
+- First macOS cfg-repair helper `674a05989960590d25827e78a19001d2cbd87527`, run `34287393002`, failed before product commit because the helper had not built the Tauri `frontendDist` required by workspace Clippy. The cfg patch itself applied and the bounded product diff check passed. No product commit was created by this failed run.
+- Forward-only helper repair `636651dd72ea2054468f9c9c00b24f9a80167203` aligned qualification with regular CI by building the admitted frontend closure first.
+- Corrected helper run `34287724816`, job `102267065785`, succeeded through frontend qualification, Rust 1.98.0 format, workspace all-target Clippy, native observation adapter test, exact product-diff proof and guarded push.
+- Product repair commit `3125190fb9859dbcb9c4887d0662dc6bb296aa4a` (`fix(006): scope empty observation snapshot on macOS`) applies `#[cfg(any(not(target_os = "macos"), test))]` to the helper used by Windows/Linux/unsupported-platform production paths and tests but not macOS production.
+- Human cleanup commit `02db0ce8cb1e0d6ba13aec6da57c1f76e743cc10` removed the temporary macOS repair helper.
+
+### Exact clean-head qualification
+
+Regular PR CI run `34288135133` completed with conclusion `success` on exact clean head `02db0ce8cb1e0d6ba13aec6da57c1f76e743cc10`.
+
+- Ubuntu job `102268344321`: SUCCESS.
+- Windows job `102268344391`: SUCCESS.
+- macOS job `102268344457`: SUCCESS.
+
+The matrix completed the repository's applicable frontend closure, format, workspace Clippy, workspace tests, property qualification, bounded fuzz smoke, IPC qualification, authenticated daemon IPC, adversarial authority qualification, daemon build and strict-local external-network observation. Ubuntu additionally completed native-containment and governed-process qualification.
+
+The final adapter remains observation-only. The product module and integration test preserve the structural restriction that observation, semantic text, coordinates and pixel evidence cannot mint capability, policy, approval, fallback eligibility, Kernel/Effect Gate authorization, control-lease authority or visible-channel state. Governed focus still requires exact current Gate/request/effect/target/session/permission/lease/channel revalidation and successful focus readback before terminal success; uncertain focus remains `UNKNOWN_OUTCOME`.
+
+## Current disposition
+
+```text
+PHASE_D_RUNTIME_WIRING_AUDIT=RECONCILED
+PHASE_D_RECONCILIATION=COMPLETE
+PHASE_D_EXACT_CLEAN_HEAD=02db0ce8cb1e0d6ba13aec6da57c1f76e743cc10
+PHASE_D_EXACT_HEAD_CI_RUN=34288135133
+PHASE_D_CI_UBUNTU=SUCCESS
+PHASE_D_CI_WINDOWS=SUCCESS
+PHASE_D_CI_MACOS=SUCCESS
+T006_016_COMPLETE=YES
+T006_017_COMPLETE=YES
+T006_018_COMPLETE=YES
+T006_019_COMPLETE=YES
+PHASE_D_COMPLETE=YES
+PHASE_E_PRODUCT_IMPLEMENTATION_START=AUTHORIZED_BY_DEPENDENCY_ORDER
+FINAL_SPEC006_REVIEW=NOT_PREAPPROVED
+SPEC_006_IMPLEMENTATION_COMPLETE=NO
+SPEC_006_CLOSED_CANONICAL=NO
+WAIVER_TAKEN=NO
+```
+'''
+          closeout.write_text(prefix + final)
+
+          core = Path("specs/006-desktop-computer-control/implementation/phase-d-core-qualification.md")
+          text = core.read_text()
+          old_scope = "This record binds only the Phase D core hardening and native-observation qualification evidence accumulated before canonical Phase D closeout. It does not mark T006-016 through T006-019 complete, does not preapprove adapter correctness, and does not satisfy final Spec 006 review or closeout gates."
+          new_scope = "This record binds the Phase D core hardening and native-observation qualification evidence through canonical Phase D closeout. It marks only T006-016 through T006-019 complete after exact clean-head tri-OS CI; it does not preapprove final Spec 006 review, merge, post-merge qualification or project closure."
+          if text.count(old_scope) != 1:
+              raise SystemExit("Phase D core scope marker changed")
+          text = text.replace(old_scope, new_scope, 1)
+          disposition = "## Current disposition\n\n`PHASE_D_CORE_HARDENING_MATERIALIZED=YES`"
+          if text.count(disposition) != 1:
+              raise SystemExit("Phase D core disposition marker changed")
+          prefix, _ = text.split("## Current disposition\n", 1)
+          tail = r'''## Final runtime-wiring and clean-head qualification
+
+- Runtime module wiring product commit: `c2cdf62d6bf19b2a70897774844e80f37d961282`.
+- Clean wired descendant: `4701d21eb39e288c258ddf00526f2784844a92de`.
+- Preserved regular CI run `34285589422`: Ubuntu SUCCESS, Windows SUCCESS, macOS FAILURE at Clippy due a macOS-production dead-code cfg mismatch.
+- Preserved first cfg-repair run `34287393002`: FAILURE before product commit because the helper omitted the Tauri frontend build required by workspace Clippy; no product commit was created.
+- Corrected cfg-repair helper run `34287724816`: SUCCESS after frontend closure, format, workspace all-target Clippy and adapter-test qualification.
+- Product cfg repair: `3125190fb9859dbcb9c4887d0662dc6bb296aa4a`.
+- Exact clean human descendant: `02db0ce8cb1e0d6ba13aec6da57c1f76e743cc10`.
+- Exact-head regular CI run `34288135133`: SUCCESS on Ubuntu job `102268344321`, Windows job `102268344391` and macOS job `102268344457`.
+
+The exact clean head compiles the observation adapter through the real `golamd` library module graph and the integration test imports that product module. Observation remains non-authoritative, bounded and separate from later capture/actuation/clipboard authority. Focus terminal success remains conditioned on fresh readback of the intended focused surface; missing or conflicting readback remains `UNKNOWN_OUTCOME`.
+
+## Current disposition
+
+`PHASE_D_CORE_HARDENING_MATERIALIZED=YES`
+`PHASE_D_NATIVE_API_PROBE=SUCCESS_TRI_OS`
+`PHASE_D_NATIVE_OBSERVATION_ADAPTER_MATERIALIZED=YES`
+`PHASE_D_RUNTIME_MODULE_WIRING=YES`
+`PHASE_D_EXACT_CLEAN_HEAD=02db0ce8cb1e0d6ba13aec6da57c1f76e743cc10`
+`PHASE_D_EXACT_HEAD_REGULAR_CI=SUCCESS_TRI_OS_RUN_34288135133`
+`T006_016_T006_019_COMPLETE=YES`
+`PHASE_D_COMPLETE=YES`
+`FINAL_SPEC006_REVIEW=NOT_PREAPPROVED`
+`SPEC_006_IMPLEMENTATION_COMPLETE=NO`
+`SPEC_006_CLOSED_CANONICAL=NO`
+`WAIVER_TAKEN=NO`
+'''
+          core.write_text(prefix + tail)
+
+          tasks = Path("specs/006-desktop-computer-control/tasks.md")
+          text = tasks.read_text()
+          for task in ("T006-016", "T006-017", "T006-018", "T006-019"):
+              old = f"- [ ] **{task}**"
+              new = f"- [x] **{task}**"
+              if text.count(old) != 1:
+                  raise SystemExit(f"{task} checkbox marker changed")
+              text = text.replace(old, new, 1)
+          tasks.write_text(text)
+          PY
+
+      - name: Verify bounded governance diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(printf '%s\n' \
+            specs/006-desktop-computer-control/implementation/phase-d-closeout.md \
+            specs/006-desktop-computer-control/implementation/phase-d-core-qualification.md \
+            specs/006-desktop-computer-control/tasks.md | sort)"
+          actual="$(git diff --name-only HEAD | sort)"
+          test "${actual}" = "${expected}"
+          grep -q '^PHASE_D_COMPLETE=YES$' specs/006-desktop-computer-control/implementation/phase-d-closeout.md
+          grep -q 'T006_016_T006_019_COMPLETE=YES' specs/006-desktop-computer-control/implementation/phase-d-core-qualification.md
+          for task in T006-016 T006-017 T006-018 T006-019; do
+            grep -q -- "- \[x\] \*\*${task}\*\*" specs/006-desktop-computer-control/tasks.md
+          done
+
+      - name: Self-remove and commit closeout
+        shell: bash
+        run: |
+          set -euo pipefail
+          helper=".github/workflows/spec006-phase-d-closeout-materialize.yml"
+          rm "${helper}"
+          git fetch origin impl/006-desktop-computer-control
+          test "$(git rev-parse origin/impl/006-desktop-computer-control)" = "$(git rev-parse HEAD)"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'docs(006): close Phase D reconciliation'
+          git push origin HEAD:impl/006-desktop-computer-control
