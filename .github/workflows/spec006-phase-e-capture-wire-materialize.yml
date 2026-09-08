@@ -18,14 +18,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Verify exact helper-only arm commit
+      - name: Verify exact helper-only repair chain
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "5a033588c14118dd0baf91b5fe64f2655c9d247f"
+          base="5a033588c14118dd0baf91b5fe64f2655c9d247f"
           helper=".github/workflows/spec006-phase-e-capture-wire-materialize.yml"
-          test "$(git diff --name-only HEAD^ HEAD)" = "${helper}"
-          echo 'PHASE_E_CAPTURE_WIRE_ARM_EXACT=YES'
+          test "$(git diff --name-only "${base}" HEAD)" = "${helper}"
+          echo 'PHASE_E_CAPTURE_WIRE_REPAIR_CHAIN_EXACT=YES'
 
       - name: Install Linux build prerequisites
         run: |
@@ -35,7 +35,7 @@ jobs:
       - name: Install pinned Rust toolchain
         run: rustup toolchain install 1.98.0 --profile minimal --component rustfmt,clippy
 
-      - name: Wire capture runtime module
+      - name: Wire and canonically format capture runtime module
         shell: bash
         run: |
           set -euo pipefail
@@ -49,7 +49,10 @@ jobs:
               raise SystemExit("golamd module insertion point changed")
           path.write_text(text.replace(old, new, 1))
           PY
-          test "$(git diff --name-only HEAD)" = "crates/golamd/src/lib.rs"
+          cargo +1.98.0 fmt --all
+          expected="$(printf '%s\n' crates/golamd/src/desktop_capture.rs crates/golamd/src/lib.rs | sort)"
+          actual="$(git diff --name-only HEAD | sort)"
+          test "${actual}" = "${expected}"
 
       - name: Qualify capture module wiring
         run: |
@@ -58,6 +61,14 @@ jobs:
           cargo +1.98.0 clippy --locked -p golamd --all-targets -- -D warnings
           cargo +1.98.0 test --locked -p golamd --all-targets
           echo 'PHASE_E_CAPTURE_MODULE_WIRING_QUALIFIED=YES'
+
+      - name: Verify bounded product diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(printf '%s\n' crates/golamd/src/desktop_capture.rs crates/golamd/src/lib.rs | sort)"
+          actual="$(git diff --name-only HEAD | sort)"
+          test "${actual}" = "${expected}"
 
       - name: Self-remove and commit qualified product patch
         shell: bash
