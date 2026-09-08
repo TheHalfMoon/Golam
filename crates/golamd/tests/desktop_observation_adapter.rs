@@ -1,9 +1,5 @@
 #![forbid(unsafe_code)]
 
-#[path = "../src/desktop_observation.rs"]
-pub mod desktop_observation;
-
-use desktop_observation::{NativeObservationRequest, observe_native_desktop};
 use golam_core::EffectId;
 use golam_core::desktop_backend::{DesktopActionDispatchContext, DesktopBackendError};
 use golam_core::desktop_control::{
@@ -17,6 +13,7 @@ use golam_core::desktop_intent::{
     InteractiveAuthorityBinding, PreparedDesktopAction, RequestBinding,
 };
 use golam_core::tool_request::{BindingDigest, ToolRequestId};
+use golamd::desktop_observation::{self, NativeObservationRequest, observe_native_desktop};
 
 fn digest(value: u8) -> BindingDigest {
     BindingDigest::new([value; 32])
