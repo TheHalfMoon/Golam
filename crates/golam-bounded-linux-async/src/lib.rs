@@ -16,8 +16,8 @@ pub fn run_bounded<F, T>(timeout: Duration, future: F) -> Result<T, BoundedAsync
 where
     F: Future<Output = T>,
 {
-    let timeout_millis = u64::try_from(timeout.as_millis())
-        .map_err(|_| BoundedAsyncError::InvalidTimeout)?;
+    let timeout_millis =
+        u64::try_from(timeout.as_millis()).map_err(|_| BoundedAsyncError::InvalidTimeout)?;
     if timeout_millis == 0 || timeout_millis > MAX_BOUNDED_ASYNC_MILLIS {
         return Err(BoundedAsyncError::InvalidTimeout);
     }
