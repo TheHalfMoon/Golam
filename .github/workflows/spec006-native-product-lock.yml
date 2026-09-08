@@ -98,25 +98,24 @@ jobs:
           cargo +1.98.0 check --locked -p golamd
 
           python3 - <<'PY'
-          import base64
-          import gzip
           import hashlib
           from pathlib import Path
 
           data = Path('Cargo.lock').read_bytes()
-          packed = gzip.compress(data, compresslevel=9, mtime=0)
-          encoded = base64.b64encode(packed).decode('ascii')
-          chunks = [encoded[i:i + 4000] for i in range(0, len(encoded), 4000)]
           print('=== PRODUCT_LOCK_EVIDENCE ===')
           print(f'PRODUCT_LOCK_BYTES={len(data)}')
           print(f'PRODUCT_LOCK_SHA256={hashlib.sha256(data).hexdigest()}')
-          print(f'PRODUCT_LOCK_GZIP_BYTES={len(packed)}')
-          print(f'PRODUCT_LOCK_GZIP_B64_CHUNKS={len(chunks)}')
-          for index, chunk in enumerate(chunks):
-              print(f'PRODUCT_LOCK_GZIP_B64_CHUNK_{index:03d}={chunk}')
           print('PRODUCT_MANIFEST_SOURCE=TEMP_GIT_ARCHIVE_ONLY')
           print('PRODUCT_DEPENDENCY_SET=EXACT_ADMITTED_T006_016_T006_033')
           PY
+
+      - name: Upload exact generated product lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: spec006-admitted-product-lock
+          path: ${{ runner.temp }}/golam-spec006-native-product-lock/Cargo.lock
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Prove checked-out product remains unchanged
         shell: bash
