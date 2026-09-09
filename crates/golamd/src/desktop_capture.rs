@@ -12,7 +12,7 @@ use golam_core::tool_request::BindingDigest;
 const NATIVE_CAPTURE_PAYLOAD_DOMAIN: &[u8] = b"golam:native-capture-payload:v1";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) struct EphemeralCaptureMetadata {
+pub struct EphemeralCaptureMetadata {
     pub source_identity_digest: BindingDigest,
     pub payload_digest: BindingDigest,
     pub width: u32,
@@ -23,7 +23,7 @@ pub(crate) struct EphemeralCaptureMetadata {
 /// Raw capture bytes live only inside `golamd` until an explicitly authorized
 /// local consumer takes the one-shot payload. The type intentionally does not
 /// implement `Clone` or `Debug`, and `Drop` overwrites the backing allocation.
-pub(crate) struct EphemeralCapturePayload {
+struct EphemeralCapturePayload {
     metadata: EphemeralCaptureMetadata,
     bytes: Vec<u8>,
 }
@@ -40,8 +40,8 @@ impl EphemeralCapturePayload {
             .map_err(|_| NativeCaptureError::InvalidIntent)?;
         validate_frame_bounds(intent.limits, width, height, bytes.len())?;
 
-        let payload_bytes = u32::try_from(bytes.len())
-            .map_err(|_| NativeCaptureError::PayloadLimitExceeded)?;
+        let payload_bytes =
+            u32::try_from(bytes.len()).map_err(|_| NativeCaptureError::PayloadLimitExceeded)?;
         let payload_digest = capture_payload_digest(
             intent.selected_source_identity_digest,
             width,
@@ -77,12 +77,12 @@ impl Drop for EphemeralCapturePayload {
 }
 
 #[derive(Default)]
-pub(crate) struct EphemeralCaptureSlot {
+pub struct EphemeralCaptureSlot {
     payload: Option<EphemeralCapturePayload>,
 }
 
 impl EphemeralCaptureSlot {
-    pub(crate) fn stage_validated(
+    pub fn stage_validated(
         &mut self,
         intent: ValidatedCaptureIntent<'_>,
         width: u32,
@@ -107,7 +107,7 @@ impl EphemeralCaptureSlot {
         Ok(receipt)
     }
 
-    pub(crate) fn consume_exact<R>(
+    pub fn consume_exact<R>(
         &mut self,
         expected_source_identity_digest: BindingDigest,
         expected_payload_digest: BindingDigest,
@@ -127,7 +127,7 @@ impl EphemeralCaptureSlot {
         Ok(consumer(&payload.bytes, metadata))
     }
 
-    pub(crate) fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.payload = None;
     }
 
@@ -166,9 +166,7 @@ fn capture_payload_digest(
     height: u32,
     bytes: &[u8],
 ) -> BindingDigest {
-    let mut input = Vec::with_capacity(
-        NATIVE_CAPTURE_PAYLOAD_DOMAIN.len() + 32 + 8 + bytes.len(),
-    );
+    let mut input = Vec::with_capacity(NATIVE_CAPTURE_PAYLOAD_DOMAIN.len() + 32 + 8 + bytes.len());
     input.extend_from_slice(NATIVE_CAPTURE_PAYLOAD_DOMAIN);
     input.extend_from_slice(&source_identity_digest.bytes());
     input.extend_from_slice(&width.to_le_bytes());
@@ -178,7 +176,7 @@ fn capture_payload_digest(
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum NativeCaptureError {
+pub enum NativeCaptureError {
     InvalidIntent,
     InvalidFrameDimensions,
     DimensionLimitExceeded,
@@ -216,12 +214,12 @@ impl std::error::Error for NativeCaptureError {}
 
 #[cfg(test)]
 mod tests {
+    use golam_core::EffectId;
     use golam_core::desktop_control::DESKTOP_CONTROL_SCHEMA_VERSION;
     use golam_core::desktop_intent::{
         AuthorityBindings, CaptureRetentionPolicy, EffectBinding, RequestBinding,
     };
     use golam_core::tool_request::ToolRequestId;
-    use golam_core::EffectId;
 
     use super::*;
 
@@ -268,7 +266,10 @@ mod tests {
         let receipt = slot.stage(&intent, 2, 2, vec![11; 16]).unwrap();
 
         assert_eq!(receipt.status, DesktopBackendTerminalStatus::Committed);
-        assert_eq!(receipt.source_identity_digest, intent.selected_source_identity_digest);
+        assert_eq!(
+            receipt.source_identity_digest,
+            intent.selected_source_identity_digest
+        );
         assert_eq!(receipt.payload_bytes, 16);
         assert_ne!(receipt.payload_digest.bytes(), [0; 32]);
 
@@ -283,7 +284,11 @@ mod tests {
         assert_eq!(observed.1.payload_bytes, 16);
         assert!(slot.is_empty());
         assert!(matches!(
-            slot.consume_exact(receipt.source_identity_digest, receipt.payload_digest, |_, _| ()),
+            slot.consume_exact(
+                receipt.source_identity_digest,
+                receipt.payload_digest,
+                |_, _| ()
+            ),
             Err(NativeCaptureError::NoEphemeralPayload)
         ));
     }
