@@ -1,0 +1,484 @@
+name: spec006-source-foundry
+
+on:
+  push:
+    branches: [impl/006-desktop-computer-control]
+    paths:
+      - .github/workflows/spec006-source-foundry.yml
+      - scripts/prune-denied-native-optionals.mjs
+      - specs/006-desktop-computer-control/implementation/desktop-shell-source-foundry-candidate.md
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    name: qualify-exact-desktop-dependency-closure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Record qualification toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc --version
+          cargo --version
+          node --version
+          npm --version
+          python3 --version
+          tar --version | head -n 1
+
+      - name: Install pinned Rust toolchain
+        run: rustup toolchain install 1.98.0 --profile minimal
+
+      - name: Resolve and disposition exact Tauri Rust closure in isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/golam-spec006-cargo
+          mkdir -p /tmp/golam-spec006-cargo/src
+          cat >/tmp/golam-spec006-cargo/Cargo.toml <<'EOF'
+          [package]
+          name = "golam-spec006-source-foundry"
+          version = "0.0.0"
+          edition = "2024"
+          rust-version = "1.98"
+          publish = false
+
+          [dependencies]
+          tauri = { version = "=2.11.1", default-features = false, features = ["wry"] }
+
+          [build-dependencies]
+          tauri-build = { version = "=2.6.1", default-features = false }
+          EOF
+          printf 'fn main() {}\n' >/tmp/golam-spec006-cargo/src/main.rs
+          cd /tmp/golam-spec006-cargo
+          cargo +1.98.0 generate-lockfile
+          cargo +1.98.0 fetch --locked
+          cargo +1.98.0 metadata --locked --format-version 1 >cargo-metadata.json
+
+          echo '=== CARGO_LOCK_SHA256 ==='
+          sha256sum Cargo.lock
+          echo '=== CARGO_DIRECT_TREE ==='
+          cargo +1.98.0 tree --locked --edges normal,build
+          echo '=== CARGO_FEATURE_TREE ==='
+          cargo +1.98.0 tree --locked --edges normal,build,features
+          echo '=== CARGO_LOCK_PACKAGES ==='
+          python3 - <<'PY'
+          import tomllib
+          data = tomllib.load(open('Cargo.lock','rb'))
+          packages = data.get('package', [])
+          print(f'package_count={len(packages)}')
+          for p in sorted(packages, key=lambda x:(x['name'],x['version'],x.get('source',''))):
+              print('|'.join([p['name'], p['version'], p.get('source','workspace'), p.get('checksum','')]))
+          PY
+
+          echo '=== CARGO_LICENSE_NOTICE_BUILD_DISPOSITIONS ==='
+          python3 - <<'PY'
+          import json
+          import re
+          import sys
+          from pathlib import Path
+
+          metadata = json.load(open('cargo-metadata.json', encoding='utf-8'))
+          permissive = {
+              '0BSD','Apache-2.0','Apache-2.0 WITH LLVM-exception','BSD-2-Clause',
+              'BSD-3-Clause','BSL-1.0','CC0-1.0','ISC','MIT','MIT-0','Unlicense',
+              'Unicode-3.0','Zlib'
+          }
+          forbidden_markers = (
+              'AGPL','GPL-1','GPL-2','GPL-3','SSPL','BUSL','Commons-Clause',
+              'EUPL','OSL','CDDL','EPL'
+          )
+
+          def license_leaves(expr):
+              text = expr.strip().replace('(', ' ').replace(')', ' ')
+              return [part.strip() for part in re.split(r'\s+(?:OR|AND)\s+|\s*/\s*', text) if part.strip()]
+
+          def disposition(name, expr):
+              if not expr:
+                  return ('REJECT_MISSING_LICENSE_METADATA', '')
+              leaves = license_leaves(expr)
+              if leaves and all(leaf in permissive for leaf in leaves):
+                  selected = 'Apache-2.0' if 'Apache-2.0' in leaves else leaves[0]
+                  conjunction = 'YES' if re.search(r'\s+AND\s+', expr) else 'NO'
+                  return ('ACCEPT_PERMISSIVE_EXPRESSION', f'SELECTED_OR_BRANCH={selected};CONJUNCTION_TERMS_APPLY={conjunction}')
+              if expr.strip() == 'MPL-2.0':
+                  return (
+                      'ACCEPT_MPL_2_0_FILE_LEVEL_WITH_OBLIGATIONS',
+                      'OBLIGATIONS=retain-license-and-copyright-notices;'
+                      'distribute-modified-MPL-covered-files-under-MPL-2.0;'
+                      'if-covered-executable-is-distributed-make-corresponding-MPL-covered-source-available-and-inform-recipients'
+                  )
+              if name == 'r-efi' and {'MIT', 'Apache-2.0'}.issubset(set(leaves)):
+                  return ('ACCEPT_PERMISSIVE_ALTERNATIVE', 'SELECTED=Apache-2.0;LGPL_ALTERNATIVE_NOT_SELECTED')
+              if any(marker.lower() in expr.lower() for marker in forbidden_markers) or 'LGPL' in expr:
+                  return ('REJECT_NONPERMISSIVE_OR_UNSELECTED_RECIPROCAL', '')
+              return ('REJECT_UNCLASSIFIED_LICENSE_EXPRESSION', '')
+
+          external = [p for p in metadata['packages'] if p.get('source')]
+          blocked = []
+          custom_build = []
+          native_links = []
+          mpl = []
+          print(f'external_package_count={len(external)}')
+          for package in sorted(external, key=lambda p:(p['name'],p['version'],p.get('source',''))):
+              root = Path(package['manifest_path']).parent
+              notice_files = []
+              try:
+                  for child in root.iterdir():
+                      if child.is_file() and re.match(r'(?i)^(license|licence|notice|copying|copyright)([._-].*)?$', child.name):
+                          notice_files.append(child.name)
+              except OSError:
+                  pass
+              kinds = sorted({kind for target in package.get('targets', []) for kind in target.get('kind', [])})
+              has_custom_build = 'custom-build' in kinds
+              links = package.get('links') or ''
+              status, detail = disposition(package['name'], package.get('license') or '')
+              if status.startswith('REJECT_'):
+                  blocked.append((package['name'], package['version'], status, package.get('license') or ''))
+              if status.startswith('ACCEPT_MPL_'):
+                  mpl.append((
+                      package['name'], package['version'], package.get('license') or '',
+                      ','.join(notice_files) if notice_files else 'NO_UPSTREAM_TOP_LEVEL_FILE_OBSERVED',
+                      'DISTRIBUTION_BUNDLE_MUST_CARRY_MPL_2_0_LICENSE_AND_SOURCE_AVAILABILITY_NOTICE'
+                  ))
+              if has_custom_build:
+                  custom_build.append((package['name'], package['version']))
+              if links:
+                  native_links.append((package['name'], package['version'], links))
+              print('|'.join([
+                  package['name'], package['version'], package.get('source',''),
+                  package.get('license') or 'MISSING', package.get('license_file') or '',
+                  status, detail or 'NO_EXTRA_DISPOSITION_DETAIL',
+                  ','.join(notice_files) if notice_files else 'NO_TOP_LEVEL_LICENSE_NOTICE_FILE_OBSERVED',
+                  'CUSTOM_BUILD' if has_custom_build else 'NO_CUSTOM_BUILD',
+                  links or 'NO_NATIVE_LINKS', package.get('repository') or ''
+              ]))
+          print('=== CARGO_MPL_2_0_ACCEPTED_PACKAGES ===')
+          print(f'count={len(mpl)}')
+          for row in mpl:
+              print('|'.join(row))
+          print('=== CARGO_BLOCKED_LICENSES ===')
+          print(f'count={len(blocked)}')
+          for row in blocked:
+              print('|'.join(row))
+          print('=== CARGO_CUSTOM_BUILD_PACKAGES ===')
+          print(f'count={len(custom_build)}')
+          for row in custom_build:
+              print('|'.join(row))
+          print('=== CARGO_NATIVE_LINK_PACKAGES ===')
+          print(f'count={len(native_links)}')
+          for row in native_links:
+              print('|'.join(row))
+          if blocked:
+              sys.exit('Source Foundry rejected one or more Cargo license dispositions')
+          PY
+
+      - name: Resolve and disposition exact Tauri React frontend closure in isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/golam-spec006-js /tmp/golam-spec006-npm-archives
+          mkdir -p /tmp/golam-spec006-js /tmp/golam-spec006-npm-archives
+          cd /tmp/golam-spec006-js
+          cat >package.json <<'EOF'
+          {
+            "name": "golam-spec006-source-foundry",
+            "private": true,
+            "version": "0.0.0",
+            "dependencies": {
+              "@tauri-apps/api": "2.11.1",
+              "react": "19.2.8",
+              "react-dom": "19.2.8"
+            },
+            "devDependencies": {
+              "@tauri-apps/cli": "2.11.4",
+              "@vitejs/plugin-react": "6.1.1",
+              "typescript": "6.0.3",
+              "vite": "8.2.2"
+            }
+          }
+          EOF
+          npm install --ignore-scripts --no-audit --no-fund
+
+          echo '=== NPM_LOCK_SHA256 ==='
+          sha256sum package-lock.json
+          echo '=== NPM_LOCK_PACKAGES ==='
+          node <<'NODE'
+          const fs = require('fs');
+          const lock = JSON.parse(fs.readFileSync('package-lock.json','utf8'));
+          const entries = Object.entries(lock.packages || {}).filter(([k]) => k !== '');
+          console.log(`package_count=${entries.length}`);
+          for (const [packagePath, meta] of entries.sort((a,b)=>a[0].localeCompare(b[0]))) {
+            console.log([packagePath, meta.version || '', meta.resolved || '', meta.integrity || '', meta.optional ? 'OPTIONAL' : 'REQUIRED', meta.hasInstallScript ? 'HAS_INSTALL_SCRIPT' : 'NO_INSTALL_SCRIPT_FLAG'].join('|'));
+          }
+          NODE
+
+          echo '=== NPM_ARCHIVE_LICENSE_NOTICE_LIFECYCLE_DISPOSITIONS ==='
+          node <<'NODE'
+          const fs = require('fs');
+          const cp = require('child_process');
+          const path = require('path');
+          const crypto = require('crypto');
+
+          const lock = JSON.parse(fs.readFileSync('package-lock.json','utf8'));
+          const entries = Object.entries(lock.packages || {}).filter(([k]) => k !== '');
+          const permissive = new Set(['0BSD','Apache-2.0','BSD-2-Clause','BSD-3-Clause','BSL-1.0','CC0-1.0','ISC','MIT','MIT-0','Unlicense','Unicode-3.0','Zlib']);
+          const forbidden = ['AGPL','GPL-1','GPL-2','GPL-3','LGPL','SSPL','BUSL','Commons-Clause','EUPL','OSL','CDDL','EPL'];
+          const lifecycleKeys = new Set(['preinstall','install','postinstall','preprepare','prepare','postprepare','prerebuild','rebuild','postrebuild','prebuild','build','postbuild','prepack','postpack']);
+          const archiveRoot = '/tmp/golam-spec006-npm-archives';
+
+          function packageName(packagePath) {
+            return packagePath.split('node_modules/').pop();
+          }
+          function licenseLeaves(expr) {
+            return String(expr || '').replace(/[()]/g, ' ').split(/\s+(?:OR|AND)\s+|\s*\/\s*/).map(v => v.trim()).filter(Boolean);
+          }
+          function disposition(value) {
+            const text = typeof value === 'string' ? value.trim() : '';
+            if (!text) return ['REJECT_MISSING_LICENSE_METADATA', ''];
+            const leaves = licenseLeaves(text);
+            if (leaves.length && leaves.every(v => permissive.has(v))) {
+              const selected = leaves.includes('Apache-2.0') ? 'Apache-2.0' : leaves[0];
+              const conjunction = /\s+AND\s+/.test(text) ? 'YES' : 'NO';
+              return ['ACCEPT_PERMISSIVE_EXPRESSION', `SELECTED_OR_BRANCH=${selected};CONJUNCTION_TERMS_APPLY=${conjunction}`];
+            }
+            if (text === 'MPL-2.0') {
+              return [
+                'ACCEPT_MPL_2_0_FILE_LEVEL_WITH_OBLIGATIONS',
+                'OBLIGATIONS=retain-license-and-copyright-notices;distribute-modified-MPL-covered-files-under-MPL-2.0;if-covered-executable-is-distributed-make-corresponding-MPL-covered-source-available-and-inform-recipients'
+              ];
+            }
+            if (forbidden.some(marker => text.toLowerCase().includes(marker.toLowerCase()))) {
+              return ['REJECT_NONPERMISSIVE_OR_UNSELECTED_RECIPROCAL', ''];
+            }
+            return ['REJECT_UNCLASSIFIED_LICENSE_EXPRESSION', ''];
+          }
+          function packArchive(spec) {
+            const raw = cp.execFileSync(
+              'npm',
+              ['pack', spec, '--ignore-scripts', '--json', '--pack-destination', archiveRoot],
+              {encoding: 'utf8', stdio: ['ignore','pipe','pipe']}
+            );
+            const parsed = JSON.parse(raw);
+            if (!Array.isArray(parsed) || parsed.length !== 1 || !parsed[0].filename) {
+              throw new Error(`unexpected npm pack output for ${spec}`);
+            }
+            return path.join(archiveRoot, parsed[0].filename);
+          }
+          function archiveFileList(archive) {
+            return cp.execFileSync('tar', ['-tzf', archive], {encoding: 'utf8'})
+              .split(/\r?\n/).map(v => v.trim()).filter(Boolean);
+          }
+          function archivePackageJson(archive) {
+            return JSON.parse(cp.execFileSync('tar', ['-xOzf', archive, 'package/package.json'], {encoding: 'utf8'}));
+          }
+          function verifyIntegrity(bytes, integrity) {
+            if (typeof integrity !== 'string' || integrity.trim() === '') return false;
+            for (const rawToken of integrity.trim().split(/\s+/)) {
+              const token = rawToken.split('?')[0];
+              const match = /^([A-Za-z0-9]+)-(.+)$/.exec(token);
+              if (!match) continue;
+              const algorithm = match[1].toLowerCase();
+              let actual;
+              try {
+                actual = crypto.createHash(algorithm).update(bytes).digest('base64');
+              } catch {
+                continue;
+              }
+              if (actual === match[2]) return true;
+            }
+            return false;
+          }
+
+          const blocked = [];
+          const lifecycle = [];
+          const mpl = [];
+          const seenSpecs = new Set();
+          const archiveRows = [];
+          for (const [packagePath, lockMeta] of entries.sort((a,b)=>a[0].localeCompare(b[0]))) {
+            const name = packageName(packagePath);
+            const version = lockMeta.version;
+            const spec = `${name}@${version}`;
+            if (seenSpecs.has(spec)) continue;
+            seenSpecs.add(spec);
+
+            const archive = packArchive(spec);
+            const archiveBytes = fs.readFileSync(archive);
+            const archiveSha256 = crypto.createHash('sha256').update(archiveBytes).digest('hex');
+            const integrityMatchesLock = verifyIntegrity(archiveBytes, lockMeta.integrity);
+            if (!integrityMatchesLock) {
+              blocked.push([name, version, 'REJECT_ARCHIVE_SRI_MISMATCH', String(lockMeta.integrity || 'MISSING')]);
+            }
+            const files = archiveFileList(archive);
+            const pkg = archivePackageJson(archive);
+            if (pkg.name !== name || pkg.version !== version) {
+              blocked.push([name, version, 'REJECT_ARCHIVE_IDENTITY_MISMATCH', `${pkg.name}@${pkg.version}`]);
+            }
+            const noticeFiles = files.filter(file => /^package\/(?:license|licence|notice|copying|copyright)(?:[._-].*)?$/i.test(file));
+            const [status, detail] = disposition(pkg.license);
+            if (status.startsWith('REJECT_')) blocked.push([name, version, status, JSON.stringify(pkg.license || null)]);
+            if (status.startsWith('ACCEPT_MPL_')) {
+              mpl.push([name, version, String(pkg.license), noticeFiles.join(',') || 'NONE']);
+              if (!noticeFiles.length) blocked.push([name, version, 'REJECT_MPL_WITHOUT_ARCHIVE_LICENSE_NOTICE_FILE', String(pkg.license)]);
+            }
+
+            const scripts = pkg.scripts && typeof pkg.scripts === 'object' ? pkg.scripts : {};
+            const relevantScripts = Object.entries(scripts).filter(([key]) => lifecycleKeys.has(key));
+            for (const [key, command] of relevantScripts) {
+              lifecycle.push([name, version, key, String(command), 'DEPENDENCY_LIFECYCLE_EXECUTION_DENIED']);
+            }
+
+            const nativeFiles = name === 'fsevents' && version === '2.3.3'
+              ? files.filter(file => /(?:\.node$|binding\.gyp$|src\/)/i.test(file))
+              : [];
+            archiveRows.push([
+              name, version, lockMeta.optional ? 'OPTIONAL' : 'REQUIRED',
+              lockMeta.resolved || 'MISSING_RESOLVED', lockMeta.integrity || 'MISSING_INTEGRITY',
+              integrityMatchesLock ? 'SRI_MATCH' : 'SRI_MISMATCH',
+              String(pkg.license || 'MISSING'), status, detail || 'NO_EXTRA_DISPOSITION_DETAIL',
+              noticeFiles.length ? noticeFiles.join(',') : 'NO_ARCHIVE_TOP_LEVEL_LICENSE_NOTICE_FILE_OBSERVED',
+              archiveSha256,
+              relevantScripts.length ? JSON.stringify(Object.fromEntries(relevantScripts)) : '{}',
+              nativeFiles.length ? nativeFiles.join(',') : 'NO_FSEVENTS_NATIVE_SOURCE_OR_BINARY_LIST_APPLICABLE',
+              lockMeta.hasInstallScript ? 'LOCK_HAS_INSTALL_SCRIPT' : 'LOCK_NO_INSTALL_SCRIPT_FLAG'
+            ]);
+          }
+
+          for (const row of archiveRows) console.log(row.join('|'));
+          console.log('=== NPM_MPL_2_0_ACCEPTED_PACKAGES ===');
+          console.log(`count=${mpl.length}`);
+          for (const row of mpl) console.log(row.join('|'));
+          console.log('=== NPM_RELEVANT_LIFECYCLE_SCRIPTS ===');
+          console.log(`count=${lifecycle.length}`);
+          for (const row of lifecycle) console.log(row.join('|'));
+          console.log('=== NPM_ARCHIVE_SRI_BINDING ===');
+          console.log(`package_count=${archiveRows.length}`);
+          console.log(`all_match=${archiveRows.every(row => row[5] === 'SRI_MATCH') ? 'YES' : 'NO'}`);
+          console.log('=== FSEVENTS_2_3_3_DISPOSITION ===');
+          const fsevents = archiveRows.find(row => row[0] === 'fsevents' && row[1] === '2.3.3');
+          if (fsevents) {
+            console.log('PACKAGE=fsevents@2.3.3');
+            console.log('LOCK_POSTURE=OPTIONAL_MACOS_LOCK_ENTRY_ONLY');
+            console.log('PRODUCT_NODE_MODULES_POSTURE=PRUNE_BEFORE_ANY_PRODUCT_BUILD_OR_TOOL_EXECUTION');
+            console.log('INSTALL_SCRIPT_EXECUTION=DENIED');
+            console.log('NODE_GYP_EXECUTION=DENIED');
+            console.log('NODE_HEADER_NETWORK_ACQUISITION=DENIED');
+            console.log('NATIVE_ADDON_EXECUTION=DENIED');
+          } else {
+            blocked.push(['fsevents', '2.3.3', 'REJECT_EXPECTED_OPTIONAL_PACKAGE_MISSING', '']);
+          }
+          console.log('=== NPM_BLOCKED_LICENSE_OR_ARCHIVE_DISPOSITIONS ===');
+          console.log(`count=${blocked.length}`);
+          for (const row of blocked) console.log(row.join('|'));
+          if (blocked.length) process.exitCode = 1;
+          NODE
+
+      - name: Prove repository prune control and frontend build on Linux
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/golam-spec006-js
+          rm -rf node_modules
+          npm ci --ignore-scripts --no-audit --no-fund
+          node "$GITHUB_WORKSPACE/scripts/prune-denied-native-optionals.mjs" --root "$PWD"
+          node "$GITHUB_WORKSPACE/scripts/prune-denied-native-optionals.mjs" --root "$PWD"
+          mkdir -p src
+          cat >index.html <<'EOF'
+          <div id="root"></div><script type="module" src="/src/main.jsx"></script>
+          EOF
+          cat >src/main.jsx <<'EOF'
+          import React from 'react';
+          import { createRoot } from 'react-dom/client';
+          createRoot(document.getElementById('root')).render(React.createElement('main', null, 'Golam Source Foundry'));
+          EOF
+          ./node_modules/.bin/vite build
+          node "$GITHUB_WORKSPACE/scripts/prune-denied-native-optionals.mjs" --root "$PWD"
+          cat <<'EOF'
+          PRODUCT_NPM_INSTALL_COMMAND=npm ci --ignore-scripts --no-audit --no-fund
+          PRODUCT_POST_INSTALL_NATIVE_PRUNE=node scripts/prune-denied-native-optionals.mjs
+          PRODUCT_DEPENDENCY_LIFECYCLE_EXECUTION=DENIED
+          PRODUCT_FRONTEND_BUILD_COMMAND=npm run build --ignore-scripts
+          REPOSITORY_PRUNE_CONTROL=QUALIFIED
+          REPOSITORY_PRUNE_CONTROL_IDEMPOTENT=PASS
+          FSEVENTS_PRODUCT_NODE_MODULES=ABSENT_BEFORE_AND_AFTER_BUILD
+          FSEVENTS_INSTALL_SCRIPT_EXECUTION=DENIED
+          FSEVENTS_NATIVE_ADDON_EXECUTION=DENIED
+          EOF
+
+      - name: Record qualification-only network and authority boundary
+        shell: bash
+        run: |
+          cat <<'EOF'
+          SOURCE_FOUNDRY_PACKAGE_MANAGER_NETWORK=QUALIFICATION_ONLY
+          PRODUCT_RUNTIME_NETWORK_AUTHORITY=NO
+          PRODUCT_MANIFEST_MUTATION=NO
+          RENDERER_AUTHORITY=NO
+          NATIVE_AUTOMATION_ADMISSION=NO
+          NATIVE_CAPTURE_ADMISSION=NO
+          RAW_INPUT_ADMISSION=NO
+          CLIPBOARD_ADMISSION=NO
+          SOURCE_FOUNDRY_ADMISSION=NO_REVIEW_REQUIRED
+          EOF
+
+  prove-script-disabled-macos:
+    name: prove-script-disabled-install-macos
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve exact frontend closure, apply repository prune control, and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/golam-spec006-js-macos
+          mkdir -p /tmp/golam-spec006-js-macos/src
+          cd /tmp/golam-spec006-js-macos
+          cat >package.json <<'EOF'
+          {
+            "name": "golam-spec006-source-foundry-macos",
+            "private": true,
+            "version": "0.0.0",
+            "scripts": {
+              "build": "vite build"
+            },
+            "dependencies": {
+              "@tauri-apps/api": "2.11.1",
+              "react": "19.2.8",
+              "react-dom": "19.2.8"
+            },
+            "devDependencies": {
+              "@tauri-apps/cli": "2.11.4",
+              "@vitejs/plugin-react": "6.1.1",
+              "typescript": "6.0.3",
+              "vite": "8.2.2"
+            }
+          }
+          EOF
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm ci --ignore-scripts --no-audit --no-fund
+          echo '=== FSEVENTS_PRE_PRUNE_NATIVE_FILES ==='
+          find node_modules/fsevents -type f \( -name '*.node' -o -name 'binding.gyp' \) -print 2>/dev/null || true
+          find node_modules/fsevents -type f -name '*.node' -exec shasum -a 256 {} \; 2>/dev/null || true
+          node "$GITHUB_WORKSPACE/scripts/prune-denied-native-optionals.mjs" --root "$PWD"
+          node "$GITHUB_WORKSPACE/scripts/prune-denied-native-optionals.mjs" --root "$PWD"
+          cat >index.html <<'EOF'
+          <div id="root"></div><script type="module" src="/src/main.jsx"></script>
+          EOF
+          cat >src/main.jsx <<'EOF'
+          import React from 'react';
+          import { createRoot } from 'react-dom/client';
+          createRoot(document.getElementById('root')).render(React.createElement('main', null, 'Golam Source Foundry'));
+          EOF
+          npm run build --ignore-scripts
+          node "$GITHUB_WORKSPACE/scripts/prune-denied-native-optionals.mjs" --root "$PWD"
+          cat <<'EOF'
+          MACOS_SCRIPT_DISABLED_INSTALL=PASS
+          MACOS_REPOSITORY_PRUNE_CONTROL=PASS
+          MACOS_REPOSITORY_PRUNE_CONTROL_IDEMPOTENT=PASS
+          MACOS_FRONTEND_BUILD_WITHOUT_FSEVENTS_PACKAGE=PASS
+          FSEVENTS_INSTALL_SCRIPT_EXECUTION=DENIED
+          FSEVENTS_NATIVE_ADDON_EXECUTION=DENIED
+          EOF

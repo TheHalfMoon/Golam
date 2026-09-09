@@ -12,6 +12,8 @@ mod sys {
 }
 
 pub mod acp_adapter;
+pub mod desktop_capture;
+pub mod desktop_observation;
 pub mod local_fs;
 pub mod mcp_local_process_v2;
 #[cfg(test)]

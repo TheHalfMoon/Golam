@@ -1,0 +1,13 @@
+{
+  "identifier": "main",
+  "description": "Golam main desktop window with only sanitized local control commands.",
+  "local": true,
+  "windows": ["main"],
+  "platforms": ["linux", "macOS", "windows"],
+  "permissions": [
+    "allow-desktop-status",
+    "allow-desktop-pause",
+    "allow-desktop-stop",
+    "allow-desktop-takeover"
+  ]
+}

@@ -6,8 +6,10 @@ members = [
   "crates/golam-effects",
   "crates/golam-ipc",
   "crates/golam-kernel",
+  "crates/golam-bounded-linux-async",
   "crates/golamd",
   "crates/golam",
+  "apps/golam-desktop/src-tauri",
 ]
 
 [workspace.package]

@@ -5,6 +5,12 @@ mod authorization;
 mod capability_lease;
 mod client_auth;
 mod client_enrollment;
+mod desktop_authority;
+mod desktop_capture_effect;
+mod desktop_clipboard_effect;
+mod desktop_dispatch;
+mod desktop_effect;
+mod desktop_reconciliation;
 mod effect_execution;
 mod managed_memory_writer;
 mod memory_restart;
@@ -42,6 +48,22 @@ pub use capability_lease::{
 };
 pub use client_auth::ClientAuthorityError;
 pub use client_enrollment::{ClientEnrollmentError, EnrolledClientCredential};
+pub use desktop_authority::{
+    DesktopAuthorityError, HumanInterruptRequest, ProtectedDesktopControlState,
+};
+pub use desktop_capture_effect::{
+    DesktopCaptureError, DispatchDesktopCapture, PrepareDesktopCapture, PreparedDesktopCapture,
+};
+pub use desktop_clipboard_effect::{
+    DesktopClipboardError, DispatchDesktopClipboard, PrepareDesktopClipboard,
+    PreparedDesktopClipboard,
+};
+pub use desktop_dispatch::{DesktopDispatchError, DispatchDesktopAction};
+pub use desktop_effect::{
+    DesktopKernelError, PrepareDesktopAction, PreparedDesktopKernelAction, TrustedRouteCandidate,
+    TrustedRouteDisposition, effect_binding, evaluate_desktop_routes,
+};
+pub use desktop_reconciliation::{DesktopReconciliationError, DesktopReconciliationRepair};
 pub use effect_execution::PreparedEffectDispatch;
 pub use golam_ipc::credentials::GeneratedClientCredential;
 pub use golam_ipc::lifecycle::{Authenticate, ClientKeyId, ConnectionId, Ready, ServerLifecycle};

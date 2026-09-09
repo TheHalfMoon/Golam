@@ -5,6 +5,7 @@ use std::fmt;
 use std::path::PathBuf;
 
 use golam_core::EffectId;
+use golam_ledger::effect_read::{EffectReadError, EffectReader};
 pub use golam_ledger::tool_mutation_evidence::ToolMutationVerifiedStatus;
 use golam_ledger::tool_mutation_evidence::{
     RecordToolMutationIntent, RecordToolMutationReceipt, ToolMutationEvidenceError,
@@ -22,10 +23,13 @@ const TOOL_CONTEXT_EVIDENCE_DB: &str = "tool-context-evidence.sqlite";
 pub enum ToolMutationEvidenceKernelError {
     Kernel(KernelError),
     Store(ToolMutationEvidenceError),
+    Read(EffectReadError),
     MissingEvidence(EffectId),
     BindingMismatch(EffectId),
     MissingVerifiedReceipt(EffectId),
     VerifiedStatusMismatch(EffectId),
+    EffectNotReconciling(EffectId),
+    InvalidStoredPreconditions(EffectId),
 }
 
 impl fmt::Display for ToolMutationEvidenceKernelError {
@@ -33,6 +37,7 @@ impl fmt::Display for ToolMutationEvidenceKernelError {
         match self {
             Self::Kernel(error) => write!(f, "tool mutation evidence kernel error: {error}"),
             Self::Store(error) => write!(f, "tool mutation evidence store error: {error}"),
+            Self::Read(error) => write!(f, "tool mutation evidence effect read error: {error}"),
             Self::MissingEvidence(effect_id) => write!(
                 f,
                 "tool mutation reconciliation evidence is missing for effect {}",
@@ -53,6 +58,16 @@ impl fmt::Display for ToolMutationEvidenceKernelError {
                 "tool mutation verified receipt status mismatch for effect {}",
                 effect_id.0
             ),
+            Self::EffectNotReconciling(effect_id) => write!(
+                f,
+                "tool mutation effect {} is not in reconciliation",
+                effect_id.0
+            ),
+            Self::InvalidStoredPreconditions(effect_id) => write!(
+                f,
+                "tool mutation effect {} has invalid stored preconditions",
+                effect_id.0
+            ),
         }
     }
 }
@@ -62,10 +77,13 @@ impl Error for ToolMutationEvidenceKernelError {
         match self {
             Self::Kernel(error) => Some(error),
             Self::Store(error) => Some(error),
+            Self::Read(error) => Some(error),
             Self::MissingEvidence(_)
             | Self::BindingMismatch(_)
             | Self::MissingVerifiedReceipt(_)
-            | Self::VerifiedStatusMismatch(_) => None,
+            | Self::VerifiedStatusMismatch(_)
+            | Self::EffectNotReconciling(_)
+            | Self::InvalidStoredPreconditions(_) => None,
         }
     }
 }
@@ -79,6 +97,12 @@ impl From<KernelError> for ToolMutationEvidenceKernelError {
 impl From<ToolMutationEvidenceError> for ToolMutationEvidenceKernelError {
     fn from(value: ToolMutationEvidenceError) -> Self {
         Self::Store(value)
+    }
+}
+
+impl From<EffectReadError> for ToolMutationEvidenceKernelError {
+    fn from(value: EffectReadError) -> Self {
+        Self::Read(value)
     }
 }
 
@@ -141,6 +165,59 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
         })?)
     }
 
+    /// Records a provider-verified reconciliation receipt after restart without
+    /// accepting caller-reconstructed authority-bearing effect bindings. The
+    /// exact action/resource/precondition/payload tuple is reloaded from the
+    /// protected effect ledger and is eligible only while that effect is
+    /// durably `reconciling`.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "restart reconciliation keeps principal, effect, provider, verified status, receipt and scope explicit"
+    )]
+    pub fn record_tool_reconciliation_verified_receipt(
+        &mut self,
+        principal: Principal<'_>,
+        effect_id: EffectId,
+        provider_id: &str,
+        verified_status: ToolMutationVerifiedStatus,
+        receipt_bytes: &[u8],
+        scope: &str,
+    ) -> Result<[u8; 32], ToolMutationEvidenceKernelError> {
+        let reader = EffectReader::open(&self.authority)?;
+        let snapshot = reader
+            .snapshot(effect_id)?
+            .ok_or(ToolMutationEvidenceKernelError::MissingEvidence(effect_id))?;
+        if snapshot.risk_class != "tool_mutation" {
+            return Err(ToolMutationEvidenceKernelError::BindingMismatch(effect_id));
+        }
+        if snapshot.current_state != "reconciling" {
+            return Err(ToolMutationEvidenceKernelError::EffectNotReconciling(
+                effect_id,
+            ));
+        }
+        let preconditions_hash: [u8; 32] = snapshot
+            .preconditions
+            .try_into()
+            .map_err(|_| ToolMutationEvidenceKernelError::InvalidStoredPreconditions(effect_id))?;
+        self.require_authority(&AuthorizationRequest {
+            principal,
+            action: &snapshot.action,
+            resource: &snapshot.resource,
+            context: AuthorizationContext::local(scope),
+        })?;
+        let mut store = ToolMutationEvidenceStore::open(self.tool_mutation_evidence_path())?;
+        Ok(store.record_verified_receipt(RecordToolMutationReceipt {
+            effect_id,
+            action: &snapshot.action,
+            resource: &snapshot.resource,
+            preconditions_hash,
+            payload_hash: snapshot.payload_hash,
+            provider_id,
+            verified_status,
+            receipt_bytes,
+        })?)
+    }
+
     pub(crate) fn require_verified_tool_mutation_receipt(
         &self,
         effect_id: EffectId,
@@ -187,7 +264,10 @@ impl<P: AuthorizationPolicy> KernelApi<P> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{KernelCreateSession, PolicyDecision, PrepareToolEffect};
+    use crate::{
+        CompleteToolEffect, KernelCreateSession, PolicyDecision, PrepareToolEffect,
+        ToolExecutionCompletion,
+    };
     use golam_core::paths::RuntimeLayout;
     use golam_core::{EventId, SessionId};
     use std::fs;
@@ -304,6 +384,103 @@ mod tests {
                 ToolMutationVerifiedStatus::Failed,
             ),
             Err(ToolMutationEvidenceKernelError::VerifiedStatusMismatch(id)) if id == effect_id
+        ));
+        drop(kernel);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn restart_reconciliation_receipt_uses_canonical_effect_binding() {
+        let runtime = runtime();
+        let mut kernel = kernel(&runtime);
+        let effect_id = EffectId(772);
+        let prepared = prepared(&mut kernel, effect_id);
+        kernel
+            .record_tool_mutation_intent(
+                Principal::test("evidence"),
+                &prepared,
+                "golam-git-linux-v1",
+                b"branch:candidate",
+                "evidence",
+            )
+            .unwrap();
+        kernel
+            .complete_tool_effect(
+                Principal::test("evidence"),
+                CompleteToolEffect {
+                    prepared: &prepared,
+                    finished_at: "2026-09-05T09:30:02Z",
+                    completion: ToolExecutionCompletion::UnknownOutcome,
+                    reason_code: Some("provider_timeout"),
+                    evidence_ref: None,
+                    receipt: None,
+                },
+                "evidence",
+            )
+            .unwrap();
+        kernel
+            .begin_tool_reconciliation(
+                Principal::test("evidence"),
+                effect_id,
+                "2026-09-05T09:30:03Z",
+                "evidence",
+            )
+            .unwrap();
+        drop(kernel);
+
+        let mut kernel = KernelApi::open(&runtime, AllowTools).unwrap();
+        let receipt_hash = kernel
+            .record_tool_reconciliation_verified_receipt(
+                Principal::test("evidence"),
+                effect_id,
+                "golam-git-linux-v1",
+                ToolMutationVerifiedStatus::Succeeded,
+                b"verified-after-restart",
+                "evidence",
+            )
+            .unwrap();
+        assert_ne!(receipt_hash, [0; 32]);
+        assert!(
+            kernel
+                .require_verified_tool_mutation_receipt(
+                    effect_id,
+                    prepared.action(),
+                    prepared.resource(),
+                    prepared.preconditions_hash(),
+                    prepared.payload_hash(),
+                    ToolMutationVerifiedStatus::Succeeded,
+                )
+                .is_ok()
+        );
+        drop(kernel);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn restart_receipt_is_rejected_before_reconciliation_state() {
+        let runtime = runtime();
+        let mut kernel = kernel(&runtime);
+        let effect_id = EffectId(773);
+        let prepared = prepared(&mut kernel, effect_id);
+        kernel
+            .record_tool_mutation_intent(
+                Principal::test("evidence"),
+                &prepared,
+                "golam-git-linux-v1",
+                b"branch:candidate",
+                "evidence",
+            )
+            .unwrap();
+        assert!(matches!(
+            kernel.record_tool_reconciliation_verified_receipt(
+                Principal::test("evidence"),
+                effect_id,
+                "golam-git-linux-v1",
+                ToolMutationVerifiedStatus::Succeeded,
+                b"premature",
+                "evidence",
+            ),
+            Err(ToolMutationEvidenceKernelError::EffectNotReconciling(id)) if id == effect_id
         ));
         drop(kernel);
         fs::remove_dir_all(runtime.root).unwrap();

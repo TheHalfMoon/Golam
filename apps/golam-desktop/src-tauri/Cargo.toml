@@ -1,0 +1,19 @@
+[package]
+name = "golam-desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+build = "build.rs"
+
+[dependencies]
+golam-core = { path = "../../../crates/golam-core" }
+golam-ipc = { path = "../../../crates/golam-ipc" }
+golam-ledger = { path = "../../../crates/golam-ledger" }
+serde_json.workspace = true
+tauri = { version = "=2.11.1", default-features = false, features = ["wry"] }
+
+[build-dependencies]
+tauri-build = { version = "=2.6.1", default-features = false }
+
+[lints]
+workspace = true

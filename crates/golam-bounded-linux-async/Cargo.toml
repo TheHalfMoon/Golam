@@ -1,0 +1,12 @@
+[package]
+name = "golam-bounded-linux-async"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+tokio = { version = "=1.53.1", default-features = false, features = ["rt", "time"] }
+
+[lints]
+workspace = true

@@ -1,0 +1,200 @@
+name: spec006-linux-runtime-facade-source-foundry
+
+on:
+  push:
+    branches: [impl/006-desktop-computer-control]
+    paths:
+      - .github/workflows/spec006-linux-runtime-facade-source-foundry.yml
+      - specs/006-desktop-computer-control/implementation/linux-runtime-source-foundry-candidate.md
+
+permissions:
+  contents: read
+
+jobs:
+  qualify-bounded-linux-async-facade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pinned Rust toolchain
+        shell: bash
+        run: rustup toolchain install 1.98.0 --profile minimal
+
+      - name: Prove Tokio is structurally hidden behind a bounded facade
+        shell: bash
+        run: |
+          set -euo pipefail
+          FACADE="${RUNNER_TEMP}/golam-bounded-linux-async-source-foundry"
+          CONSUMER="${RUNNER_TEMP}/golam-bounded-linux-async-consumer"
+          rm -rf "$FACADE" "$CONSUMER"
+          mkdir -p "$FACADE/src" "$CONSUMER/src/bin"
+
+          cat >"$FACADE/Cargo.toml" <<'EOF'
+          [package]
+          name = "golam-bounded-linux-async-source-foundry"
+          version = "0.0.0"
+          edition = "2024"
+          rust-version = "1.98"
+          publish = false
+
+          [workspace]
+
+          [dependencies]
+          tokio = { version = "=1.53.1", default-features = false, features = ["rt", "time"] }
+          EOF
+
+          cat >"$FACADE/src/lib.rs" <<'EOF'
+          #![forbid(unsafe_code)]
+
+          use std::future::Future;
+          use std::time::Duration;
+
+          pub const MAX_BOUNDED_ASYNC_MILLIS: u64 = 30_000;
+
+          #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+          pub enum BoundedAsyncError {
+              InvalidTimeout,
+              RuntimeUnavailable,
+              TimedOut,
+          }
+
+          pub fn run_bounded<F, T>(timeout: Duration, future: F) -> Result<T, BoundedAsyncError>
+          where
+              F: Future<Output = T>,
+          {
+              let timeout_millis = u64::try_from(timeout.as_millis())
+                  .map_err(|_| BoundedAsyncError::InvalidTimeout)?;
+              if timeout_millis == 0 || timeout_millis > MAX_BOUNDED_ASYNC_MILLIS {
+                  return Err(BoundedAsyncError::InvalidTimeout);
+              }
+
+              let runtime = tokio::runtime::Builder::new_current_thread()
+                  .enable_time()
+                  .build()
+                  .map_err(|_| BoundedAsyncError::RuntimeUnavailable)?;
+              runtime.block_on(async move {
+                  tokio::time::timeout(timeout, future)
+                      .await
+                      .map_err(|_| BoundedAsyncError::TimedOut)
+              })
+          }
+          EOF
+
+          cat >"$CONSUMER/Cargo.toml" <<EOF
+          [package]
+          name = "golam-bounded-linux-async-consumer"
+          version = "0.0.0"
+          edition = "2024"
+          rust-version = "1.98"
+          publish = false
+
+          [workspace]
+
+          [dependencies]
+          golam-bounded-linux-async-source-foundry = { path = "$FACADE" }
+          atspi = { version = "=0.30.0", default-features = false, features = ["proxies", "connection", "tokio"] }
+          EOF
+
+          cat >"$CONSUMER/src/main.rs" <<'EOF'
+          #![forbid(unsafe_code)]
+
+          use std::time::Duration;
+          use golam_bounded_linux_async_source_foundry::{BoundedAsyncError, run_bounded};
+
+          fn typecheck_admitted_atspi_future() {
+              let future = atspi::AccessibilityConnection::new();
+              let _ = run_bounded(Duration::from_millis(25), future);
+          }
+
+          fn main() {
+              let result = run_bounded(Duration::from_millis(25), async { 7_u8 });
+              assert_eq!(result, Ok(7));
+              assert_eq!(
+                  run_bounded(Duration::ZERO, async { 1_u8 }),
+                  Err(BoundedAsyncError::InvalidTimeout),
+              );
+              let _ = typecheck_admitted_atspi_future as fn();
+          }
+          EOF
+
+          cat >"$CONSUMER/src/bin/forbidden_tokio.rs" <<'EOF'
+          #![forbid(unsafe_code)]
+
+          fn main() {
+              let _ = tokio::runtime::Builder::new_multi_thread();
+          }
+          EOF
+
+          (
+            cd "$FACADE"
+            cargo +1.98.0 generate-lockfile
+            cargo +1.98.0 check --locked
+          )
+          (
+            cd "$CONSUMER"
+            cargo +1.98.0 generate-lockfile
+            cargo +1.98.0 check --locked --bin golam-bounded-linux-async-consumer
+            cargo +1.98.0 run --locked --bin golam-bounded-linux-async-consumer
+            if cargo +1.98.0 check --locked --bin forbidden_tokio >forbidden.stdout 2>forbidden.stderr; then
+              echo 'STRUCTURAL_GUARD_FAILED=consumer_resolved_tokio_without_direct_dependency' >&2
+              exit 1
+            fi
+            if ! grep -Eq 'use of unresolved module or unlinked crate `tokio`|failed to resolve: use of unresolved module or unlinked crate `tokio`' forbidden.stderr; then
+              echo 'STRUCTURAL_GUARD_FAILED=unexpected_compile_failure' >&2
+              cat forbidden.stderr >&2
+              exit 1
+            fi
+          )
+
+          python3 - "$FACADE/src/lib.rs" <<'PY'
+          import pathlib
+          import sys
+
+          source = pathlib.Path(sys.argv[1]).read_text(encoding='utf-8')
+          allowed = {
+              'tokio::runtime::Builder::new_current_thread()',
+              'tokio::time::timeout(timeout, future)',
+          }
+          references = {
+              line.strip()
+              for line in source.splitlines()
+              if 'tokio::' in line
+          }
+          for reference in references:
+              if not any(token in reference for token in allowed):
+                  raise SystemExit(f'UNQUALIFIED_TOKIO_REFERENCE={reference}')
+          if len(references) != 2:
+              raise SystemExit(f'UNEXPECTED_TOKIO_REFERENCE_COUNT={len(references)}')
+          denied = [
+              'pub use tokio',
+              'pub type',
+              'tokio::net',
+              'tokio::process',
+              'tokio::spawn',
+              'tokio::task',
+              'tokio::signal',
+              'tokio::fs',
+              'tokio::io',
+              'tokio::sync',
+              'new_multi_thread',
+              'enable_all',
+          ]
+          for token in denied:
+              if token in source:
+                  raise SystemExit(f'DENIED_FACADE_TOKEN={token}')
+          print('FACADE_DIRECT_TOKIO_OWNER=YES')
+          print('FACADE_PUBLIC_TOKIO_REEXPORT=NO')
+          print('FACADE_ALLOWED_TOKIO_REFERENCES=NEW_CURRENT_THREAD_AND_TIMEOUT_ONLY')
+          print('CONSUMER_DIRECT_TOKIO_DEPENDENCY=NO')
+          print('CONSUMER_TOKIO_NAME_RESOLUTION=COMPILE_FAIL')
+          print('DIRECT_PRODUCT_TOKIO_API_SURFACE_STRUCTURALLY_RESTRICTED_TO_BOUNDED_DRIVER=YES')
+          PY
+
+      - name: Prove repository product manifests remain unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
+          echo 'PRODUCT_MANIFEST_MUTATION=NO'
+          echo 'SOURCE_FOUNDRY_ADMISSION=NO_PENDING_EXACT_HEAD_QUALIFICATION_AND_INDEPENDENT_REVIEW'

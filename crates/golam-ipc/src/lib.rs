@@ -3,6 +3,7 @@
 pub mod client_handshake;
 pub mod command;
 pub mod credentials;
+pub mod desktop_control;
 pub mod lifecycle;
 pub mod request;
 #[cfg(unix)]

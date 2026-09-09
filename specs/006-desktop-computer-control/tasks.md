@@ -44,10 +44,10 @@
 
 ## Phase D — Semantic observation, focus and identity
 
-- [ ] **T006-016** Implement bounded work-surface/window/monitor enumeration behind platform adapters.
-- [ ] **T006-017** Implement semantic element observation with explicit depth/node/time/string bounds.
-- [ ] **T006-018** Implement governed focus as `ToolRequest → immutable focus intent → capability/policy/approval → Effect PREPARED → Kernel/Effect Gate → immediate request/effect/intent/work-surface/session/permission/control-lease/visible-channel revalidation → bounded platform focus dispatch → observe actual focus → terminal evidence/reconciliation`. Include focused work-surface tracking, stale/focus-race invalidation, control-lease generation and human-takeover invalidation; absent, stale, mismatched or substituted Gate authorization fails closed and `UNKNOWN_OUTCOME` blocks focus-dependent actions until reconciliation.
-- [ ] **T006-019** Add cross-platform fake and adapter tests proving observation, semantic text, coordinates, screenshots and pixel hints never imply actuation authority or fallback eligibility; add focus tests that reject absent/stale/mismatched/substituted Gate authorization, stale work-surface identity, permission/session drift and superseded lease/visible-channel state before focus dispatch.
+- [x] **T006-016** Implement bounded work-surface/window/monitor enumeration behind platform adapters.
+- [x] **T006-017** Implement semantic element observation with explicit depth/node/time/string bounds.
+- [x] **T006-018** Implement governed focus as `ToolRequest → immutable focus intent → capability/policy/approval → Effect PREPARED → Kernel/Effect Gate → immediate request/effect/intent/work-surface/session/permission/control-lease/visible-channel revalidation → bounded platform focus dispatch → observe actual focus → terminal evidence/reconciliation`. Include focused work-surface tracking, stale/focus-race invalidation, control-lease generation and human-takeover invalidation; absent, stale, mismatched or substituted Gate authorization fails closed and `UNKNOWN_OUTCOME` blocks focus-dependent actions until reconciliation.
+- [x] **T006-019** Add cross-platform fake and adapter tests proving observation, semantic text, coordinates, screenshots and pixel hints never imply actuation authority or fallback eligibility; add focus tests that reject absent/stale/mismatched/substituted Gate authorization, stale work-surface identity, permission/session drift and superseded lease/visible-channel state before focus dispatch.
 
 ## Phase E — Bounded capture
 

@@ -20,6 +20,7 @@ pub mod capability_lease_runtime;
 pub mod capability_leases;
 pub mod checkpoint;
 pub mod clients;
+pub mod desktop_control_evidence;
 pub mod dispatch;
 pub mod effect_completion;
 pub mod effect_read;

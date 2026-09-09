@@ -5,21 +5,26 @@ use std::fmt;
 use std::io::{Read, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use golam_core::desktop_control::{DesktopControlMode, HumanInterruptOperation};
 use golam_core::paths::RuntimeLayout;
 use golam_core::{ClientId, PROTOCOL_VERSION, ResourceLimits};
+use golam_ipc::desktop_control::{
+    DesktopControlRequest, DesktopControlSurfaceReply, DesktopControlSurfaceState,
+    decode_desktop_control_request, encode_desktop_control_reply, is_desktop_control_method,
+};
 use golam_ipc::lifecycle::{
     Authenticate, ClientKeyId, ConnectionId, Hello, LifecycleError, LifecycleMessage,
     LifecyclePhase, ServerLifecycle,
 };
 use golam_ipc::request::{
-    ClientAction, ReplyMessage, ReplyStatus, RequestProtocolError, ServerRequestTracker,
-    decode_request, encode_reply,
+    ClientAction, ReplyMessage, ReplyStatus, RequestMessage, RequestProtocolError,
+    ServerRequestTracker, decode_request, encode_reply,
 };
 use golam_ipc::wire::{WireError, read_frame, write_frame};
 use golam_ipc::{FrameHeader, FrameKind};
 use golam_kernel::{
-    AuthorizationPolicy, BootstrapPolicy, ClientEnrollmentError, ClientKind, KernelApi,
-    KernelError, Principal,
+    AuthorizationPolicy, BootstrapPolicy, ClientEnrollmentError, ClientKind, DesktopAuthorityError,
+    KernelApi, KernelError, Principal,
 };
 use golamd::CommandRouter;
 
@@ -32,7 +37,7 @@ pub struct ConnectionMaterial {
 }
 
 pub trait BootstrapApprover {
-    fn approve(&mut self, client_id: ClientId, key_id: ClientKeyId) -> bool;
+    fn approve(&mut self, client_id: ClientId, key_id: ClientKeyId) -> Option<ClientKind>;
 }
 
 #[derive(Debug)]
@@ -194,10 +199,11 @@ pub fn serve_connection<S: Read + Write, A: BootstrapApprover, P: AuthorizationP
         authenticate,
         &timestamp_now(),
     )?;
+    let client_record = auth_kernel.active_client_record(hello.client_id, authenticate.key_id)?;
     write_lifecycle(stream, LifecycleMessage::Ready(ready), ready.limits)?;
 
     let mut tracker = ServerRequestTracker::new(LifecyclePhase::Ready, ready.limits)?;
-    let principal = Principal::enrolled_client("local-cli", hello.client_id);
+    let principal = Principal::enrolled_client(client_subject(client_record.kind), hello.client_id);
 
     loop {
         let frame = read_frame(stream, ready.limits)?;
@@ -215,7 +221,22 @@ pub fn serve_connection<S: Read + Write, A: BootstrapApprover, P: AuthorizationP
             ClientAction::Begin { request_id, method } => {
                 let request = decode_request(&frame.payload)?;
                 debug_assert_eq!(request.method, method);
-                let reply = router.route(principal, &request, &timestamp_now(), "local-ipc");
+                let reply = if is_desktop_control_method(request.method) {
+                    match unix_time_ms() {
+                        Some(now_unix_ms) => route_desktop_control(
+                            &auth_kernel,
+                            client_record.kind,
+                            principal,
+                            &request,
+                            now_unix_ms,
+                        ),
+                        None => {
+                            desktop_error_reply(ReplyStatus::Failed, "desktop_clock_unavailable")
+                        }
+                    }
+                } else {
+                    router.route(principal, &request, &timestamp_now(), "local-ipc")
+                };
                 write_reply(stream, request_id.0, &reply, ready.limits, &mut tracker)?;
             }
             ClientAction::Cancel { request_id }
@@ -227,6 +248,128 @@ pub fn serve_connection<S: Read + Write, A: BootstrapApprover, P: AuthorizationP
                 write_reply(stream, request_id.0, &reply, ready.limits, &mut tracker)?;
             }
         }
+    }
+}
+
+fn route_desktop_control<P: AuthorizationPolicy>(
+    kernel: &KernelApi<P>,
+    client_kind: ClientKind,
+    principal: Principal<'_>,
+    request: &RequestMessage,
+    now_unix_ms: u64,
+) -> ReplyMessage {
+    if client_kind != ClientKind::DesktopFuture {
+        return desktop_error_reply(ReplyStatus::Denied, "desktop_host_unauthorized");
+    }
+
+    let request = match decode_desktop_control_request(request) {
+        Ok(request) => request,
+        Err(_) => {
+            return desktop_error_reply(
+                ReplyStatus::InvalidRequest,
+                "desktop_control_request_invalid",
+            );
+        }
+    };
+
+    let result =
+        match request {
+            DesktopControlRequest::Status => kernel
+                .desktop_control_surface_snapshot(now_unix_ms)
+                .map(|snapshot| {
+                    desktop_surface_reply(snapshot.mode, snapshot.visible_channel_qualified)
+                }),
+            DesktopControlRequest::Heartbeat => kernel
+                .observe_desktop_native_visible_channel(principal, true, now_unix_ms)
+                .and_then(|_| kernel.desktop_control_surface_snapshot(now_unix_ms))
+                .map(|snapshot| {
+                    desktop_surface_reply(snapshot.mode, snapshot.visible_channel_qualified)
+                }),
+            DesktopControlRequest::Pause => kernel
+                .apply_native_desktop_human_interrupt(
+                    principal,
+                    HumanInterruptOperation::Pause,
+                    now_unix_ms,
+                    now_unix_ms,
+                )
+                .map(|snapshot| {
+                    desktop_surface_reply(snapshot.mode, snapshot.visible_channel_qualified)
+                }),
+            DesktopControlRequest::Stop => kernel
+                .apply_native_desktop_human_interrupt(
+                    principal,
+                    HumanInterruptOperation::Stop,
+                    now_unix_ms,
+                    now_unix_ms,
+                )
+                .map(|snapshot| {
+                    desktop_surface_reply(snapshot.mode, snapshot.visible_channel_qualified)
+                }),
+            DesktopControlRequest::Takeover => kernel
+                .apply_native_desktop_human_interrupt(
+                    principal,
+                    HumanInterruptOperation::Takeover,
+                    now_unix_ms,
+                    now_unix_ms,
+                )
+                .map(|snapshot| {
+                    desktop_surface_reply(snapshot.mode, snapshot.visible_channel_qualified)
+                }),
+        };
+
+    match result {
+        Ok(reply) => ReplyMessage {
+            status: ReplyStatus::Ok,
+            body: encode_desktop_control_reply(reply).to_vec(),
+        },
+        Err(error) => desktop_authority_error_reply(error),
+    }
+}
+
+fn desktop_surface_reply(
+    mode: Option<DesktopControlMode>,
+    visible_channel_qualified: bool,
+) -> DesktopControlSurfaceReply {
+    let state = match mode {
+        None => DesktopControlSurfaceState::NoLease,
+        Some(DesktopControlMode::AgentAllowed) => DesktopControlSurfaceState::AgentAllowed,
+        Some(DesktopControlMode::Paused) => DesktopControlSurfaceState::Paused,
+        Some(DesktopControlMode::HumanExclusive) => DesktopControlSurfaceState::HumanExclusive,
+        Some(DesktopControlMode::Revoked) => DesktopControlSurfaceState::Revoked,
+    };
+    DesktopControlSurfaceReply {
+        state,
+        visible_channel_qualified,
+    }
+}
+
+fn desktop_authority_error_reply(error: DesktopAuthorityError) -> ReplyMessage {
+    let (status, code) = match error {
+        DesktopAuthorityError::UnauthorizedDesktopHost => {
+            (ReplyStatus::Denied, "desktop_host_unauthorized")
+        }
+        DesktopAuthorityError::NoQualifiedVisibleChannel => {
+            (ReplyStatus::Denied, "desktop_visible_channel_required")
+        }
+        DesktopAuthorityError::InvalidInterruptTransition
+        | DesktopAuthorityError::LeaseExpiredBeforeInterrupt => {
+            (ReplyStatus::Denied, "desktop_interrupt_denied")
+        }
+        DesktopAuthorityError::MissingDesktopControlLease => {
+            (ReplyStatus::Failed, "desktop_control_lease_unavailable")
+        }
+        DesktopAuthorityError::AmbiguousDesktopControlLease => {
+            (ReplyStatus::Failed, "desktop_control_state_ambiguous")
+        }
+        _ => (ReplyStatus::Failed, "desktop_control_failed"),
+    };
+    desktop_error_reply(status, code)
+}
+
+fn desktop_error_reply(status: ReplyStatus, code: &str) -> ReplyMessage {
+    ReplyMessage {
+        status,
+        body: format!("error={code}\n").into_bytes(),
     }
 }
 
@@ -242,7 +385,7 @@ fn authenticate_with_optional_bootstrap<A: BootstrapApprover>(
         return Ok(());
     }
 
-    if !approver.approve(hello.client_id, authenticate.key_id) {
+    let Some(kind) = approver.approve(hello.client_id, authenticate.key_id) else {
         let _ = kernel.authenticate_registered_client(
             lifecycle,
             connection_id,
@@ -253,17 +396,26 @@ fn authenticate_with_optional_bootstrap<A: BootstrapApprover>(
         return Err(ConnectionError::BootstrapDenied {
             client_id: hello.client_id,
         });
-    }
+    };
 
     kernel.enroll_precreated_client(
         Principal::local_owner("local-owner"),
         hello.client_id,
         authenticate.key_id,
-        ClientKind::Cli,
+        kind,
         &timestamp_now(),
         "local-bootstrap",
     )?;
     Ok(())
+}
+
+const fn client_subject(kind: ClientKind) -> &'static str {
+    match kind {
+        ClientKind::Cli => "local-cli",
+        ClientKind::DesktopFuture => "local-desktop",
+        ClientKind::IdeFuture => "local-ide",
+        ClientKind::Test => "local-test",
+    }
 }
 
 fn write_lifecycle<S: Write>(
@@ -301,6 +453,14 @@ fn write_reply<S: Write>(
     Ok(())
 }
 
+fn unix_time_ms() -> Option<u64> {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()?
+        .as_millis();
+    u64::try_from(millis).ok().filter(|value| *value != 0)
+}
+
 fn timestamp_now() -> String {
     match SystemTime::now().duration_since(UNIX_EPOCH) {
         Ok(duration) => format!("unix:{}.{:09}", duration.as_secs(), duration.subsec_nanos()),
@@ -312,14 +472,22 @@ fn timestamp_now() -> String {
 mod tests {
     use super::*;
     use golam_core::authority::AuthorityLayout;
+    use golam_core::desktop_control::{
+        DESKTOP_CONTROL_SCHEMA_VERSION, DesktopControlLeaseId, DesktopControlLeaseState,
+    };
+    use golam_core::tool_request::BindingDigest;
     use golam_core::{ClientId, PROTOCOL_VERSION};
     use golam_ipc::FrameKind;
     use golam_ipc::client_handshake::sign_authenticate;
     use golam_ipc::command::{Command, encode_command};
     use golam_ipc::credentials::ClientCredentialStore;
+    use golam_ipc::desktop_control::{
+        decode_desktop_control_reply, encode_desktop_control_request,
+    };
     use golam_ipc::lifecycle::{Challenge, ShutdownReason};
     use golam_ipc::request::{ReplyStatus, decode_reply, encode_request};
     use golam_ipc::wire::read_frame;
+    use golam_kernel::ProtectedDesktopControlState;
     use std::fs;
     use std::io::{self, Cursor};
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -359,14 +527,14 @@ mod tests {
     }
 
     struct Approval {
-        allow: bool,
+        kind: Option<ClientKind>,
         calls: usize,
     }
 
     impl BootstrapApprover for Approval {
-        fn approve(&mut self, _client_id: ClientId, _key_id: ClientKeyId) -> bool {
+        fn approve(&mut self, _client_id: ClientId, _key_id: ClientKeyId) -> Option<ClientKind> {
             self.calls += 1;
-            self.allow
+            self.kind
         }
     }
 
@@ -396,6 +564,18 @@ mod tests {
         client_id: ClientId,
         key_id: ClientKeyId,
         command: Option<Command>,
+    ) -> Vec<u8> {
+        let requests = command
+            .map(|command| vec![encode_command(&command).unwrap()])
+            .unwrap_or_default();
+        authenticated_requests_input(store, client_id, key_id, &requests)
+    }
+
+    fn authenticated_requests_input(
+        store: &ClientCredentialStore<'_>,
+        client_id: ClientId,
+        key_id: ClientKeyId,
+        requests: &[RequestMessage],
     ) -> Vec<u8> {
         let material = material();
         let client_nonce = [5; 32];
@@ -427,12 +607,16 @@ mod tests {
             )
             .unwrap(),
         );
-        if let Some(command) = command {
-            let message = encode_command(&command).unwrap();
-            let payload = encode_request(&message).unwrap();
+        for (index, request) in requests.iter().enumerate() {
+            let payload = encode_request(request).unwrap();
             bytes.extend_from_slice(
-                &golam_ipc::encode_frame(FrameKind::Request, Some(1), &payload, material.limits)
-                    .unwrap(),
+                &golam_ipc::encode_frame(
+                    FrameKind::Request,
+                    Some((index + 1) as u64),
+                    &payload,
+                    material.limits,
+                )
+                .unwrap(),
             );
         }
         let shutdown_payload = LifecycleMessage::Shutdown(ShutdownReason::Normal).encode_payload();
@@ -446,6 +630,57 @@ mod tests {
             .unwrap(),
         );
         bytes
+    }
+
+    fn decoded_replies(output: Vec<u8>, count: usize) -> Vec<ReplyMessage> {
+        let mut output = Cursor::new(output);
+        assert_eq!(
+            read_frame(&mut output, material().limits)
+                .unwrap()
+                .header
+                .kind,
+            FrameKind::Challenge
+        );
+        assert_eq!(
+            read_frame(&mut output, material().limits)
+                .unwrap()
+                .header
+                .kind,
+            FrameKind::Ready
+        );
+        (0..count)
+            .map(|_| {
+                let reply = read_frame(&mut output, material().limits).unwrap();
+                assert_eq!(reply.header.kind, FrameKind::Reply);
+                decode_reply(&reply.payload).unwrap()
+            })
+            .collect()
+    }
+
+    fn persist_desktop_lease(runtime: &RuntimeLayout, lease_id: u128) -> DesktopControlLeaseId {
+        let now = unix_time_ms().unwrap();
+        let lease_id = DesktopControlLeaseId::from_u128(lease_id);
+        let state = ProtectedDesktopControlState::new(
+            DesktopControlLeaseState {
+                schema_version: DESKTOP_CONTROL_SCHEMA_VERSION,
+                lease_id,
+                generation: 1,
+                controlling_principal_ref: BindingDigest::new([1; 32]),
+                mode: DesktopControlMode::AgentAllowed,
+                issued_at_unix_ms: now,
+                updated_at_unix_ms: now,
+                expires_at_unix_ms: now.checked_add(120_000).unwrap(),
+                capability_ref: BindingDigest::new([2; 32]),
+                policy_ref: BindingDigest::new([3; 32]),
+                interrupt_cause_ref: None,
+            },
+            Vec::new(),
+        )
+        .unwrap();
+        let kernel = KernelApi::open(runtime, BootstrapPolicy::default()).unwrap();
+        kernel.persist_desktop_control_state(&state).unwrap();
+        drop(kernel);
+        lease_id
     }
 
     #[test]
@@ -464,34 +699,15 @@ mod tests {
         let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
         let mut router = CommandRouter::new(kernel);
         let mut approval = Approval {
-            allow: true,
+            kind: Some(ClientKind::Cli),
             calls: 0,
         };
 
         serve_connection(&mut io, &runtime, &mut router, material(), &mut approval).unwrap();
         assert_eq!(approval.calls, 1);
 
-        let mut output = Cursor::new(io.output);
-        assert_eq!(
-            read_frame(&mut output, material().limits)
-                .unwrap()
-                .header
-                .kind,
-            FrameKind::Challenge
-        );
-        assert_eq!(
-            read_frame(&mut output, material().limits)
-                .unwrap()
-                .header
-                .kind,
-            FrameKind::Ready
-        );
-        let reply = read_frame(&mut output, material().limits).unwrap();
-        assert_eq!(reply.header.kind, FrameKind::Reply);
-        assert_eq!(
-            decode_reply(&reply.payload).unwrap().status,
-            ReplyStatus::Ok
-        );
+        let replies = decoded_replies(io.output, 1);
+        assert_eq!(replies[0].status, ReplyStatus::Ok);
 
         let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
         assert!(
@@ -499,7 +715,215 @@ mod tests {
                 .client_requires_bootstrap_enrollment(generated.client_id, generated.key_id)
                 .unwrap()
         );
+        assert_eq!(
+            kernel
+                .active_client_record(generated.client_id, generated.key_id)
+                .unwrap()
+                .kind,
+            ClientKind::Cli
+        );
         drop(kernel);
+        drop(router);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn desktop_bootstrap_kind_is_trusted_approval_output() {
+        let runtime = runtime();
+        let authority = AuthorityLayout::initialize(&runtime).unwrap();
+        let store = ClientCredentialStore::new(&authority);
+        let generated = store.generate(ClientId(2010)).unwrap();
+        let mut io = ScriptedIo::new(authenticated_input(
+            &store,
+            generated.client_id,
+            generated.key_id,
+            None,
+        ));
+        let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
+        let mut router = CommandRouter::new(kernel);
+        let mut approval = Approval {
+            kind: Some(ClientKind::DesktopFuture),
+            calls: 0,
+        };
+
+        serve_connection(&mut io, &runtime, &mut router, material(), &mut approval).unwrap();
+        let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
+        let record = kernel
+            .active_client_record(generated.client_id, generated.key_id)
+            .unwrap();
+        assert_eq!(record.kind, ClientKind::DesktopFuture);
+        assert_eq!(client_subject(record.kind), "local-desktop");
+        drop(kernel);
+        drop(router);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn desktop_future_control_requests_route_through_protected_kernel_state() {
+        let runtime = runtime();
+        let lease_id = persist_desktop_lease(&runtime, 55);
+        let authority = AuthorityLayout::initialize(&runtime).unwrap();
+        let store = ClientCredentialStore::new(&authority);
+        let generated = store.generate(ClientId(2011)).unwrap();
+        let requests = [
+            encode_desktop_control_request(DesktopControlRequest::Heartbeat),
+            encode_desktop_control_request(DesktopControlRequest::Pause),
+            encode_desktop_control_request(DesktopControlRequest::Takeover),
+            encode_desktop_control_request(DesktopControlRequest::Stop),
+            encode_desktop_control_request(DesktopControlRequest::Status),
+        ];
+        let mut io = ScriptedIo::new(authenticated_requests_input(
+            &store,
+            generated.client_id,
+            generated.key_id,
+            &requests,
+        ));
+        let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
+        let mut router = CommandRouter::new(kernel);
+        let mut approval = Approval {
+            kind: Some(ClientKind::DesktopFuture),
+            calls: 0,
+        };
+
+        serve_connection(&mut io, &runtime, &mut router, material(), &mut approval).unwrap();
+        let replies = decoded_replies(io.output, requests.len());
+        assert!(replies.iter().all(|reply| reply.status == ReplyStatus::Ok));
+        let states = replies
+            .iter()
+            .map(|reply| decode_desktop_control_reply(&reply.body).unwrap().state)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            states,
+            vec![
+                DesktopControlSurfaceState::AgentAllowed,
+                DesktopControlSurfaceState::Paused,
+                DesktopControlSurfaceState::HumanExclusive,
+                DesktopControlSurfaceState::Revoked,
+                DesktopControlSurfaceState::Revoked,
+            ]
+        );
+        assert!(replies.iter().all(|reply| {
+            decode_desktop_control_reply(&reply.body)
+                .unwrap()
+                .visible_channel_qualified
+        }));
+
+        let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
+        let state = kernel
+            .restore_desktop_control_state(lease_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(state.current_lease().generation, 4);
+        assert_eq!(state.current_lease().mode, DesktopControlMode::Revoked);
+        assert!(!state.autonomous_actuation_allowed(unix_time_ms().unwrap()));
+        drop(kernel);
+        drop(router);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn stale_desktop_heartbeat_blocks_agent_actuation_while_lease_remains_agent_allowed() {
+        let runtime = runtime();
+        let lease_id = persist_desktop_lease(&runtime, 56);
+        let authority = AuthorityLayout::initialize(&runtime).unwrap();
+        let store = ClientCredentialStore::new(&authority);
+        let generated = store.generate(ClientId(2012)).unwrap();
+        let requests = [encode_desktop_control_request(
+            DesktopControlRequest::Heartbeat,
+        )];
+        let mut io = ScriptedIo::new(authenticated_requests_input(
+            &store,
+            generated.client_id,
+            generated.key_id,
+            &requests,
+        ));
+        let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
+        let mut router = CommandRouter::new(kernel);
+        let mut approval = Approval {
+            kind: Some(ClientKind::DesktopFuture),
+            calls: 0,
+        };
+
+        serve_connection(&mut io, &runtime, &mut router, material(), &mut approval).unwrap();
+        let replies = decoded_replies(io.output, 1);
+        let heartbeat = decode_desktop_control_reply(&replies[0].body).unwrap();
+        assert_eq!(heartbeat.state, DesktopControlSurfaceState::AgentAllowed);
+        assert!(heartbeat.visible_channel_qualified);
+
+        let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
+        let state = kernel
+            .restore_desktop_control_state(lease_id)
+            .unwrap()
+            .unwrap();
+        assert_eq!(state.current_lease().mode, DesktopControlMode::AgentAllowed);
+        let stale_at = unix_time_ms().unwrap().checked_add(10_000).unwrap();
+        assert!(!state.autonomous_actuation_allowed(stale_at));
+        assert!(
+            !kernel
+                .desktop_control_surface_snapshot(stale_at)
+                .unwrap()
+                .visible_channel_qualified
+        );
+        drop(kernel);
+        drop(router);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn cli_principal_cannot_invoke_desktop_human_control_authority() {
+        let runtime = runtime();
+        let authority = AuthorityLayout::initialize(&runtime).unwrap();
+        let store = ClientCredentialStore::new(&authority);
+        let generated = store.generate(ClientId(2013)).unwrap();
+        let requests = [encode_desktop_control_request(
+            DesktopControlRequest::Status,
+        )];
+        let mut io = ScriptedIo::new(authenticated_requests_input(
+            &store,
+            generated.client_id,
+            generated.key_id,
+            &requests,
+        ));
+        let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
+        let mut router = CommandRouter::new(kernel);
+        let mut approval = Approval {
+            kind: Some(ClientKind::Cli),
+            calls: 0,
+        };
+
+        serve_connection(&mut io, &runtime, &mut router, material(), &mut approval).unwrap();
+        let replies = decoded_replies(io.output, 1);
+        assert_eq!(replies[0].status, ReplyStatus::Denied);
+        assert_eq!(replies[0].body, b"error=desktop_host_unauthorized\n");
+        drop(router);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn desktop_control_request_body_cannot_supply_authority_identifiers() {
+        let runtime = runtime();
+        let authority = AuthorityLayout::initialize(&runtime).unwrap();
+        let store = ClientCredentialStore::new(&authority);
+        let generated = store.generate(ClientId(2014)).unwrap();
+        let mut request = encode_desktop_control_request(DesktopControlRequest::Pause);
+        request.body.extend_from_slice(b"lease=renderer-supplied");
+        let mut io = ScriptedIo::new(authenticated_requests_input(
+            &store,
+            generated.client_id,
+            generated.key_id,
+            &[request],
+        ));
+        let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
+        let mut router = CommandRouter::new(kernel);
+        let mut approval = Approval {
+            kind: Some(ClientKind::DesktopFuture),
+            calls: 0,
+        };
+
+        serve_connection(&mut io, &runtime, &mut router, material(), &mut approval).unwrap();
+        let replies = decoded_replies(io.output, 1);
+        assert_eq!(replies[0].status, ReplyStatus::InvalidRequest);
+        assert_eq!(replies[0].body, b"error=desktop_control_request_invalid\n");
         drop(router);
         fs::remove_dir_all(runtime.root).unwrap();
     }
@@ -519,7 +943,7 @@ mod tests {
         let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
         let mut router = CommandRouter::new(kernel);
         let mut approval = Approval {
-            allow: false,
+            kind: None,
             calls: 0,
         };
 
@@ -569,7 +993,51 @@ mod tests {
         let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
         let mut router = CommandRouter::new(kernel);
         let mut approval = Approval {
-            allow: true,
+            kind: Some(ClientKind::Cli),
+            calls: 0,
+        };
+
+        assert!(matches!(
+            serve_connection(&mut io, &runtime, &mut router, material(), &mut approval,),
+            Err(ConnectionError::UnexpectedFrame {
+                expected: FrameKind::Authenticate,
+                actual: FrameKind::Request
+            })
+        ));
+        assert_eq!(approval.calls, 0);
+        drop(router);
+        fs::remove_dir_all(runtime.root).unwrap();
+    }
+
+    #[test]
+    fn desktop_request_before_authenticate_is_rejected_before_ready() {
+        let runtime = runtime();
+        let client_id = ClientId(2004);
+        let hello = Hello {
+            protocol_version: PROTOCOL_VERSION,
+            client_id,
+            client_nonce: [6; 32],
+        };
+        let hello_payload = LifecycleMessage::Hello(hello).encode_payload();
+        let mut input =
+            golam_ipc::encode_frame(FrameKind::Hello, None, &hello_payload, material().limits)
+                .unwrap();
+        let request = encode_desktop_control_request(DesktopControlRequest::Status);
+        let request_payload = encode_request(&request).unwrap();
+        input.extend_from_slice(
+            &golam_ipc::encode_frame(
+                FrameKind::Request,
+                Some(1),
+                &request_payload,
+                material().limits,
+            )
+            .unwrap(),
+        );
+        let mut io = ScriptedIo::new(input);
+        let kernel = KernelApi::open(&runtime, BootstrapPolicy::default()).unwrap();
+        let mut router = CommandRouter::new(kernel);
+        let mut approval = Approval {
+            kind: Some(ClientKind::DesktopFuture),
             calls: 0,
         };
 

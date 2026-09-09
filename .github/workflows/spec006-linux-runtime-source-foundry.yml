@@ -1,0 +1,309 @@
+name: spec006-linux-runtime-source-foundry
+
+on:
+  push:
+    branches: [impl/006-desktop-computer-control]
+    paths:
+      - .github/workflows/spec006-linux-runtime-source-foundry.yml
+      - specs/006-desktop-computer-control/implementation/linux-runtime-source-foundry-candidate.md
+
+permissions:
+  contents: read
+
+jobs:
+  qualify-linux-runtime-candidate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux native qualification prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libpipewire-0.3-dev \
+            libclang-dev \
+            libx11-dev \
+            libxext-dev \
+            libxfixes-dev \
+            libxi-dev \
+            libxtst-dev \
+            pkg-config
+
+      - name: Install pinned Rust toolchain
+        shell: bash
+        run: rustup toolchain install 1.98.0 --profile minimal
+
+      - name: Compare admitted Linux baseline with direct Tokio runtime candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="${RUNNER_TEMP}/golam-spec006-linux-runtime-baseline"
+          CANDIDATE="${RUNNER_TEMP}/golam-spec006-linux-runtime-candidate"
+          rm -rf "$BASE" "$CANDIDATE"
+          mkdir -p "$BASE/src" "$CANDIDATE/src"
+
+          write_manifest() {
+            local root="$1"
+            local include_tokio="$2"
+            cat >"$root/Cargo.toml" <<'EOF'
+          [package]
+          name = "golam-spec006-linux-runtime-source-foundry"
+          version = "0.0.0"
+          edition = "2024"
+          rust-version = "1.98"
+          publish = false
+
+          [dependencies]
+          atspi = { version = "=0.30.0", default-features = false, features = ["proxies", "connection", "tokio"] }
+          ashpd = { version = "=0.13.13", default-features = false, features = ["tokio", "remote_desktop", "screencast"] }
+          pipewire = { version = "=0.9.2" }
+          enigo = { version = "=0.6.1", default-features = false, features = ["x11rb"] }
+          x11-clipboard = { version = "=0.9.3" }
+          EOF
+            if [ "$include_tokio" = yes ]; then
+              cat >>"$root/Cargo.toml" <<'EOF'
+          tokio = { version = "=1.53.1", default-features = false, features = ["rt", "time"] }
+          EOF
+            fi
+          }
+
+          write_manifest "$BASE" no
+          write_manifest "$CANDIDATE" yes
+
+          cat >"$BASE/src/main.rs" <<'EOF'
+          #![forbid(unsafe_code)]
+          fn main() {}
+          EOF
+
+          cat >"$CANDIDATE/src/main.rs" <<'EOF'
+          #![forbid(unsafe_code)]
+
+          use std::time::Duration;
+
+          fn main() {
+              let runtime = tokio::runtime::Builder::new_current_thread()
+                  .enable_time()
+                  .build()
+                  .expect("bounded current-thread Tokio runtime must construct");
+              let completed = runtime.block_on(async {
+                  tokio::time::timeout(Duration::from_millis(25), async { 7_u8 }).await
+              });
+              assert_eq!(completed.expect("bounded probe must complete"), 7);
+
+              runtime.block_on(async {
+                  let atspi_future = atspi::AccessibilityConnection::new();
+                  drop(atspi_future);
+              });
+          }
+          EOF
+
+          for root in "$BASE" "$CANDIDATE"; do
+            (
+              cd "$root"
+              cargo +1.98.0 generate-lockfile
+              cargo +1.98.0 fetch --locked
+              cargo +1.98.0 metadata --locked --format-version 1 > metadata.json
+              cargo +1.98.0 tree --locked --edges normal,build,features > features.txt
+              cargo +1.98.0 check --locked
+            )
+          done
+
+          python3 - "$BASE" "$CANDIDATE" <<'PY'
+          import hashlib
+          import json
+          import pathlib
+          import sys
+          import tomllib
+
+          base = pathlib.Path(sys.argv[1])
+          candidate = pathlib.Path(sys.argv[2])
+          expected_tokio_version = '1.53.1'
+          expected_tokio_checksum = '202caea871b69668250d242070849eb495be178ed697a3e98aebce5bc81a0bed'
+          allowed_extra_features = {'rt', 'time'}
+          root_name = 'golam-spec006-linux-runtime-source-foundry'
+
+          def load_metadata(root):
+              return json.loads((root / 'metadata.json').read_text(encoding='utf-8'))
+
+          def load_lock(root):
+              return tomllib.loads((root / 'Cargo.lock').read_text(encoding='utf-8'))
+
+          def external_metadata_packages(metadata):
+              return {
+                  (package['name'], package['version'], package.get('source'))
+                  for package in metadata['packages']
+                  if package.get('source') is not None
+              }
+
+          def external_lock_records(lock):
+              return {
+                  json.dumps(package, sort_keys=True, separators=(',', ':'))
+                  for package in lock.get('package', [])
+                  if package.get('source') is not None
+              }
+
+          def local_root(lock):
+              matches = [
+                  package for package in lock.get('package', [])
+                  if package.get('source') is None and package.get('name') == root_name
+              ]
+              if len(matches) != 1:
+                  raise SystemExit(f'LOCAL_ROOT_PACKAGE_COUNT={len(matches)}')
+              return matches[0]
+
+          def lock_checksum(lock, name, version):
+              matches = [
+                  package for package in lock.get('package', [])
+                  if package.get('name') == name and package.get('version') == version
+              ]
+              if len(matches) != 1:
+                  raise SystemExit(f'{name.upper()}_LOCK_PACKAGE_COUNT={len(matches)}')
+              checksum = matches[0].get('checksum')
+              if checksum != expected_tokio_checksum:
+                  raise SystemExit(f'TOKIO_LOCK_CHECKSUM_MISMATCH={checksum}')
+              return checksum
+
+          def tokio_features(metadata):
+              packages = {package['id']: package for package in metadata['packages']}
+              matches = [
+                  node for node in metadata['resolve']['nodes']
+                  if packages[node['id']]['name'] == 'tokio'
+                  and packages[node['id']]['version'] == expected_tokio_version
+              ]
+              if len(matches) != 1:
+                  raise SystemExit(f'TOKIO_RESOLVE_NODE_COUNT={len(matches)}')
+              return set(matches[0]['features'])
+
+          base_metadata = load_metadata(base)
+          candidate_metadata = load_metadata(candidate)
+          base_external_metadata = external_metadata_packages(base_metadata)
+          candidate_external_metadata = external_metadata_packages(candidate_metadata)
+          if base_external_metadata != candidate_external_metadata:
+              print(f'DIRECT_RUNTIME_EXTERNAL_PACKAGES_ONLY_BASELINE={sorted(base_external_metadata - candidate_external_metadata)}')
+              print(f'DIRECT_RUNTIME_EXTERNAL_PACKAGES_ONLY_CANDIDATE={sorted(candidate_external_metadata - base_external_metadata)}')
+              raise SystemExit('DIRECT_RUNTIME_PACKAGE_CLOSURE_CHANGED')
+
+          base_lock = load_lock(base)
+          candidate_lock = load_lock(candidate)
+          base_external_lock = external_lock_records(base_lock)
+          candidate_external_lock = external_lock_records(candidate_lock)
+          if base_external_lock != candidate_external_lock:
+              print(f'DIRECT_RUNTIME_EXTERNAL_LOCK_ONLY_BASELINE={sorted(base_external_lock - candidate_external_lock)}')
+              print(f'DIRECT_RUNTIME_EXTERNAL_LOCK_ONLY_CANDIDATE={sorted(candidate_external_lock - base_external_lock)}')
+              raise SystemExit('DIRECT_RUNTIME_EXTERNAL_LOCK_PACKAGE_CLOSURE_CHANGED')
+
+          base_root = local_root(base_lock)
+          candidate_root = local_root(candidate_lock)
+          base_root_without_deps = {key: value for key, value in base_root.items() if key != 'dependencies'}
+          candidate_root_without_deps = {key: value for key, value in candidate_root.items() if key != 'dependencies'}
+          if base_root_without_deps != candidate_root_without_deps:
+              raise SystemExit('DIRECT_RUNTIME_LOCAL_ROOT_OTHER_FIELDS_CHANGED')
+
+          base_dependencies = set(base_root.get('dependencies', []))
+          candidate_dependencies = set(candidate_root.get('dependencies', []))
+          removed_dependencies = base_dependencies - candidate_dependencies
+          added_dependencies = candidate_dependencies - base_dependencies
+          if removed_dependencies:
+              raise SystemExit(f'DIRECT_RUNTIME_LOCAL_ROOT_DEPENDENCIES_REMOVED={sorted(removed_dependencies)}')
+          if len(added_dependencies) != 1:
+              raise SystemExit(f'DIRECT_RUNTIME_LOCAL_ROOT_ADDED_DEPENDENCY_COUNT={len(added_dependencies)}:{sorted(added_dependencies)}')
+          added_dependency = next(iter(added_dependencies))
+          if added_dependency != 'tokio' and not added_dependency.startswith('tokio '):
+              raise SystemExit(f'DIRECT_RUNTIME_LOCAL_ROOT_UNEXPECTED_ADDED_DEPENDENCY={added_dependency}')
+
+          base_checksum = lock_checksum(base_lock, 'tokio', expected_tokio_version)
+          candidate_checksum = lock_checksum(candidate_lock, 'tokio', expected_tokio_version)
+          if base_checksum != candidate_checksum:
+              raise SystemExit('DIRECT_RUNTIME_TOKIO_CHECKSUM_CHANGED')
+
+          base_features = tokio_features(base_metadata)
+          candidate_features = tokio_features(candidate_metadata)
+          removed_features = base_features - candidate_features
+          extra_features = candidate_features - base_features
+          if removed_features:
+              raise SystemExit(f'DIRECT_RUNTIME_REMOVED_BASELINE_FEATURES={sorted(removed_features)}')
+          if not extra_features.issubset(allowed_extra_features):
+              raise SystemExit(f'DIRECT_RUNTIME_UNQUALIFIED_FEATURE_DELTA={sorted(extra_features)}')
+
+          base_lock_bytes = (base / 'Cargo.lock').read_bytes()
+          candidate_lock_bytes = (candidate / 'Cargo.lock').read_bytes()
+          if base_lock_bytes == candidate_lock_bytes:
+              raise SystemExit('DIRECT_RUNTIME_EXPECTED_LOCAL_ROOT_LOCK_DELTA_MISSING')
+
+          print(f'BASELINE_EXTERNAL_PACKAGE_COUNT={len(base_external_metadata)}')
+          print(f'CANDIDATE_EXTERNAL_PACKAGE_COUNT={len(candidate_external_metadata)}')
+          print(f'BASELINE_EXTERNAL_LOCK_RECORD_COUNT={len(base_external_lock)}')
+          print(f'CANDIDATE_EXTERNAL_LOCK_RECORD_COUNT={len(candidate_external_lock)}')
+          print(f'BASELINE_LOCK_BYTES={len(base_lock_bytes)}')
+          print(f'BASELINE_LOCK_SHA256={hashlib.sha256(base_lock_bytes).hexdigest()}')
+          print(f'CANDIDATE_LOCK_BYTES={len(candidate_lock_bytes)}')
+          print(f'CANDIDATE_LOCK_SHA256={hashlib.sha256(candidate_lock_bytes).hexdigest()}')
+          print(f'TOKIO_LOCK_CHECKSUM={candidate_checksum}')
+          print('TOKIO_DIRECT_VERSION=1.53.1')
+          print(f'TOKIO_BASELINE_FEATURES={sorted(base_features)}')
+          print(f'TOKIO_CANDIDATE_FEATURES={sorted(candidate_features)}')
+          print(f'TOKIO_DIRECT_FEATURE_DELTA={sorted(extra_features)}')
+          print(f'DIRECT_RUNTIME_LOCAL_ROOT_DEPENDENCY_ADDED={added_dependency}')
+          print('DIRECT_RUNTIME_PACKAGE_CLOSURE_CHANGED=NO')
+          print('DIRECT_RUNTIME_EXTERNAL_LOCK_PACKAGE_CLOSURE_CHANGED=NO')
+          print('DIRECT_RUNTIME_LOCAL_ROOT_OTHER_FIELDS_CHANGED=NO')
+          print('DIRECT_RUNTIME_FULL_LOCK_BYTES_CHANGED=YES_EXPECTED_LOCAL_ROOT_DIRECT_EDGE_ONLY')
+          PY
+
+          (
+            cd "$CANDIDATE"
+            cargo +1.98.0 run --locked
+          )
+
+      - name: Verify exact Tokio archive and license evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import pathlib
+          import tarfile
+
+          expected = '202caea871b69668250d242070849eb495be178ed697a3e98aebce5bc81a0bed'
+          cargo_home = pathlib.Path.home() / '.cargo' / 'registry' / 'cache'
+          archives = list(cargo_home.glob('*/tokio-1.53.1.crate'))
+          if len(archives) != 1:
+              raise SystemExit(f'TOKIO_ARCHIVE_COUNT={len(archives)}')
+          archive = archives[0]
+          digest = hashlib.sha256(archive.read_bytes()).hexdigest()
+          if digest != expected:
+              raise SystemExit(f'TOKIO_ARCHIVE_SHA256_MISMATCH={digest}')
+
+          with tarfile.open(archive, 'r:gz') as tar:
+              license_candidates = sorted(
+                  name for name in tar.getnames()
+                  if pathlib.PurePosixPath(name).name.upper().startswith(('LICENSE', 'COPYING', 'NOTICE'))
+              )
+              if not license_candidates:
+                  raise SystemExit('TOKIO_ARCHIVE_LICENSE_EVIDENCE_MISSING')
+              selected = license_candidates[0]
+              extracted = tar.extractfile(tar.getmember(selected))
+              if extracted is None:
+                  raise SystemExit('TOKIO_LICENSE_EVIDENCE_UNREADABLE')
+              data = extracted.read()
+
+          print(f'TOKIO_ARCHIVE_SHA256={digest}')
+          print(f'TOKIO_LICENSE_EVIDENCE_PATH={selected}')
+          print(f'TOKIO_LICENSE_EVIDENCE_BYTES={len(data)}')
+          print(f'TOKIO_LICENSE_EVIDENCE_SHA256={hashlib.sha256(data).hexdigest()}')
+          print('TOKIO_DIRECT_ROLE=BOUNDED_LINUX_ASYNC_DRIVER_ONLY')
+          print('TOKIO_AUTHORITY_MINTING=DENIED')
+          print('TOKIO_NETWORK_AUTHORITY=DENIED')
+          print('TOKIO_BACKGROUND_TASK_AUTHORITY=DENIED')
+          PY
+
+      - name: Prove repository product manifests were not mutated
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code
+          test -z "$(git status --porcelain)"
+          echo 'PRODUCT_MANIFEST_MUTATION=NO'
+          echo 'SOURCE_FOUNDRY_ADMISSION=NO_PENDING_INDEPENDENT_REVIEW'

@@ -1,0 +1,601 @@
+name: spec006-native-adapter-source-foundry
+
+on:
+  push:
+    branches: [impl/006-desktop-computer-control]
+    paths:
+      - .github/workflows/spec006-native-adapter-source-foundry.yml
+      - specs/006-desktop-computer-control/implementation/native-adapter-source-foundry-candidate.md
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    name: qualify-${{ matrix.platform }}-native-adapter-candidate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            os: windows-latest
+          - platform: macos
+            os: macos-latest
+          - platform: linux
+            os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux native qualification prerequisites
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libpipewire-0.3-dev \
+            libclang-dev \
+            libx11-dev \
+            libxext-dev \
+            libxfixes-dev \
+            libxi-dev \
+            libxtst-dev \
+            pkg-config
+
+      - name: Install pinned Rust toolchain
+        shell: bash
+        run: rustup toolchain install 1.98.0 --profile minimal
+
+      - name: Build isolated exact candidate manifest
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          ROOT="${RUNNER_TEMP}/golam-spec006-native-${PLATFORM}"
+          rm -rf "$ROOT"
+          mkdir -p "$ROOT/src"
+          cat >"$ROOT/Cargo.toml" <<'EOF'
+          [package]
+          name = "golam-spec006-native-source-foundry"
+          version = "0.0.0"
+          edition = "2024"
+          rust-version = "1.98"
+          publish = false
+          EOF
+
+          case "$PLATFORM" in
+            windows)
+              cat >>"$ROOT/Cargo.toml" <<'EOF'
+
+          [dependencies]
+          xa11y-core = { version = "=0.13.0", default-features = false }
+          xa11y-windows = { version = "=0.13.0", default-features = false }
+          wgc = { version = "=1.0.7", default-features = false }
+          enigo = { version = "=0.6.1", default-features = false }
+          arboard = { version = "=3.6.1", default-features = false }
+          EOF
+              cat >"$ROOT/src/main.rs" <<'EOF'
+          #![forbid(unsafe_code)]
+          use xa11y_windows::WindowsProvider;
+
+          fn main() {
+              let _ = core::mem::size_of::<WindowsProvider>();
+          }
+          EOF
+              ;;
+            macos)
+              cat >>"$ROOT/Cargo.toml" <<'EOF'
+
+          [dependencies]
+          axuielement = { version = "=0.9.1", default-features = false }
+          screencapturekit = { version = "=10.0.3", default-features = false }
+          enigo = { version = "=0.6.1", default-features = false }
+          arboard = { version = "=3.6.1", default-features = false }
+          EOF
+              printf '#![forbid(unsafe_code)]\nfn main() {}\n' >"$ROOT/src/main.rs"
+              ;;
+            linux)
+              cat >>"$ROOT/Cargo.toml" <<'EOF'
+
+          [dependencies]
+          atspi = { version = "=0.30.0", default-features = false, features = ["proxies", "connection", "tokio"] }
+          ashpd = { version = "=0.13.13", default-features = false, features = ["tokio", "remote_desktop", "screencast"] }
+          pipewire = { version = "=0.9.2" }
+          enigo = { version = "=0.6.1", default-features = false, features = ["x11rb"] }
+          x11-clipboard = { version = "=0.9.3" }
+          EOF
+              printf '#![forbid(unsafe_code)]\nfn main() {}\n' >"$ROOT/src/main.rs"
+              ;;
+            *)
+              echo "unsupported platform: $PLATFORM" >&2
+              exit 1
+              ;;
+          esac
+
+          cd "$ROOT"
+          cargo +1.98.0 generate-lockfile
+          cargo +1.98.0 fetch --locked
+          HOST_TRIPLE="$(rustc +1.98.0 -vV | sed -n 's/^host: //p')"
+          test -n "$HOST_TRIPLE"
+          cargo +1.98.0 metadata --locked --filter-platform "$HOST_TRIPLE" --format-version 1 >metadata.json
+          cargo +1.98.0 tree --locked --target "$HOST_TRIPLE" --edges normal,build >tree.txt
+          cargo +1.98.0 tree --locked --target "$HOST_TRIPLE" --edges normal,build,features >features.txt
+          cargo +1.98.0 check --locked
+
+          echo "=== PLATFORM ==="
+          echo "$PLATFORM"
+          echo "=== HOST_TRIPLE ==="
+          echo "$HOST_TRIPLE"
+          echo "=== LOCK_SHA256 ==="
+          if command -v sha256sum >/dev/null 2>&1; then sha256sum Cargo.lock; else shasum -a 256 Cargo.lock; fi
+          echo "=== DIRECT_TREE ==="
+          cat tree.txt
+          echo "=== FEATURE_TREE ==="
+          cat features.txt
+
+      - name: Enforce feature and capability denylist
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          ROOT="${RUNNER_TEMP}/golam-spec006-native-${PLATFORM}"
+          cd "$ROOT"
+
+          deny_feature() {
+            local package="$1"
+            local feature="$2"
+            if grep -F "${package} feature \"${feature}\"" features.txt >/dev/null; then
+              echo "DENIED_FEATURE_PRESENT=${package}/${feature}" >&2
+              exit 1
+            fi
+          }
+          require_feature() {
+            local package="$1"
+            local feature="$2"
+            if ! grep -F "${package} feature \"${feature}\"" features.txt >/dev/null; then
+              echo "REQUIRED_FEATURE_MISSING=${package}/${feature}" >&2
+              exit 1
+            fi
+          }
+
+          case "$PLATFORM" in
+            windows)
+              python3 - <<'PY'
+          import json
+          import pathlib
+          import sys
+
+          metadata = json.load(open('metadata.json', encoding='utf-8'))
+          packages = [p for p in metadata['packages'] if p['name'] == 'xa11y-windows' and p['version'] == '0.13.0']
+          if len(packages) != 1:
+              sys.exit(f'XA11Y_WINDOWS_PACKAGE_COUNT={len(packages)}')
+          manifest = pathlib.Path(packages[0]['manifest_path'])
+          lib_rs = manifest.parent / 'src' / 'lib.rs'
+          text = lib_rs.read_text(encoding='utf-8')
+          if 'WindowsProvider' not in text:
+              sys.exit('XA11Y_WINDOWS_PROVIDER_SURFACE_MISSING')
+          print('XA11Y_WINDOWS_PROVIDER_SURFACE=OBSERVED')
+          print('XA11Y_WINDOWS_CALLER_SAFE_RUST_PROBE=PASS')
+          print('XA11Y_WINDOWS_INPUT_AND_SCREENSHOT_TYPES=EXPLICITLY_NOT_ADMITTED_BY_SEMANTIC_ROLE')
+          PY
+              deny_feature wgc tracing
+              for f in x11rb wayland libei_smol libei_tokio xdo platform_specific serde tokio; do deny_feature enigo "$f"; done
+              for f in image-data image core-graphics windows-sys wayland-data-control wl-clipboard-rs; do deny_feature arboard "$f"; done
+              ;;
+            macos)
+              for f in raw-ffi async; do deny_feature axuielement "$f"; done
+              for f in async macos_13_0 macos_14_0 macos_14_2 macos_14_4 macos_15_0 macos_15_2 macos_26_0; do deny_feature screencapturekit "$f"; done
+              for f in x11rb wayland libei_smol libei_tokio xdo platform_specific serde tokio; do deny_feature enigo "$f"; done
+              for f in image-data image core-graphics windows-sys wayland-data-control wl-clipboard-rs; do deny_feature arboard "$f"; done
+              ;;
+            linux)
+              require_feature atspi proxies
+              require_feature atspi connection
+              require_feature atspi tokio
+              require_feature ashpd tokio
+              require_feature ashpd remote_desktop
+              require_feature ashpd screencast
+              for f in frontend backend background camera clipboard input_capture location network_monitor notification open_uri print proxy_resolver screenshot secret usb wallpaper wayland raw_handle; do deny_feature ashpd "$f"; done
+              require_feature enigo x11rb
+              for f in wayland libei_smol libei_tokio xdo platform_specific serde tokio; do deny_feature enigo "$f"; done
+
+              grep -F 'x11-clipboard v0.9.3' tree.txt >/dev/null || {
+                echo 'LINUX_X11_CLIPBOARD_CANDIDATE_MISSING' >&2
+                exit 1
+              }
+              for denied in 'clipboard_wayland ' 'wl-clipboard-rs ' 'wayland-data-control ' 'arboard '; do
+                if grep -F "$denied" tree.txt >/dev/null; then
+                  echo "LINUX_DENIED_CLIPBOARD_CLOSURE_PRESENT=${denied}" >&2
+                  exit 1
+                fi
+              done
+              echo 'LINUX_CLIPBOARD_CANDIDATE=X11_CLIPBOARD_0_9_3_ONLY'
+              echo 'LINUX_PURE_WAYLAND_CLIPBOARD=NOT_SUPPORTED_PENDING_SEPARATE_SESSION_BOUND_ADMISSION'
+              ;;
+          esac
+
+          echo "FEATURE_DENYLIST=PASS"
+
+      - name: Inventory checksum-bound package archives, licenses, builds, native links, and network closure
+        shell: bash
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          ROOT="${RUNNER_TEMP}/golam-spec006-native-${PLATFORM}"
+          cd "$ROOT"
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import sys
+          import tarfile
+          import tomllib
+          import urllib.request
+          from pathlib import Path, PurePosixPath
+
+          metadata = json.load(open('metadata.json', encoding='utf-8'))
+          with open('Cargo.lock', 'rb') as fh:
+              cargo_lock = tomllib.load(fh)
+
+          allowed = {
+              '0BSD', 'Apache-2.0', 'Apache-2.0 WITH LLVM-exception',
+              'BSD-2-Clause', 'BSD-3-Clause', 'BSL-1.0', 'CC0-1.0',
+              'ISC', 'MIT', 'MIT-0', 'MPL-2.0', 'Unicode-3.0',
+              'Unicode-DFS-2016', 'Unlicense', 'Zlib', 'Zlib-acknowledgement',
+          }
+          network_clients = {
+              'reqwest', 'hyper', 'hyper-util', 'ureq', 'curl', 'curl-sys',
+              'isahc', 'surf', 'attohttpc', 'awc'
+          }
+          license_name = re.compile(r'^(LICENSE|LICENCE|COPYING)(?:[-._].*)?$', re.I)
+          notice_name = re.compile(r'^(NOTICE|COPYRIGHT)(?:[-._].*)?$', re.I)
+          vcs_sha_re = re.compile(r'^[0-9a-f]{40}$')
+
+          # These are the only package families allowed to use exact-VCS fallback
+          # when the checksum-bound .crate intentionally omits repository license
+          # evidence. The source commit itself is read from that archive's
+          # .cargo_vcs_info.json; repository location and evidence path are not
+          # taken from untrusted package metadata.
+          objc2_trio = {'Zlib', 'Apache-2.0', 'MIT'}
+          vcs_license_allowlist = {
+              'clipboard-win': ('github', 'DoumanAsh', 'clipboard-win', 'LICENSE', {'BSL-1.0'}),
+              'xa11y-core': ('github', 'xa11y', 'xa11y', 'LICENSE', {'MIT'}),
+              'xa11y-windows': ('github', 'xa11y', 'xa11y', 'LICENSE', {'MIT'}),
+              'cookie-factory': ('github', 'rust-bakery', 'cookie-factory', 'LICENSES/MIT.txt', {'MIT'}),
+              'objc2': ('github', 'madsmtm', 'objc2', 'LICENSE.md', {'MIT'}),
+              'objc2-encode': ('github', 'madsmtm', 'objc2', 'LICENSE.md', {'MIT'}),
+              'objc2-foundation': ('github', 'madsmtm', 'objc2', 'LICENSE.md', {'MIT'}),
+              'dispatch2': ('github', 'madsmtm', 'objc2', 'LICENSE.md', objc2_trio),
+              'objc2-app-kit': ('github', 'madsmtm', 'objc2', 'LICENSE.md', objc2_trio),
+              'objc2-core-foundation': ('github', 'madsmtm', 'objc2', 'LICENSE.md', objc2_trio),
+              'objc2-core-graphics': ('github', 'madsmtm', 'objc2', 'LICENSE.md', objc2_trio),
+              'objc2-core-image': ('github', 'madsmtm', 'objc2', 'LICENSE.md', objc2_trio),
+              'objc2-core-video': ('github', 'madsmtm', 'objc2', 'LICENSE.md', objc2_trio),
+              'objc2-io-surface': ('github', 'madsmtm', 'objc2', 'LICENSE.md', objc2_trio),
+              'objc2-quartz-core': ('github', 'madsmtm', 'objc2', 'LICENSE.md', objc2_trio),
+              'libspa-sys': ('gitlab-freedesktop', 'pipewire', 'pipewire-rs', 'LICENSE', {'MIT'}),
+          }
+
+          def strip_outer(expr):
+              expr = expr.strip()
+              while expr.startswith('(') and expr.endswith(')'):
+                  depth = 0
+                  wraps = True
+                  for i, ch in enumerate(expr):
+                      if ch == '(':
+                          depth += 1
+                      elif ch == ')':
+                          depth -= 1
+                          if depth == 0 and i != len(expr) - 1:
+                              wraps = False
+                              break
+                  if not wraps:
+                      break
+                  expr = expr[1:-1].strip()
+              return expr
+
+          def split_top(expr, operator):
+              parts = []
+              depth = 0
+              start = 0
+              marker = f' {operator} '
+              i = 0
+              while i <= len(expr) - len(marker):
+                  ch = expr[i]
+                  if ch == '(':
+                      depth += 1
+                      i += 1
+                      continue
+                  if ch == ')':
+                      depth -= 1
+                      i += 1
+                      continue
+                  if depth == 0 and expr.startswith(marker, i):
+                      parts.append(expr[start:i].strip())
+                      i += len(marker)
+                      start = i
+                      continue
+                  i += 1
+              if parts:
+                  parts.append(expr[start:].strip())
+              return parts
+
+          def select_allowed_path(expr):
+              expr = strip_outer(expr.replace('/', ' OR '))
+              ors = split_top(expr, 'OR')
+              if ors:
+                  for part in ors:
+                      selected = select_allowed_path(part)
+                      if selected is not None:
+                          return selected
+                  return None
+              ands = split_top(expr, 'AND')
+              if ands:
+                  selected = []
+                  for part in ands:
+                      branch = select_allowed_path(part)
+                      if branch is None:
+                          return None
+                      selected.extend(branch)
+                  return selected
+              return [expr] if expr in allowed else None
+
+          def distribution_obligation(selected, notice_files):
+              obligations = []
+              for license_id in selected:
+                  if license_id == 'MPL-2.0':
+                      obligations.append('FILE_LEVEL_SOURCE_AVAILABILITY_AND_LICENSE_NOTICE_REQUIRED')
+                  elif license_id.startswith('Apache-2.0'):
+                      obligations.append('LICENSE_AND_COPYRIGHT_NOTICE_REQUIRED')
+                  else:
+                      obligations.append('LICENSE_OR_COPYRIGHT_NOTICE_REQUIRED')
+              if notice_files:
+                  obligations.append('PRESERVE_OBSERVED_UPSTREAM_NOTICE_FILES')
+              return '+'.join(dict.fromkeys(obligations))
+
+          def read_vcs_info(tf):
+              matches = []
+              for member in tf.getmembers():
+                  if not member.isfile():
+                      continue
+                  parts = PurePosixPath(member.name).parts
+                  if len(parts) == 2 and parts[1] == '.cargo_vcs_info.json':
+                      matches.append(member)
+              if len(matches) != 1:
+                  return None
+              fh = tf.extractfile(matches[0])
+              if fh is None:
+                  return None
+              try:
+                  return json.loads(fh.read().decode('utf-8'))
+              except (UnicodeDecodeError, json.JSONDecodeError):
+                  return None
+
+          def exact_vcs_license(name, selected, vcs_info):
+              mapping = vcs_license_allowlist.get(name)
+              if mapping is None or not selected or vcs_info is None:
+                  return None
+              host, owner, repo, path, allowed_selected = mapping
+              if set(selected) - allowed_selected:
+                  return None
+              git = vcs_info.get('git') or {}
+              sha = (git.get('sha1') or '').lower()
+              if not vcs_sha_re.fullmatch(sha):
+                  return None
+              if git.get('dirty') is True:
+                  return None
+
+              if host == 'github':
+                  url = f'https://raw.githubusercontent.com/{owner}/{repo}/{sha}/{path}'
+              elif host == 'gitlab-freedesktop':
+                  url = f'https://gitlab.freedesktop.org/{owner}/{repo}/-/raw/{sha}/{path}'
+              else:
+                  return None
+
+              request = urllib.request.Request(
+                  url,
+                  headers={'User-Agent': 'Golam-Spec006-Source-Foundry/1'},
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      body = response.read(256 * 1024 + 1)
+              except Exception:
+                  return None
+              if len(body) < 128 or len(body) > 256 * 1024:
+                  return None
+              return {
+                  'sha': sha,
+                  'path_in_vcs': vcs_info.get('path_in_vcs') or '',
+                  'url': url,
+                  'path': path,
+                  'bytes': len(body),
+                  'sha256': hashlib.sha256(body).hexdigest(),
+              }
+
+          lock_packages = cargo_lock.get('package', [])
+          packages = {p['id']: p for p in metadata['packages']}
+          nodes = {n['id']: n for n in metadata['resolve']['nodes']}
+          reachable = set()
+          stack = [metadata['resolve']['root']]
+          while stack:
+              pid = stack.pop()
+              if pid in reachable:
+                  continue
+              reachable.add(pid)
+              node = nodes.get(pid)
+              if node:
+                  stack.extend(dep['pkg'] for dep in node.get('deps', []))
+
+          external = [packages[pid] for pid in reachable if packages[pid].get('source')]
+          blocked = []
+          network = []
+          custom_build = []
+          native_links = []
+          vcs_fallbacks = []
+          cargo_home = Path(os.environ.get('CARGO_HOME') or (Path.home() / '.cargo'))
+          cache_root = cargo_home / 'registry' / 'cache'
+
+          print(f'ACTIVE_EXTERNAL_PACKAGE_COUNT={len(external)}')
+          print('=== ARCHIVE_BOUND_LICENSE_NOTICE_INVENTORY ===')
+          for p in sorted(external, key=lambda x: (x['name'], x['version'], x.get('source') or '')):
+              name = p['name']
+              version = p['version']
+              source = p.get('source') or ''
+              expr = (p.get('license') or '').strip()
+              selected = select_allowed_path(expr) if expr else None
+
+              lock_rows = [row for row in lock_packages if row.get('name') == name and str(row.get('version')) == version]
+              exact_rows = [row for row in lock_rows if (row.get('source') or '') == source]
+              lock_row = exact_rows[0] if len(exact_rows) == 1 else (lock_rows[0] if len(lock_rows) == 1 else None)
+              lock_checksum = (lock_row or {}).get('checksum') or ''
+
+              archive_candidates = list(cache_root.glob(f'*/{name}-{version}.crate')) if cache_root.exists() else []
+              verified_archives = []
+              for archive_path in archive_candidates:
+                  digest = hashlib.sha256(archive_path.read_bytes()).hexdigest()
+                  if lock_checksum and digest == lock_checksum:
+                      verified_archives.append((archive_path, digest))
+              archive = verified_archives[0][0] if len(verified_archives) == 1 else None
+              archive_sha = verified_archives[0][1] if len(verified_archives) == 1 else ''
+
+              license_files = []
+              notice_files = []
+              vcs_info = None
+              if archive is not None:
+                  with tarfile.open(archive, mode='r:*') as tf:
+                      vcs_info = read_vcs_info(tf)
+                      for member in tf.getmembers():
+                          if not member.isfile():
+                              continue
+                          parts = PurePosixPath(member.name).parts
+                          if len(parts) < 2:
+                              continue
+                          rel = PurePosixPath(*parts[1:])
+                          if len(rel.parts) != 1:
+                              continue
+                          base = rel.name
+                          if license_name.match(base):
+                              license_files.append(base)
+                          if notice_name.match(base):
+                              notice_files.append(base)
+              license_files = sorted(set(license_files))
+              notice_files = sorted(set(notice_files))
+
+              vcs_license = None
+              if not license_files:
+                  vcs_license = exact_vcs_license(name, selected, vcs_info)
+                  if vcs_license is not None:
+                      vcs_fallbacks.append((name, version, vcs_license))
+
+              problems = []
+              if not source.startswith('registry+'):
+                  problems.append('NON_REGISTRY_SOURCE_REQUIRES_SEPARATE_SOURCE_IDENTITY_REVIEW')
+              if lock_row is None:
+                  problems.append('LOCK_IDENTITY_AMBIGUOUS_OR_MISSING')
+              if not lock_checksum:
+                  problems.append('LOCK_CHECKSUM_MISSING')
+              if archive is None:
+                  problems.append('CHECKSUM_BOUND_CRATE_ARCHIVE_NOT_UNIQUELY_RESOLVED')
+              if selected is None:
+                  problems.append('NO_ALLOWED_SPDX_PATH')
+              if not license_files and vcs_license is None:
+                  problems.append('NO_ARCHIVE_LICENSE_OR_ALLOWLISTED_EXACT_VCS_LICENSE_EVIDENCE')
+
+              obligation = distribution_obligation(selected or [], notice_files) if selected else 'UNRESOLVED'
+              disposition = 'ACCEPT_ARCHIVE_BOUND_LICENSE_EVIDENCE' if not problems else 'REVIEW_REQUIRED:' + ','.join(problems)
+              if not problems and vcs_license is not None:
+                  disposition = 'ACCEPT_CHECKSUM_ARCHIVE_PLUS_EXACT_VCS_LICENSE_EVIDENCE'
+              if problems:
+                  blocked.append((name, version, disposition))
+
+              kinds = sorted({kind for target in p.get('targets', []) for kind in target.get('kind', [])})
+              has_build = 'custom-build' in kinds
+              if has_build:
+                  custom_build.append((name, version))
+              if p.get('links'):
+                  native_links.append((name, version, p['links']))
+              if name in network_clients:
+                  network.append((name, version))
+
+              evidence_location = ','.join(license_files) if license_files else (
+                  f"VCS:{vcs_license['sha']}:{vcs_license['path']}:{vcs_license['sha256']}"
+                  if vcs_license is not None else 'NO_LICENSE_EVIDENCE'
+              )
+              vcs_path = vcs_license['path_in_vcs'] if vcs_license is not None else ''
+              print('|'.join([
+                  name,
+                  version,
+                  source,
+                  lock_checksum or 'NO_LOCK_CHECKSUM',
+                  archive_sha or 'NO_VERIFIED_ARCHIVE_SHA256',
+                  expr or 'NO_SPDX_EXPRESSION',
+                  ' AND '.join(selected) if selected else 'NO_SELECTED_ALLOWED_PATH',
+                  evidence_location,
+                  ','.join(notice_files) if notice_files else 'NO_TOP_LEVEL_NOTICE_FILE',
+                  vcs_path,
+                  obligation,
+                  disposition,
+                  'CUSTOM_BUILD' if has_build else 'NO_CUSTOM_BUILD',
+                  p.get('links') or 'NO_NATIVE_LINKS',
+                  p.get('repository') or ''
+              ]))
+
+          print('=== EXACT_VCS_LICENSE_FALLBACKS ===')
+          print(f'count={len(vcs_fallbacks)}')
+          for name, version, evidence in vcs_fallbacks:
+              print('|'.join([
+                  name,
+                  version,
+                  evidence['sha'],
+                  evidence['path_in_vcs'],
+                  evidence['path'],
+                  str(evidence['bytes']),
+                  evidence['sha256'],
+                  evidence['url'],
+              ]))
+          print('=== CUSTOM_BUILD_PACKAGES ===')
+          print(f'count={len(custom_build)}')
+          for row in custom_build: print('|'.join(row))
+          print('=== NATIVE_LINK_PACKAGES ===')
+          print(f'count={len(native_links)}')
+          for row in native_links: print('|'.join(row))
+          print('=== NETWORK_CLIENT_PACKAGES ===')
+          print(f'count={len(network)}')
+          for row in network: print('|'.join(row))
+          print('=== BLOCKED_ARCHIVE_OR_LICENSE_EVIDENCE ===')
+          print(f'count={len(blocked)}')
+          for row in blocked: print('|'.join(row))
+
+          if network:
+              sys.exit('network-capable HTTP client package entered the active candidate closure')
+          if blocked:
+              sys.exit('checksum-bound archive or exact-VCS license evidence requires reconciliation before admission')
+          PY
+
+      - name: Prove product manifests remain unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code -- \
+            Cargo.toml \
+            Cargo.lock \
+            apps/golam-desktop/src-tauri/Cargo.toml \
+            apps/golam-desktop/package.json \
+            apps/golam-desktop/package-lock.json
+          cat <<'EOF'
+          PRODUCT_MANIFEST_MUTATION=NO
+          PRODUCT_NATIVE_ADAPTER_CODE_ADMISSION=NO
+          PRODUCT_RUNTIME_NETWORK_AUTHORITY=NO
+          CAMERA_ADMISSION=NO
+          MICROPHONE_ADMISSION=NO
+          AUDIO_CAPTURE_ADMISSION=NO
+          OCR_ADMISSION=NO
+          LINUX_DIRECT_WAYLAND_CLIPBOARD_ADMISSION=NO
+          WAYLAND_BYPASS_ADMISSION=NO
+          SOURCE_FOUNDRY_CANDIDATE_QUALIFICATION=PASS_PENDING_INDEPENDENT_REVIEW
+          EOF

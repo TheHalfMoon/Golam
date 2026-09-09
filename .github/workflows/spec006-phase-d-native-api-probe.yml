@@ -1,0 +1,180 @@
+name: spec006-phase-d-native-api-probe
+
+on:
+  push:
+    branches: [impl/006-desktop-computer-control]
+    paths:
+      - .github/workflows/spec006-phase-d-native-api-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  compile-native-observation-probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build prerequisites
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libpipewire-0.3-dev build-essential libxdo-dev
+
+      - name: Install pinned Rust toolchain
+        shell: bash
+        run: rustup toolchain install 1.98.0 --profile minimal
+
+      - name: Materialize API-only probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > crates/golamd/src/bin/spec006-phase-d-native-api-probe.rs <<'EOF'
+          #![forbid(unsafe_code)]
+
+          #[cfg(target_os = "windows")]
+          fn probe() -> Result<(), Box<dyn std::error::Error>> {
+              use std::sync::Arc;
+              use xa11y_core::{App, Provider};
+              use xa11y_windows::WindowsProvider;
+
+              let provider: Arc<dyn Provider> = Arc::new(WindowsProvider::new()?);
+              let apps = App::list_with(Arc::clone(&provider))?;
+              for app in apps.into_iter().take(2) {
+                  let _ = (
+                      &app.name,
+                      app.pid,
+                      &app.data.stable_id,
+                      app.data.bounds,
+                      app.data.states.focused,
+                      app.data.states.active,
+                      app.data.handle,
+                  );
+                  let tree = app.tree(Some(2))?;
+                  let _ = (&tree.role, &tree.name, &tree.value, &tree.children);
+              }
+              let _ = App::foreground_with(provider, std::time::Duration::ZERO);
+              Ok(())
+          }
+
+          #[cfg(target_os = "macos")]
+          fn probe() -> Result<(), Box<dyn std::error::Error>> {
+              use axuielement::prelude::*;
+              use screencapturekit::prelude::*;
+
+              let content = SCShareableContent::get()?;
+              for display in content.displays().into_iter().take(2) {
+                  let _ = (display.display_id(), display.width(), display.height());
+              }
+              for window in content
+                  .windows()
+                  .into_iter()
+                  .filter(|window| window.is_on_screen())
+                  .take(2)
+              {
+                  let _ = (
+                      window.window_id(),
+                      window.title(),
+                      window.owning_application().map(|app| app.application_name()),
+                  );
+              }
+
+              if let Some(system) = system_wide() {
+                  if let Some(app) = system.focused_application()? {
+                      let _ = app.pid()?;
+                      let children = app.children()?;
+                      for child in children.into_iter().take(2) {
+                          let _ = child.string_attribute(
+                              axuielement::ax_attribute::AX_ROLE_ATTRIBUTE,
+                          )?;
+                          let _ = child.string_attribute(
+                              axuielement::ax_attribute::AX_TITLE_ATTRIBUTE,
+                          )?;
+                          let _ = child.action_names()?;
+                      }
+                  }
+                  let _ = system.focused_ui_element()?;
+              }
+              Ok(())
+          }
+
+          #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+          fn probe() -> Result<(), Box<dyn std::error::Error>> {
+              use std::time::Duration;
+
+              use atspi::proxy::accessible::ObjectRefExt;
+              use golam_bounded_linux_async::run_bounded;
+
+              let result = run_bounded(Duration::from_millis(250), async {
+                  let connection = atspi::AccessibilityConnection::new().await?;
+                  let root = connection.root_accessible_on_registry().await?;
+                  let children = root.get_children().await?;
+                  for child in children.into_iter().take(2) {
+                      let proxy = child.as_accessible_proxy(connection.connection()).await?;
+                      let _ = proxy.name().await?;
+                      let _ = proxy.get_role_name().await?;
+                      let _ = proxy.get_children().await?;
+                      let _ = (child.name_as_str(), child.path_as_str());
+                  }
+                  Ok::<(), atspi::AtspiError>(())
+              });
+              let _ = result;
+              Ok(())
+          }
+
+          #[cfg(not(any(
+              target_os = "windows",
+              target_os = "macos",
+              all(target_os = "linux", target_arch = "x86_64")
+          )))]
+          fn probe() -> Result<(), Box<dyn std::error::Error>> {
+              Ok(())
+          }
+
+          fn main() -> Result<(), Box<dyn std::error::Error>> {
+              probe()
+          }
+          EOF
+
+      - name: Compile exact admitted native observation APIs
+        shell: bash
+        run: cargo +1.98.0 check --locked -p golamd --bin spec006-phase-d-native-api-probe
+
+      - name: Enforce semantic-route structural restrictions
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROBE=crates/golamd/src/bin/spec006-phase-d-native-api-probe.rs
+          ! grep -Eq 'WindowsInputProvider|WindowsScreenshot|new_item_from_monitor|new_item_from_window' "$PROBE"
+          ! grep -Eq 'tokio::|raw_ffi|post_keyboard_event|perform_action' "$PROBE"
+          grep -q 'WindowsProvider' "$PROBE"
+          grep -q 'golam_bounded_linux_async::run_bounded' "$PROBE"
+          grep -q 'ObjectRefExt' "$PROBE"
+          echo 'WINDOWS_SEMANTIC_PROVIDER_ONLY=YES'
+          echo 'WINDOWS_INPUT_SCREENSHOT_SURFACES_REFERENCED=NO'
+          echo 'LINUX_DIRECT_TOKIO_REFERENCED=NO'
+          echo 'LINUX_OBJECT_REFS_CONVERTED_TO_ACCESSIBLE_PROXY=YES'
+          echo 'MACOS_RAW_OR_ACTUATION_API_REFERENCED=NO'
+
+      - name: Prove helper-only repository state
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm crates/golamd/src/bin/spec006-phase-d-native-api-probe.rs
+          rm -rf target
+          STATUS="$(git status --porcelain --untracked-files=all)"
+          if [ -n "$STATUS" ]; then
+            printf '%s\n' "$STATUS" >&2
+            echo 'HELPER_ONLY_REPOSITORY_STATE=NO' >&2
+            exit 1
+          fi
+          git diff --exit-code
+          echo 'HELPER_ONLY_REPOSITORY_STATE=YES'
+          echo 'PRODUCT_SOURCE_MUTATION=NO'
+          echo 'PRODUCT_MANIFEST_MUTATION=NO'
