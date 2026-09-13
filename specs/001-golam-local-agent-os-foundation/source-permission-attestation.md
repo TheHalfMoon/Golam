@@ -1,7 +1,7 @@
 # Founder Source Permission Attestation
 
 **Recorded**: 2026-08-24  
-**Reaffirmed**: 2026-09-08  
+**Reaffirmed**: 2026-09-13  
 **Scope**: Golam research/source universe recorded in the repository and sources supplied/reviewed during current program research  
 **Status**: `FOUNDER_PERMISSION_ATTESTED_AND_REAFFIRMED`
 
@@ -19,6 +19,12 @@ This includes `Golam-Research` / the Grok Bot 0.18 reconstruction as source mate
 The founder explicitly reaffirmed that Golam may copy, use, modify, port and selectively reuse code/source material from the sources supplied during the current research pass and sources already recorded in the repository, subject to exact component-level rights and technical admission.
 
 This reaffirmation means a source should not remain `REFERENCE_ONLY` merely because the repository previously lacked founder reuse permission evidence. It may advance to reuse evaluation when its exact component is otherwise eligible.
+
+## 2026-09-13 reaffirmation
+
+The founder again explicitly reaffirmed permission to use source code from the source universe already recorded in Golam and from the newly supplied 2026-09-13 review set, including the materially reviewed CopilotKit, TinyFish, Desktop Commander, Perplexity, OpenRAG, VoiceStudio, MiMo Code, Ripwire and MarkItDown source families.
+
+This additional reaffirmation changes no technical admission rule. Exact components, transitive dependencies, assets, model artifacts, datasets, services, trademarks and redistribution obligations still require component-level reconciliation and Source Foundry qualification before admission.
 
 The reaffirmation does **not** assert that third-party license, NOTICE, attribution, trademark, model-weight, dataset, service, export, patent or redistribution obligations disappear. It also does not convert an ambiguous/unlicensed upstream component into automatically reusable code when the applicable rights for that exact component remain unclear.
 
@@ -107,6 +113,8 @@ A broad founder permission record does not override a source-specific ambiguity 
 Research, behavioral comparison and clean-room reimplementation may remain available where legally and technically appropriate, but the repository must record the selected posture explicitly.
 
 `SOURCE_PERMISSION_REAFFIRMED=YES`
+
+`SOURCE_PERMISSION_REAFFIRMED_2026_09_13=YES`
 
 `AUTOMATIC_CODE_ADMISSION=NO`
 
