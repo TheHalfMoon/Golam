@@ -82,6 +82,35 @@ MUSE_PUBLIC_REFERENCE != MUSE_SOURCE_CODE_PERMISSION
 MODEL_CARD_LICENSE != TRANSITIVE_ARTIFACT_CLEARANCE
 ```
 
+
+
+## 2026-09-22 Z.AI / AutoClaw source permission reaffirmation
+
+The founder states that Z.AI granted permission to copy, use, modify, port and selectively reuse **all Z.AI source code made available under that permission** for AutoClaw-related work.
+
+This founder attestation is sufficient to move Z.AI-owned/authorized available source into Golam Source Foundry evaluation without rejecting it merely for lack of permission evidence. It does not by itself identify a public source repository for the proprietary AutoClaw desktop application, and it does not assert rights over independent upstream or third-party code merely because AutoClaw depends on or interoperates with it.
+
+Reviewed Z.AI public repositories include:
+
+```text
+zai-org/GLM-skills
+zai-org/Open-AutoGLM
+zai-org/ZCode
+zai-org/Synapse
+```
+
+Independent `openclaw/openclaw` is governed by its own MIT license/third-party notices and is not treated as covered by the Z.AI permission assertion.
+
+For any non-public AutoClaw source later supplied by Z.AI/the founder, the exact component still requires a private Source Foundry record before Golam code admission.
+
+```text
+ZAI_AVAILABLE_SOURCE_PERMISSION_ATTESTED=YES
+ZAI_PERMISSION != INDEPENDENT_UPSTREAM_RIGHTS
+ZAI_PERMISSION != THIRD_PARTY_DEPENDENCY_CLEARANCE
+AUTOCLAW_PRODUCT_ACCESS != AUTOCLAW_SOURCE_REPO_IDENTITY
+PERMISSION_TO_COPY != TECHNICAL_ADMISSION
+```
+
 ## What this attestation changes
 
 A source MUST NOT be rejected solely because Golam planning previously lacked evidence that founder permission had been obtained. Such sources are eligible to enter Source Foundry qualification.
