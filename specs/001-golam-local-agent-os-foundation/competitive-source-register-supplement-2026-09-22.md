@@ -282,11 +282,11 @@ Golam must keep these behind typed capabilities, isolation, secret/egress contro
 
 ## 7. Founder-owned GitHub portfolio review
 
-A fresh authenticated owner enumeration on 2026-09-22 found:
+A fresh authenticated owner enumeration on 2026-09-22, reverified after the initial planning pass, found:
 
 ```text
-OWNER_REPOSITORIES = 35
-PUBLIC_REPOSITORIES = 28
+OWNER_REPOSITORIES = 36
+PUBLIC_REPOSITORIES = 29
 PRIVATE_REPOSITORIES = 7
 ```
 
@@ -298,6 +298,7 @@ Private repository names/content are deliberately not copied into this public Go
 | --- | --- | --- |
 | `TheHalfMoon/kernux` | `18dd95f7fa07a3c2b9fbd1b9583a044b8384c020` | Capability kernel, real browser/computer/process/runtime execution, grants/evidence, local/remote runtime patterns |
 | `TheHalfMoon/Ascout` | `20818ea52568c3955654236994de28a00f47fb26` | Unified assurance, reality verification, owner-source inventory, evidence/finding/coverage discipline |
+| `TheHalfMoon/Sentrdel` | current live source to be re-pinned at admission time | Security evidence, invariants, coverage honesty, reachability and retest lifecycle |
 | `TheHalfMoon/wepld` | `666e62d7d9e040505baca277a474d734afcc07a0` | Agentic engineering control plane, semantic/browser/computer research, terminal/process ownership |
 | `TheHalfMoon/Morize` | `62fc04d01d398da93b4dacf0ab2f33e3f1440462` | Governed memory OS, bi-temporal truth, ContextBundle, memory firewall, retrieval hierarchy |
 | `TheHalfMoon/Winds` | `3e637403accadc0f446d596f4411c5c9da371e89` | Exact Git/worktree isolation, typed execution/evidence, recovery |
@@ -367,6 +368,7 @@ Otherwise the source remains a reference.
 ```text
 NEW_SOURCES_REVIEWED_2026_09_22=YES
 OWNER_PORTFOLIO_REENUMERATED_2026_09_22=YES
+OWNER_PORTFOLIO_COUNT_CORRECTED_TO_36_2026_09_22=YES
 FOUNDER_SOURCE_PERMISSION_REAFFIRMED_2026_09_22=YES
 ACTIVE_SPEC_006_PR_24_WIDENED=NO
 CURRENT_POINTER_CHANGED=NO
