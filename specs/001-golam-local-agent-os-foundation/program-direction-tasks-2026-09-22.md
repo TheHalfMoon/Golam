@@ -15,9 +15,9 @@ These tasks capture gaps exposed by the 2026-09-22 source/portfolio review. They
 
 ## Phase R — Semantic decision and capability exchange foundations
 
-- [ ] **T203 — Semantic Decision Provider Contract.** Define one provider-neutral `DecisionProvider` / `DecisionRequest` / `DecisionReceipt` family for bounded typed decisions. Support at minimum Choice, Boolean/Noul and ordered Score semantics where independently qualified. Bind exact state/context digest, schema/option identities, explicit no-match/abstain semantics, model artifact, backend/device/runtime, prompt/schema digest, probability output, calibration profile, input-limit/truncation evidence, latency/resource/cost and provider revision. SemIf, Decider and Nimble are candidate/reference implementations; none becomes the canonical policy engine. The contract must explicitly prohibit a provider from minting capability, lowering a trusted consequence class, authorizing egress, satisfying owner presence/approval, declaring source truth or emitting `VERIFIED_COMPLETE`.
+- [ ] **T203 — Semantic Decision Provider Contract.** Define one provider-neutral `DecisionProvider` / `DecisionRequest` / `DecisionReceipt` family for bounded typed decisions. Support at minimum Choice, Boolean/Noul and ordered Score semantics where independently qualified. Bind exact state/context digest, schema/option identities, explicit no-match/abstain semantics, model artifact, backend/device/runtime, prompt/schema digest, probability output, calibration profile, input-limit/truncation evidence, latency/resource/cost and provider revision. Define deterministic cross-field constraints / bounded dependency graphs so independently scored fields cannot silently form an impossible or policy-inconsistent decision set; contradiction must cause abstention, deterministic repair only where specified, or escalation. SemIf, Decider and Nimble are candidate/reference implementations; none becomes the canonical policy engine. The contract must explicitly prohibit a provider from minting capability, lowering a trusted consequence class, authorizing egress, satisfying owner presence/approval, declaring source truth or emitting `VERIFIED_COMPLETE`.
 
-- [ ] **T204 — Decision Calibration, Applicability and Escalation Qualification.** Extend T143/T145/T152/T158/T175/T203 with workload-specific qualification for decision providers. Measure appropriate accuracy/balanced accuracy, NLL/log loss, Brier, ECE/reliability, AURC/selective risk, abstention coverage, option-order/schema perturbation, context-length and truncation sensitivity, quantization/backend drift, domain shift, tainted/adversarial input behavior, latency and resources. Define a deterministic escalation policy from exact rules/source truth -> bounded local decision provider -> stronger provider/generative reasoning -> independent verification/human review. Generic confidence thresholds are forbidden unless calibrated for the exact workload/configuration.
+- [ ] **T204 — Decision Calibration, Applicability and Escalation Qualification.** Extend T143/T145/T152/T158/T175/T203 with workload-specific qualification for decision providers. Measure appropriate accuracy/balanced accuracy, NLL/log loss, Brier, ECE/reliability, AURC/selective risk, abstention coverage, option-order/schema perturbation, cross-field contradiction/impossible-state rate, context-length and truncation sensitivity, quantization/backend drift, domain shift, tainted/adversarial input behavior, latency and resources. Define a deterministic escalation policy from exact rules/source truth -> bounded local decision provider -> stronger provider/generative reasoning -> independent verification/human review. Generic confidence thresholds are forbidden unless calibrated for the exact workload/configuration.
 
 - [ ] **T206 — Capability Catalog and Provider Offer Contract.** Extend T119/T152/T154/T165/T180/T197/T199/T201 with provider-neutral `CapabilityDefinition`, exact `CapabilityOffer`, `ProviderRevision`, `AccountBinding`, `CapabilityAvailability`, `CapabilityQualification` and proposed `ToolCallPlan`. Discovery is by task/capability rather than provider name alone. Every offer must expose exact provider/revision, locality, account/credential requirements, operation/effect classes, egress destinations/data classes, retention expectation where knowable, cost model/estimate, latency/reliability evidence, availability freshness and Source Foundry/conformance references. Catalog state is a projection of admitted/observed provider state and must not become a second capability, identity, authorization, billing or Effect authority.
 
@@ -45,9 +45,9 @@ A future owning spec must prove:
 
 ## Phase S — Reconciled execution and credential-brokered tool use
 
-- [ ] **T205 — Agent Workload Manifest / Reconciled Execution Contract.** Refine T127/T129/T130/T151/T153/T159/T167/T168/T173 using Google AX as a reconciliation/lifecycle reference without importing Kubernetes/Redis as local baseline requirements. Define a versioned `ExecutionEnvelope` bound to a canonical `TaskContract` with workspace bindings, execution backend, isolation profile, compute/resource budget, egress policy reference, execution profile/model reference, capability set, secret-handle references, readiness conditions, observable endpoints, checkpoint/suspend/resume/timeout/cleanup policy and output-artifact policy. Separate desired runtime state from observed runtime state. Runtime reconciliation may restart/reprovision a worker where allowed but must never become a blind retry path for ambiguous external Effects.
+- [ ] **T205 — Agent Workload Manifest / Reconciled Execution Contract.** Refine T127/T129/T130/T151/T153/T159/T167/T168/T173 using Google AX as a reconciliation/lifecycle reference without importing Kubernetes/Redis as local baseline requirements. Define a versioned `ExecutionEnvelope` bound to a canonical `TaskContract` with workspace bindings, execution backend, isolation profile, compute/resource budget, egress policy reference, execution profile/model reference, capability set, secret-handle references, readiness conditions, observable endpoints, checkpoint/suspend/resume/timeout/cleanup policy and output-artifact policy. Separate desired runtime state from observed runtime state. Bind each runtime instance to an execution incarnation/generation (or equivalent fencing token) so a replaced/stale worker fails closed at the protected action boundary after reconciliation or reprovisioning. Runtime reconciliation may restart/reprovision a worker where allowed but must never become a blind retry path for ambiguous external Effects.
 
-- [ ] **T207 — Credential-Brokered Tool Relay Contract.** Extend T119/T165/T172/T179/T190/T199/T201/T206 with a Treg-inspired but Golam-authorized relay path. Support exact provider/account selection, multiple credential bindings, secret-handle injection, destination binding, control-header/cookie stripping, SSRF/private-address policy, raw path/query fidelity where required, bounded request/response sizes, streaming, cancellation, idempotency material, cost reservation/receipt hooks and failure capture with redaction. Authorization, Effect state, egress, identity, secret state and final verification remain canonical Golam concerns. A relay transport success is not an Effect verification result.
+- [ ] **T207 — Credential-Brokered Tool Relay Contract.** Extend T119/T165/T172/T179/T190/T199/T201/T206 with a Treg-inspired but Golam-authorized relay path. Support exact provider/account selection, multiple credential bindings, secret-handle injection, destination binding, control-header/cookie stripping, SSRF/private-address policy, raw path/query fidelity where required, bounded request/response sizes, streaming, cancellation, idempotency material, bounded pre-dispatch cost quote/reservation where a provider is paid, final cost receipt/reconciliation, and failure capture with redaction. Cost overrun beyond the authorized budget must stop/fail closed or require a new budget decision; spend authorization is separate from Effect authorization. Authorization, Effect state, egress, identity, secret state and final verification remain canonical Golam concerns. A relay transport success is not an Effect verification result.
 
 ### T205 invariants
 
@@ -117,6 +117,10 @@ ASSOCIATION_CONFIDENCE != CANONICAL_RELATION
 BRIEFING_SUMMARY != SOURCE_OF_TRUTH
 LEARNED_RULE != ACTIVE_AUTHORITY
 ```
+
+## Phase T2 — Attention budget and proactive autonomy discipline
+
+- [ ] **T212 — Attention Budget and Proactive Autonomy Policy.** Refine T208/T209 with explicit interruption governance so proactive Golam does not become intelligent notification spam. Define deduplication/coalescing, freshness/expiry, quiet/defer policy, current-focus awareness where available, user-configured urgency classes, briefing-vs-immediate routing, reason-for-surfacing, correction feedback and a bounded daily/periodic interruption budget where useful. Evaluate precision/recall for important items together with unnecessary-interruption rate, duplicate surfacing, stale-card rate, deferred-item recovery and correction stability. Corrections produce candidate rules/routines and never silently mutate protected active policy. `ATTENTION_SCORE != USER_PRIORITY_TRUTH`; `HIGH_MODEL_CONFIDENCE != INTERRUPT_NOW`; `PROACTIVE != ALWAYS_INTERRUPTIVE`.
 
 ## Phase U — Owner portfolio governance and cross-fabric proof
 
@@ -199,6 +203,7 @@ P0_NEW_SHARED_CONTRACTS:
   T203 Decision Provider Contract
   T206 Capability Catalog / Provider Offer Contract
   T211 Owner Portfolio Reuse Matrix (cross-cutting governance)
+  T212 Attention Budget / Proactive Autonomy Policy
 
 P1_NEW:
   T204 Decision Calibration / Escalation
@@ -238,6 +243,11 @@ ASSOCIATION_CONFIDENCE != CANONICAL_RELATION
 BRIEFING_SUMMARY != SOURCE_OF_TRUTH
 LEARNED_RULE != ACTIVE_AUTHORITY
 OWNER_REPOSITORY_ACCESS != SOURCE_ADMISSION
+FIELD_PROBABILITY != JOINT_CONSISTENCY
+STALE_WORKER != CURRENT_EFFECT_ACTOR
+BUDGET_AUTHORIZATION != EFFECT_AUTHORIZATION
+ATTENTION_SCORE != USER_PRIORITY_TRUTH
+HIGH_MODEL_CONFIDENCE != INTERRUPT_NOW
 ```
 
 ## End-to-end proving journeys
@@ -293,7 +303,7 @@ Feed an out-of-domain/high-confidence wrong DecisionProvider result. Prove deter
 ## Current safe sequencing
 
 1. Keep active Spec 006 PR #24 unchanged in scope.
-2. Treat T203–T211 as planning-only extension tasks.
+2. Treat T203–T212 as planning-only extension tasks.
 3. Qualify the planning PR on its exact new head after this extension.
 4. Re-run independent architecture/security/governance review because the planning head changed.
 5. Merge planning only after new-head findings and required checks are reconciled.
