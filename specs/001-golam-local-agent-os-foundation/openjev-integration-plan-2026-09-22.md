@@ -1,8 +1,8 @@
 # Golam OpenJev Integration Plan — 2026-09-22
 
-**Status:** PLANNING ONLY / FIRST-CLASS BOUNDED PROVIDER TARGET  
-**Source:** \`https://huggingface.co/AlexWortega/openjev\`  
-**Founder permission:** recorded in \`source-permission-attestation.md\`  
+**Status:** PLANNING ONLY / FIRST-CLASS BOUNDED PROVIDER TARGET
+**Source:** \`https://huggingface.co/AlexWortega/openjev\`
+**Founder permission:** recorded in \`source-permission-attestation.md\`
 **Authority:** no implementation/model admission is granted by this document
 
 ## 1. Decision
