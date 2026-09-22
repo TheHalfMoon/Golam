@@ -1115,3 +1115,165 @@ ACTIVE_SPEC_006_PR_24_WIDENED=NO
 NEW_PRODUCT_IMPLEMENTATION_STARTED=NO
 FUTURE_IMPLEMENTATION_AUTHORITY_GRANTED=NO
 ```
+
+
+## 22. Voice/audio and personal-agent deep dive
+
+A focused follow-up reviewed the current OpenJev Hub artifact, the owner-pinned Golam-research/Grok Bot reconstruction, Wispral, Himsat and Meta's newly launched Muse product/safety architecture. The result is a stronger voice direction than the original T140/T196 "optional real-time voice" umbrella.
+
+### 22.1 Product goal: speak naturally, work continuously
+
+Golam should support a conversation where the user can:
+
+- speak or type into the same durable work/conversation spine;
+- hear low-latency spoken responses;
+- interrupt Golam while it is speaking;
+- add a second task before the first response finishes;
+- steer/cancel/queue/branch long-running work;
+- leave while background work continues and return to a transparent activity/task state;
+- keep strict-local voice useful without network access;
+- use deterministic approval controls for consequential actions.
+
+This is not a turn-by-turn voice chatbot. It is conversational control over the same Task/Effect/Evidence system.
+
+### 22.2 OpenJev belongs behind speech, not in place of speech
+
+The reviewed `AlexWortega/openjev` artifact is a Qwen3.5-derived text-classification/NLI decision model, not an STT/TTS/VAD engine. Its useful Golam role is after textual/contextual state exists:
+
+```text
+audio/acoustic signals
+  -> streaming STT revisions
+  -> bounded transcript/context state
+  -> optional T203/OpenJev-style decisions
+       command vs aside
+       question vs dictation
+       semantic turn completeness hint
+       urgency/routing/clarification hint
+  -> deterministic policy + conversation/task handling
+```
+
+It may improve latency/cost for bounded semantic decisions, but it never authenticates the speaker, replaces acoustic endpointing, authorizes an Effect or proves that a partial transcript is final user intent.
+
+### 22.3 Grok Bot reconstruction is a baseline to surpass
+
+The owner-pinned Golam-research reconstruction contains a recovered voice controller with:
+
+- explicit microphone permission acquisition;
+- MediaRecorder capture with bounded duration;
+- cancellation/abort handling;
+- agent/account session scoping;
+- whole-clip transcription after recording stops;
+- transcript-card and deterministic permission/auto-review UX.
+
+Those are valuable bounded components/patterns. The whole-clip `record -> stop -> transcribe -> send` path is not sufficient for Golam's target. Golam needs incremental STT, typed turn events, low-latency playback, barge-in and independent cancellation across audio and agent lifecycles.
+
+### 22.4 Wispral supplies the correct voice control-plane shape
+
+Wispral's strongest architecture lessons are retained directly:
+
+- voice is typed events/state transitions, not one `audio -> text -> shell` function;
+- microphone, STT, TTS, agent requests and rendering are independently cancellable;
+- provenance preserves source audio/non-persistence marker, raw transcript, normalized transcript, entity binding, semantic class, final instruction and authorization separately;
+- `COMMAND` and `ASIDE` are semantic concepts behind deterministic policy;
+- speech engines are replaceable;
+- push-to-talk is the founding reliability baseline;
+- full-duplex/hands-free/AEC are later independently qualified capabilities;
+- exact timestamps make latency claims measurable.
+
+### 22.5 Himsat supplies the runtime and benchmark substrate
+
+Himsat contributes the stronger runtime decomposition:
+
+```text
+capture + capture health
+  -> conditioning / AEC / NS / AGC
+  -> VAD / segmentation
+  -> Voice Runtime Router
+  -> streaming STT / quality pass
+  -> optional diarization
+```
+
+Golam should reuse the contract lessons, not blindly import all engines. The route must bind exact engine/model artifacts, hardware, language, locality, privacy, health and resource envelope. Arabic/English/code-switch, device swaps, Bluetooth, noise, false VAD, latency, six-hour stability and strict-local network denial belong in qualification evidence.
+
+### 22.6 Muse contributes the interaction model and independent safety architecture
+
+Meta Muse is proprietary and is used as public behavior/security reference only.
+
+High-value product lessons:
+
+- one long-running conversation rather than rigid turn locking;
+- new messages while prior work continues;
+- side chats when scoped context is useful;
+- background tasks/goals;
+- proactive messages only when worth interrupting the user;
+- visible activity/history;
+- rich Artifacts instead of forcing every answer into prose;
+- deterministic approval cards for critical actions.
+
+High-value security lessons map cleanly onto existing Golam concepts:
+
+```text
+Muse runtime cell             -> Golam bounded ExecutionNode/worker
+Sentinel permission authority -> Golam Authority Kernel + Effect Gate
+credential surrogation        -> Golam Secret/Account broker
+network egress checks         -> T179 Egress Broker
+tainted external data         -> T179 trust zones / T213 evidence coverage
+durable state outside runtime -> Golam canonical user-owned state
+```
+
+Golam should not add a second Sentinel authority. The useful lesson is architectural separation: the model proposes; a separate deterministic authority path decides.
+
+### 22.7 Full-duplex is a set of contracts, not a checkbox
+
+The target flow is:
+
+```text
+Microphone / explicit voice session
+  -> Capture Health
+  -> Conditioning / AEC
+  -> VAD / acoustic endpoint evidence
+  -> Streaming STT (partial revisions)
+  -> Semantic turn/intent hints
+  -> Conversation / Task spine
+  -> Agent stream
+  -> Streaming TTS
+  -> Audio playback
+          ^
+          |
+     immediate barge-in
+```
+
+Each arrow is observable and independently cancellable.
+
+Important source-channel rules:
+
+```text
+MICROPHONE_AUDIO != OWNER_IDENTITY
+SYSTEM_AUDIO != OWNER_COMMAND
+REMOTE_PARTY_SPEECH != OWNER_COMMAND
+TTS_OUTPUT != USER_INTENT
+PARTIAL_TRANSCRIPT != FINAL_USER_INTENT
+```
+
+This prevents meeting audio, a video, another person or Golam's own speaker output from becoming commands merely because the transcript contains imperative text.
+
+### 22.8 Voice output has its own privacy boundary
+
+Spoken output can leak information in a room even when network privacy is perfect. Therefore TTS routing must consider data class and output device. Sensitive content may require screen-only display, headphones, an explicit disclosure or a user-selected permissive profile.
+
+A generated or cloned voice is presentation, never identity.
+
+### 22.9 Resulting task decomposition
+
+T196 remains the umbrella contract; new bounded tasks are:
+
+```text
+T217 AudioSession / Duplex Control
+T218 Speech Runtime Router / Capture Health
+T219 Streaming STT / Turn Detection / Semantic Interpretation
+T220 Streaming TTS / Barge-In / Voice Presence
+T221 Conversational Work / Multi-Task Voice UX
+T222 Golam VoiceBench / Multilingual Safety / Accessibility
+```
+
+No task admits a speech model, cloud service, native library or proprietary Muse component. Exact implementation still requires live successor authority, Source Foundry and Model Artifact Foundry qualification.
