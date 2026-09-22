@@ -238,7 +238,7 @@ AX-style desired/observed reconciliation is useful only if a replaced runtime ca
 A resumed/reprovisioned worker must receive a fresh execution incarnation. Stale incarnations may finish local computation, but they must fail closed at the protected action boundary if their generation is no longer current.
 
 ```text
-RUNTIME_RESTART != SAME_EXECUTION_INCARCATION
+RUNTIME_RESTART != SAME_EXECUTION_INCARNATION
 STALE_WORKER != CURRENT_EFFECT_ACTOR
 RECONCILER_CONVERGENCE != AUTHORITY_CONTINUITY
 ```
