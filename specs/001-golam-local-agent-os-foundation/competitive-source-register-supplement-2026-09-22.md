@@ -1,0 +1,378 @@
+# Competitive Source Register Supplement — 2026-09-22
+
+**Status**: PROGRAM RESEARCH / SOURCE FOUNDRY INPUT — NO PRODUCT ADMISSION
+
+**Extends**:
+- `competitive-source-register-2026.md`
+- `competitive-source-register-supplement-2026-09-08.md`
+- `competitive-source-register-supplement-2026-09-13.md`
+- `source-permission-attestation.md`
+
+**Founder direction**: the founder states permission to use, copy, modify, port and selectively reuse source material supplied for Golam and source material in the founder-owned GitHub portfolio. This is a permission input, not an admission decision.
+
+```text
+PERMISSION_TO_COPY != TECHNICAL_ADMISSION
+SOURCE_VISIBILITY != SOURCE_ADMISSION
+OWNER_REPOSITORY_ACCESS != SOURCE_ADMISSION
+CATALOG_ENTRY != CAPABILITY_AUTHORITY
+MODEL_PROBABILITY != AUTHORITY
+```
+
+All implementation reuse remains subject to the exact-component Source Foundry record, the T197 TCB budget, transitive rights/NOTICE closure, security qualification, dependency/runtime closure, exact version identity and the canonical Effect/Verification contracts.
+
+## 1. External sources reverified for this pass
+
+| Source | Exact reviewed revision/state | Primary value | Golam disposition |
+| --- | --- | --- | --- |
+| `google/ax` | `d8ed0fe38bceb7842d3c47817d53d16ccdfcb601` | Declarative Task/Workspace/Gateway/Model resources, reconciliation, readiness, suspend/resume, sandboxed agent workloads | HIGH_VALUE_EXECUTION_ORCHESTRATION_REFERENCE |
+| `superdesigndev/treg` | `9ba0d6906d495cb2842a008c959983a4a536f256` | Capability catalog, search-by-job, credential-brokered relay, MCP catalog surface, explicit provider/cost selection | HIGH_VALUE_CAPABILITY_EXCHANGE_SOURCE_CANDIDATE |
+| `TheoLeeCJ/SemIf` | `1f2dea3e25379f9dfc98cb83c324f00ab5deda37` | Local typed semantic decisions from option logits, shared-state scoring, calibration, reproducible evidence | HIGH_VALUE_DECISION_PROVIDER_CANDIDATE |
+| `Mapika/decider` | `7557fe058e0b31ffcf754b7c5bb31a452454ce89` | Choice/Score/Noul typed decisions, calibrated probabilities, fast local serving, browser/vision experiments | HIGH_VALUE_DECISION_PROVIDER_CANDIDATE |
+| `bespokelabsai/nimble` | `f136b3f75721fda4ea961f73993cc50b08488835` | Open Jev-style training/serving recipe and typed structured prediction | HIGH_VALUE_DECISION_TRAINING_AND_EVAL_REFERENCE |
+| `bespokelabs/Bespoke-Nimble-9B` | Hub state reviewed 2026-09-22; Apache-2.0 tag; Qwen3.5-9B adapter | Candidate local typed-decision artifact | MODEL_ARTIFACT_CANDIDATE_ONLY |
+| `aayushch/laya` | `5970a114241ee09cec09d571acf9ba52d27ae612` | Proactive action cards, cross-app attention, briefing, coherence, approval-first action UX, local-first desktop patterns | HIGH_VALUE_EXPERIENCE_AND_HARNESS_REFERENCE |
+| `tinyfish-io/agentql` | `418ba8ad1c69dfac134a6833369a01dfba5a24a7` | Resilient semantic web selectors and structured extraction | HIGH_VALUE_BROWSER_SEMANTICS_REFERENCE |
+| `tinyfish-io/tinyfish-mcp-server` | `5df1bbb8ff48bc282c59bbc00e8c8418cf791b62` | Hosted automation/MCP streaming and remote run behavior | NETWORK_ADAPTER_REFERENCE_ONLY |
+| `tinyfish-io/tinyfish-cookbook` | `8615317f6db58ae776dd53817ac30668c1db5ef8` | Search/Fetch/Agent/Browser escalation recipes and research workflows | BEHAVIORAL_REFERENCE |
+| `wonderwhy-er/DesktopCommanderMCP` | `75048278f4866f0d8bde26f6f9aa3b8d39dca870` | Files/process/PTY/document tooling, session UX, bounded output, local audit, remote MCP patterns | HIGH_VALUE_TOOL_PROVIDER_REFERENCE |
+
+The supplied Bespoke Hugging Face discussion is not treated as architecture authority. Its material program value is the Nimble model/repository and the reproducible typed-decision method, not the discussion thread itself.
+
+## 2. Google AX: adopt the reconciliation model, not the cluster requirement
+
+AX contributes four especially strong concepts:
+
+- `Task`: isolated unit with compute/resource constraints;
+- `Workspace`: reusable materialized repositories/tools/skills;
+- `Gateway`: explicit network boundary;
+- `Model`: named model configuration;
+- readiness conditions plus suspend/resume/checkpoint behavior;
+- a controller that reconciles desired state toward observed runtime state.
+
+Golam should not make Kubernetes, Redis, Agent Substrate or a cluster control plane mandatory for local use.
+
+Recommended translation:
+
+```text
+Golam TaskContract
+  -> ExecutionEnvelope
+     -> WorkspaceBindings
+     -> ExecutionBackend / IsolationProfile
+     -> EgressPolicyRef
+     -> ExecutionProfileRef
+     -> CapabilitySetRef
+     -> ReadinessConditions
+     -> CheckpointPolicy
+```
+
+The envelope is declarative execution input. It does not grant authority.
+
+```text
+WORKLOAD_MANIFEST != CAPABILITY_GRANT
+WORKSPACE_BINDING != FILESYSTEM_AUTHORITY
+GATEWAY_DECLARATION != EGRESS_AUTHORIZATION
+READINESS_CONDITION != VERIFIED_COMPLETION
+```
+
+AX reconciliation is valuable for workers and long-running tasks because it separates desired state from runtime truth. Golam should preserve this distinction locally first and allow cluster/remote backends later through T151/T173.
+
+## 3. Treg: capability exchange without a second authority system
+
+Treg demonstrates that an agent should ask for a capability rather than carry thousands of provider-specific tool schemas.
+
+Retain:
+
+- capability/job-oriented search;
+- stable exact endpoint/tool identity;
+- provider alternatives with price and behavior metadata;
+- server-side credential injection;
+- multiple credential bindings where an upstream requires them;
+- compact MCP discovery plus exact call instead of thousands of tools;
+- structured authorization remediation;
+- faithful relay behavior;
+- explicit cost/balance information;
+- provider/account selection visible to the caller;
+- no silent provider failover for ordinary exact calls.
+
+Golam strengthening:
+
+- the catalog is a projection of admitted/available capability offers, never authority;
+- credentials use Golam secret handles and the existing connector/account broker;
+- every call is mapped to T199 Operation/Effect semantics before dispatch;
+- arbitrary or insufficiently modeled tools remain `OPEN_WORLD`, potentially consequential and non-idempotent;
+- T179 owns taint/egress; T152 owns routing constraints; T165/T180/T197 own source/extension admission;
+- tool relay cannot create its own Effect ledger, authorization state, identity root or truth about successful completion;
+- exact cost, locality, destination and account are known before a route is selected when possible.
+
+A future `CapabilityOffer` should carry at least:
+
+```text
+capability_id
+provider_id
+provider_revision
+operation_classes
+read_write_open_world_class
+locality
+account_binding
+credential_binding_refs
+egress_destinations
+data_classes
+retention_expectation_if_known
+price_model
+estimated_cost
+latency/reliability evidence
+idempotency/retry semantics
+source_admission_ref
+conformance_ref
+availability/freshness
+```
+
+### Treg license and permission boundary
+
+The reviewed repository license is Apache-2.0 plus additional terms that restrict using the public-licensed software as a hosted, managed or embedded third-party commercial service without explicit prior written authorization.
+
+The founder separately states that Golam has permission to use/copy the Treg source. That statement is recorded as founder-attested permission input. Before any Treg code is copied into a distributed/commercial Golam component, the exact Source Foundry record must bind documentary permission scope sufficient for the intended use and preserve any continuing notice/attribution obligations.
+
+```text
+FOUNDER_ATTESTED_PERMISSION != VERIFIED_SCOPE_OF_UPSTREAM_COMMERCIAL_GRANT
+PUBLIC_REPO_ACCESS != COMMERCIAL_EMBEDDING_RIGHT
+```
+
+This is not a reason to avoid Treg; it is a reason to keep rights proof exact.
+
+## 4. SemIf + Decider + Nimble: a provider-neutral System-1 decision fabric
+
+These sources reveal a product opportunity larger than choosing one model.
+
+Many agent decisions are bounded:
+
+- classify attention;
+- choose one route/provider;
+- check whether evidence supports a criterion;
+- score urgency/risk;
+- decide whether to escalate;
+- select a workflow branch;
+- estimate whether more retrieval is needed.
+
+A full text-generating LLM is often unnecessary.
+
+Golam should define one replaceable `DecisionProvider` contract with candidates such as SemIf, Decider, Nimble-derived artifacts and future qualified local providers.
+
+A `DecisionRequest` should bind:
+
+```text
+request_id
+state_digest
+bounded_state_or_context_ref
+question_schema
+exact_option_ids
+criterion_descriptions
+explicit_no_match_or_abstain_semantics
+data_class
+locality_requirement
+latency_budget
+resource_budget
+calibration_profile_requirement
+model/provider constraints
+```
+
+A `DecisionReceipt` should bind:
+
+```text
+provider_id
+provider_revision
+model_artifact_ref
+backend/device/runtime
+prompt_or_schema_digest
+option_probabilities
+selected_option
+abstention_state
+calibration_profile
+applicability/coverage evidence
+latency
+resource/cost evidence
+input_truncation_or_limit evidence
+```
+
+SemIf contributes reproducible prompt hashes, local backends and workload calibration. Decider contributes richer typed decision families and high-throughput serving. Nimble contributes an independently reproducible training/data recipe and strong warning that option probabilities are conditional rather than guarantees of correctness.
+
+The decision fabric is advisory to deterministic policy and verification.
+
+```text
+DECISION_PROBABILITY != AUTHORITY
+DECISION_PROVIDER != POLICY_ENGINE
+CALIBRATED_PROBABILITY != VERIFIED_FACT
+DECISION_PROVIDER_OUTPUT != OWNER_APPROVAL
+MODEL_ROUTE_RECOMMENDATION != EFFECT_PERMISSION
+```
+
+Security-sensitive authorization remains deterministic and kernel-owned. A decision provider may raise attention or request review; it must never lower a trusted consequence class or transform deny into allow.
+
+## 5. Laya: make Golam proactive without creating a second event system
+
+Laya's strongest contribution is product behavior, not its n8n/Python/Chroma implementation stack.
+
+Retain:
+
+- proactive action cards;
+- pre-research before the user opens an item;
+- daily briefings;
+- cross-platform entity coherence;
+- temporal rollups;
+- explicit preview-before-send;
+- worker session launched from a card;
+- local/cloud model selection;
+- budget visibility;
+- editable learned grouping/routing rules.
+
+Golam strengthening:
+
+```text
+External Event / Observation
+  -> canonical connector ingest
+  -> deterministic normalization
+  -> DecisionProvider triage where useful
+  -> ContextBundle / research evidence
+  -> AttentionItem
+  -> ActionProposal
+  -> authenticated user input
+  -> canonical Effect flow
+  -> VerificationReceipt
+```
+
+There is no second notification/event database with separate authority semantics. `AttentionItem` and `ActionProposal` are projections over canonical Task/Event/Knowledge/Effect/Evidence state.
+
+Corrections to grouping, classification or routing produce immutable `RoutineCandidate` or rule-candidate revisions. They do not mutate trusted active behavior in place.
+
+```text
+ATTENTION_CARD != TASK_TRUTH
+ACTION_PROPOSAL != AUTHORIZED_EFFECT
+ASSOCIATION_CONFIDENCE != CANONICAL_RELATION
+BRIEFING_SUMMARY != SOURCE_OF_TRUTH
+LEARNED_RULE != ACTIVE_AUTHORITY
+```
+
+## 6. TinyFish + Desktop Commander: providers under the same fabric
+
+TinyFish/AgentQL remains valuable for semantic browser target discovery, especially where deterministic selectors alone are brittle.
+
+The route remains:
+
+```text
+strong deterministic browser/application identity when available
+-> semantic candidate discovery
+-> exact target binding
+-> canonical Effect Gate
+-> dispatch
+-> observation/reconciliation
+```
+
+Natural-language selector confidence does not establish target authority.
+
+Desktop Commander contributes strong UX and provider patterns for:
+
+- process sessions;
+- bounded/tail output;
+- filesystem tooling;
+- PDF/DOCX/XLSX operations;
+- local call history;
+- remote machine access.
+
+Golam must keep these behind typed capabilities, isolation, secret/egress controls and the Effect ledger. Command blocklists and directory allowlists are guardrails, not containment.
+
+## 7. Founder-owned GitHub portfolio review
+
+A fresh authenticated owner enumeration on 2026-09-22 found:
+
+```text
+OWNER_REPOSITORIES = 35
+PUBLIC_REPOSITORIES = 28
+PRIVATE_REPOSITORIES = 7
+```
+
+Private repository names/content are deliberately not copied into this public Golam planning artifact. They were available to the discovery pass but remain confidentiality-preserving candidate context. Any private component selected later requires an exact Source Foundry record and a separate decision about what provenance may be published.
+
+### Primary internal architecture/donor families
+
+| Source | Reviewed current pin | Golam value |
+| --- | --- | --- |
+| `TheHalfMoon/kernux` | `18dd95f7fa07a3c2b9fbd1b9583a044b8384c020` | Capability kernel, real browser/computer/process/runtime execution, grants/evidence, local/remote runtime patterns |
+| `TheHalfMoon/Ascout` | `20818ea52568c3955654236994de28a00f47fb26` | Unified assurance, reality verification, owner-source inventory, evidence/finding/coverage discipline |
+| `TheHalfMoon/wepld` | `666e62d7d9e040505baca277a474d734afcc07a0` | Agentic engineering control plane, semantic/browser/computer research, terminal/process ownership |
+| `TheHalfMoon/Morize` | `62fc04d01d398da93b4dacf0ab2f33e3f1440462` | Governed memory OS, bi-temporal truth, ContextBundle, memory firewall, retrieval hierarchy |
+| `TheHalfMoon/Winds` | `3e637403accadc0f446d596f4411c5c9da371e89` | Exact Git/worktree isolation, typed execution/evidence, recovery |
+| `TheHalfMoon/SpecGrain` | `5de7d6499bb0a9e3a191fc0934399cf099d1980a` | Bounded dependency-ordered delivery |
+| `TheHalfMoon/Diffcipline` | `1e6d14f77b95bb132b42276f10d67f1018ab5bb6` | Challenge/prove-before-done discipline |
+| `TheHalfMoon/Delethos` | `5b8f5f28239bbd0b2a366824fd14c1b6c01058b8` | Verified delegation and independent review/isolation |
+| `TheHalfMoon/Tarif` | `b1b3cecc7c2de32a4ecdba02a6bb752ae7a050c5` | Action/resource/parameter authority model reference |
+| `TheHalfMoon/Ecra` | `0e2ff8c687c93e6f158da6984a7a6915339b5f3f` | Browser/workspace/trusted execution UX reference |
+
+### Model, benchmark and evidence families
+
+| Source | Reviewed current pin | Golam value |
+| --- | --- | --- |
+| `TheHalfMoon/MESC` | `ab29ca613cd1ec19460809a2708d2c315d191b9f` | Validator-grounded outputs and provider qualification |
+| `TheHalfMoon/MedScale` | `ff2e677294b1ea8704bbeefa605d129c1a99e8f2` | Local privacy, source registers, benchmark/evidence planning |
+| `TheHalfMoon/MSTR` | `e87328872232471fa0e1eb05d74223bc0aeaafd3` | Local/offline model/runtime qualification and efficiency |
+| `TheHalfMoon/commandMed` | `ce5dc8f4dda49270e5bb4bebc936ce7514a9b9e9` | Abstention, evidence/safety/resource constrained evaluation |
+| `TheHalfMoon/commandF` | `18819c7fdaee618f4aa86c6c3279b1acb70ec9f2` | SHA-bound package identity, deterministic diff/check/SARIF patterns |
+
+### Human control, multimodal and product-harness references
+
+| Source | Reviewed current pin | Golam value |
+| --- | --- | --- |
+| `TheHalfMoon/Himsat` | `cc1c1c38bf07fe6c28d6ce919d5d773f41d23d62` | Evidence-linked conversation memory, voice/capture privacy and temporal provenance |
+| `TheHalfMoon/Wispral` | `edacdf7504302cc91ff7138bc6ac2d391e4df1f4` | Voice control, interruption, visible permissions |
+| `TheHalfMoon/Inercative` | `fd3fd806b8941a03fc96ddfcc395f2da57622a5a` | Product-building harness, typed generation/test/policy/evidence loops |
+| `TheHalfMoon/Golam-research` | `a9f633e09d49a85829b8236331b9e21f7e612634` | High-value reconstruction/protocol/product evidence with special provenance handling |
+
+Domain repositories remain useful for patterns, datasets, testing methods or domain-specific examples, but they are not promoted into Golam runtime dependencies merely because they are owner-accessible.
+
+## 8. Portfolio synthesis: do not create a collage
+
+The combined source universe points to five reusable fabrics, not dozens of embedded applications:
+
+```text
+1. Authority + Evidence Core        -> Golam canonical kernel
+2. Execution Fabric                -> Kernux + AX + Desktop Commander + TinyFish
+3. Capability Exchange             -> Treg + Golam connectors/extensions/secrets
+4. Decision Fabric                 -> SemIf + Decider + Nimble + internal model qualification
+5. Attention / Knowledge Fabric    -> Laya + Morize + Golam Experience/Context
+```
+
+Ascout/Winds/SpecGrain/Diffcipline/MESC/commandF provide cross-cutting proof, source identity, bounded delivery and independent verification.
+
+The key design constraint is that these fabrics consume the same canonical contracts. None becomes a second authority root.
+
+## 9. Source intake rule
+
+A source becomes implementation material only when all are true:
+
+```text
+MEASURED_GAP
+AND BOUNDED_COMPONENT_SELECTED
+AND EXACT_SOURCE_PINNED
+AND PERMISSION_RIGHTS_OBLIGATIONS_RECONCILED
+AND DEPENDENCY_RUNTIME_CLOSURE_RECORDED
+AND TCB_DELTA_ACCEPTABLE
+AND AUTHORITY_EFFECT_MAPPING_DEFINED
+AND BENCHMARK_OR_PARITY_NEED_DEFINED
+AND FAILURE_REMOVAL_PATH_DEFINED
+```
+
+Otherwise the source remains a reference.
+
+## 10. Program disposition
+
+```text
+NEW_SOURCES_REVIEWED_2026_09_22=YES
+OWNER_PORTFOLIO_REENUMERATED_2026_09_22=YES
+FOUNDER_SOURCE_PERMISSION_REAFFIRMED_2026_09_22=YES
+ACTIVE_SPEC_006_PR_24_WIDENED=NO
+CURRENT_POINTER_CHANGED=NO
+CONSTITUTION_CHANGED=NO
+NEW_RUNTIME_DEPENDENCY_ADMITTED=NO
+NEW_PRODUCT_IMPLEMENTATION_STARTED=NO
+FUTURE_IMPLEMENTATION_AUTHORITY_GRANTED=NO
+WAIVER_TAKEN=NO
+```
