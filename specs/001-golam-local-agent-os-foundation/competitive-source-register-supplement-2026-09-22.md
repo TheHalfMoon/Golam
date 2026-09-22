@@ -432,6 +432,36 @@ OPENJEV_DISABLED_PATH_REQUIRED=YES
 
 Muse is not an admitted dependency or donor implementation. Its public architecture is useful because it independently reinforces Golam's existing direction: a model/runtime should not own permission, credentials or egress. Golam maps those lessons onto its existing Authority/Effect/Secret/Egress contracts rather than reproducing Meta's cloud VM topology.
 
+
+
+### AutoClaw / Z.AI follow-up sources
+
+The founder explicitly states that Z.AI granted permission to copy/use available Z.AI AutoClaw-related source code. This permission is recorded as founder-attested input and does not bypass exact-component Source Foundry, transitive rights/NOTICE closure, T165 security admission or T197 TCB budgeting.
+
+| Source | Reviewed state | Disposition | Golam value / boundary |
+| --- | --- | --- | --- |
+| AutoClaw official product (`https://autoclaw.z.ai/`) | official product/blog/changelog reviewed 2026-09-22; public desktop source repo not identified | `HIGH_VALUE_PRODUCT_BEHAVIOR_REFERENCE / AUTHORIZED_SOURCE_IF_SEPARATELY_SUPPLIED` | one-message execution UX, Cluster Mode, multi-agent isolation, Hermes self-evolution, IM control, professional deliverables, model switching; product behavior does not become Golam authority |
+| `openclaw/openclaw` | `e9df70639592b85e6c6f15e609b5a4a1c53b1b18`; MIT + third-party notices | `HIGH_VALUE_UPSTREAM_SOURCE_CANDIDATE` | channels, automation/cron/hooks/tasks, sessions/memory/context, multi-agent operator lifecycle, plugins/skills, sandbox/browser/security and completeness rubrics; independent upstream rights, not covered by Z.AI permission assertion |
+| `zai-org/GLM-skills` | `2ecd31c37e75671a4767342ba3a68a84c8f1b848`; Apache-2.0 | `HIGH_VALUE_SKILL_PACK_SOURCE_CANDIDATE` | official skill packaging/prerequisite patterns and bounded OCR/multimodal/document/PRD workflows; use through T233/Source Foundry |
+| `zai-org/Open-AutoGLM` | `86f55382982fb054e8fc98ca80609dff8a2cdc3c`; Apache-2.0 | `BOUNDED_MOBILE_ACTION_PROVIDER_CANDIDATE` | Android/HarmonyOS/iOS visual-control adapters, screenshots, normalized coordinates, takeover/confirmation patterns; model->action loop must be re-mapped through Golam T199/Effect Gate |
+| `zai-org/ZCode` | `872ad960de7ec172591f7e1952f7849229f94521`; Apache-2.0 | `HIGH_VALUE_HARNESS_AND_TOOLING_REFERENCE / BOUNDED_SOURCE_CANDIDATE` | coding harness, browser skill, artifact/UI patterns, architecture governance and feature-boundary tooling |
+| `zai-org/Synapse` | `651d39d92ff08beff0868f991c36a27c20191726`; Apache-2.0 | `HIGH_VALUE_COLLABORATION_AND_LEARNING_REFERENCE / BOUNDED_SOURCE_CANDIDATE` | shared conversations/memory/plugins plus OpenClaw self-improvement hook/promotion patterns; active Golam behavior remains governed |
+
+#### AutoClaw placement rule
+
+AutoClaw should influence Golam at the Harness/Experience/Capability boundary, not replace the protected Authority/Evidence spine.
+
+```text
+AUTOCLAW_CLUSTER_MODE != NEW_TASK_AUTHORITY
+AUTOCLAW_MULTI_AGENT != SHARED_AMBIENT_MEMORY
+HERMES_LEARNING != ACTIVE_RULE
+AUTOCLAW_CHANNEL != GOLAM_PRINCIPAL
+OPEN_AUTOGLM_ACTION != AUTHORIZED_EFFECT
+SKILL_PACK != ADMITTED_CAPABILITY
+```
+
+The reviewed adoption plan is `autoclaw-zai-adoption-2026-09-22.md`.
+
 ## 8. Portfolio synthesis: do not create a collage
 
 The combined source universe points to five reusable fabrics, not dozens of embedded applications:
@@ -443,6 +473,7 @@ The combined source universe points to five reusable fabrics, not dozens of embe
 4. Decision Fabric                 -> OpenJev first-class bounded target + SemIf + Decider + Nimble + internal model qualification
 5. Attention / Knowledge Fabric    -> Laya + Morize + Golam Experience/Context
 6. Voice / Conversational Presence -> Wispral + Himsat + Golam-research + replaceable speech engines + T203 decision providers
+7. Adaptive Delivery / Channels / Skills -> AutoClaw behavior + OpenClaw + Z.AI GLM-skills + Synapse/ZCode, under T163/T169/T180/T230–T234
 ```
 
 Ascout/Winds/SpecGrain/Diffcipline/MESC/commandF provide cross-cutting proof, source identity, bounded delivery and independent verification. Kodac/Pluma/Signthos/Ecra/Inercative/Wispral add bounded contracts for workload identity, disclosure-bound proposals, review checkpoints, multidimensional proof, skill replay/repair, failure continuity and immediate human interruption without becoming separate authority systems.
@@ -486,6 +517,9 @@ OPENJEV_CLASSIFIED_AS_DECISION_NOT_SPEECH=YES
 OPENJEV_FIRST_CLASS_PROVIDER_TARGET=YES
 OPENJEV_RUNTIME_ADMITTED=NO
 MUSE_REFERENCE_ONLY_NO_CODE_ADMISSION=YES
+AUTOCLAW_ZAI_DEEP_DIVE_COMPLETED_2026_09_22=YES
+ZAI_AVAILABLE_SOURCE_PERMISSION_ATTESTED=YES
+AUTOCLAW_PUBLIC_DESKTOP_SOURCE_REPO_IDENTIFIED=NO
 PRIVATE_SOURCE_NAMES_PUBLISHED=NO
 WAIVER_TAKEN=NO
 ```
