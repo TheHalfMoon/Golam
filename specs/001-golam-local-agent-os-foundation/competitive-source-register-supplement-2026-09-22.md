@@ -383,6 +383,10 @@ Public sources reviewed with **no current measured Golam gap** are not promoted 
 | `TheHalfMoon/Himsat` | `cc1c1c38bf07fe6c28d6ce919d5d773f41d23d62` | `PRIMARY_AUDIO_RUNTIME_AND_BENCHMARK_REFERENCE` | Capture health, conditioning/VAD, Voice Runtime Router, local speech challenger matrix, Arabic/English/code-switch, device/clock/long-session evidence |
 | Meta Muse public product/security documentation | official public material reviewed 2026-09-22: `https://about.fb.com/news/2026/09/introducing-muse-personal-ai-agent/`, `https://research.meta.ai/blog/security-and-safety-for-ai-agents-our-approach-with-muse`, `https://introducing.muse.ai/` | `BEHAVIOR_SECURITY_REFERENCE_ONLY` | Long-running non-turn-locked conversation, side chats, background goals/work, proactive sparse updates, activity transparency, artifacts, deterministic approvals; isolated runtime + independent permission/egress authority + credential surrogation + tainted egress. No proprietary source-code reuse inferred. |
 
+| Meta Muse Voice Transcribe | official Meta AI Research material reviewed 2026-09-22 | `REMOTE_SPEECH_BENCHMARK / OPTIONAL_PROVIDER_REFERENCE` | Streaming ASR, endpointing, 20+ speaker diarization, multilingual/code-switch and context-bias behavior; no strict-local equivalence inferred and no hidden cloud fallback permitted |
+| `meta-models/Muse-Glimmer-30B` | official Meta/Hugging Face model state reviewed 2026-09-22; Apache-2.0 open weights; exact files/digests/runtime still require T175 | `LOCAL_AGENT_MODEL_ARTIFACT_CANDIDATE` | Always-on local agent/tool-use/multimodal candidate; **not a speech engine** |
+| NemotronLabs VoiceChat paper/model family | public research state reviewed 2026-09-22 | `NATIVE_DUPLEX_BENCHMARK_CANDIDATE` | Full-duplex speech-to-speech, incremental transcript, streaming TTS and structured tool calls; benchmark interruption, tool-selection and argument correctness separately; no automatic code/model admission |
+
 #### OpenJev placement rule
 
 OpenJev must not be mislabeled as a voice model. This review refers specifically to the founder-supplied `AlexWortega/openjev` namespace; similarly named Hub repositories are separate source/model objects and may carry different licenses or artifacts. Exact namespace/revision/file digests are therefore mandatory. It may consume transcript/context state to answer bounded typed semantic questions. Acoustic endpointing, speaker/source attribution, microphone control, VAD, STT and TTS remain separate replaceable capabilities.
@@ -393,6 +397,9 @@ OPENJEV != VAD
 OPENJEV != TTS
 OPENJEV_DECISION != EFFECT_AUTHORIZATION
 MODEL_DISPLAY_NAME != MODEL_ARTIFACT_IDENTITY
+MUSE_GLIMMER != SPEECH_ENGINE
+REMOTE_STREAMING_STT != STRICT_LOCAL_ROUTE
+NATIVE_DUPLEX_TOOL_CALL != EFFECT_AUTHORIZATION
 ```
 
 #### Muse placement rule
