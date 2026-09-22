@@ -197,6 +197,59 @@ Future owning specs must prove, with bounded fixtures and at least one adversari
 - a producer and independent verifier can disagree without the producer overwriting verification truth;
 - mandatory unknown verification dimensions prevent `VERIFIED_COMPLETE`.
 
+
+
+## Phase W — Realtime voice, audio and conversational presence
+
+T196 remains the umbrella Voice Presence / Audio Authority contract. T217–T222 decompose it into bounded shared contracts so voice does not become one monolithic implementation package or a second authority path.
+
+- [ ] **T217 — Realtime Audio Session and Duplex Control Contract.** Refine T140/T169/T196/T199/T201 into one event-driven `AudioSession` contract with independently cancellable lifecycles for microphone capture, conditioning/VAD, STT, agent streaming, TTS synthesis and audio playback. Define typed events for microphone authority grant/revoke, device/route state, audio-source identity, speech start/end, partial/final transcript, turn candidate/commit, agent acknowledgement/stream, TTS first-audio/playback state, barge-in, mute/duck, cancellation request/settlement, route change and failure. Push-to-talk remains the reliability baseline; hands-free/full-duplex is explicit opt-in and MUST NOT imply always-listening. Where microphone capture remains active during TTS, bind acoustic echo cancellation/playback-reference behavior so Golam's own output cannot silently become user intent. Raw audio is ephemeral by default unless a separate recording/retention capability is explicitly authorized.
+
+- [ ] **T218 — Speech Runtime Router, Capture Health and Model/Engine Qualification.** Refine T132/T152/T159/T170/T175/T191/T196 using the strongest Himsat/Wispral voice-runtime evidence. Define provider-neutral replaceable lanes such as `LIVE_GENERAL`, `LOW_RESOURCE`, `MULTILINGUAL_CODE_SWITCH`, `HIGH_ACCURACY` and `LONG_FORM`, with exact STT/VAD/conditioning/TTS engine+artifact identity, device/backend/hardware, locality, privacy profile, latency/resource envelope and health evidence. Preserve capture/source health separately from recognition quality: attachment, route, silence/clipping/drop/backpressure, clock discontinuity, self-capture and device-change evidence. Route selection is locked for a bounded utterance/segment with explicit transition points and hysteresis; no hidden local->cloud fallback or mid-utterance model thrash. Candidate families from Himsat/Wispral remain challengers only until exact T175/Source Foundry qualification.
+
+- [ ] **T219 — Streaming STT, Turn Detection and Semantic Speech Interpretation Contract.** Refine T192/T196/T203/T204/T213. Preserve separate representations for source/audio metadata or explicit non-persistence, partial transcript revisions, final raw transcript, normalized transcript, entity candidates/bindings, utterance semantic class, turn-decision evidence and final Task/Conversation input. Acoustic endpointing/VAD/prosody and semantic completeness are separate signals. A T203 `DecisionProvider` such as a qualified OpenJev-style model may provide bounded textual decisions such as `COMMAND`/`ASIDE`/`QUESTION`/`DICTATION`/`CORRECTION`, semantic "respond now vs keep listening" hints, urgency or routing, but it is not an audio model and cannot replace VAD, authorize an Effect, authenticate a speaker, or make a high-risk target safe. Deterministic stop/cancel controls and explicit UI gestures bypass semantic-model latency. Partial/final transcript revisions must retain lineage rather than silently rewriting what the user said.
+
+- [ ] **T220 — Streaming TTS, Barge-In and Voice Presence Contract.** Refine T196/T199/T201 around low-latency, interruptible speech output. Define `VoiceOutputSession` with exact TTS engine/model/voice/style identity, text/source revision, output data class, device route, synthesis chunks, first-audio/last-audio timing, playback state, cancellation and provenance. Permit phrase/sentence streaming where bounded, but never speak unverified hidden reasoning or secrets. Sensitive output may require a safer route (screen/headset) or explicit disclosure/approval rather than ambient speaker playback. Barge-in must mute/duck audible output immediately on the protected control path and request agent/TTS cancellation without waiting for final transcription. Voice cloning/speaker imitation remains a separate consented capability and can never establish owner presence or authentication.
+
+- [ ] **T221 — Conversational Work, Multi-Task Voice UX and Background Presence.** Refine T185/T200/T208/T209/T212 using Golam-research/Grok Bot and Meta Muse as product-behavior references without importing their authority models. Text and voice consume one canonical conversation/work spine: one main long-running conversation may accept additional user messages while work is active; explicit side chats/project scopes may isolate context; users can steer, interrupt, cancel, queue or branch tasks without waiting for the previous assistant turn to finish. Background work, Goals/Tasks, proactive updates, generated Artifacts and activity history are projections over canonical state. Reuse Grok-style transcript/permission-card lessons and stale-approval handling, but all consequential approvals remain deterministic Golam controls. Muse-style proactivity must obey T212 attention budgets; voice output is not used for unsolicited always-on announcements by default.
+
+- [ ] **T222 — Golam VoiceBench, Multilingual Safety and Accessibility Qualification.** Extend T143–T150/T158/T178/T213/T216 with a reproducible voice/audio qualification profile before any "best voice" claim. Measure at minimum: STT WER/CER and entity accuracy; Arabic, English and code-switch conditions where qualified; first-partial/finalization latency; transcript revision stability; VAD miss/false activation/boundary error; semantic endpoint false-stop/late-stop; interruption-to-mute and interruption-to-agent-cancel latency; false barge-in from Golam playback/echo; TTS first-audio latency/RTF/intelligibility; route/device/Bluetooth changes; CPU/RAM/accelerator/battery/thermal behavior where applicable; long-session stability; network-denied strict-local behavior; and exact model/runtime provenance. Include adversarial source-channel cases proving system audio, media playback, remote-party speech and Golam's own TTS cannot become owner commands merely because they are transcribed. Every consequential voice control path retains a keyboard/touch/text accessibility fallback.
+
+### T217–T222 hard invariants
+
+```text
+AUDIO_SESSION != AUTHORITY
+MICROPHONE_AUDIO != OWNER_IDENTITY
+SYSTEM_AUDIO != OWNER_COMMAND
+REMOTE_PARTY_SPEECH != OWNER_COMMAND
+TTS_OUTPUT != USER_INTENT
+FULL_DUPLEX != ALWAYS_LISTENING
+PARTIAL_TRANSCRIPT != FINAL_USER_INTENT
+NORMALIZED_TRANSCRIPT != SOURCE_AUDIO_TRUTH
+TEXT_DECISION != ACOUSTIC_ENDPOINT
+DECISION_PROVIDER != VOICE_AUTHORITY
+VAD_EVENT != COMMAND_AUTHORIZATION
+FINAL_TRANSCRIPT != STOP_PREREQUISITE
+VOICE_ROUTE_FALLBACK != PRIVACY_DOWNGRADE
+VOICE_CLONE != OWNER_PRESENCE
+CHAT_BUBBLE != TASK_BOUNDARY
+PROACTIVE_VOICE != UNSOLICITED_ALWAYS_ON_AUDIO
+```
+
+### T217–T222 acceptance direction
+
+Future owning specs must prove, with exact instrumentation rather than subjective demos:
+
+- microphone capture, STT, agent work, TTS and playback can be cancelled independently without leaking stale callbacks across account/agent/session fences;
+- in hands-free mode, Golam can hear a real user interruption while rejecting/discounting its own playback echo, and the stop path does not wait for final ASR;
+- a stale/partial transcript revision cannot authorize or target a consequential Effect;
+- semantic turn models can be removed/replaced without changing deterministic authority semantics;
+- local speech routes stay local under network denial and never silently fail over to cloud;
+- system audio/media/remote participants cannot be promoted to owner commands by transcript content alone;
+- multiple user utterances/messages arriving while Golam is working are attributed to explicit steer/queue/branch semantics rather than flattened into one ambiguous turn;
+- a screen-only/text fallback exists for every consequential voice interaction;
+- voice model/runtime updates preserve exact artifact identity, benchmark deltas and rollback to the last qualified local route.
+
 ## Cross-fabric ownership rule
 
 Before T203–T210 implementation, T198's Canonical Shared-Contract Ownership Matrix must name the sole owner/version source/migration authority for at least:
@@ -218,7 +271,12 @@ Before T203–T210 implementation, T198's Canonical Shared-Contract Ownership Ma
 - EvidenceCoverage/Fidelity and absence semantics;
 - ContextDisclosureReceipt / WorkerProposal / ReviewCheckpoint;
 - WorkflowIR/SkillIR and replay/divergence semantics;
-- EvidenceBundle / multidimensional verification projections.
+- EvidenceBundle / multidimensional verification projections;
+- AudioSession / voice event and source-channel semantics;
+- SpeechRuntimeRoute / CaptureHealth / engine-model identity;
+- SpeechInterpretation / turn-decision receipts;
+- VoiceOutputSession / playback and barge-in state;
+- conversational steer/queue/branch projection semantics.
 
 No owning package may invent package-local protected truth for one of these concepts.
 
@@ -243,6 +301,18 @@ Prefer behavior/UX and bounded component patterns. Its n8n/Python/Chroma topolog
 ### TinyFish / Desktop Commander
 
 Adapters remain outside protected authority. Hosted variants are explicit non-strict capabilities. Anti-bot/stealth behavior is not a Golam product goal. Broad host/process capability does not bypass Golam isolation and Effect policy.
+
+### OpenJev / Jev-style decision models
+
+Treat OpenJev as a T203/T219 decision-provider candidate, not as STT, VAD, TTS or speaker authentication. Its current public artifact is a text-classification / NLI-style Qwen3.5-derived model and may also expose multimodal decision behavior, but voice use must consume transcript/context state through the typed DecisionProvider contract. T175 applies to exact model weights/tokenizer/config/runtime; no current Hub branch name substitutes for immutable artifact digests.
+
+### Golam-research / Grok Bot 0.18 reconstruction
+
+The recovered voice surface is a useful push-to-talk and permission/transcript UX baseline: bounded recording, microphone permission handling, cancellation, agent/account scoping, transcript cards and stale approval handling. It is not the target full-duplex architecture because its recovered voice path records a clip and transcribes after stop. Reuse remains subject to the repository's special provenance handling and normal Source Foundry qualification.
+
+### Meta Muse
+
+Muse is a behavior/security architecture reference only; no Meta proprietary source-code reuse is inferred. Retain the product lessons that fit Golam: long-running conversation that accepts new input while work continues, explicit side chats, background goals/work, proactive-but-sparse updates, activity transparency, rich artifacts and deterministic approval controls. Retain the security lessons conceptually: runtime isolation, a permission/egress authority outside the model, credential surrogation/just-in-time insertion and tainted-untrusted external data. Map these onto Golam's existing Authority Kernel, Effect Gate, Secret/Account broker, T179 taint/egress and T173 isolation rather than creating a second Sentinel authority.
 
 ## Priority and sequencing
 
@@ -275,6 +345,16 @@ P1_NEW:
 
 P1_PRODUCT_PROJECTION:
   T208 Proactive Attention / Action Proposal
+
+P1_VOICE_FOUNDATION:
+  T217 Realtime Audio Session / Duplex Control
+  T218 Speech Runtime Router / Capture Health
+  T219 Streaming STT / Turn Detection / Semantic Speech Interpretation
+
+P2_VOICE_EXPERIENCE:
+  T220 Streaming TTS / Barge-In / Voice Presence
+  T221 Conversational Work / Multi-Task Voice UX
+  T222 Golam VoiceBench / Multilingual Safety / Accessibility
 
 P2_AFTER_FOUNDATIONS:
   T209 Cross-Source Coherence / Briefing
@@ -317,6 +397,14 @@ DISCLOSURE != AUTHORITY
 UNDISCLOSED_OBJECT != VALID_PROPOSAL_TARGET
 SCHEMA_VALID != SEMANTICALLY_EQUIVALENT
 PRODUCER_SUCCESS != INDEPENDENT_VERIFICATION
+AUDIO_SESSION != AUTHORITY
+MICROPHONE_AUDIO != OWNER_IDENTITY
+SYSTEM_AUDIO != OWNER_COMMAND
+FULL_DUPLEX != ALWAYS_LISTENING
+PARTIAL_TRANSCRIPT != FINAL_USER_INTENT
+TEXT_DECISION != ACOUSTIC_ENDPOINT
+VAD_EVENT != COMMAND_AUTHORIZATION
+VOICE_ROUTE_FALLBACK != PRIVACY_DOWNGRADE
 ```
 
 ## End-to-end proving journeys
@@ -372,7 +460,7 @@ Feed an out-of-domain/high-confidence wrong DecisionProvider result. Prove deter
 ## Current safe sequencing
 
 1. Keep active Spec 006 PR #24 unchanged in scope.
-2. Treat T203–T216 as planning-only extension tasks.
+2. Treat T203–T222 as planning-only extension tasks.
 3. Qualify the planning PR on its exact new head after this extension.
 4. Re-run independent architecture/security/governance review because the planning head changed.
 5. Merge planning only after new-head findings and required checks are reconciled.
