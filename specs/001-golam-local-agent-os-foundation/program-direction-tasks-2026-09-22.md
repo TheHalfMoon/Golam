@@ -319,9 +319,59 @@ A future owning spec must prove:
 - removal/unavailability falls back or escalates without widening locality, privacy, spend, account or authority;
 - Golam remains correct when OpenJev is disabled entirely.
 
+
+
+## Phase X — AutoClaw / Z.AI product-discipline adoption
+
+The source and product review is recorded in `autoclaw-zai-adoption-2026-09-22.md`. T230–T234 adapt only measured gaps and MUST consume existing canonical Task/Worker/Effect/Evidence/Channel/Skill contracts rather than creating an AutoClaw-shaped parallel runtime.
+
+- [ ] **T230 — Adaptive Delivery Formation / Cluster Discipline Contract.** Refine T163/T167/T184/T185/T208/T216 into one operator-visible formation layer for complex work. A deterministic/qualified complexity decision selects solo vs bounded team formation; the formation declares roles, work decomposition, parallelizable dimensions, evidence requirements, independent review/audit obligations, revision loop and deliverable profile before execution. Parallelism is used only where dimensions are separable and budgets permit it. Progress UI projects actual Task/Run/Worker/Verification state rather than model-authored status prose. Material conclusions, code, financial/analytical calculations or other actionable deliverables may require a separate reviewer/verifier principal according to the owning policy. Reviewer dissent remains durable under T184. Formation completion cannot emit `VERIFIED_COMPLETE`; criterion-level VerificationReceipts remain authoritative.
+
+- [ ] **T231 — Cross-Channel Agent Identity, Memory and Workspace Binding Contract.** Refine T164/T167/T169/T183/T201 for an explicit `AgentProfileBinding`. Bind one stable agent identity to exactly scoped memory namespace, workspace/project bindings, account/credential bindings, capability/skill profile, privacy profile and allowed channel bindings. The same agent may preserve continuity across Telegram/WhatsApp/Discord/Lark-class surfaces only through explicit provider-stable channel/account bindings; different agents remain isolated even on the same host or group chat. Shared project artifacts are explicit canonical objects, never ambient shared credentials/filesystem/memory. Channel sender identity and display names remain lower-assurance transport inputs and cannot mint Golam principal authority. Define migration, unlink, agent deletion, channel rebind, stale-session invalidation and cross-channel task/result delivery semantics.
+
+- [ ] **T232 — Governed Preference, Tool-Knowledge and Workflow Evolution Contract.** Refine T122/T123/T162/T181/T215 using AutoClaw Hermes and the reviewed Synapse/OpenClaw self-improvement pattern. Define `LearningObservation` from user correction, explicit preference, command/tool failure, API failure, knowledge gap or measured better pattern, then compile into one bounded candidate family: `PreferenceRuleCandidate`, `ToolKnowledgeCandidate`, `AgentWorkflowCandidate` or canonical Skill/Workflow candidate. Every candidate carries exact source event/revision, scope, taint, conflicts, intended target profile, preview/diff, eval/replay evidence and activation policy. Explicit user wording such as "from now on" may strengthen intent evidence but does not bypass conflict/scope/authority checks. Promotion creates immutable new versions; it never edits active protected prompt/skill truth in place. Define supersede/revoke, rollback, stale-cache/session invalidation and outcome-based improvement.
+
+- [ ] **T233 — Skill Pack, Prerequisite and Progressive-Disclosure Lifecycle Contract.** Refine T154/T165/T180/T206/T215 using Z.AI GLM-skills and OpenClaw plugin/skill operator lifecycle as source references. Define one `SkillPackRevision` manifest binding exact version/source/publisher, manifest digest, instructions, scripts/assets/references, entrypoints, required binaries, environment-variable *names*, model/provider needs, filesystem/data classes, network/egress, operation/effect classes, runtime/isolation profile, dependency closure, rights/NOTICE, qualification evidence, activation/revocation and rollback predecessor. Environment-variable names or declared prerequisites never authorize secret release. Prefer progressive disclosure: capability/catalog metadata first, full skill instructions/assets only after selection. Operator lifecycle must cover inspect, install/import, qualify, enable, disable, update, revoke, rollback and remove; package load failure must fail closed without corrupting the catalog or active skill state.
+
+- [ ] **T234 — External Agent-OS Operator Completeness Parity Harness.** Use the exact-pinned OpenClaw completeness rubrics as an external operator-lifecycle checklist, not architecture authority. Periodically map relevant surfaces—multi-agent, session/memory/context, channels, automation/cron/hooks/tasks, plugin/skill lifecycle, security/auth/pairing/secrets, browser/sandbox, voice, platform clients, providers and observability—to one of `SUPPORTED`, `PLANNED`, `INTENTIONALLY_DIFFERENT`, `OUT_OF_SCOPE`, `BLOCKED` or `UNKNOWN`. `SUPPORTED` requires exact Golam spec/task/test/evidence references. The harness must detect lifecycle asymmetry such as setup without removal, run without recovery, install without rollback, send without delivery/health diagnostics, or create without revocation. External parity scoring cannot override Golam Constitution, privacy/authority/effect policy, or justify feature bloat.
+
+### T230–T234 hard invariants
+
+```text
+FORMATION_PLAN != TASK_AUTHORITY
+AGENT_COUNT != QUALITY
+MODEL_CONSENSUS != VERIFICATION
+PROGRESS_MESSAGE != PROGRESS_TRUTH
+CHANNEL_ACCOUNT != GOLAM_PRINCIPAL
+DISPLAY_NAME != IDENTITY
+SAME_HOST != SHARED_AGENT_MEMORY
+SAME_GROUP != SHARED_AGENT_AUTHORITY
+LEARNING != ACTIVE_RULE
+CORRECTION != GLOBAL_PREFERENCE
+MODEL_SELF_CRITIQUE != VERIFIED_FAILURE
+PROMOTED_RULE != AUTHORITY
+SKILL_MANIFEST_REQUIREMENT != SECRET_RELEASE_AUTHORITY
+SKILL_INSTALLED != SKILL_ADMITTED
+EXTERNAL_PARITY != ARCHITECTURE_AUTHORITY
+FEATURE_COUNT != PRODUCT_QUALITY
+```
+
+### T230–T234 acceptance direction
+
+Future owning specs must prove:
+
+- simple work does not pay mandatory cluster overhead while complex work can create a bounded formation with explicit independent-review obligations;
+- progress displays are derived from canonical work/evidence state and cannot be fabricated by a model;
+- two agents on one host can prove memory/workspace/account separation while one explicitly bound agent can resume across two qualified channels;
+- unlink/rebind/delete invalidates stale channel/session bindings without orphan authority;
+- a user correction can produce a candidate without silently mutating active behavior, and conflicting preference candidates remain unresolved rather than last-write-wins;
+- skill prerequisites are inspectable before activation and missing/changed dependencies fail closed;
+- skill update/revocation invalidates stale caches/queued activations and can roll back to the last qualified revision;
+- external completeness parity finds at least setup/remove, run/recovery, install/rollback and send/health asymmetries without turning OpenClaw behavior into mandatory Golam policy.
+
 ## Cross-fabric ownership rule
 
-Before T203–T229 implementation, T198's Canonical Shared-Contract Ownership Matrix must name the sole owner/version source/migration authority for at least:
+Before T203–T234 implementation, T198's Canonical Shared-Contract Ownership Matrix must name the sole owner/version source/migration authority for at least:
 
 - TaskContract / Task-Session-Run-Worker identities;
 - ExecutionEnvelope;
@@ -352,7 +402,11 @@ Before T203–T229 implementation, T198's Canonical Shared-Contract Ownership Ma
 - VoiceRetention / biometric / consent semantics;
 - VoiceProfile / lexicon / pronunciation semantics;
 - VoiceRouteDegradation / release-gate semantics;
-- OpenJevDecisionAdapter / workload qualification / calibration-profile semantics.
+- OpenJevDecisionAdapter / workload qualification / calibration-profile semantics;
+- DeliveryFormation / role / audit obligation semantics;
+- AgentProfileBinding / channel-memory-workspace binding semantics;
+- LearningObservation / PreferenceRuleCandidate / ToolKnowledgeCandidate semantics;
+- SkillPackRevision / prerequisite / activation-revocation semantics.
 
 No owning package may invent package-local protected truth for one of these concepts.
 
@@ -438,6 +492,15 @@ P2_VOICE_EXPERIENCE:
   T226 Privacy / Consent / Retention / Biometrics / Abuse Safety
   T227 Language / Lexicon / Pronunciation / Accessibility
   T228 Reliability / Degradation / Model Lifecycle / Release Gates
+
+P1_AUTOCLAW_ADOPTION:
+  T230 Adaptive Delivery Formation / Cluster Discipline
+  T231 Cross-Channel Agent Identity / Memory / Workspace Binding
+  T232 Governed Preference / Tool-Knowledge / Workflow Evolution
+  T233 Skill Pack / Prerequisite / Progressive-Disclosure Lifecycle
+
+P2_EXTERNAL_COMPLETENESS:
+  T234 Agent-OS Operator Completeness Parity Harness
 
 P2_AFTER_FOUNDATIONS:
   T209 Cross-Source Coherence / Briefing
@@ -547,7 +610,7 @@ Feed an out-of-domain/high-confidence wrong DecisionProvider result. Prove deter
 ## Current safe sequencing
 
 1. Keep active Spec 006 PR #24 unchanged in scope.
-2. Treat T203–T229 as planning-only extension tasks.
+2. Treat T203–T234 as planning-only extension tasks.
 3. Qualify the planning PR on its exact new head after this extension.
 4. Re-run independent architecture/security/governance review because the planning head changed.
 5. Merge planning only after new-head findings and required checks are reconciled.
