@@ -377,21 +377,22 @@ Public sources reviewed with **no current measured Golam gap** are not promoted 
 
 | Source | Reviewed state | Disposition | Golam value / boundary |
 | --- | --- | --- | --- |
-| `AlexWortega/openjev` (Hugging Face) | Hub state reviewed 2026-09-22; model card identifies MIT, Qwen3.5-4B base, text-classification/NLI; exact artifact digests must be frozen by T175 before admission | `MODEL_ARTIFACT_CANDIDATE / HIGH_VALUE_DECISION_REFERENCE` | Fast bounded semantic decisions over transcript/context; **not** STT, VAD, TTS or speaker identity; use only through T203/T219 |
+| `AlexWortega/openjev` (Hugging Face) | `https://huggingface.co/AlexWortega/openjev`; Hub state reviewed 2026-09-22; model card identifies MIT, Qwen3.5-4B base, text-classification/NLI; exact artifact digests must be frozen by T175 before admission | `MODEL_ARTIFACT_CANDIDATE / HIGH_VALUE_DECISION_REFERENCE` | Fast bounded semantic decisions over transcript/context; **not** STT, VAD, TTS or speaker identity; use only through T203/T219 |
 | `TheHalfMoon/Golam-research` | `a9f633e09d49a85829b8236331b9e21f7e612634` | `HIGH_VALUE_IMPLEMENTATION_EVIDENCE / BOUNDED_PORT_CANDIDATE` | Grok Bot 0.18 recovered push-to-talk voice controller, transcript cards, permission/auto-review UX, coordinator/session fences; whole-clip STT is a baseline to surpass, not the target full-duplex design |
 | `TheHalfMoon/Wispral` | `edacdf7504302cc91ff7138bc6ac2d391e4df1f4` | `PRIMARY_VOICE_ARCHITECTURE_REFERENCE` | Event-driven voice control plane, independent cancellation, provenance, push-to-talk baseline, streaming STT evidence and measurable interruption/latency semantics |
 | `TheHalfMoon/Himsat` | `cc1c1c38bf07fe6c28d6ce919d5d773f41d23d62` | `PRIMARY_AUDIO_RUNTIME_AND_BENCHMARK_REFERENCE` | Capture health, conditioning/VAD, Voice Runtime Router, local speech challenger matrix, Arabic/English/code-switch, device/clock/long-session evidence |
-| Meta Muse public product/security documentation | official public material reviewed 2026-09-22 | `BEHAVIOR_SECURITY_REFERENCE_ONLY` | Long-running non-turn-locked conversation, side chats, background goals/work, proactive sparse updates, activity transparency, artifacts, deterministic approvals; isolated runtime + independent permission/egress authority + credential surrogation + tainted egress. No proprietary source-code reuse inferred. |
+| Meta Muse public product/security documentation | official public material reviewed 2026-09-22: `https://about.fb.com/news/2026/09/introducing-muse-personal-ai-agent/`, `https://research.meta.ai/blog/security-and-safety-for-ai-agents-our-approach-with-muse`, `https://introducing.muse.ai/` | `BEHAVIOR_SECURITY_REFERENCE_ONLY` | Long-running non-turn-locked conversation, side chats, background goals/work, proactive sparse updates, activity transparency, artifacts, deterministic approvals; isolated runtime + independent permission/egress authority + credential surrogation + tainted egress. No proprietary source-code reuse inferred. |
 
 #### OpenJev placement rule
 
-OpenJev must not be mislabeled as a voice model. It may consume transcript/context state to answer bounded typed semantic questions. Acoustic endpointing, speaker/source attribution, microphone control, VAD, STT and TTS remain separate replaceable capabilities.
+OpenJev must not be mislabeled as a voice model. This review refers specifically to the founder-supplied `AlexWortega/openjev` namespace; similarly named Hub repositories are separate source/model objects and may carry different licenses or artifacts. Exact namespace/revision/file digests are therefore mandatory. It may consume transcript/context state to answer bounded typed semantic questions. Acoustic endpointing, speaker/source attribution, microphone control, VAD, STT and TTS remain separate replaceable capabilities.
 
 ```text
 OPENJEV != STT
 OPENJEV != VAD
 OPENJEV != TTS
 OPENJEV_DECISION != EFFECT_AUTHORIZATION
+MODEL_DISPLAY_NAME != MODEL_ARTIFACT_IDENTITY
 ```
 
 #### Muse placement rule
