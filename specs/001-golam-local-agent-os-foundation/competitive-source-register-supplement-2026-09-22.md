@@ -282,13 +282,28 @@ Golam must keep these behind typed capabilities, isolation, secret/egress contro
 
 ## 7. Founder-owned GitHub portfolio review
 
-A fresh authenticated owner enumeration on 2026-09-22, reverified after the initial planning pass, found:
+### Canonical owner-enumeration record
+
+This is the single population record consumed by T211 and later owner-portfolio planning for this review revision.
 
 ```text
+ENUMERATION_DATE = 2026-09-22
+ENUMERATION_METHOD = authenticated GitHub repositories-by-affiliation(owner), first page sized above observed population
+INCLUSION = every repository returned for the founder as owner
+PRIVATE_REPOSITORIES_INCLUDED_IN_COUNT = YES
+PRIVATE_REPOSITORY_NAMES_PUBLISHED_HERE = NO
+ARCHIVED_REPOSITORIES = included if returned; not excluded by policy
+FORKS = included if returned; fork status is not an exclusion rule
+EMPTY_REPOSITORIES = included if returned
+NAME_OR_SIZE_FILTER = NONE
 OWNER_REPOSITORIES = 36
 PUBLIC_REPOSITORIES = 29
 PRIVATE_REPOSITORIES = 7
 ```
+
+The current connector payload exposes archived state and no returned repository was archived at this revalidation. Fork status is not relied upon by this enumeration record; forks are not excluded if the owner-affiliation enumeration returns them. Counts are therefore defined by the authenticated returned population plus repository visibility, not by a hand-maintained source table.
+
+Any later count change requires refreshing this record and then updating consumers that cite it; consumers MUST NOT independently infer population size from the subset of repositories promoted as Golam sources.
 
 Private repository names/content are deliberately not copied into this public Golam planning artifact. They were available to the discovery pass but remain confidentiality-preserving candidate context. Any private component selected later requires an exact Source Foundry record and a separate decision about what provenance may be published.
 
