@@ -254,7 +254,7 @@ Future owning specs must prove, with exact instrumentation rather than subjectiv
 
 ## Cross-fabric ownership rule
 
-Before T203–T210 implementation, T198's Canonical Shared-Contract Ownership Matrix must name the sole owner/version source/migration authority for at least:
+Before T203–T222 implementation, T198's Canonical Shared-Contract Ownership Matrix must name the sole owner/version source/migration authority for at least:
 
 - TaskContract / Task-Session-Run-Worker identities;
 - ExecutionEnvelope;
