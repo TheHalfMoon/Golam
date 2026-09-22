@@ -1002,3 +1002,116 @@ NEW_RUNTIME_DEPENDENCY_ADMITTED=NO
 FUTURE_IMPLEMENTATION_AUTHORITY_GRANTED=NO
 WAIVER_TAKEN=NO
 ```
+
+
+## 11. Owner-portfolio deep dive follow-up
+
+A second authenticated deep dive compared all 36 owner repositories against the current Golam planning corpus and searched specifically for source patterns not already represented by T110–T212. It found four material architecture gaps plus two important refinements.
+
+### 11.1 Evidence needs capability, fidelity, capture and absence semantics
+
+Golam already has strong Effect/Verification semantics, but "no evidence" is not precise enough for a multi-provider Agent OS. The evidence layer must distinguish:
+
+- what a provider/runtime could theoretically expose;
+- what the current adapter actually implements;
+- whether observation/capture was active for the run;
+- which predicates were directly observed;
+- which claims are deterministic derivations;
+- what was unsupported, unavailable, failed, partial or genuinely not observed.
+
+The system must not render "we could not observe this" as "this did not happen", nor "the scanner emitted no finding" as "the subject is clean".
+
+This becomes T213 and extends the existing Evidence/Verification owners rather than introducing a new evidence database or canonical finding authority.
+
+### 11.2 Delegation needs a disclosure receipt, not only a ContextBundle
+
+A bounded worker should know exactly what was disclosed to it, and any later mutation proposal should be tied back to that disclosure. The safe pattern is:
+
+```text
+canonical state
+-> ContextDisclosureReceipt(exact objects/revisions/omissions/budget/audience)
+-> worker reasoning
+-> WorkerProposal(disclosure_receipt_id + expected revisions)
+-> canonical owner/reviewer transition
+-> ordinary Golam Effect/Verification path
+```
+
+Context disclosure exports no capability, approval, lease or secret. A worker that learned an object ID elsewhere must not thereby acquire proposal authority over that object. Proposal origin and owner acceptance remain separate evidence. An explicit reviewed-through checkpoint also prevents a UI open/read event from being misrepresented as human review.
+
+This becomes T214.
+
+### 11.3 Skill evolution needs an IR/replay/repair spine before broad self-improvement
+
+The current skill-evolution direction is strengthened into four distinct stages:
+
+```text
+typed Skill/Workflow IR
+-> authority-free candidate compilation
+-> deterministic/low-model replay with fresh authorization
+-> divergence detection + localized repair + downstream invalidation
+```
+
+The IR records required capabilities, side effects, artifacts/dataflow, assumptions, pre/postconditions and verifiers; it never captures live demonstration-time grants or secrets. Repair produces a new candidate/version and invalidates affected evidence rather than rewriting prior history.
+
+A schema-valid or compilable generated skill is not automatically semantically faithful to the originating user intent. Semantic-faithfulness evidence and safe abstention are part of qualification.
+
+This becomes T215 and refines T122/T123/T162/T163/T194 rather than creating a second workflow system.
+
+### 11.4 Verification needs orthogonal dimensions and EvidenceBundles
+
+One green status is too coarse for consequential effects and durable artifacts. A future VerificationReceipt/EvidenceBundle projection should allow independent dimensions such as:
+
+- exact input/source and output artifact identity;
+- target/account and backend/route identity;
+- authorization/approval binding;
+- Effect terminal/reconciliation state;
+- constraint/postcondition satisfaction;
+- freshness/time basis;
+- coverage/fidelity;
+- verifier independence;
+- provider attestations;
+- unresolved/unsupported dimensions.
+
+The owning VerificationObligation defines which dimensions are mandatory. Mandatory UNKNOWN or missing dimensions block `VERIFIED_COMPLETE`.
+
+This becomes T216 and extends T149/T150; it is not a new truth ledger.
+
+### 11.5 Execution approval must bind the actual workload
+
+The portfolio review strengthened T205: a user approving a command label or requested sandbox profile is insufficient if the executable/workload can change before dispatch. Consequential process execution should bind approval and Effect dispatch to exact workload/artifact identity where observable, workspace/source revision, execution incarnation, backend identity, requested confinement and trusted observed-confinement evidence.
+
+```text
+APPROVED_COMMAND_NAME != APPROVED_EXECUTABLE_BYTES
+SANDBOX_LABEL != CONFINEMENT_PROOF
+BACKEND_CAPABILITY != OBSERVED_CONFINEMENT
+```
+
+### 11.6 Voice stop is a control path, not a transcription result
+
+T196 is strengthened so an emergency interrupt can mute audible output and request cancellation without waiting for final ASR transcription. The later transcript is evidence/content, not the authority to stop.
+
+```text
+FINAL_TRANSCRIPT != STOP_PREREQUISITE
+```
+
+### 11.7 Portfolio reuse discipline
+
+The deep dive did not justify copying whole applications into Golam. Reuse disposition remains component-level:
+
+```text
+ADOPT_CONTRACT
+PORT_OR_ADAPT_BOUNDED_COMPONENT
+REFERENCE_METHOD
+BENCHMARK_ONLY
+NO_CURRENT_MEASURED_GAP
+```
+
+Public sources with measured gaps are recorded in the source supplement. Private source identities remain undisclosed in this public repository; useful patterns may inform planning, but any actual private code reuse still requires an authorized exact-component Source Foundry record with publishable provenance decided separately.
+
+```text
+PORTFOLIO_DEEP_DIVE_COMPLETED=YES
+NEW_PARALLEL_AUTHORITY_SYSTEM=NO
+ACTIVE_SPEC_006_PR_24_WIDENED=NO
+NEW_PRODUCT_IMPLEMENTATION_STARTED=NO
+FUTURE_IMPLEMENTATION_AUTHORITY_GRANTED=NO
+```
