@@ -45,7 +45,7 @@ A future owning spec must prove:
 
 ## Phase S — Reconciled execution and credential-brokered tool use
 
-- [ ] **T205 — Agent Workload Manifest / Reconciled Execution Contract.** Refine T127/T129/T130/T151/T153/T159/T167/T168/T173 using Google AX as a reconciliation/lifecycle reference without importing Kubernetes/Redis as local baseline requirements. Define a versioned `ExecutionEnvelope` bound to a canonical `TaskContract` with workspace bindings, execution backend, isolation profile, compute/resource budget, egress policy reference, execution profile/model reference, capability set, secret-handle references, readiness conditions, observable endpoints, checkpoint/suspend/resume/timeout/cleanup policy and output-artifact policy. Separate desired runtime state from observed runtime state. Bind each runtime instance to an execution incarnation/generation (or equivalent fencing token) so a replaced/stale worker fails closed at the protected action boundary after reconciliation or reprovisioning. Runtime reconciliation may restart/reprovision a worker where allowed but must never become a blind retry path for ambiguous external Effects.
+- [ ] **T205 — Agent Workload Manifest / Reconciled Execution Contract.** Refine T127/T129/T130/T151/T153/T159/T167/T168/T173 using Google AX as a reconciliation/lifecycle reference without importing Kubernetes/Redis as local baseline requirements. Define a versioned `ExecutionEnvelope` bound to a canonical `TaskContract` with workspace bindings, execution backend, isolation profile, compute/resource budget, egress policy reference, execution profile/model reference, capability set, secret-handle references, readiness conditions, observable endpoints, checkpoint/suspend/resume/timeout/cleanup policy and output-artifact policy. Separate desired runtime state from observed runtime state. Bind each runtime instance to an execution incarnation/generation (or equivalent fencing token) so a replaced/stale worker fails closed at the protected action boundary after reconciliation or reprovisioning. For process/container/tool execution, bind authorization across approval wait to exact executable/workload identity where observable: executable or artifact digest, workspace/source revision, backend identity, requested confinement profile and the trusted observed-confinement evidence available for the actual attempt. A backend label, requested sandbox profile, or pre-approval command name is not proof that the post-approval workload bytes or confinement remained identical. Runtime reconciliation may restart/reprovision a worker where allowed but must never become a blind retry path for ambiguous external Effects.
 
 - [ ] **T207 — Credential-Brokered Tool Relay Contract.** Extend T119/T165/T172/T179/T190/T199/T201/T206 with a Treg-inspired but Golam-authorized relay path. Support exact provider/account selection, multiple credential bindings, secret-handle injection, destination binding, control-header/cookie stripping, SSRF/private-address policy, raw path/query fidelity where required, bounded request/response sizes, streaming, cancellation, idempotency material, bounded pre-dispatch cost quote/reservation where a provider is paid, final cost receipt/reconciliation, and failure capture with redaction. Cost overrun beyond the authorized budget must stop/fail closed or require a new budget decision; spend authorization is separate from Effect authorization. Authorization, Effect state, egress, identity, secret state and final verification remain canonical Golam concerns. A relay transport success is not an Effect verification result.
 
@@ -58,6 +58,10 @@ GATEWAY_DECLARATION != EGRESS_AUTHORIZATION
 RUNTIME_READY != TASK_VERIFIED_COMPLETE
 RUNTIME_RECONCILIATION != EFFECT_RETRY
 CHECKPOINT_STATE != CURRENT_AUTHORITY
+APPROVED_COMMAND_NAME != APPROVED_EXECUTABLE_BYTES
+SANDBOX_LABEL != CONFINEMENT_PROOF
+BACKEND_CAPABILITY != OBSERVED_CONFINEMENT
+APPROVAL_WAIT != WORKLOAD_IDENTITY_CONTINUITY
 ```
 
 ### T207 invariants
@@ -124,7 +128,7 @@ LEARNED_RULE != ACTIVE_AUTHORITY
 
 ## Phase U — Owner portfolio governance and cross-fabric proof
 
-- [ ] **T211 — Owner Portfolio Reuse Matrix / Internal Donor Bridge.** Maintain a confidentiality-safe inventory of the founder-owned GitHub portfolio and map selected public/private components to measured Golam gaps. The 2026-09-22 enumeration observed 35 owner repositories: 28 public and 7 private. Public planning may name public sources; private names/content stay undisclosed unless separate publication authority exists. Reuse must route through the same T113/T165/T180/T197 exact-component Source Foundry record. For each selected component record current pin/tree, source role, selected paths, reuse strategy, dependency/runtime closure, rights/NOTICE, authority ceiling, TCB delta, benchmark/parity reason and removal/rollback path. Repository ownership or founder permission never auto-admits the code.
+- [ ] **T211 — Owner Portfolio Reuse Matrix / Internal Donor Bridge.** Maintain a confidentiality-safe inventory of the founder-owned GitHub portfolio and map selected public/private components to measured Golam gaps. The 2026-09-22 enumeration, reverified during the portfolio deep dive, observed 36 owner repositories: 29 public and 7 private. Public planning may name public sources; private names/content stay undisclosed unless separate publication authority exists. Reuse must route through the same T113/T165/T180/T197 exact-component Source Foundry record. For each selected component record current pin/tree, source role, selected paths, reuse strategy, dependency/runtime closure, rights/NOTICE, authority ceiling, TCB delta, benchmark/parity reason and removal/rollback path. Repository ownership or founder permission never auto-admits the code.
 
 ### T211 required role vocabulary
 
@@ -141,6 +145,53 @@ PROVENANCE_CAUTION_REFERENCE
 NO_CURRENT_MEASURED_GAP
 PRIVATE_CONSIDERED_UNDISCLOSED
 ```
+
+
+
+## Phase V — Evidence fidelity, bounded delegation, skill replay and multidimensional proof
+
+- [ ] **T213 — Evidence Fidelity, Coverage and Absence Contract.** Refine T149/T150/T156/T158/T177/T192 using the strongest owner-portfolio evidence semantics without creating a second Evidence Plane. Define one typed contract that separates: provider/vendor capability ceiling, adapter implementation fidelity, capture/observation activation, predicates actually observed, deterministic derivations, unsupported predicates, and explicit absence reasons. At minimum distinguish `NOT_OBSERVED` (observation was active and capable), `NOT_OBSERVABLE_AT_FIDELITY`, `CAPTURE_INACTIVE`, `UNSUPPORTED`, `FAILED`, `PARTIAL` and `UNKNOWN` where applicable. Evidence-producing adapters declare valid predicates/lifecycles by subject kind rather than forcing one universal lifecycle. Missing/failed/unsupported analysis never becomes a clean result by absence. Every nontrivial claim carries exact source/adapter/revision/fidelity evidence sufficient to explain what Golam could and could not know. This extends canonical Verification/Evidence semantics; it MUST NOT create a parallel finding/evidence authority.
+
+- [ ] **T214 — Disclosure-Bound Agent Proposal and Review Checkpoint Contract.** Refine T120/T127/T133/T163/T167/T179/T192 with a bounded disclosure/proposal boundary for workers and external agents. Define an immutable `ContextDisclosureReceipt` binding exact disclosed object/source/revision identities, omissions/rejections, byte/token budget, sensitivity/taint, expiry, audience and capability ceiling. A returned `WorkerProposal` must cite the disclosure receipt and may target an existing canonical object only when that exact object/revision (or an explicitly permitted successor rule) was disclosed and the proposal carries current expected-revision preconditions. Disclosure exports no capability, approval, lease, secret or authority. Record proposal origin separately from owner/reviewer acceptance. Add an explicit `ReviewCheckpoint` / reviewed-through sequence marker so opening a view never implies review; resume projections are pinned to a stable canonical sequence and prioritize unresolved contradictions, stale evidence and blockers before ordinary continuation state.
+
+- [ ] **T215 — Canonical Skill / Workflow IR, Deterministic Replay and Divergence Repair.** Refine T122/T123/T162/T163/T194/T199 before broad self-improving skill evolution. Define one versioned typed `WorkflowIR` / `SkillIR` carrying artifact/dataflow identities, capability requirements (never captured grants), disclosure constraints, side-effect/effect classes, preconditions, postconditions, verification obligations, retry/reconciliation semantics, compatibility assumptions and exact dependency/provider revisions. Separate `SkillCompiler` (human/verified trajectory -> authority-free candidate) from `DeterministicReplay` (fresh authorization, exact attempts/receipts) and from `DivergenceRepair` (failed-assumption detection, localized repair, downstream evidence/artifact invalidation, fresh authorization/re-verification, candidate version promotion). Successful exploratory work may reduce later model calls only when replay compatibility is proven. A syntactically/schema-valid compiled workflow is not automatically semantically faithful to the originating intent.
+
+- [ ] **T216 — Multidimensional Verification and EvidenceBundle Contract.** Refine T149/T150/T157/T186/T193/T199 so consequential outcomes and durable artifacts are not collapsed into one green boolean. Define a versioned `EvidenceBundle` plus orthogonal verification dimensions suitable to the subject, such as source/input identity, output/content integrity, target/account identity, route/backend identity, authority/approval binding, operation/effect terminal state, constraint/postcondition satisfaction, verifier independence, coverage/fidelity, freshness/time basis, provider attestations and unresolved/unsupported dimensions. `VERIFIED_COMPLETE` requires the owning VerificationObligation to state which dimensions are mandatory and to fail closed when a mandatory dimension is invalid, missing or unknown. Prefer an independently implemented verifier/readback path for high-consequence artifacts/effects when practical; producer self-report alone cannot satisfy independent verification.
+
+### T213–T216 hard invariants
+
+```text
+NOT_OBSERVED != NOT_POSSIBLE
+NOT_OBSERVABLE != NOT_OCCURRED
+CAPTURE_INACTIVE != NEGATIVE_EVIDENCE
+NO_FINDING != CLEAN
+CHECK_PASS != COMPLETE_COVERAGE
+PARTIAL_ENFORCEMENT != ENFORCED
+DISCLOSURE != AUTHORITY
+UNDISCLOSED_OBJECT != VALID_PROPOSAL_TARGET
+EXPORTED_CONTEXT != EXPORTED_CAPABILITY
+AGENT_ORIGIN != OWNER_ACCEPTANCE
+VIEW_OPENED != REVIEW_COMPLETED
+SCHEMA_VALID != SEMANTICALLY_EQUIVALENT
+COMPILABLE != FAITHFUL
+REPLAY_COMPATIBLE != CURRENTLY_AUTHORIZED
+REPAIR != SILENT_HISTORY_REWRITE
+PRODUCER_SUCCESS != INDEPENDENT_VERIFICATION
+EVIDENCE_BUNDLE != SINGLE_BOOLEAN
+```
+
+### T213–T216 acceptance direction
+
+Future owning specs must prove, with bounded fixtures and at least one adversarial path per contract:
+
+- unavailable capture/coverage cannot render as a negative fact or clean result;
+- a worker cannot propose a mutation to undisclosed/stale protected state merely because it knows an identifier from another channel;
+- exported context never carries live grants/approvals/secrets by implication;
+- resume/checkpoint state is explicit and cannot be advanced by reading a screen;
+- a compiled skill cannot retain demonstration-time authority and must acquire fresh authorization on replay;
+- divergence invalidates only evidence/artifacts whose assumptions are affected, while preserving immutable prior history;
+- a producer and independent verifier can disagree without the producer overwriting verification truth;
+- mandatory unknown verification dimensions prevent `VERIFIED_COMPLETE`.
 
 ## Cross-fabric ownership rule
 
@@ -159,7 +210,11 @@ Before T203–T210 implementation, T198's Canonical Shared-Contract Ownership Ma
 - ContextBundle/RetrievalReceipt;
 - DecisionRequest/Receipt;
 - CapabilityDefinition/Offer;
-- AttentionItem/ActionProposal projections.
+- AttentionItem/ActionProposal projections;
+- EvidenceCoverage/Fidelity and absence semantics;
+- ContextDisclosureReceipt / WorkerProposal / ReviewCheckpoint;
+- WorkflowIR/SkillIR and replay/divergence semantics;
+- EvidenceBundle / multidimensional verification projections.
 
 No owning package may invent package-local protected truth for one of these concepts.
 
@@ -202,6 +257,10 @@ P0_CANONICAL_PREREQUISITES:
 P0_NEW_SHARED_CONTRACTS:
   T203 Decision Provider Contract
   T206 Capability Catalog / Provider Offer Contract
+  T213 Evidence Fidelity / Coverage / Absence Contract
+  T214 Disclosure-Bound Agent Proposal / Review Checkpoint Contract
+  T215 Canonical Skill / Workflow IR + Replay / Divergence Contract
+  T216 Multidimensional Verification / EvidenceBundle Contract
   T211 Owner Portfolio Reuse Matrix (cross-cutting governance)
   T212 Attention Budget / Proactive Autonomy Policy
 
@@ -248,6 +307,12 @@ STALE_WORKER != CURRENT_EFFECT_ACTOR
 BUDGET_AUTHORIZATION != EFFECT_AUTHORIZATION
 ATTENTION_SCORE != USER_PRIORITY_TRUTH
 HIGH_MODEL_CONFIDENCE != INTERRUPT_NOW
+NOT_OBSERVED != NOT_POSSIBLE
+NO_FINDING != CLEAN
+DISCLOSURE != AUTHORITY
+UNDISCLOSED_OBJECT != VALID_PROPOSAL_TARGET
+SCHEMA_VALID != SEMANTICALLY_EQUIVALENT
+PRODUCER_SUCCESS != INDEPENDENT_VERIFICATION
 ```
 
 ## End-to-end proving journeys
@@ -303,7 +368,7 @@ Feed an out-of-domain/high-confidence wrong DecisionProvider result. Prove deter
 ## Current safe sequencing
 
 1. Keep active Spec 006 PR #24 unchanged in scope.
-2. Treat T203–T212 as planning-only extension tasks.
+2. Treat T203–T216 as planning-only extension tasks.
 3. Qualify the planning PR on its exact new head after this extension.
 4. Re-run independent architecture/security/governance review because the planning head changed.
 5. Merge planning only after new-head findings and required checks are reconciled.
