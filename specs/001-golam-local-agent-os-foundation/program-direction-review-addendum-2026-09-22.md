@@ -1353,3 +1353,56 @@ ACTIVE_SPEC_006_PR_24_WIDENED=NO
 NEW_PRODUCT_IMPLEMENTATION_STARTED=NO
 FUTURE_IMPLEMENTATION_AUTHORITY_GRANTED=NO
 ```
+
+
+### 22.12 OpenJev first-class bounded integration decision
+
+The founder explicitly authorized use of the supplied `AlexWortega/openjev` model/source and asked that it become part of Golam when technically justified.
+
+The current Hub state supports making it a **first-class bounded DecisionProvider target**, not an authority-bearing core dependency.
+
+Current reviewed role:
+
+```text
+OpenJev
+  -> bounded semantic classification / reranking
+  -> T203 DecisionProvider
+  -> T204/T229 calibration + applicability
+  -> deterministic Golam caller/policy
+```
+
+High-value workloads include:
+
+- voice utterance class and semantic turn-completeness;
+- clarification-needed;
+- attention triage;
+- admitted capability/provider candidate ranking;
+- retrieval reranking;
+- bounded "what should be checked next?" verification triage.
+
+The exact integration contract is recorded in `openjev-integration-plan-2026-09-22.md`, and T229 owns the future adapter/qualification lifecycle.
+
+OpenJev is intentionally optional. Golam must remain correct when it is disabled, removed, unavailable, corrupt, out-of-domain or rejected for a particular workload.
+
+This gives Golam a useful System-1 layer: cheap/fast bounded decisions can avoid unnecessary large-model calls, while exact rules, stronger models, authoritative sources and human review remain available through deterministic escalation.
+
+The architecture ceiling remains:
+
+```text
+OPENJEV != AUTHORITY
+OPENJEV != POLICY_ENGINE
+OPENJEV != EFFECT_GATE
+OPENJEV != OWNER_PRESENCE
+OPENJEV != VERIFIED_FACT
+OPENJEV_HIGH_SCORE != ALLOW
+OPENJEV_UNAVAILABLE != GOLAM_UNAVAILABLE
+```
+
+This is a planning decision only. Exact artifact admission still requires immutable revision/file digests, base-model/transitive rights closure, T175 runtime qualification, workload-specific T204/T229 benchmark evidence and removal/rollback proof.
+
+```text
+OPENJEV_FIRST_CLASS_PROVIDER_TARGET=YES
+OPENJEV_MODEL_ADMITTED=NO
+OPENJEV_RUNTIME_DEPENDENCY_ADMITTED=NO
+FUTURE_IMPLEMENTATION_AUTHORITY_GRANTED=NO
+```
