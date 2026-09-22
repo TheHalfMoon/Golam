@@ -1406,3 +1406,166 @@ OPENJEV_MODEL_ADMITTED=NO
 OPENJEV_RUNTIME_DEPENDENCY_ADMITTED=NO
 FUTURE_IMPLEMENTATION_AUTHORITY_GRANTED=NO
 ```
+
+
+## 23. AutoClaw / Z.AI deep-dive conclusions
+
+A focused review of official AutoClaw product material plus available OpenClaw/Z.AI source concluded that Golam should adopt selected operator and delivery disciplines, not copy AutoClaw as a monolith.
+
+### 23.1 What AutoClaw validates
+
+AutoClaw validates a user-facing product shape that matches Golam's direction:
+
+```text
+one user goal
+-> agent plans and executes
+-> tools/files/browser/skills
+-> visible progress
+-> durable deliverable/result
+-> return result into the same conversation/channel
+```
+
+Official product material also exposes four high-value behaviors:
+
+1. Cluster Mode: plan -> research -> parallelize -> audit -> revise -> deliver;
+2. multi-agent work/life isolation with separate memory/workspace and same-agent continuity across IM channels;
+3. Hermes self-evolution for preferences/corrections plus whole-workflow skill evolution;
+4. IM as a remote task/progress/result surface.
+
+These behaviors strengthen Golam's Harness/Experience contracts but do not change protected Authority/Evidence ownership.
+
+### 23.2 Cluster Mode maps onto existing Golam primitives
+
+Golam already has T163 DeliveryGraph, T167 Task/Session/Run/Worker identities, T184 dissent, T185 UI projection and T216 verification.
+
+The missing product-level abstraction is an adaptive `DeliveryFormation` that chooses solo versus bounded team execution and declares role/evidence/review obligations before work begins.
+
+T230 fills that gap.
+
+Key boundary:
+
+```text
+FORMATION != AUTHORITY
+PARALLELISM != QUALITY
+REVIEWER_OPINION != VERIFIED_COMPLETE
+```
+
+### 23.3 Same agent across channels is not the same as shared ambient state
+
+AutoClaw's same-agent cross-channel continuity is useful, but only with explicit bindings.
+
+Golam should bind:
+
+```text
+AgentIdentity
+-> MemoryNamespace
+-> WorkspaceBindings
+-> AccountBindings
+-> CapabilityProfile
+-> PrivacyProfile
+-> ChannelBindings
+```
+
+T231 makes this explicit. Different agents remain isolated even on one host. Shared channel/group membership never implies shared memory, credentials or authority.
+
+### 23.4 Hermes should become a governed low-friction learning surface
+
+Golam already has the stronger safety spine: T122/T123/T162/T181/T215 prohibit in-place autonomous protected mutation and require versioned candidates/evaluation/activation.
+
+The AutoClaw/Synapse lesson is product ergonomics: every meaningful correction, preference, tool failure or recurring workflow should have a cheap path into a visible candidate.
+
+T232 adds:
+
+```text
+LearningObservation
+-> PreferenceRuleCandidate
+   / ToolKnowledgeCandidate
+   / AgentWorkflowCandidate
+   / SkillCandidate
+-> preview/conflict/eval
+-> governed activation
+```
+
+This preserves user intent without making a model-written AGENTS/SOUL/TOOLS file itself authoritative.
+
+### 23.5 Z.AI GLM-skills expose the missing operator lifecycle around skills
+
+Golam's Source Foundry and extension security are stronger than ordinary skill loaders. The useful Z.AI/OpenClaw addition is the complete skill-pack lifecycle:
+
+- manifest and prerequisites;
+- inspect before enable;
+- install/import;
+- qualify;
+- enable/disable;
+- update;
+- revoke;
+- rollback;
+- remove;
+- progressive disclosure of full instructions/assets only when selected.
+
+T233 adds this lifecycle without creating a second plugin authority.
+
+### 23.6 OpenClaw completeness rubrics are valuable as an external no-gap audit
+
+The exact-pinned OpenClaw repository contains unusually broad completeness rubrics across multi-agent, sessions/memory, channels, automation, plugins, security, browser/sandbox, voice, clients, providers and observability.
+
+T234 uses these as a periodic external parity checklist with explicit Golam dispositions:
+
+```text
+SUPPORTED
+PLANNED
+INTENTIONALLY_DIFFERENT
+OUT_OF_SCOPE
+BLOCKED
+UNKNOWN
+```
+
+This is a no-gap audit, not a feature-count contest or architecture authority.
+
+### 23.7 Open-AutoGLM is useful code, but its action loop must be re-authorized
+
+The public source cleanly separates screenshot/model/action/device adapters and contains useful Android/HarmonyOS/iOS primitives.
+
+Golam may selectively port/adapt these device primitives, but the source's direct model-response -> action-handler loop is not retained as authority.
+
+Required translation:
+
+```text
+model visual output
+-> parsed Operation candidate
+-> target / consequence / taint classification
+-> canonical Effect Gate
+-> protected device adapter
+-> post-action evidence / verification
+```
+
+Local callback confirmation/takeover becomes Golam's existing approval/OwnerPresence/takeover generation semantics.
+
+### 23.8 Rights/source posture
+
+The founder states Z.AI granted permission to copy/use available Z.AI AutoClaw-related source.
+
+Public reviewed Z.AI repositories are Apache-2.0. Independent OpenClaw is MIT with third-party notices.
+
+No public source repository for the AutoClaw desktop application itself was identified in this review. Product behavior remains reference/reimplementation input unless exact AutoClaw source is separately supplied and admitted.
+
+### 23.9 Resulting program tasks
+
+```text
+T230 Adaptive Delivery Formation / Cluster Discipline
+T231 Cross-Channel Agent Identity / Memory / Workspace Binding
+T232 Governed Preference / Tool-Knowledge / Workflow Evolution
+T233 Skill Pack / Prerequisite / Progressive-Disclosure Lifecycle
+T234 External Agent-OS Operator Completeness Parity Harness
+```
+
+These tasks refine existing T122/T162/T163/T167/T169/T180/T184/T185/T215 contracts. They do not widen active Spec 006 and grant no implementation authority.
+
+```text
+AUTOCLAW_ZAI_DEEP_DIVE_COMPLETE=YES
+MONOLITHIC_AUTOCLAW_COPY_PLANNED=NO
+ZAI_AVAILABLE_SOURCE_PERMISSION_ATTESTED=YES
+NEW_PARALLEL_AUTHORITY_SYSTEM=NO
+ACTIVE_SPEC_006_PR_24_WIDENED=NO
+FUTURE_IMPLEMENTATION_AUTHORITY_GRANTED=NO
+```
