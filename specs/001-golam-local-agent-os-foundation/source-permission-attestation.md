@@ -1,7 +1,7 @@
 # Founder Source Permission Attestation
 
 **Recorded**: 2026-08-24  
-**Reaffirmed**: 2026-09-13  
+**Reaffirmed**: 2026-09-22  
 **Scope**: Golam research/source universe recorded in the repository and sources supplied/reviewed during current program research  
 **Status**: `FOUNDER_PERMISSION_ATTESTED_AND_REAFFIRMED`
 
@@ -48,6 +48,22 @@ REJECT
 ```
 
 The selection should minimize attack surface and maintenance burden while preserving the desired product behavior. The fact that direct copying is permitted does not make direct copying the preferred architecture.
+
+
+
+## 2026-09-22 owner-portfolio reaffirmation
+
+The founder explicitly reaffirmed permission for Golam to evaluate, copy, modify, port and selectively reuse source from the founder-owned GitHub portfolio, including public and private repositories, together with the externally supplied source universe already recorded by Golam.
+
+This public attestation deliberately does not enumerate private repository names or contents. A private repository/component may be considered during confidential planning, but any actual code admission must still create the same exact-component Source Foundry record and separately decide what provenance may be published without disclosing private material.
+
+The reaffirmation is not a blanket technical or legal admission. Third-party code, generated/vendored code, model artifacts, datasets, assets, trademarks, service credentials and transitive dependencies inside an owner repository retain their own rights/NOTICE/security/runtime obligations.
+
+```text
+OWNER_REPOSITORY_PERMISSION != COMPONENT_ADMISSION
+PRIVATE_SOURCE_ACCESS != PUBLICATION_AUTHORITY
+FOUNDER_PERMISSION != TRANSITIVE_THIRD_PARTY_RIGHTS
+```
 
 ## What this attestation changes
 
@@ -115,6 +131,8 @@ Research, behavioral comparison and clean-room reimplementation may remain avail
 `SOURCE_PERMISSION_REAFFIRMED=YES`
 
 `SOURCE_PERMISSION_REAFFIRMED_2026_09_13=YES`
+
+`SOURCE_PERMISSION_REAFFIRMED_2026_09_22=YES`
 
 `AUTOMATIC_CODE_ADMISSION=NO`
 
