@@ -15,7 +15,7 @@ These tasks capture gaps exposed by the 2026-09-22 source/portfolio review. They
 
 ## Phase R — Semantic decision and capability exchange foundations
 
-- [ ] **T203 — Semantic Decision Provider Contract.** Define one provider-neutral `DecisionProvider` / `DecisionRequest` / `DecisionReceipt` family for bounded typed decisions. Support at minimum Choice, Boolean/Noul and ordered Score semantics where independently qualified. Bind exact state/context digest, schema/option identities, explicit no-match/abstain semantics, model artifact, backend/device/runtime, prompt/schema digest, probability output, calibration profile, input-limit/truncation evidence, latency/resource/cost and provider revision. Define deterministic cross-field constraints / bounded dependency graphs so independently scored fields cannot silently form an impossible or policy-inconsistent decision set; contradiction must cause abstention, deterministic repair only where specified, or escalation. SemIf, Decider and Nimble are candidate/reference implementations; none becomes the canonical policy engine. The contract must explicitly prohibit a provider from minting capability, lowering a trusted consequence class, authorizing egress, satisfying owner presence/approval, declaring source truth or emitting `VERIFIED_COMPLETE`.
+- [ ] **T203 — Semantic Decision Provider Contract.** Define one provider-neutral `DecisionProvider` / `DecisionRequest` / `DecisionReceipt` family for bounded typed decisions. Support at minimum Choice, Boolean/Noul and ordered Score semantics where independently qualified. Bind exact state/context digest, schema/option identities, explicit no-match/abstain semantics, model artifact, backend/device/runtime, prompt/schema digest, probability output, calibration profile, input-limit/truncation evidence, latency/resource/cost and provider revision. Define deterministic cross-field constraints / bounded dependency graphs so independently scored fields cannot silently form an impossible or policy-inconsistent decision set; contradiction must cause abstention, deterministic repair only where specified, or escalation. SemIf, Decider, Nimble and the founder-supplied `AlexWortega/openjev` are candidate/reference implementations; none becomes the canonical policy engine. OpenJev is the first explicitly planned first-class bounded provider target under T229, subject to T175/T204 qualification. The contract must explicitly prohibit a provider from minting capability, lowering a trusted consequence class, authorizing egress, satisfying owner presence/approval, declaring source truth or emitting `VERIFIED_COMPLETE`.
 
 - [ ] **T204 — Decision Calibration, Applicability and Escalation Qualification.** Extend T143/T145/T152/T158/T175/T203 with workload-specific qualification for decision providers. Measure appropriate accuracy/balanced accuracy, NLL/log loss, Brier, ECE/reliability, AURC/selective risk, abstention coverage, option-order/schema perturbation, cross-field contradiction/impossible-state rate, context-length and truncation sensitivity, quantization/backend drift, domain shift, tainted/adversarial input behavior, latency and resources. Define a deterministic escalation policy from exact rules/source truth -> bounded local decision provider -> stronger provider/generative reasoning -> independent verification/human review. Generic confidence thresholds are forbidden unless calibrated for the exact workload/configuration.
 
@@ -284,9 +284,43 @@ Future owning specs must prove, with exact instrumentation rather than subjectiv
 - language/lexicon personalization cannot silently rewrite raw transcript evidence;
 - graceful degradation never widens privacy, provider, account, authority or Effect policy.
 
+
+
+- [ ] **T229 — OpenJev First-Class Decision Provider Qualification and Adapter.** Execute the bounded integration plan in `openjev-integration-plan-2026-09-22.md` after an owning implementation lifecycle is authorized. Treat exactly `AlexWortega/openjev` as an optional, replaceable T203 `DecisionProvider` target. T175 must first freeze exact immutable model/config/tokenizer/safetensors identities, base-model/transitive rights, runtime/backend, offline behavior and rollback artifact. Then implement one bounded `OpenJevDecisionAdapter` that accepts canonical `DecisionRequest` and emits `DecisionReceipt` only; it MUST NOT own routing policy, authority, egress, Effect decisions, owner presence, verification truth or fallback policy. Qualify OpenJev independently for bounded workloads such as voice utterance class, semantic turn-completeness, clarification-needed, Attention triage, capability fit, provider-candidate ranking and retrieval reranking. Each workload gets its own calibration/applicability/abstention profile and can be rejected independently. Prove replacement/removal, out-of-domain abstention, transcript-revision invalidation for voice, adversarial/tainted-input handling, quantization/backend drift, resource/latency envelopes, strict-local network-denied behavior where claimed, and deterministic escalation to stronger providers/human review where required.
+
+### T229 hard invariants
+
+```text
+OPENJEV != AUTHORITY
+OPENJEV != POLICY_ENGINE
+OPENJEV != EFFECT_GATE
+OPENJEV != OWNER_PRESENCE
+OPENJEV != VERIFICATION_ORACLE
+OPENJEV != STT
+OPENJEV != VAD
+OPENJEV != TTS
+OPENJEV_HIGH_SCORE != ALLOW
+OPENJEV_DECISION != VERIFIED_FACT
+OPENJEV_UNAVAILABLE != GOLAM_UNAVAILABLE
+OPENJEV_REMOVAL != AUTHORITY_SEMANTICS_CHANGE
+```
+
+### T229 acceptance direction
+
+A future owning spec must prove:
+
+- exact artifact and runtime identity are frozen and independently reproducible;
+- founder permission plus transitive rights/NOTICE obligations are reconciled for the exact artifact/runtime;
+- at least one bounded workload beats or materially improves the baseline on a preregistered latency/quality/resource objective without violating safety/authority gates;
+- every admitted workload has explicit calibration/applicability/abstention evidence rather than a generic confidence threshold;
+- a high-confidence wrong/out-of-domain result cannot grant authority, lower consequence, satisfy approval or create verified completion;
+- stale partial-transcript decisions are invalidated when the transcript revision they depend on changes;
+- removal/unavailability falls back or escalates without widening locality, privacy, spend, account or authority;
+- Golam remains correct when OpenJev is disabled entirely.
+
 ## Cross-fabric ownership rule
 
-Before T203–T228 implementation, T198's Canonical Shared-Contract Ownership Matrix must name the sole owner/version source/migration authority for at least:
+Before T203–T229 implementation, T198's Canonical Shared-Contract Ownership Matrix must name the sole owner/version source/migration authority for at least:
 
 - TaskContract / Task-Session-Run-Worker identities;
 - ExecutionEnvelope;
@@ -316,7 +350,8 @@ Before T203–T228 implementation, T198's Canonical Shared-Contract Ownership Ma
 - AudioTransport / clock / stream-generation semantics;
 - VoiceRetention / biometric / consent semantics;
 - VoiceProfile / lexicon / pronunciation semantics;
-- VoiceRouteDegradation / release-gate semantics.
+- VoiceRouteDegradation / release-gate semantics;
+- OpenJevDecisionAdapter / workload qualification / calibration-profile semantics.
 
 No owning package may invent package-local protected truth for one of these concepts.
 
@@ -382,6 +417,7 @@ P1_NEW:
   T204 Decision Calibration / Escalation
   T205 ExecutionEnvelope / Reconciliation
   T207 Credential-Brokered Tool Relay
+  T229 OpenJev First-Class Decision Provider Qualification / Adapter
 
 P1_PRODUCT_PROJECTION:
   T208 Proactive Attention / Action Proposal
@@ -510,7 +546,7 @@ Feed an out-of-domain/high-confidence wrong DecisionProvider result. Prove deter
 ## Current safe sequencing
 
 1. Keep active Spec 006 PR #24 unchanged in scope.
-2. Treat T203–T228 as planning-only extension tasks.
+2. Treat T203–T229 as planning-only extension tasks.
 3. Qualify the planning PR on its exact new head after this extension.
 4. Re-run independent architecture/security/governance review because the planning head changed.
 5. Merge planning only after new-head findings and required checks are reconciled.
