@@ -156,7 +156,7 @@ Many agent decisions are bounded:
 
 A full text-generating LLM is often unnecessary.
 
-Golam should define one replaceable `DecisionProvider` contract with candidates such as SemIf, Decider, Nimble-derived artifacts and future qualified local providers.
+Golam should define one replaceable `DecisionProvider` contract with candidates such as SemIf, Decider, Nimble-derived artifacts and future qualified local providers. The founder-supplied `AlexWortega/openjev` is the first explicitly planned first-class bounded provider target under T229, while remaining optional and replaceable.
 
 A `DecisionRequest` should bind:
 
@@ -377,7 +377,7 @@ Public sources reviewed with **no current measured Golam gap** are not promoted 
 
 | Source | Reviewed state | Disposition | Golam value / boundary |
 | --- | --- | --- | --- |
-| `AlexWortega/openjev` (Hugging Face) | `https://huggingface.co/AlexWortega/openjev`; Hub state reviewed 2026-09-22; model card identifies MIT, Qwen3.5-4B base, text-classification/NLI; exact artifact digests must be frozen by T175 before admission | `MODEL_ARTIFACT_CANDIDATE / HIGH_VALUE_DECISION_REFERENCE` | Fast bounded semantic decisions over transcript/context; **not** STT, VAD, TTS or speaker identity; use only through T203/T219 |
+| `AlexWortega/openjev` (Hugging Face) | `https://huggingface.co/AlexWortega/openjev`; Hub state reviewed 2026-09-22; updated 2026-09-21; task `text-classification`; Transformers; Qwen3.5-4B base; NLI/cross-encoder/reranker tags; Hub license metadata MIT; exact immutable artifact digests still require T175 | `FIRST_CLASS_BOUNDED_DECISION_PROVIDER_TARGET / MODEL_ARTIFACT_CANDIDATE` | Optional replaceable local T203 provider target under T229 for voice semantic decisions, attention triage, capability-fit/provider ranking and retrieval reranking; **not** STT, VAD, TTS, policy, authority, speaker identity or verification truth |
 | `TheHalfMoon/Golam-research` | `a9f633e09d49a85829b8236331b9e21f7e612634` | `HIGH_VALUE_IMPLEMENTATION_EVIDENCE / BOUNDED_PORT_CANDIDATE` | Grok Bot 0.18 recovered push-to-talk voice controller, transcript cards, permission/auto-review UX, coordinator/session fences; whole-clip STT is a baseline to surpass, not the target full-duplex design |
 | `TheHalfMoon/Wispral` | `edacdf7504302cc91ff7138bc6ac2d391e4df1f4` | `PRIMARY_VOICE_ARCHITECTURE_REFERENCE` | Event-driven voice control plane, independent cancellation, provenance, push-to-talk baseline, streaming STT evidence and measurable interruption/latency semantics |
 | `TheHalfMoon/Himsat` | `cc1c1c38bf07fe6c28d6ce919d5d773f41d23d62` | `PRIMARY_AUDIO_RUNTIME_AND_BENCHMARK_REFERENCE` | Capture health, conditioning/VAD, Voice Runtime Router, local speech challenger matrix, Arabic/English/code-switch, device/clock/long-session evidence |
@@ -402,6 +402,32 @@ REMOTE_STREAMING_STT != STRICT_LOCAL_ROUTE
 NATIVE_DUPLEX_TOOL_CALL != EFFECT_AUTHORIZATION
 ```
 
+#### OpenJev first-class provider admission path
+
+OpenJev has moved from general candidate/reference status to a bounded first-class provider **target**, not to admitted runtime status.
+
+The required path is:
+
+```text
+founder permission
+-> exact HF namespace/revision/file digest freeze
+-> transitive/base-model rights closure
+-> T175 artifact/runtime qualification
+-> T203 adapter conformance
+-> T204/T229 workload-specific calibration/applicability
+-> adversarial + strict-local + replacement tests
+-> workload-specific ADMITTED or REJECTED result
+```
+
+Admission is per workload. A passing voice-turn profile does not automatically admit attention triage, routing, reranking or verification-support usage.
+
+```text
+OPENJEV_PROVIDER_TARGET=YES
+OPENJEV_GLOBAL_ADMISSION=NO
+OPENJEV_WORKLOAD_ADMISSION_IS_INDEPENDENT=YES
+OPENJEV_DISABLED_PATH_REQUIRED=YES
+```
+
 #### Muse placement rule
 
 Muse is not an admitted dependency or donor implementation. Its public architecture is useful because it independently reinforces Golam's existing direction: a model/runtime should not own permission, credentials or egress. Golam maps those lessons onto its existing Authority/Effect/Secret/Egress contracts rather than reproducing Meta's cloud VM topology.
@@ -414,7 +440,7 @@ The combined source universe points to five reusable fabrics, not dozens of embe
 1. Authority + Evidence Core        -> Golam canonical kernel
 2. Execution Fabric                -> Kernux + AX + Desktop Commander + TinyFish
 3. Capability Exchange             -> Treg + Golam connectors/extensions/secrets
-4. Decision Fabric                 -> SemIf + Decider + Nimble + internal model qualification
+4. Decision Fabric                 -> OpenJev first-class bounded target + SemIf + Decider + Nimble + internal model qualification
 5. Attention / Knowledge Fabric    -> Laya + Morize + Golam Experience/Context
 6. Voice / Conversational Presence -> Wispral + Himsat + Golam-research + replaceable speech engines + T203 decision providers
 ```
@@ -457,6 +483,8 @@ FUTURE_IMPLEMENTATION_AUTHORITY_GRANTED=NO
 PORTFOLIO_DEEP_DIVE_COMPLETED_2026_09_22=YES
 VOICE_AUDIO_DEEP_DIVE_COMPLETED_2026_09_22=YES
 OPENJEV_CLASSIFIED_AS_DECISION_NOT_SPEECH=YES
+OPENJEV_FIRST_CLASS_PROVIDER_TARGET=YES
+OPENJEV_RUNTIME_ADMITTED=NO
 MUSE_REFERENCE_ONLY_NO_CODE_ADMISSION=YES
 PRIVATE_SOURCE_NAMES_PUBLISHED=NO
 WAIVER_TAKEN=NO
