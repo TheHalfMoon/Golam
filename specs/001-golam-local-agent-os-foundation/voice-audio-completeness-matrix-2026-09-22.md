@@ -1,7 +1,7 @@
 # Golam Voice / Audio Completeness Matrix — 2026-09-22
 
-**Status:** PLANNING ONLY  
-**Scope:** Completeness closure for the T196 umbrella and T217–T228 voice/audio program  
+**Status:** PLANNING ONLY
+**Scope:** Completeness closure for the T196 umbrella and T217–T228 voice/audio program
 **Authority:** This document grants no implementation authority, dependency admission, model admission, cloud-provider admission, or Spec 006 scope expansion.
 
 ## 1. Product outcome
@@ -77,7 +77,7 @@ A native duplex model may collapse compute stages, but it MUST NOT collapse cano
 | Semantic turn classification | T203, T204, T219 | bounded decision provider; abstain/escalate; no authority | out-of-domain high-confidence and replacement-provider tests |
 | COMMAND / ASIDE / QUESTION / CORRECTION | T219, T223 | semantic labels inform UX only; deterministic policy remains authoritative | ambiguity and mid-turn correction fixtures |
 | Critical entity binding | T224 | exact target/value revision for risky actions | homophone, near-match, stale-target and ambiguity tests |
-| Voice confirmation | T174, T199, T224 | confirmation binds exact pending operation, scope, generation and expiry | unrelated "yes", replayed audio and stale-confirmation rejection |
+| Voice confirmation | T174, T199, T224 | challenge response is bounded interaction evidence only; it binds exact pending operation, scope, generation and expiry but cannot itself establish identity, owner presence, approval, capability or Effect authorization | unrelated "yes", replayed audio, stale-confirmation rejection and proof that canonical OwnerPresence/approval/Effect Gate still independently authorize consequential dispatch |
 | Conversation concurrency | T167, T221 | explicit steer / queue / branch / cancel semantics | overlapping input while worker active and reconnect/resume tests |
 | Background goals/tasks | T167, T208, T212, T221 | voice is projection/control surface, not separate task truth | task-state reconciliation and stale projection tests |
 | Tool proposals | T199, T219 | speech-native/model tool call is proposal only | forced tool-call injection and wrong-argument denial |
@@ -144,7 +144,7 @@ Before consequential execution, the interpretation layer must preserve and bind:
 - current workspace/account/provider/route context;
 - confirmation challenge identity where required.
 
-High-risk confirmation must bind to one exact pending operation and expire. A free-floating "yes", replayed audio, TTS output or a response from another speaker cannot approve a different operation.
+High-risk confirmation must bind to one exact pending operation and expire, but the voice response remains interaction evidence rather than approval authority. A free-floating "yes", replayed audio, TTS output, another speaker, or a correctly matched live voice response cannot by itself establish principal identity, owner presence, capability or Effect authorization. Consequential dispatch still requires the canonical OwnerPresence/approval policy and Effect Gate checks for the exact operation at dispatch time.
 
 Examples needing explicit uncertainty handling include:
 
@@ -160,6 +160,7 @@ Examples needing explicit uncertainty handling include:
 \`\`\`text
 TRANSCRIPT_CONFIDENCE != TARGET_CERTAINTY
 GENERIC_YES != BOUND_OPERATION_APPROVAL
+VOICE_CONFIRMATION_RESPONSE != APPROVAL_AUTHORITY
 NORMALIZED_NUMBER != SOURCE_NUMBER_TRUTH
 ENTITY_CANDIDATE != EXACT_TARGET_BINDING
 \`\`\`
