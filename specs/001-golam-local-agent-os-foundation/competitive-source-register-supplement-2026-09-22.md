@@ -329,6 +329,33 @@ Private repository names/content are deliberately not copied into this public Go
 
 Domain repositories remain useful for patterns, datasets, testing methods or domain-specific examples, but they are not promoted into Golam runtime dependencies merely because they are owner-accessible.
 
+
+
+### Additional owner-portfolio dispositions from the deep dive
+
+The re-enumeration was followed by a repository-content deep dive, not only a name/README scan. Public sources that expose a measured Golam gap are promoted below; private repositories remain `PRIVATE_CONSIDERED_UNDISCLOSED` in this public artifact and require a private exact-component Source Foundry record before any reuse.
+
+| Source | Reviewed current pin | Disposition | Measured Golam value |
+| --- | --- | --- | --- |
+| `TheHalfMoon/Kodac` | `406b335277f2df1e3dedf24cdb45847dff919d44` | `HIGH_VALUE_ARCHITECTURE_REFERENCE / BOUNDED_ADAPTER_CANDIDATE` | Exact workload identity across approval wait; requested-vs-observed confinement; backend capability is not confinement proof; one-shot approval binding |
+| `TheHalfMoon/Pluma` | `f38a3e743a32342f1c25e7a7e606eff6a8c8edb2` | `HIGH_VALUE_ARCHITECTURE_REFERENCE / PORT_OR_ADAPT_DOMAIN_CONTRACTS` | DisclosureReceipt -> bounded AgentProposal, explicit review checkpoints, valid-time vs recorded-time decision resolution, agent-independent resume/continuity |
+| `TheHalfMoon/Signthos` | `f945f12fd1a2b600c2c61493162e3654b4d5b50c` | `HIGH_VALUE_ARCHITECTURE_REFERENCE` | Orthogonal verification dimensions, versioned EvidenceBundle, immutable artifact revisions and independent verification |
+| `TheHalfMoon/Ecra` | `0e2ff8c687c93e6f158da6984a7a6915339b5f3f` | `HIGH_VALUE_ARCHITECTURE_REFERENCE` | Typed Skill IR -> candidate compiler -> deterministic replay -> divergence/repair -> downstream invalidation |
+| `TheHalfMoon/Inercative` | `fd3fd806b8941a03fc96ddfcc395f2da57622a5a` | `HIGH_VALUE_ARCHITECTURE_REFERENCE` | Failure Ledger, finite evidence-driven repair, Context Continuation Policy, completeness manifests and model/tool/budget routing |
+| `TheHalfMoon/Wispral` | `edacdf7504302cc91ff7138bc6ac2d391e4df1f4` | `HIGH_VALUE_ARCHITECTURE_REFERENCE` | Typed voice lifecycle and interruption/cancellation that must not wait for final transcription |
+
+The private portfolio deep dive exposed additional high-value patterns in evidence fidelity/absence semantics and semantic-faithfulness verification. Those patterns informed T213 and T215, but this public repository intentionally does not publish private repository names, paths, content or pins. Exact private-source identity is retained only when/where an authorized private Source Foundry record is created.
+
+Public sources reviewed with **no current measured Golam gap** are not promoted merely because they are available:
+
+| Source | Current disposition | Reason |
+| --- | --- | --- |
+| `TheHalfMoon/acarat` | `NO_CURRENT_MEASURED_GAP` | Explainable uncertainty/projection lessons are already covered by Decision/Evidence contracts; no Golam runtime dependency justified |
+| `TheHalfMoon/Balott` | `DOMAIN_REFERENCE_ONLY` | Game/ranking/voice domain does not expose a unique Golam platform gap |
+| `TheHalfMoon/Qdrat` | `DOMAIN_REFERENCE_ONLY` | Application-event automation is useful product evidence but must not replace Golam durable Effect/scheduler semantics |
+| `TheHalfMoon/Zyara` | `DOMAIN_REFERENCE_ONLY` | Adapter/voice/provider lessons overlap stronger Golam/Wispral/connector contracts |
+| `TheHalfMoon/Trcel` | `NO_CURRENT_MEASURED_GAP` | Empty repository at review time |
+
 ## 8. Portfolio synthesis: do not create a collage
 
 The combined source universe points to five reusable fabrics, not dozens of embedded applications:
@@ -341,7 +368,7 @@ The combined source universe points to five reusable fabrics, not dozens of embe
 5. Attention / Knowledge Fabric    -> Laya + Morize + Golam Experience/Context
 ```
 
-Ascout/Winds/SpecGrain/Diffcipline/MESC/commandF provide cross-cutting proof, source identity, bounded delivery and independent verification.
+Ascout/Winds/SpecGrain/Diffcipline/MESC/commandF provide cross-cutting proof, source identity, bounded delivery and independent verification. Kodac/Pluma/Signthos/Ecra/Inercative/Wispral add bounded contracts for workload identity, disclosure-bound proposals, review checkpoints, multidimensional proof, skill replay/repair, failure continuity and immediate human interruption without becoming separate authority systems.
 
 The key design constraint is that these fabrics consume the same canonical contracts. None becomes a second authority root.
 
@@ -376,5 +403,7 @@ CONSTITUTION_CHANGED=NO
 NEW_RUNTIME_DEPENDENCY_ADMITTED=NO
 NEW_PRODUCT_IMPLEMENTATION_STARTED=NO
 FUTURE_IMPLEMENTATION_AUTHORITY_GRANTED=NO
+PORTFOLIO_DEEP_DIVE_COMPLETED_2026_09_22=YES
+PRIVATE_SOURCE_NAMES_PUBLISHED=NO
 WAIVER_TAKEN=NO
 ```
