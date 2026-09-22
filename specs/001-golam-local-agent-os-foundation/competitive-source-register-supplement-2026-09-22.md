@@ -371,6 +371,33 @@ Public sources reviewed with **no current measured Golam gap** are not promoted 
 | `TheHalfMoon/Zyara` | `DOMAIN_REFERENCE_ONLY` | Adapter/voice/provider lessons overlap stronger Golam/Wispral/connector contracts |
 | `TheHalfMoon/Trcel` | `NO_CURRENT_MEASURED_GAP` | Empty repository at review time |
 
+
+
+### Voice/audio and personal-agent follow-up sources
+
+| Source | Reviewed state | Disposition | Golam value / boundary |
+| --- | --- | --- | --- |
+| `AlexWortega/openjev` (Hugging Face) | Hub state reviewed 2026-09-22; model card identifies MIT, Qwen3.5-4B base, text-classification/NLI; exact artifact digests must be frozen by T175 before admission | `MODEL_ARTIFACT_CANDIDATE / HIGH_VALUE_DECISION_REFERENCE` | Fast bounded semantic decisions over transcript/context; **not** STT, VAD, TTS or speaker identity; use only through T203/T219 |
+| `TheHalfMoon/Golam-research` | `a9f633e09d49a85829b8236331b9e21f7e612634` | `HIGH_VALUE_IMPLEMENTATION_EVIDENCE / BOUNDED_PORT_CANDIDATE` | Grok Bot 0.18 recovered push-to-talk voice controller, transcript cards, permission/auto-review UX, coordinator/session fences; whole-clip STT is a baseline to surpass, not the target full-duplex design |
+| `TheHalfMoon/Wispral` | `edacdf7504302cc91ff7138bc6ac2d391e4df1f4` | `PRIMARY_VOICE_ARCHITECTURE_REFERENCE` | Event-driven voice control plane, independent cancellation, provenance, push-to-talk baseline, streaming STT evidence and measurable interruption/latency semantics |
+| `TheHalfMoon/Himsat` | `cc1c1c38bf07fe6c28d6ce919d5d773f41d23d62` | `PRIMARY_AUDIO_RUNTIME_AND_BENCHMARK_REFERENCE` | Capture health, conditioning/VAD, Voice Runtime Router, local speech challenger matrix, Arabic/English/code-switch, device/clock/long-session evidence |
+| Meta Muse public product/security documentation | official public material reviewed 2026-09-22 | `BEHAVIOR_SECURITY_REFERENCE_ONLY` | Long-running non-turn-locked conversation, side chats, background goals/work, proactive sparse updates, activity transparency, artifacts, deterministic approvals; isolated runtime + independent permission/egress authority + credential surrogation + tainted egress. No proprietary source-code reuse inferred. |
+
+#### OpenJev placement rule
+
+OpenJev must not be mislabeled as a voice model. It may consume transcript/context state to answer bounded typed semantic questions. Acoustic endpointing, speaker/source attribution, microphone control, VAD, STT and TTS remain separate replaceable capabilities.
+
+```text
+OPENJEV != STT
+OPENJEV != VAD
+OPENJEV != TTS
+OPENJEV_DECISION != EFFECT_AUTHORIZATION
+```
+
+#### Muse placement rule
+
+Muse is not an admitted dependency or donor implementation. Its public architecture is useful because it independently reinforces Golam's existing direction: a model/runtime should not own permission, credentials or egress. Golam maps those lessons onto its existing Authority/Effect/Secret/Egress contracts rather than reproducing Meta's cloud VM topology.
+
 ## 8. Portfolio synthesis: do not create a collage
 
 The combined source universe points to five reusable fabrics, not dozens of embedded applications:
@@ -381,6 +408,7 @@ The combined source universe points to five reusable fabrics, not dozens of embe
 3. Capability Exchange             -> Treg + Golam connectors/extensions/secrets
 4. Decision Fabric                 -> SemIf + Decider + Nimble + internal model qualification
 5. Attention / Knowledge Fabric    -> Laya + Morize + Golam Experience/Context
+6. Voice / Conversational Presence -> Wispral + Himsat + Golam-research + replaceable speech engines + T203 decision providers
 ```
 
 Ascout/Winds/SpecGrain/Diffcipline/MESC/commandF provide cross-cutting proof, source identity, bounded delivery and independent verification. Kodac/Pluma/Signthos/Ecra/Inercative/Wispral add bounded contracts for workload identity, disclosure-bound proposals, review checkpoints, multidimensional proof, skill replay/repair, failure continuity and immediate human interruption without becoming separate authority systems.
@@ -419,6 +447,9 @@ NEW_RUNTIME_DEPENDENCY_ADMITTED=NO
 NEW_PRODUCT_IMPLEMENTATION_STARTED=NO
 FUTURE_IMPLEMENTATION_AUTHORITY_GRANTED=NO
 PORTFOLIO_DEEP_DIVE_COMPLETED_2026_09_22=YES
+VOICE_AUDIO_DEEP_DIVE_COMPLETED_2026_09_22=YES
+OPENJEV_CLASSIFIED_AS_DECISION_NOT_SPEECH=YES
+MUSE_REFERENCE_ONLY_NO_CODE_ADMISSION=YES
 PRIVATE_SOURCE_NAMES_PUBLISHED=NO
 WAIVER_TAKEN=NO
 ```
