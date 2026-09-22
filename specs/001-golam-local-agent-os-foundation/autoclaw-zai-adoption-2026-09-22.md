@@ -1,8 +1,8 @@
 # AutoClaw / Z.AI Adoption Review — 2026-09-22
 
-**Status:** PROGRAM RESEARCH / SOURCE FOUNDRY INPUT — PLANNING ONLY  
-**Target:** Golam Local/Private Verified Agent OS  
-**Founder permission:** founder states Z.AI granted permission to copy/use available Z.AI AutoClaw-related source code  
+**Status:** PROGRAM RESEARCH / SOURCE FOUNDRY INPUT — PLANNING ONLY
+**Target:** Golam Local/Private Verified Agent OS
+**Founder permission:** founder states Z.AI granted permission to copy/use available Z.AI AutoClaw-related source code
 **Authority:** this document does not admit code, models, cloud services or implementation scope
 
 ## 1. Exact reviewed product/source universe
