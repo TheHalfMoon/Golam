@@ -229,6 +229,22 @@ Requirements:
 - revoke/kill;
 - no implied widening of filesystem/network grants.
 
+
+
+### Reconciliation must be fenced, not merely retried
+
+AX-style desired/observed reconciliation is useful only if a replaced runtime cannot keep acting as a valid actor. Every reconciled execution instance therefore needs a monotonic runtime generation or equivalent fencing identity bound into dispatch authorization.
+
+A resumed/reprovisioned worker must receive a fresh execution incarnation. Stale incarnations may finish local computation, but they must fail closed at the protected action boundary if their generation is no longer current.
+
+```text
+RUNTIME_RESTART != SAME_EXECUTION_INCARCATION
+STALE_WORKER != CURRENT_EFFECT_ACTOR
+RECONCILER_CONVERGENCE != AUTHORITY_CONTINUITY
+```
+
+This is especially important when a crash occurs around an external side effect: reconciliation may recreate compute, but it must reconcile the existing Effect before allowing a conflicting retry.
+
 ## 5. Fabric B — Capability Exchange
 
 ### 5.1 Product goal
@@ -440,6 +456,31 @@ They may not:
 - certify `VERIFIED_COMPLETE`;
 - turn a denial into allow.
 
+
+
+### 6.6 Cross-field consistency and bounded decision graphs
+
+Typed decision providers often score fields independently. Golam must not assume that independently plausible answers are jointly valid.
+
+A future Decision Fabric should support deterministic cross-field constraints and small dependency graphs:
+
+```text
+DecisionRequest
+  -> independent typed scores
+  -> abstention/applicability checks
+  -> deterministic constraint validation
+  -> contradiction/impossible-state detection
+  -> escalation when constraints cannot be satisfied safely
+```
+
+Examples include route/provider choices that conflict with a strict-local profile, a "safe to retry" answer that conflicts with an at-most-once Effect class, or several classifications that cannot all be true simultaneously.
+
+```text
+FIELD_PROBABILITY != JOINT_CONSISTENCY
+HIGH_CONFIDENCE_FIELD != VALID_DECISION_SET
+MODEL_CONSISTENCY != POLICY_CONSISTENCY
+```
+
 ## 7. Fabric D — Proactive Attention
 
 ### 7.1 Move beyond chat
@@ -519,6 +560,23 @@ Cross-app entity coherence should use Morize-style evidence-linked identity/rela
 A Jira ticket, GitHub PR, Slack thread and email may be linked into one narrative, but a model-generated link remains a candidate until rules/evidence satisfy the relation policy.
 
 User link/unlink corrections may generate versioned relation/routine candidates.
+
+
+
+### 7.6 Attention is a scarce user resource
+
+A proactive system can fail by being technically correct too often. Golam should treat interruption cost as a governed product resource.
+
+Attention ranking should account for urgency, expected user value, freshness, confidence/applicability, duplicate/related items, current user focus, quiet policy and whether an item can be safely deferred into a briefing. The system should expose why an item surfaced and support user correction.
+
+Release evaluation should measure not only recall of important items, but unnecessary interruption rate, duplicate surfacing, stale-card rate, deferred-item recovery and correction learning without silent policy mutation.
+
+```text
+ATTENTION_SCORE != USER_PRIORITY_TRUTH
+HIGH_MODEL_CONFIDENCE != INTERRUPT_NOW
+PROACTIVE != ALWAYS_INTERRUPTIVE
+CORRECTION_SIGNAL != ACTIVE_POLICY_MUTATION
+```
 
 ## 8. Fabric E — Context and Knowledge
 
