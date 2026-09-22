@@ -201,7 +201,7 @@ Future owning specs must prove, with bounded fixtures and at least one adversari
 
 ## Phase W — Realtime voice, audio and conversational presence
 
-T196 remains the umbrella Voice Presence / Audio Authority contract. T217–T222 decompose it into bounded shared contracts so voice does not become one monolithic implementation package or a second authority path.
+T196 remains the umbrella Voice Presence / Audio Authority contract. T217–T228 decompose it into bounded shared contracts so voice does not become one monolithic implementation package or a second authority path. The companion `voice-audio-completeness-matrix-2026-09-22.md` is the closure checklist for lifecycle ownership and acceptance.
 
 - [ ] **T217 — Realtime Audio Session and Duplex Control Contract.** Refine T140/T169/T196/T199/T201 into one event-driven `AudioSession` contract with independently cancellable lifecycles for microphone capture, conditioning/VAD, STT, agent streaming, TTS synthesis and audio playback. Define typed events for microphone authority grant/revoke, device/route state, audio-source identity, speech start/end, partial/final transcript, turn candidate/commit, agent acknowledgement/stream, TTS first-audio/playback state, barge-in, mute/duck, cancellation request/settlement, route change and failure. Push-to-talk remains the reliability baseline; hands-free/full-duplex is explicit opt-in and MUST NOT imply always-listening. Where microphone capture remains active during TTS, bind acoustic echo cancellation/playback-reference behavior so Golam's own output cannot silently become user intent. Raw audio is ephemeral by default unless a separate recording/retention capability is explicitly authorized.
 
@@ -215,7 +215,21 @@ T196 remains the umbrella Voice Presence / Audio Authority contract. T217–T222
 
 - [ ] **T222 — Golam VoiceBench, Multilingual Safety and Accessibility Qualification.** Extend T143–T150/T158/T178/T213/T216 with a reproducible voice/audio qualification profile before any "best voice" claim. Measure at minimum: STT WER/CER and entity accuracy; Arabic, English and code-switch conditions where qualified; first-partial/finalization latency; transcript revision stability; VAD miss/false activation/boundary error; semantic endpoint false-stop/late-stop; interruption-to-mute and interruption-to-agent-cancel latency; false barge-in from Golam playback/echo; TTS first-audio latency/RTF/intelligibility; route/device/Bluetooth changes; CPU/RAM/accelerator/battery/thermal behavior where applicable; long-session stability; network-denied strict-local behavior; and exact model/runtime provenance. Benchmark both modular cascade and native speech-to-speech candidates where eligible, keeping their interaction semantics visibly distinct; use current public references such as Muse Voice Transcribe for streaming-ASR/endpointing/diarization parity and NemotronLabs VoiceChat-class systems for native full-duplex/tool-calling behavior where lawful and reproducible. Include tool-selection/argument correctness, argument accuracy, interruption takeover and post-interruption recovery for any speech-native tool-calling path. Include adversarial source-channel cases proving system audio, media playback, remote-party speech and Golam's own TTS cannot become owner commands merely because they are transcribed. Every consequential voice control path retains a keyboard/touch/text accessibility fallback.
 
-### T217–T222 hard invariants
+
+
+- [ ] **T223 — Activation, Wake, Source Attribution and Floor-Control Contract.** Refine T169/T196/T217/T219/T226 around who/what is currently allowed to open a voice turn. Push-to-talk remains the deterministic baseline. Optional hands-free/wake operation must be explicit opt-in, local-first by default, visibly enabled, independently revocable, bounded by a non-durable pre-roll/ring buffer, and qualified for false activation/rejection, accent/language, noise and device-resource cost. Every captured segment carries source-channel evidence when available so microphone speech, system audio, imported media, remote participants and Golam playback remain distinguishable. Diarization, speaker embeddings and floor ownership are contextual evidence only: they cannot authenticate a principal or mint authority. Define explicit floor/turn takeover, overlapping-speaker and unknown-speaker handling for meetings and shared spaces.
+
+- [ ] **T224 — Critical Utterance Binding, Corrections and High-Risk Voice Confirmation.** Refine T174/T199/T219/T213/T216 for speech-specific ambiguity. Preserve raw and normalized transcript revisions, exact recognized number/name/path/hash/account/amount/date tokens, entity-resolution evidence, negation/correction lineage and uncertainty. Before a consequential voice-triggered action, bind the current interpretation to the exact pending operation/Effect, target/account/workspace/provider context and expected revisions. Any required voice confirmation is a bounded challenge tied to exactly that pending operation, session generation and expiry; a generic/replayed "yes", Golam TTS, media audio or another speaker cannot approve it. High-risk ambiguity fails closed or requests explicit read-back/text confirmation according to policy.
+
+- [ ] **T225 — Audio Transport, Clock, Device and Remote-Stream Resilience.** Refine T169/T217/T218/T220/T205 for sample/transport/session integrity. Define canonical audio-frame metadata for source, device, codec/PCM format, sample rate/channels, monotonic timestamps, session generation, packet/buffer sequence and discontinuities. Cover local device hot-plug, Bluetooth/profile switches, sleep/wake, capture/playback underrun/overrun, bounded backpressure, remote GolamConnect audio jitter/loss/reorder/reconnect, source-clock drift and resynchronization. A reconnect, engine restart or route change must not replay buffered audio into a new session, revive a cancelled utterance or silently rewrite transcript/source-time truth.
+
+- [ ] **T226 — Voice Privacy, Consent, Retention, Biometrics and Abuse-Safety Contract.** Refine T174/T179/T196/T201/T217/T220. Separate microphone permission, active-listening visibility, optional wake buffer, raw-audio retention, transcript retention, cloud processing, speaker embeddings/biometrics, diagnostic recordings and voice cloning/imitation into independently governed capabilities. Raw audio is ephemeral by default; persistence requires explicit purpose, duration, data-class policy, export/delete/reset behavior and exact storage boundary. Speaker similarity is never sole authentication. Add adversarial coverage for replayed owner recordings, deepfake/clone speech, malicious media/TV/video audio, remote-party commands, Golam self-TTS, malformed/corrupt audio, stale wake buffers and resource-exhaustion streams. No hidden recording or content-bearing remote telemetry.
+
+- [ ] **T227 — Language, Lexicon, Pronunciation, Voice Persona and Accessibility Contract.** Refine T192/T196/T219/T220/T222 for user-specific speech quality without weakening truth. Support evidence-scoped English, Arabic and Arabic/English code-switch qualification, with dialect/accent claims only where a corpus exists. Define bounded user lexicons/hotwords/pronunciation dictionaries for names, organizations, repository identifiers and technical vocabulary; preserve raw ASR and measure false-insertion cost. TTS preferences such as language, voice, pace and pronunciation are user-owned presentation configuration. Voice cloning/imitation requires explicit consent/provenance and remains non-identity. Require captions/live transcript where available, text/keyboard/touch alternatives, adjustable playback and non-audio presentation for critical confirmations; no consequential feature may be voice-only.
+
+- [ ] **T228 — Voice Reliability, Graceful Degradation, Model Lifecycle and Release Gates.** Refine T132/T143–T150/T175/T178/T218/T222. Every qualified voice route publishes exact artifact/runtime identity plus measured latency, accuracy, resource, stability and privacy behavior by hardware/language/profile. Define deterministic degradation: TTS failure -> text; unreliable AEC -> push-to-talk/headphones profile; preferred local STT unavailable -> another admitted local route or explicit unavailable; cloud denied/network down -> no cloud fallback; device loss -> stop/mute/rebind; resource/thermal pressure -> admitted lower-resource route or explicit pause. Updates require benchmark delta and rollback to the last qualified route. Release evidence must include long-session/crash/recovery, device changes, strict-local network denial and zero-tolerance authority/privacy gates; no aggregate quality score may compensate for an unauthorized Effect or privacy violation.
+
+### T217–T228 hard invariants
 
 ```text
 AUDIO_SESSION != AUTHORITY
@@ -238,9 +252,18 @@ NATIVE_DUPLEX_OUTPUT != VERIFIED_TRANSCRIPT
 VOICE_CLONE != OWNER_PRESENCE
 CHAT_BUBBLE != TASK_BOUNDARY
 PROACTIVE_VOICE != UNSOLICITED_ALWAYS_ON_AUDIO
+WAKE_DETECTED != OWNER_AUTHENTICATED
+SPEAKER_MATCH != OPERATION_AUTHORIZED
+DIARIZATION_LABEL != PRINCIPAL_IDENTITY
+GENERIC_YES != BOUND_OPERATION_APPROVAL
+RECONNECTED_STREAM != SAME_AUDIO_SESSION
+BUFFERED_AUDIO != CURRENT_USER_INTENT
+RAW_AUDIO_RETENTION != TRANSCRIPT_RETENTION
+PERSONAL_LEXICON != SOURCE_TRANSCRIPT_TRUTH
+DEGRADED_ROUTE != POLICY_RELAXATION
 ```
 
-### T217–T222 acceptance direction
+### T217–T228 acceptance direction
 
 Future owning specs must prove, with exact instrumentation rather than subjective demos:
 
@@ -253,11 +276,17 @@ Future owning specs must prove, with exact instrumentation rather than subjectiv
 - system audio/media/remote participants cannot be promoted to owner commands by transcript content alone;
 - multiple user utterances/messages arriving while Golam is working are attributed to explicit steer/queue/branch semantics rather than flattened into one ambiguous turn;
 - a screen-only/text fallback exists for every consequential voice interaction;
-- voice model/runtime updates preserve exact artifact identity, benchmark deltas and rollback to the last qualified local route.
+- voice model/runtime updates preserve exact artifact identity, benchmark deltas and rollback to the last qualified local route;
+- wake-word activation cannot authenticate the speaker or authorize an Effect;
+- a replayed/generic confirmation cannot approve an unrelated or stale operation;
+- reconnect/restart/device-switch cannot replay stale buffered audio into a new session;
+- raw audio cannot persist beyond declared policy by crash/restart or provider behavior;
+- language/lexicon personalization cannot silently rewrite raw transcript evidence;
+- graceful degradation never widens privacy, provider, account, authority or Effect policy.
 
 ## Cross-fabric ownership rule
 
-Before T203–T222 implementation, T198's Canonical Shared-Contract Ownership Matrix must name the sole owner/version source/migration authority for at least:
+Before T203–T228 implementation, T198's Canonical Shared-Contract Ownership Matrix must name the sole owner/version source/migration authority for at least:
 
 - TaskContract / Task-Session-Run-Worker identities;
 - ExecutionEnvelope;
@@ -281,7 +310,13 @@ Before T203–T222 implementation, T198's Canonical Shared-Contract Ownership Ma
 - SpeechRuntimeRoute / CaptureHealth / engine-model identity;
 - SpeechInterpretation / turn-decision receipts;
 - VoiceOutputSession / playback and barge-in state;
-- conversational steer/queue/branch projection semantics.
+- conversational steer/queue/branch projection semantics;
+- VoiceActivation / WakeSession / source-channel / floor-control semantics;
+- CriticalUtteranceBinding / VoiceConfirmationChallenge semantics;
+- AudioTransport / clock / stream-generation semantics;
+- VoiceRetention / biometric / consent semantics;
+- VoiceProfile / lexicon / pronunciation semantics;
+- VoiceRouteDegradation / release-gate semantics.
 
 No owning package may invent package-local protected truth for one of these concepts.
 
@@ -360,6 +395,12 @@ P2_VOICE_EXPERIENCE:
   T220 Streaming TTS / Barge-In / Voice Presence
   T221 Conversational Work / Multi-Task Voice UX
   T222 Golam VoiceBench / Multilingual Safety / Accessibility
+  T223 Activation / Wake / Source Attribution / Floor Control
+  T224 Critical Utterance Binding / Voice Confirmation
+  T225 Audio Transport / Clock / Device Resilience
+  T226 Privacy / Consent / Retention / Biometrics / Abuse Safety
+  T227 Language / Lexicon / Pronunciation / Accessibility
+  T228 Reliability / Degradation / Model Lifecycle / Release Gates
 
 P2_AFTER_FOUNDATIONS:
   T209 Cross-Source Coherence / Briefing
@@ -469,7 +510,7 @@ Feed an out-of-domain/high-confidence wrong DecisionProvider result. Prove deter
 ## Current safe sequencing
 
 1. Keep active Spec 006 PR #24 unchanged in scope.
-2. Treat T203–T222 as planning-only extension tasks.
+2. Treat T203–T228 as planning-only extension tasks.
 3. Qualify the planning PR on its exact new head after this extension.
 4. Re-run independent architecture/security/governance review because the planning head changed.
 5. Merge planning only after new-head findings and required checks are reconciled.
