@@ -1299,3 +1299,57 @@ REMOTE_STREAMING_STT != STRICT_LOCAL_ROUTE
 NATIVE_DUPLEX_TOOL_CALL != EFFECT_AUTHORIZATION
 VOICE_CONVERSATION_QUALITY != TOOL_ARGUMENT_CORRECTNESS
 ```
+
+
+### 22.11 Voice planning completeness closure
+
+A final lifecycle audit found several concerns that were present only implicitly in T217–T222. They are now assigned explicit owners rather than left as implementation-time interpretation:
+
+- T223 — activation, optional wake word, source attribution, diarization/floor semantics;
+- T224 — critical numbers/entities, correction lineage and bound high-risk voice confirmation;
+- T225 — audio transport, clock drift, jitter, device hot-plug, Bluetooth and remote-stream generation;
+- T226 — consent, raw/transcript retention, biometrics, replay/deepfake/media injection and abuse safety;
+- T227 — Arabic/English/code-switch scope, personal lexicon/pronunciation, persona and accessibility;
+- T228 — graceful degradation, model/runtime update/rollback, SLO evidence and zero-tolerance release gates.
+
+The companion `voice-audio-completeness-matrix-2026-09-22.md` maps the whole lifecycle from activation through playback and release qualification to a canonical owner and minimum evidence.
+
+This closes a class of gaps that should not be deferred to implementation:
+
+```text
+WAKE_DETECTED != OWNER_AUTHENTICATED
+SPEAKER_MATCH != OPERATION_AUTHORIZED
+GENERIC_YES != BOUND_OPERATION_APPROVAL
+RECONNECTED_STREAM != SAME_AUDIO_SESSION
+BUFFERED_AUDIO != CURRENT_USER_INTENT
+RAW_AUDIO_RETENTION != TRANSCRIPT_RETENTION
+PERSONAL_LEXICON != SOURCE_TRANSCRIPT_TRUTH
+DEGRADED_ROUTE != POLICY_RELAXATION
+```
+
+The plan now explicitly covers:
+
+- activation and wake lifecycle;
+- shared-room / meeting source and floor attribution;
+- high-risk numeric/entity read-back and confirmation binding;
+- local and remote audio transport integrity;
+- clock/jitter/device recovery;
+- raw-audio and transcript retention as separate privacy decisions;
+- voice replay/deepfake/media injection;
+- multilingual/personal lexicon behavior;
+- accessible non-voice controls;
+- deterministic degradation under model/device/network/resource failure;
+- model/runtime update and rollback;
+- route/hardware/language-specific SLO evidence;
+- zero-tolerance release gates for authority and privacy failures.
+
+No new canonical authority system is introduced. T223–T228 refine the existing T169/T174/T175/T179/T196/T199/T201/T205/T213/T216 contracts and keep implementation authority unchanged.
+
+```text
+VOICE_COMPLETENESS_MATRIX_PRESENT=YES
+VOICE_TASK_GRAPH_EXTENDS_THROUGH_T228=YES
+NEW_PARALLEL_AUTHORITY_SYSTEM=NO
+ACTIVE_SPEC_006_PR_24_WIDENED=NO
+NEW_PRODUCT_IMPLEMENTATION_STARTED=NO
+FUTURE_IMPLEMENTATION_AUTHORITY_GRANTED=NO
+```
