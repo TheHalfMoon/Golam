@@ -1277,3 +1277,25 @@ T222 Golam VoiceBench / Multilingual Safety / Accessibility
 ```
 
 No task admits a speech model, cloud service, native library or proprietary Muse component. Exact implementation still requires live successor authority, Source Foundry and Model Artifact Foundry qualification.
+
+
+### 22.10 Muse family and native-duplex benchmark separation
+
+The Muse name now spans materially different artifacts and must not be treated as one provider:
+
+- **Muse Agent / Muse Spark 1.3** — long-horizon collaboration, multitasking, background work and harness/security behavior reference;
+- **Muse Voice Transcribe** — streaming speech perception reference/provider with real-time ASR, endpointing, diarization and multilingual code-switch behavior; currently treated as non-strict/remote unless an independently qualified local artifact is available;
+- **Muse Glimmer 30B** — Apache-2.0 open-weight local multimodal/agentic model candidate suitable for T175/T152 qualification; it is not a speech model and does not replace STT/TTS/VAD;
+- **native full-duplex speech-to-speech systems such as NemotronLabs VoiceChat** — benchmark/candidate class for unified listening, incremental transcription, speech generation and structured tool output.
+
+This separation prevents product-name matching from becoming architecture. Golam selects capabilities by qualified contract, locality, evidence and artifact identity.
+
+Current public VoiceChat evidence is particularly useful because it shows that native full-duplex tool calling can coexist with natural interruption handling while tool argument accuracy still remains an independent problem. Golam therefore evaluates native-duplex conversational quality and tool semantics separately; a speech model's structured tool call is still an untrusted proposal routed through T199 and the Effect Gate.
+
+```text
+MUSE_PRODUCT_NAME != CAPABILITY_IDENTITY
+MUSE_GLIMMER != SPEECH_ENGINE
+REMOTE_STREAMING_STT != STRICT_LOCAL_ROUTE
+NATIVE_DUPLEX_TOOL_CALL != EFFECT_AUTHORIZATION
+VOICE_CONVERSATION_QUALITY != TOOL_ARGUMENT_CORRECTNESS
+```
