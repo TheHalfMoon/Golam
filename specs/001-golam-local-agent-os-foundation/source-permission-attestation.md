@@ -65,6 +65,23 @@ PRIVATE_SOURCE_ACCESS != PUBLICATION_AUTHORITY
 FOUNDER_PERMISSION != TRANSITIVE_THIRD_PARTY_RIGHTS
 ```
 
+
+
+## 2026-09-22 voice/source reaffirmation
+
+The founder reaffirmed that Golam may evaluate, copy, modify, port and selectively reuse the code/source/model material the founder has supplied or explicitly identified as permission-granted for this voice/audio pass, including the newly supplied `AlexWortega/openjev` candidate and the founder-owned GitHub portfolio.
+
+This attestation does not infer permission for proprietary source code merely because a public product or architecture was studied. Meta Muse is currently recorded as public behavior/security reference material only; no Meta proprietary source-code grant is asserted by this record.
+
+Exact model weights, tokenizers, datasets, generated training material, native libraries, assets and transitive dependencies remain separate Source Foundry / Model Artifact Foundry objects with their own rights, NOTICE, integrity, runtime and security qualification.
+
+```text
+FOUNDER_PERMISSION_TO_REUSE_SUPPLIED_SOURCE=YES
+OPENJEV_PERMISSION_ATTESTED=YES
+MUSE_PUBLIC_REFERENCE != MUSE_SOURCE_CODE_PERMISSION
+MODEL_CARD_LICENSE != TRANSITIVE_ARTIFACT_CLEARANCE
+```
+
 ## What this attestation changes
 
 A source MUST NOT be rejected solely because Golam planning previously lacked evidence that founder permission had been obtained. Such sources are eligible to enter Source Foundry qualification.
