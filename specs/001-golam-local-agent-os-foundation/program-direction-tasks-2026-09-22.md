@@ -209,7 +209,7 @@ T196 remains the umbrella Voice Presence / Audio Authority contract. T217–T222
 
 - [ ] **T219 — Streaming STT, Turn Detection and Semantic Speech Interpretation Contract.** Refine T192/T196/T203/T204/T213. Preserve separate representations for source/audio metadata or explicit non-persistence, partial transcript revisions, final raw transcript, normalized transcript, entity candidates/bindings, utterance semantic class, turn-decision evidence and final Task/Conversation input. Acoustic endpointing/VAD/prosody and semantic completeness are separate signals. A native speech-to-speech provider may emit its own incremental transcript/turn/tool-call stream, but Golam must project those outputs into the same transcript/turn/Task/Effect contracts and retain enough aligned evidence to audit consequential actions; speech-native tool output never bypasses the canonical Effect Gate. A T203 `DecisionProvider` such as a qualified OpenJev-style model may provide bounded textual decisions such as `COMMAND`/`ASIDE`/`QUESTION`/`DICTATION`/`CORRECTION`, semantic "respond now vs keep listening" hints, urgency or routing, but it is not an audio model and cannot replace VAD, authorize an Effect, authenticate a speaker, or make a high-risk target safe. Deterministic stop/cancel controls and explicit UI gestures bypass semantic-model latency. Partial/final transcript revisions must retain lineage rather than silently rewriting what the user said.
 
-- [ ] **T220 — Streaming TTS, Barge-In and Voice Presence Contract.** Refine T196/T199/T201 around low-latency, interruptible speech output. Define `VoiceOutputSession` with exact TTS engine/model/voice/style identity, text/source revision, output data class, device route, synthesis chunks, first-audio/last-audio timing, playback state, cancellation and provenance. Permit phrase/sentence streaming where bounded, but never speak unverified hidden reasoning or secrets. Sensitive output may require a safer route (screen/headset) or explicit disclosure/approval rather than ambient speaker playback. Barge-in must mute/duck audible output immediately on the protected control path and request agent/TTS cancellation without waiting for final transcription. Voice cloning/speaker imitation remains a separate consented capability and can never establish owner presence or authentication.
+- [ ] **T220 — Streaming TTS, Barge-In and Voice Presence Contract.** Refine T196/T199/T201 around low-latency, interruptible speech output. Define `VoiceOutputSession` with exact TTS engine/model/voice/style identity, text/source revision, output data class, device route identity, route-policy generation, synthesis chunks, first-audio/last-audio timing, playback state, cancellation and provenance. Bind audible playback to the canonical T199 operation/effect classification and T201/T179 privacy policy for the approved output data class + exact route + route-policy generation. Immediately before each audible playback dispatch/chunk boundary, the protected playback path must revalidate that the current route still matches the permitted binding. If headphones disconnect, the route changes, the policy generation changes, or the new route no longer satisfies the data-class policy, Golam must mute/block pending audio and require a newly permitted route or fresh disclosure/approval; the TTS engine/playback adapter cannot decide this locally. Permit phrase/sentence streaming where bounded, but never speak unverified hidden reasoning or secrets. Sensitive output may require a safer route (screen/headset) or explicit disclosure/approval rather than ambient speaker playback. Barge-in must mute/duck audible output immediately on the protected control path and request agent/TTS cancellation without waiting for final transcription. Voice cloning/speaker imitation remains a separate consented capability and can never establish owner presence or authentication.
 
 - [ ] **T221 — Conversational Work, Multi-Task Voice UX and Background Presence.** Refine T185/T200/T208/T209/T212 using Golam-research/Grok Bot and Meta Muse as product-behavior references without importing their authority models. Text and voice consume one canonical conversation/work spine: one main long-running conversation may accept additional user messages while work is active; explicit side chats/project scopes may isolate context; users can steer, interrupt, cancel, queue or branch tasks without waiting for the previous assistant turn to finish. Background work, Goals/Tasks, proactive updates, generated Artifacts and activity history are projections over canonical state. Reuse Grok-style transcript/permission-card lessons and stale-approval handling, but all consequential approvals remain deterministic Golam controls. Muse-style proactivity must obey T212 attention budgets; voice output is not used for unsolicited always-on announcements by default.
 
@@ -231,6 +231,8 @@ DECISION_PROVIDER != VOICE_AUTHORITY
 VAD_EVENT != COMMAND_AUTHORIZATION
 FINAL_TRANSCRIPT != STOP_PREREQUISITE
 VOICE_ROUTE_FALLBACK != PRIVACY_DOWNGRADE
+PREPARED_TTS_ROUTE != CURRENT_PLAYBACK_PERMISSION
+OUTPUT_ROUTE_CHANGE != DISCLOSURE_CONTINUITY
 SPEECH_NATIVE_TOOL_CALL != EFFECT_AUTHORIZATION
 NATIVE_DUPLEX_OUTPUT != VERIFIED_TRANSCRIPT
 VOICE_CLONE != OWNER_PRESENCE
@@ -244,6 +246,7 @@ Future owning specs must prove, with exact instrumentation rather than subjectiv
 
 - microphone capture, STT, agent work, TTS and playback can be cancelled independently without leaking stale callbacks across account/agent/session fences;
 - in hands-free mode, Golam can hear a real user interruption while rejecting/discounting its own playback echo, and the stop path does not wait for final ASR;
+- sensitive audio prepared for a permitted headphone route emits no sensitive samples after a pre-playback route change to ambient speakers until the new route independently satisfies policy or receives fresh disclosure/approval;
 - a stale/partial transcript revision cannot authorize or target a consequential Effect;
 - semantic turn models can be removed/replaced without changing deterministic authority semantics;
 - local speech routes stay local under network denial and never silently fail over to cloud;
@@ -407,6 +410,8 @@ PARTIAL_TRANSCRIPT != FINAL_USER_INTENT
 TEXT_DECISION != ACOUSTIC_ENDPOINT
 VAD_EVENT != COMMAND_AUTHORIZATION
 VOICE_ROUTE_FALLBACK != PRIVACY_DOWNGRADE
+PREPARED_TTS_ROUTE != CURRENT_PLAYBACK_PERMISSION
+OUTPUT_ROUTE_CHANGE != DISCLOSURE_CONTINUITY
 SPEECH_NATIVE_TOOL_CALL != EFFECT_AUTHORIZATION
 NATIVE_DUPLEX_OUTPUT != VERIFIED_TRANSCRIPT
 ```
