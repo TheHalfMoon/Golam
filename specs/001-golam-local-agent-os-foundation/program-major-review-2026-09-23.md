@@ -350,7 +350,34 @@ Repairs that mutate state must go through the normal Effect/authority path and p
 
 This is T244.
 
-## 11. External source additions
+
+
+## 10. Gap I — canonical configuration revision and policy precedence
+
+Golam has many protected configuration surfaces: privacy profile, model routing, connectors/accounts, agent/workspace settings, skills/extensions, notification/attention behavior, device settings and future managed policy. These cannot rely on ambient "latest settings" or last-write-wins behavior.
+
+One canonical `ConfigurationRevision` contract must define:
+
+- configuration scope and owner;
+- immutable revision/generation;
+- expected prior revision for mutation;
+- deterministic precedence;
+- provenance/source surface;
+- effective policy derivation;
+- diff;
+- migration version;
+- stale-write rejection;
+- rollback-as-new-effect;
+- unsupported-future-version behavior;
+- import/export semantics.
+
+Protected configuration changes that alter privacy, egress, authority, secret release, model/provider routing or execution posture are governed Effects. Runtime environment variables, feature flags, cached settings and provider responses are inputs/derivatives, not canonical policy truth.
+
+Cross-device and cross-surface clients must use optimistic concurrency or an equivalent revision check. A stale mobile/CLI/UI client cannot overwrite a newer policy silently.
+
+This is T245.
+
+## 12. External source additions
 
 These sources are added only because they close measured lifecycle gaps.
 
@@ -366,7 +393,7 @@ These sources are added only because they close measured lifecycle gaps.
 
 No source above becomes an admitted runtime dependency from this review.
 
-## 12. Completeness matrix
+## 13. Completeness matrix
 
 | Product lifecycle | Existing owner(s) | Closure added by this review |
 | --- | --- | --- |
@@ -390,6 +417,7 @@ No source above becomes an admitted runtime dependency from this review.
 | enterprise/multi-tenant claim | not currently admitted | T243 defines separate future gate |
 | diagnostics/observability | T139/T178 | T244 |
 | safe repair UX | partial T139/T182 | T244 |
+| configuration revision / policy precedence / stale cross-surface writes | implicit only | T245 |
 | data retention/export/delete | T160/T201 | T237/T239/T241 consume it |
 | resource pressure | T132/T159/T182 | existing coverage sufficient |
 | time/DST/scheduler | T129/T130/T182 | existing coverage sufficient |
@@ -402,9 +430,9 @@ No source above becomes an admitted runtime dependency from this review.
 | external channels | T169/T183/T231 | existing coverage sufficient |
 | model decision fabric | T175/T203/T204/T229/T235 | existing coverage sufficient |
 | verification | T149/T150/T213/T216 | existing coverage sufficient |
-| resilience/chaos | T182 | T237–T244 add operator-specific expected outcomes |
+| resilience/chaos | T182 | T237–T245 add operator-specific expected outcomes |
 
-## 13. Canonical ownership extensions required in T198
+## 14. Canonical ownership extensions required in T198
 
 Before any implementation lifecycle consumes T237–T244, T198 must assign exactly one owner/version/migration authority for:
 
@@ -417,11 +445,11 @@ Before any implementation lifecycle consumes T237–T244, T198 must assign exact
 - `PlatformCapabilityState`;
 - deployment/tenancy profile;
 - `HealthSnapshot` / `RepairPlan`;
-- configuration/privacy/policy revision identity where these states interact.
+- `ConfigurationRevision` / policy-precedence / stale-write state.
 
 No package-local substitute is permitted.
 
-## 14. New hard invariants
+## 15. New hard invariants
 
 ```text
 FIRST_RUN_COMPLETE != OWNER_AUTHORIZED
@@ -445,10 +473,14 @@ TEAM_WORKSPACE != SHARED_OWNER_AUTHORITY
 ADMIN_ROLE != OWNER_PRESENCE
 TRACE != REPAIR_AUTHORITY
 HEALTH_WARNING != AUTOMATIC_MUTATION_AUTHORITY
+STALE_CONFIG_WRITE != VALID_CONFIGURATION_UPDATE
+RUNTIME_DERIVED_CONFIG != CANONICAL_CONFIGURATION
+FEATURE_FLAG != AUTHORITY_OVERRIDE
+CONFIG_IMPORT != AUTHORITY_IMPORT
 UNINSTALL != REMOTE_DATA_ERASURE
 ```
 
-## 15. Failure journeys that must exist before stable release
+## 16. Failure journeys that must exist before stable release
 
 ### Lost primary device
 
@@ -526,7 +558,7 @@ user chooses decommission
 -> disclose remote/external data that cannot be recalled
 ```
 
-## 16. Explicit non-goals / future gates
+## 17. Explicit non-goals / future gates
 
 The review does not make these current product requirements:
 
@@ -544,12 +576,12 @@ The review does not make these current product requirements:
 
 The architecture must support future bounded implementations without making them implicit trust roots today.
 
-## 17. Review disposition
+## 18. Review disposition
 
 ```text
 MAJOR_PROGRAM_REVIEW_2026_09_23_COMPLETE=YES
-MEASURED_LIFECYCLE_GAPS_FOUND=8
-NEW_TASK_RANGE=T237-T244
+MEASURED_LIFECYCLE_GAPS_FOUND=9
+NEW_TASK_RANGE=T237-T245
 NEW_PARALLEL_AUTHORITY_SYSTEM=NO
 NEW_RUNTIME_DEPENDENCY_ADMITTED=NO
 NEW_MODEL_ADMITTED=NO
