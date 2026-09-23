@@ -281,7 +281,7 @@ required_for_routes[]
 remediation
 ```
 
-Revocation must invalidate dependent route applicability and pending protected work before dispatch.
+Revocation must invalidate dependent route applicability and pending protected work before dispatch. Watchers/notifications are only an optimization: immediately before protected dispatch, Golam must freshly revalidate the platform permission/capability posture (or consume an equivalently fresh OS-issued proof bound to that dispatch generation). A delayed or missed permission-change notification must not permit stale dispatch; inability to establish current posture fails closed.
 
 This is T242.
 
@@ -468,6 +468,8 @@ OFFLINE_BUNDLE != ARTIFACT_ADMISSION
 WEBHOOK_SIGNATURE != EVENT_SEMANTIC_TRUTH
 SYNC_CURSOR != SOURCE_OF_TRUTH
 OS_PERMISSION_GRANTED_ONCE != CURRENT_ROUTE_APPLICABILITY
+CACHED_PLATFORM_PERMISSION != DISPATCH_PERMISSION_PROOF
+PERMISSION_NOTIFICATION != DISPATCH_REVALIDATION
 SAME_HOST != SAME_TENANT
 TEAM_WORKSPACE != SHARED_OWNER_AUTHORITY
 ADMIN_ROLE != OWNER_PRESENCE
@@ -538,8 +540,11 @@ write prepared
 ```text
 route prepared
 -> user revokes Accessibility/Mic/Screen permission externally
--> capability generation changes
--> pending route fails current applicability
+-> OS permission-change notification delayed/lost
+-> protected dispatch performs fresh platform permission revalidation
+-> current permission cannot be proven / revocation observed
+-> dispatch fails closed
+-> pending route is invalidated
 -> no weaker route silently selected
 -> task reports blocker/remediation
 ```
