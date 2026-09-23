@@ -520,7 +520,7 @@ OS_KEYRING_WRITE_SUCCESS != SECRET_RELEASE_AUTHORITY
 NANGO_CONNECTION_HEALTHY != GOLAM_EFFECT_AUTHORIZED
 ```
 
-These sources support T237–T244 and existing T113/T138/T139/T147/T157/T160/T168/T174/T178/T179/T182. None creates a parallel state machine.
+These sources support T237–T245 and existing T113/T138/T139/T147/T157/T160/T168/T174/T178/T179/T182. None creates a parallel state machine.
 
 ### AutoClaw / Z.AI follow-up sources
 
@@ -563,7 +563,7 @@ The combined source universe points to nine reusable fabrics, not dozens of embe
 6. Voice / Conversational Presence -> Wispral + Himsat + Golam-research + replaceable speech engines + T203 decision providers
 7. Adaptive Delivery / Channels / Skills -> AutoClaw behavior + OpenClaw + Z.AI GLM-skills + Synapse/ZCode, under T163/T169/T180/T230–T234
 8. Durable Work / Agent Computer UX -> OpenMuse bounded donor patterns under T167/T205/T221/T236
-9. Product Lifecycle / Operability -> TUF + Sigstore + Tauri updater + restic + keyring-rs + bounded connector-lifecycle references under T237–T244
+9. Product Lifecycle / Operability -> TUF + Sigstore + Tauri updater + restic + keyring-rs + bounded connector-lifecycle references under T237–T245
 ```
 
 Ascout/Winds/SpecGrain/Diffcipline/MESC/commandF provide cross-cutting proof, source identity, bounded delivery and independent verification. Kodac/Pluma/Signthos/Ecra/Inercative/Wispral add bounded contracts for workload identity, disclosure-bound proposals, review checkpoints, multidimensional proof, skill replay/repair, failure continuity and immediate human interruption without becoming separate authority systems.
