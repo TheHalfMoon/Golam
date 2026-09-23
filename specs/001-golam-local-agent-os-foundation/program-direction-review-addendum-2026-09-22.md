@@ -1804,3 +1804,24 @@ NEW_PRODUCT_IMPLEMENTATION_STARTED=NO
 ACTIVE_SPEC_006_PR_24_WIDENED=NO
 FUTURE_IMPLEMENTATION_AUTHORITY_GRANTED=NO
 ```
+
+
+### 25.6 Dispatch-boundary OS permission revalidation
+
+Independent review of the major lifecycle closure found one material race in T242: an OS permission-change notification can be delayed or lost after route preparation.
+
+T242 is now strengthened so watchers/notifications only update cached projection state; they do not satisfy protected dispatch.
+
+Immediately before each protected platform route dispatch, Golam must freshly revalidate the current platform permission/capability posture, or consume an equivalently fresh OS-issued proof bound to the dispatch generation. If current posture cannot be established, dispatch fails closed.
+
+```text
+CACHED_PLATFORM_PERMISSION != DISPATCH_PERMISSION_PROOF
+PERMISSION_NOTIFICATION != DISPATCH_REVALIDATION
+```
+
+Acceptance explicitly covers permission revocation between route preparation and dispatch with a delayed/lost notification.
+
+```text
+T242_DELAYED_PERMISSION_NOTIFICATION_GAP_CLOSED=YES
+NEW_PERMISSION_AUTHORITY_CREATED=NO
+```
