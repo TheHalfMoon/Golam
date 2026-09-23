@@ -1,7 +1,7 @@
 # Golam Major Program Review and Lifecycle Closure — 2026-09-23
 
-**Status:** PROGRAM REVIEW / PLANNING ONLY  
-**Target:** Golam Local/Private Verified Agent OS  
+**Status:** PROGRAM REVIEW / PLANNING ONLY
+**Target:** Golam Local/Private Verified Agent OS
 **Authority:** This review does not authorize implementation, dependency admission, model admission, source admission, Constitution changes or Spec 006 scope expansion.
 
 ## 1. Review objective
