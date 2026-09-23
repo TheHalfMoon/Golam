@@ -423,7 +423,7 @@ Future owning specs must prove:
 
 ## Phase Z — Product lifecycle and operability closure
 
-The major program review is recorded in `program-major-review-2026-09-23.md`. T237–T244 close product-lifecycle gaps that earlier tasks covered only partially. They refine existing canonical contracts; they do not create new authority roots or widen active Spec 006.
+The major program review is recorded in `program-major-review-2026-09-23.md`. T237–T245 close product-lifecycle gaps that earlier tasks covered only partially. They refine existing canonical contracts; they do not create new authority roots or widen active Spec 006.
 
 - [ ] **T237 — Owner Bootstrap, Recovery, Device Replacement and Decommission Contract.** Refine T138/T160/T168/T174 into one lifecycle from an uninitialized install through owner/AuthorityHost bootstrap, recovery-material creation/verification, lost-device response, AuthorityHost replacement, stale-device revocation, reinstall, uninstall and decommission. Define explicit protected states such as `UNINITIALIZED`, `ACTIVE`, `LOCKED`, `RECOVERY_PENDING`, `MIGRATION_PENDING` and `DECOMMISSION_PENDING`. Recovery material may help establish a fresh recovery ceremony but never authorizes an ordinary Effect. Decommission must stop new work, surface unresolved/in-flight Effects, remove background services/autostart and selected local state, revoke local bindings where possible, and disclose external/remote data or Effects that cannot be recalled. Provide preserve/export-vs-erase choices; uninstall must not silently destroy the only recoverable canonical state.
 
@@ -441,7 +441,11 @@ The major program review is recorded in `program-major-review-2026-09-23.md`. T2
 
 - [ ] **T244 — Operational Health, Diagnostic Bundle and Safe Repair Contract.** Refine T139/T159/T178/T182 into one operator-facing health model. Define `HealthSnapshot` and `RepairPlan` projections for canonical-store integrity, unresolved Effects, AuthorityHost/device state, model/provider readiness, extension/skill status, connector health, browser/computer runtimes, OS permissions, disk/resource pressure, backup freshness/restore-drill status, update metadata freshness, clock anomalies, listener/network exposure and crash-loop state. `golam doctor` and UI diagnostics remain local/redacted by default. A repair plan is a proposal; every state-changing repair uses the ordinary Effect/authority path and produces receipts. No support bundle silently uploads prompts, secrets, raw private artifacts or protected authority state.
 
-### T237–T244 hard invariants
+
+
+- [ ] **T245 — Canonical Configuration Revision, Policy Precedence and Drift Contract.** Define one versioned `ConfigurationRevision` / protected-policy derivation contract across Desktop, TUI, CLI, Mobile and remote projections. Scope configuration explicitly (owner/global, device, workspace/project, agent, capability/provider, connector/account, model route, notification/attention, privacy profile and future managed-organization scope). Every mutation binds expected prior revision/generation and fails on stale write rather than last-write-wins. Define deterministic precedence and conflict semantics; a lower-assurance surface, cached client, feature flag, environment variable or provider response cannot override protected policy. Configuration changes that alter authority/privacy/egress/secret/model/execution behavior are governed Effects with diff, provenance and resulting revision. Rollback is a new configuration Effect, not history rewrite. Derived runtime config/cache is rebuildable and never becomes canonical truth. Export/import excludes secrets/capability leases and cannot import authority; invalid or unsupported future configuration fails closed with repair guidance. In any future T243 enterprise mode, managed policy and personal preference remain distinct inputs with explicit precedence rather than ambient admin override.
+
+### T237–T245 hard invariants
 
 ```text
 FIRST_RUN_COMPLETE != OWNER_AUTHORIZED
@@ -466,9 +470,13 @@ TEAM_WORKSPACE != SHARED_OWNER_AUTHORITY
 ADMIN_ROLE != OWNER_PRESENCE
 TRACE != REPAIR_AUTHORITY
 HEALTH_WARNING != AUTOMATIC_MUTATION_AUTHORITY
+STALE_CONFIG_WRITE != VALID_CONFIGURATION_UPDATE
+RUNTIME_DERIVED_CONFIG != CANONICAL_CONFIGURATION
+FEATURE_FLAG != AUTHORITY_OVERRIDE
+CONFIG_IMPORT != AUTHORITY_IMPORT
 ```
 
-### T237–T244 acceptance direction
+### T237–T245 acceptance direction
 
 Future owning specs must prove:
 
@@ -483,11 +491,12 @@ Future owning specs must prove:
 - connector token expiry, webhook replay/duplicates/out-of-order events and account rebinding have deterministic recovery/dedup semantics;
 - permission revocation between route preparation and dispatch blocks that route before protected execution;
 - the personal single-owner deployment cannot accidentally become a multi-user security claim;
-- diagnostics can identify the major unhealthy states while repair remains explicitly governed and support bundles stay private by default.
+- diagnostics can identify the major unhealthy states while repair remains explicitly governed and support bundles stay private by default;
+- concurrent/stale cross-surface configuration writes are rejected deterministically, policy precedence is explicit, and rollback/import cannot bypass authority, privacy, egress or secret rules.
 
 ## Cross-fabric ownership rule
 
-Before T203–T244 implementation, T198's Canonical Shared-Contract Ownership Matrix must name the sole owner/version source/migration authority for at least:
+Before T203–T245 implementation, T198's Canonical Shared-Contract Ownership Matrix must name the sole owner/version source/migration authority for at least:
 
 - TaskContract / Task-Session-Run-Worker identities;
 - ExecutionEnvelope;
@@ -532,7 +541,8 @@ Before T203–T244 implementation, T198's Canonical Shared-Contract Ownership Ma
 - ConnectorBinding / auth generation / sync cursor / webhook receipt semantics;
 - PlatformCapabilityState / permission generation semantics;
 - deployment/tenancy profile semantics;
-- HealthSnapshot / RepairPlan semantics.
+- HealthSnapshot / RepairPlan semantics;
+- ConfigurationRevision / policy-precedence / stale-write semantics.
 
 No owning package may invent package-local protected truth for one of these concepts.
 
@@ -641,6 +651,7 @@ P1_PRODUCT_LIFECYCLE_FOUNDATIONS:
 P2_OPERATOR_AND_DEPLOYMENT:
   T243 Deployment / Tenancy / Enterprise Boundary
   T244 Operational Health / Diagnostics / Safe Repair
+  T245 Canonical Configuration Revision / Policy Precedence / Drift
 
 P2_EXTERNAL_COMPLETENESS:
   T234 Agent-OS Operator Completeness Parity Harness
@@ -768,7 +779,7 @@ Feed an out-of-domain/high-confidence wrong DecisionProvider result. Prove deter
 ## Current safe sequencing
 
 1. Keep active Spec 006 PR #24 unchanged in scope.
-2. Treat T203–T244 as planning-only extension tasks.
+2. Treat T203–T245 as planning-only extension tasks.
 3. Qualify the planning PR on its exact new head after this extension.
 4. Re-run independent architecture/security/governance review because the planning head changed.
 5. Merge planning only after new-head findings and required checks are reconciled.
