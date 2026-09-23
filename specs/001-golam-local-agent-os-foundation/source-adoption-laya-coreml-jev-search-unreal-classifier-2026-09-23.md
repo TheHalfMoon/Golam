@@ -1,6 +1,6 @@
 # Golam Source Adoption Review — Laya CoreML, Jev Search, Unreal Agent and classifier.dev — 2026-09-23
 
-**Status:** PROGRAM RESEARCH / PLANNING ONLY  
+**Status:** PROGRAM RESEARCH / PLANNING ONLY
 **Authority:** No implementation, dependency, runtime, model or source admission. No Spec 006 scope expansion.
 
 ## 1. Reviewed source states
