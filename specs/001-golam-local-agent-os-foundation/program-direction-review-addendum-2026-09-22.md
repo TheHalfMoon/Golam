@@ -1704,3 +1704,100 @@ LAYA_MODEL_ADMITTED=NO
 OPENMUSE_CODE_ADMITTED=NO
 FUTURE_IMPLEMENTATION_AUTHORITY_GRANTED=NO
 ```
+
+
+## 25. Major lifecycle and operability review
+
+The 2026-09-23 program-level review intentionally stopped looking for additional agent/model features and instead audited Golam from installation through decommission.
+
+The detailed review is `program-major-review-2026-09-23.md`.
+
+Eight residual lifecycle gaps were promoted into explicit tasks:
+
+```text
+T237 Owner Bootstrap / Recovery / Device Replacement / Decommission
+T238 Secret / Credential Lifecycle
+T239 Canonical State Integrity / Backup / Restore / Safe Repair
+T240 Secure Update / Offline Bundle / Compatibility / Rollback
+T241 Connector Auth / Remote Event / Webhook / Sync Lifecycle
+T242 OS Permission / Platform Capability Drift
+T243 Deployment / Tenancy / Enterprise Boundary
+T244 Operational Health / Diagnostics / Safe Repair
+```
+
+These are not new authority systems. They make previously distributed goals operationally complete.
+
+### 25.1 Why these gaps matter
+
+Golam already has strong contracts for what an agent may do. A trustworthy Agent OS also needs exact behavior when:
+
+- the user installs it for the first time;
+- the primary device is lost;
+- a secret expires or is compromised;
+- the canonical database is corrupt;
+- an update is validly signed but broken;
+- the machine is air-gapped;
+- an OAuth token expires during work;
+- a webhook is replayed or delivered twice;
+- the OS revokes Accessibility, Screen Recording or microphone access;
+- a personal installation is mistakenly treated as multi-user secure;
+- the operator needs to diagnose and repair the system without sending private data away.
+
+A system that only specifies the happy-path action loop is not operationally complete.
+
+### 25.2 New source set
+
+The review adds a deliberately small source/reference set:
+
+- The Update Framework — update trust/freshness/rollback protection;
+- Sigstore/Cosign — release signature/attestation verification;
+- Tauri updater — desktop update transport/install mechanics only;
+- restic — encrypted/verifiable backup/restore principles;
+- keyring-rs — OS-native credential-store adapter candidate;
+- Nango — connector OAuth/token/webhook/sync lifecycle behavior reference only by default due the reviewed Elastic License 2.0 posture.
+
+No source is admitted as a runtime dependency by this review.
+
+### 25.3 Product baseline is now explicit
+
+The architecture baseline remains:
+
+```text
+PERSONAL_SINGLE_OWNER
+LOCAL/PRIVATE FIRST
+ONE PROTECTED AUTHORITY HOST
+MULTIPLE BOUNDED AGENTS / WORKERS / DEVICES / EXECUTION NODES
+```
+
+A future enterprise/team mode is allowed only through a separate tenancy/security lifecycle; adding accounts to a shared local process is not enterprise isolation.
+
+### 25.4 New lifecycle invariants
+
+```text
+RECOVERY_MATERIAL != EFFECT_AUTHORIZATION
+BACKUP_PRESENT != RESTORE_PROVEN
+DATABASE_REPAIR != EFFECT_OUTCOME_REWRITE
+UPDATE_SIGNATURE != UPDATE_POLICY
+OFFLINE_BUNDLE != ARTIFACT_ADMISSION
+ACCOUNT_REAUTH != PENDING_EFFECT_REAUTHORIZATION
+WEBHOOK_SIGNATURE != EVENT_SEMANTIC_TRUTH
+OS_PERMISSION_GRANTED_ONCE != CURRENT_ROUTE_APPLICABILITY
+SAME_HOST != SAME_TENANT
+TRACE != REPAIR_AUTHORITY
+UNINSTALL != REMOTE_DATA_ERASURE
+```
+
+### 25.5 Review conclusion
+
+The review found no reason to replace the existing Authority / Effect / Evidence / Task spine. The main improvement is lifecycle closure around it.
+
+```text
+MAJOR_PROGRAM_REVIEW_2026_09_23_COMPLETE=YES
+MEASURED_LIFECYCLE_GAPS_FOUND=8
+TASK_GRAPH_EXTENDS_THROUGH_T244=YES
+NEW_PARALLEL_AUTHORITY_SYSTEM=NO
+NEW_RUNTIME_DEPENDENCY_ADMITTED=NO
+NEW_PRODUCT_IMPLEMENTATION_STARTED=NO
+ACTIVE_SPEC_006_PR_24_WIDENED=NO
+FUTURE_IMPLEMENTATION_AUTHORITY_GRANTED=NO
+```
