@@ -369,9 +369,59 @@ Future owning specs must prove:
 - skill update/revocation invalidates stale caches/queued activations and can roll back to the last qualified revision;
 - external completeness parity finds at least setup/remove, run/recovery, install/rollback and send/health asymmetries without turning OpenClaw behavior into mandatory Golam policy.
 
+
+
+## Phase Y — Laya decision model and OpenMuse bounded donor adoption
+
+The source-specific plans are:
+
+- `laya-integration-plan-2026-09-23.md`;
+- `openmuse-integration-plan-2026-09-23.md`.
+
+These tasks consume the existing T175/T203/T204/T167/T205/T221/T173/T179/T199 contracts. They do not create a second Decision Fabric, Task ledger, approval system, browser authority or computer authority.
+
+- [ ] **T235 — Laya Low-Resource Decision Provider Qualification and OpenJev Tournament.** Treat exactly `convaiinnovations/laya` as an optional, replaceable low-resource T203 `DecisionProvider` target. T175 must freeze exact immutable model/config/tokenizer/safetensors/runtime identities, transitive rights, offline behavior and rollback artifact. Implement only one bounded `LayaDecisionAdapter` that accepts canonical `DecisionRequest` and emits `DecisionReceipt`. Qualify Laya independently for high-frequency bounded workloads such as Attention triage, capability-fit classification, provider/route candidate scoring, retrieval relevance, urgency/risk flagging, duplicate scoring and voice semantic decisions where separately proven. Run a preregistered cross-provider tournament against OpenJev and deterministic/generative baselines on matched held-out workloads, recording calibration, selective risk/abstention, OOD behavior, contradiction rate, perturbation robustness, latency, throughput, RAM/VRAM, quantization/backend drift and strict-local behavior. A Laya guardrail/moderation score may raise scrutiny or request review but cannot lower policy, grant capability, authorize egress/Effect, satisfy approval/owner presence, or emit verified truth.
+
+- [ ] **T236 — OpenMuse Exact-Component Port Matrix and Parity Qualification.** Use `CopilotKit/openmuse@bb7ce4e1c6e523bf282a655c63621e3ed9e75150` as a bounded implementation donor, never a wholesale app/runtime fork. Before any reuse, enumerate each selected source path/blob with reuse mode, target Golam owner/package, dependency closure, rights/NOTICE, secret/network behavior, authority ceiling, Effect mapping, TCB delta, tests to port/add and rollback/removal path. Priority candidate areas are: visible follow-up queue/run-failure semantics; rich task/artifact hydration with durable IDs and ephemeral signed URLs; SQL-lease/recovery/uncertain-write test patterns; review invalidation fixtures; persistent Chromium/takeover patterns; isolated Linux-computer hardening and smoke fixtures; Goals/monitors/background update UX. CopilotKit Intelligence remains optional/non-required; OpenMuse's shared access key, task store, review state, worker token, Playwright container and Docker container never become Golam identity/Task/approval/security authority. Ported UI must rebuild from Golam canonical state, and runtime components must be removable without corrupting canonical user state.
+
+### T235–T236 hard invariants
+
+```text
+LAYA_DESKTOP != LAYA_DECISION_MODEL
+SOURCE_DISPLAY_NAME != SOURCE_IDENTITY
+LAYA != AUTHORITY
+LAYA != POLICY_ENGINE
+LAYA_GUARDRAIL_SCORE != POLICY_DECISION
+LAYA_MODERATION_SCORE != EFFECT_PERMISSION
+LAYA_HIGH_SCORE != ALLOW
+LAYA_UNAVAILABLE != GOLAM_UNAVAILABLE
+OPENMUSE_TASK_STORE != GOLAM_TASK_AUTHORITY
+OPENMUSE_REVIEW != GOLAM_APPROVAL_AUTHORITY
+OPENMUSE_WORKER_TOKEN != GOLAM_PRINCIPAL
+COPILOTKIT_THREAD != GOLAM_CANONICAL_TASK
+PLAYWRIGHT_CONTAINER != KERNEL_SECURITY_BOUNDARY
+DOCKER_CONTAINER != HOSTILE_TENANT_VM
+SIGNED_URL != OBJECT_AUTHORITY
+```
+
+### T235–T236 acceptance direction
+
+Future owning specs must prove:
+
+- Laya and OpenJev can be independently enabled, disabled, rejected per workload and removed without protected semantic changes;
+- no generic model score threshold is treated as policy or authority;
+- the lower-resource provider wins a route only from preregistered workload/hardware evidence, not model size or marketing;
+- the two distinct Laya sources cannot be confused by display name, registry key, artifact ID or Source Foundry record;
+- every copied/ported OpenMuse component is exact-pinned and assigned to an existing canonical owner;
+- OpenMuse queue failure never causes implicit resend or duplicate Effect;
+- task/lease/recovery patterns preserve Golam UNKNOWN_OUTCOME and Effect semantics rather than importing a second task ledger;
+- browser/computer ports preserve or strengthen strict-local, secret, egress and no-host-fallback boundaries;
+- OpenMuse UI/thread projections can be rebuilt from Golam canonical state without CopilotKit Intelligence;
+- removal of an OpenMuse donor component does not make user-owned canonical data unreadable or authoritative state ambiguous.
+
 ## Cross-fabric ownership rule
 
-Before T203–T234 implementation, T198's Canonical Shared-Contract Ownership Matrix must name the sole owner/version source/migration authority for at least:
+Before T203–T236 implementation, T198's Canonical Shared-Contract Ownership Matrix must name the sole owner/version source/migration authority for at least:
 
 - TaskContract / Task-Session-Run-Worker identities;
 - ExecutionEnvelope;
@@ -406,7 +456,9 @@ Before T203–T234 implementation, T198's Canonical Shared-Contract Ownership Ma
 - DeliveryFormation / role / audit obligation semantics;
 - AgentProfileBinding / channel-memory-workspace binding semantics;
 - LearningObservation / PreferenceRuleCandidate / ToolKnowledgeCandidate semantics;
-- SkillPackRevision / prerequisite / activation-revocation semantics.
+- SkillPackRevision / prerequisite / activation-revocation semantics;
+- LayaDecisionAdapter / workload calibration / cross-provider qualification semantics;
+- OpenMuse donor-port mapping / projection parity semantics.
 
 No owning package may invent package-local protected truth for one of these concepts.
 
@@ -424,9 +476,13 @@ The public repository currently carries Apache-2.0 plus additional hosted-servic
 
 Treat code and model artifacts separately. A code license never auto-admits weights, base models, datasets, teacher outputs, quantizations or runtime backends. Model Artifact Foundry T175 applies to every selected artifact.
 
-### Laya
+### Laya Desktop / `aayushch/laya`
 
 Prefer behavior/UX and bounded component patterns. Its n8n/Python/Chroma topology is not a Golam trusted-path requirement.
+
+### Laya Decision Model / `convaiinnovations/laya`
+
+Treat the Hugging Face model as a separate source identity and T203 provider candidate under T235. It is not the `aayushch/laya` application. T175 must freeze exact model/config/tokenizer/runtime artifacts before any workload admission. Guardrail/moderation/routing scores remain advisory and can raise scrutiny or request escalation but cannot lower deterministic policy, authorize an Effect or declare verified truth.
 
 ### TinyFish / Desktop Commander
 
@@ -473,6 +529,7 @@ P1_NEW:
   T205 ExecutionEnvelope / Reconciliation
   T207 Credential-Brokered Tool Relay
   T229 OpenJev First-Class Decision Provider Qualification / Adapter
+  T235 Laya Low-Resource Decision Provider Qualification / Tournament
 
 P1_PRODUCT_PROJECTION:
   T208 Proactive Attention / Action Proposal
@@ -501,6 +558,7 @@ P1_AUTOCLAW_ADOPTION:
 
 P2_EXTERNAL_COMPLETENESS:
   T234 Agent-OS Operator Completeness Parity Harness
+  T236 OpenMuse Exact-Component Port Matrix / Parity Qualification
 
 P2_AFTER_FOUNDATIONS:
   T209 Cross-Source Coherence / Briefing
@@ -555,6 +613,10 @@ PREPARED_TTS_ROUTE != CURRENT_PLAYBACK_PERMISSION
 OUTPUT_ROUTE_CHANGE != DISCLOSURE_CONTINUITY
 SPEECH_NATIVE_TOOL_CALL != EFFECT_AUTHORIZATION
 NATIVE_DUPLEX_OUTPUT != VERIFIED_TRANSCRIPT
+LAYA_DESKTOP != LAYA_DECISION_MODEL
+LAYA_GUARDRAIL_SCORE != POLICY_DECISION
+OPENMUSE_TASK_STORE != GOLAM_TASK_AUTHORITY
+COPILOTKIT_THREAD != GOLAM_CANONICAL_TASK
 ```
 
 ## End-to-end proving journeys
@@ -610,7 +672,7 @@ Feed an out-of-domain/high-confidence wrong DecisionProvider result. Prove deter
 ## Current safe sequencing
 
 1. Keep active Spec 006 PR #24 unchanged in scope.
-2. Treat T203–T234 as planning-only extension tasks.
+2. Treat T203–T236 as planning-only extension tasks.
 3. Qualify the planning PR on its exact new head after this extension.
 4. Re-run independent architecture/security/governance review because the planning head changed.
 5. Merge planning only after new-head findings and required checks are reconciled.
