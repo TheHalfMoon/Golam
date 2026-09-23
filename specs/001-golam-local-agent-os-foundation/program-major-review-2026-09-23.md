@@ -434,7 +434,7 @@ No source above becomes an admitted runtime dependency from this review.
 
 ## 14. Canonical ownership extensions required in T198
 
-Before any implementation lifecycle consumes T237–T244, T198 must assign exactly one owner/version/migration authority for:
+Before any implementation lifecycle consumes T237–T245, T198 must assign exactly one owner/version/migration authority for:
 
 - `BootstrapState` / owner-root state;
 - `RecoveryMaterialRef` and device-replacement state;
