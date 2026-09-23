@@ -493,6 +493,35 @@ exact T175 artifact
 
 A moderation/guardrail score may increase scrutiny; it cannot lower deterministic policy or authorize an Effect.
 
+
+
+### 2026-09-23 lifecycle / operability closure sources
+
+The major lifecycle review added only sources that close measured operational gaps.
+
+| Source | Reviewed state | Disposition | Golam value / boundary |
+| --- | --- | --- | --- |
+| `theupdateframework/specification` | `7dd5faca4251995063b851c060a12ac915b17ae3`; Community Specification License 1.0 | `SECURE_UPDATE_PROTOCOL_REFERENCE` | root/targets/snapshot/timestamp role separation, threshold/delegation concepts, metadata expiry and rollback/freeze protection; specification behavior, not a runtime dependency |
+| `theupdateframework/python-tuf` | `aeb6ca76b42c11991c28ee7f0af57106cd9f2b4a`; Apache-2.0 / MIT files observed | `UPDATE_IMPLEMENTATION_AND_TEST_REFERENCE` | client/repository implementation and adversarial-test reference; no Python runtime requirement for Golam |
+| `sigstore/cosign` | `0c66ecdff337f647bbcb0259efe61a81e33a76e8`; Apache-2.0 | `RELEASE_SIGNING_VERIFICATION_REFERENCE / BUILD_TOOL_CANDIDATE` | signed artifact/blob verification, identity/attestation/transparency patterns; signature is evidence consumed by update policy, never update policy itself |
+| `tauri-apps/tauri-plugin-updater` | `ca61ba54fa1a806c527b539467f12f57918b16dd`; README states MIT or MIT/Apache-2.0 where applicable | `DESKTOP_UPDATE_TRANSPORT_DONOR_CANDIDATE` | Windows/macOS/Linux update check/download/install mechanics; never the update trust root or schema authority |
+| `restic/restic` | `6adedec6b48ae9ff0ffbc37bd675ccebd02c728f`; BSD-2-Clause | `BACKUP_RESTORE_DESIGN_AND_TEST_REFERENCE` | encrypted/integrity-protected/verifiable restore and snapshot principles; no mandatory restic executable or repository format |
+| `open-source-cooperative/keyring-rs` | `430b34b83cb15e97d608aed494b49537e35a20b8`; MIT / Apache-2.0 | `OS_NATIVE_SECRET_STORE_ADAPTER_CANDIDATE` | cross-platform native secure-store abstraction/sample code; each platform store and secret-residency behavior remains independently qualified |
+| `NangoHQ/nango` | `f176680bb0a6df4ae8380fa9973a8540f346a56d`; Elastic License 2.0 | `CONNECTOR_LIFECYCLE_BEHAVIOR_REFERENCE_ONLY_BY_DEFAULT` | OAuth/API-key/token-refresh, proxy, sync, webhooks and account lifecycle patterns; hosted/multi-tenant assumptions and license constraints do not define Golam architecture or code-admission rights |
+
+#### Lifecycle-source placement rules
+
+```text
+TUF_METADATA_VALID != UPDATE_AUTHORIZED
+SIGNATURE_VALID != UPDATE_POLICY_SATISFIED
+TAURI_UPDATER_AVAILABLE != UPDATE_TRUST_ROOT
+RESTIC_BACKUP_CREATED != GOLAM_RESTORE_PROVEN
+OS_KEYRING_WRITE_SUCCESS != SECRET_RELEASE_AUTHORITY
+NANGO_CONNECTION_HEALTHY != GOLAM_EFFECT_AUTHORIZED
+```
+
+These sources support T237–T244 and existing T113/T138/T139/T147/T157/T160/T168/T174/T178/T179/T182. None creates a parallel state machine.
+
 ### AutoClaw / Z.AI follow-up sources
 
 The founder explicitly states that Z.AI granted permission to copy/use available Z.AI AutoClaw-related source code. This permission is recorded as founder-attested input and does not bypass exact-component Source Foundry, transitive rights/NOTICE closure, T165 security admission or T197 TCB budgeting.
@@ -523,7 +552,7 @@ The reviewed adoption plan is `autoclaw-zai-adoption-2026-09-22.md`.
 
 ## 8. Portfolio synthesis: do not create a collage
 
-The combined source universe points to five reusable fabrics, not dozens of embedded applications:
+The combined source universe points to nine reusable fabrics, not dozens of embedded applications:
 
 ```text
 1. Authority + Evidence Core        -> Golam canonical kernel
@@ -534,6 +563,7 @@ The combined source universe points to five reusable fabrics, not dozens of embe
 6. Voice / Conversational Presence -> Wispral + Himsat + Golam-research + replaceable speech engines + T203 decision providers
 7. Adaptive Delivery / Channels / Skills -> AutoClaw behavior + OpenClaw + Z.AI GLM-skills + Synapse/ZCode, under T163/T169/T180/T230–T234
 8. Durable Work / Agent Computer UX -> OpenMuse bounded donor patterns under T167/T205/T221/T236
+9. Product Lifecycle / Operability -> TUF + Sigstore + Tauri updater + restic + keyring-rs + bounded connector-lifecycle references under T237–T244
 ```
 
 Ascout/Winds/SpecGrain/Diffcipline/MESC/commandF provide cross-cutting proof, source identity, bounded delivery and independent verification. Kodac/Pluma/Signthos/Ecra/Inercative/Wispral add bounded contracts for workload identity, disclosure-bound proposals, review checkpoints, multidimensional proof, skill replay/repair, failure continuity and immediate human interruption without becoming separate authority systems.
@@ -563,6 +593,8 @@ Otherwise the source remains a reference.
 ```text
 NEW_SOURCES_REVIEWED_2026_09_22=YES
 NEW_SOURCES_REVIEWED_2026_09_23=YES
+MAJOR_PROGRAM_LIFECYCLE_REVIEW_2026_09_23=YES
+LIFECYCLE_SOURCE_SET_REVIEWED_2026_09_23=YES
 OWNER_PORTFOLIO_REENUMERATED_2026_09_22=YES
 OWNER_PORTFOLIO_COUNT_CORRECTED_TO_36_2026_09_22=YES
 FOUNDER_SOURCE_PERMISSION_REAFFIRMED_2026_09_22=YES
