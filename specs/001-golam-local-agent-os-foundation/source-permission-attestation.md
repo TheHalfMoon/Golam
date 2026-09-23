@@ -1,8 +1,8 @@
 # Founder Source Permission Attestation
 
-**Recorded**: 2026-08-24  
-**Reaffirmed**: 2026-09-23  
-**Scope**: Golam research/source universe recorded in the repository and sources supplied/reviewed during current program research  
+**Recorded**: 2026-08-24
+**Reaffirmed**: 2026-09-23
+**Scope**: Golam research/source universe recorded in the repository and sources supplied/reviewed during current program research
 **Status**: `FOUNDER_PERMISSION_ATTESTED_AND_REAFFIRMED`
 
 ## Attestation
