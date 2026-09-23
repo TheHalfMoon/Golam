@@ -1712,7 +1712,7 @@ The 2026-09-23 program-level review intentionally stopped looking for additional
 
 The detailed review is `program-major-review-2026-09-23.md`.
 
-Eight residual lifecycle gaps were promoted into explicit tasks:
+Nine residual lifecycle gaps were promoted into explicit tasks:
 
 ```text
 T237 Owner Bootstrap / Recovery / Device Replacement / Decommission
@@ -1723,6 +1723,7 @@ T241 Connector Auth / Remote Event / Webhook / Sync Lifecycle
 T242 OS Permission / Platform Capability Drift
 T243 Deployment / Tenancy / Enterprise Boundary
 T244 Operational Health / Diagnostics / Safe Repair
+T245 Canonical Configuration Revision / Policy Precedence / Drift
 ```
 
 These are not new authority systems. They make previously distributed goals operationally complete.
@@ -1784,6 +1785,8 @@ WEBHOOK_SIGNATURE != EVENT_SEMANTIC_TRUTH
 OS_PERMISSION_GRANTED_ONCE != CURRENT_ROUTE_APPLICABILITY
 SAME_HOST != SAME_TENANT
 TRACE != REPAIR_AUTHORITY
+STALE_CONFIG_WRITE != VALID_CONFIGURATION_UPDATE
+RUNTIME_DERIVED_CONFIG != CANONICAL_CONFIGURATION
 UNINSTALL != REMOTE_DATA_ERASURE
 ```
 
@@ -1793,8 +1796,8 @@ The review found no reason to replace the existing Authority / Effect / Evidence
 
 ```text
 MAJOR_PROGRAM_REVIEW_2026_09_23_COMPLETE=YES
-MEASURED_LIFECYCLE_GAPS_FOUND=8
-TASK_GRAPH_EXTENDS_THROUGH_T244=YES
+MEASURED_LIFECYCLE_GAPS_FOUND=9
+TASK_GRAPH_EXTENDS_THROUGH_T245=YES
 NEW_PARALLEL_AUTHORITY_SYSTEM=NO
 NEW_RUNTIME_DEPENDENCY_ADMITTED=NO
 NEW_PRODUCT_IMPLEMENTATION_STARTED=NO
