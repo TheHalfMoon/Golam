@@ -146,6 +146,42 @@ MODEL_PERMISSION != TRANSITIVE_DATASET_CLEARANCE
 SOURCE_DISPLAY_NAME != SOURCE_IDENTITY
 ```
 
+
+
+## 2026-09-23 Laya CoreML / Jev Search / Unreal Agent / classifier.dev permission reaffirmation
+
+The founder explicitly states permission to copy, use, modify, port and selectively reuse source code supplied from:
+
+```text
+mizorewww/laya-coreml
+caio0452/jev_search
+unreallabsai/unreal-agent
+classifier.dev / mrmps/classifier-dev
+```
+
+Reviewed exact public repository states are recorded in `source-adoption-laya-coreml-jev-search-unreal-classifier-2026-09-23.md`.
+
+This permission makes exact components eligible for Source Foundry evaluation. It does not automatically admit model weights, tokenizers, converted Core ML packages, hosted APIs, provider accounts, third-party datasets, trademarks or transitive dependencies.
+
+Specific boundaries:
+
+- `mizorewww/laya-coreml` repository code is Apache-2.0 at the reviewed pin, but every Hugging Face model/checkpoint/package remains a separate T175 Model Artifact Foundry object with its own provenance and rights closure.
+- `caio0452/jev_search` had no public license file observed at the reviewed pin. The founder's separate permission assertion is therefore recorded explicitly, but any distributed/commercial copy still binds the exact permission evidence/scope and third-party dependency obligations before admission.
+- `unreallabsai/unreal-agent` is MIT at the reviewed pin and may be evaluated for bounded selective reuse/porting; its session/operation authority model is not automatically adopted.
+- `mrmps/classifier-dev` repository source is MIT at the reviewed pin. The hosted `classifier.dev` service has separate terms/privacy/pricing/provider behavior and is not covered merely by source-code reuse permission.
+
+```text
+LAYA_COREML_PERMISSION_ATTESTED_2026_09_23=YES
+JEV_SEARCH_PERMISSION_ATTESTED_2026_09_23=YES
+UNREAL_AGENT_PERMISSION_ATTESTED_2026_09_23=YES
+CLASSIFIER_DEV_SOURCE_PERMISSION_ATTESTED_2026_09_23=YES
+
+SOURCE_PERMISSION != MODEL_WEIGHT_ADMISSION
+SOURCE_PERMISSION != HOSTED_SERVICE_RIGHTS
+NO_PUBLIC_LICENSE_OBSERVED != NO_PERMISSION_ASSERTED
+PERMISSION_TO_COPY != TECHNICAL_ADMISSION
+```
+
 ## What this attestation changes
 
 A source MUST NOT be rejected solely because Golam planning previously lacked evidence that founder permission had been obtained. Such sources are eligible to enter Source Foundry qualification.
