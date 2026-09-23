@@ -419,9 +419,75 @@ Future owning specs must prove:
 - OpenMuse UI/thread projections can be rebuilt from Golam canonical state without CopilotKit Intelligence;
 - removal of an OpenMuse donor component does not make user-owned canonical data unreadable or authoritative state ambiguous.
 
+
+
+## Phase Z — Product lifecycle and operability closure
+
+The major program review is recorded in `program-major-review-2026-09-23.md`. T237–T244 close product-lifecycle gaps that earlier tasks covered only partially. They refine existing canonical contracts; they do not create new authority roots or widen active Spec 006.
+
+- [ ] **T237 — Owner Bootstrap, Recovery, Device Replacement and Decommission Contract.** Refine T138/T160/T168/T174 into one lifecycle from an uninitialized install through owner/AuthorityHost bootstrap, recovery-material creation/verification, lost-device response, AuthorityHost replacement, stale-device revocation, reinstall, uninstall and decommission. Define explicit protected states such as `UNINITIALIZED`, `ACTIVE`, `LOCKED`, `RECOVERY_PENDING`, `MIGRATION_PENDING` and `DECOMMISSION_PENDING`. Recovery material may help establish a fresh recovery ceremony but never authorizes an ordinary Effect. Decommission must stop new work, surface unresolved/in-flight Effects, remove background services/autostart and selected local state, revoke local bindings where possible, and disclose external/remote data or Effects that cannot be recalled. Provide preserve/export-vs-erase choices; uninstall must not silently destroy the only recoverable canonical state.
+
+- [ ] **T238 — Secret and Credential Lifecycle Contract.** Refine T119/T174/T179/T207 around one canonical `SecretBinding` / credential-generation lifecycle. Bind secret kind, provider, exact account, scopes, storage backend, creation/verification/expiry, rotation state, revocation state, exportability, source, hardware/user-presence constraints, generation and last-use receipt. Plaintext/environment variables are delivery mechanisms, not canonical secret truth or authority. Secret release is just-in-time, least-privilege and generation-bound; model/tool context receives no secret merely because a provider requires one. Define rotation, provider revocation, account replacement, device loss, compromise response, backup/export rules for exportable vs OS-bound secrets, and stale pending-work invalidation. Evaluate `open-source-cooperative/keyring-rs@430b34b83cb15e97d608aed494b49537e35a20b8` as a bounded OS-native secure-store adapter candidate; every platform backend remains independently qualified.
+
+- [ ] **T239 — Canonical State Integrity, Encrypted Backup/Restore and Safe Repair Contract.** Refine T138/T147/T157/T160/T168/T182. Classify canonical state, external-Effect evidence, secrets, rebuildable derivatives, caches and temporary runtime state. Define startup/store integrity checks, corruption detection, safe read-only/recovery mode, hash/ledger discontinuity handling where applicable, deterministic derivative rebuild, encrypted backup manifests with exact schema/app revision, restore dry-run/conflict reporting, clean-environment restore drills, anti-fork AuthorityHost checks, and carry-forward of `UNKNOWN_OUTCOME` across missing/corrupt intervals. A repair may not discard or rewrite uncertain external Effect truth merely to make the database consistent. Use `restic/restic@6adedec6b48ae9ff0ffbc37bd675ccebd02c728f` as a backup-design/test reference for confidentiality, integrity and verifiable restore; do not make its repository format or executable mandatory.
+
+- [ ] **T240 — Secure Update, Offline Bundle, Compatibility and Rollback Contract.** Refine T113/T146/T147/T157/T175/T180/T233. Separate application binary, schema, model, extension, skill, connector-adapter and policy-data update classes. Define trusted metadata/root rotation, target identity, freshness/expiry, rollback/freeze protection, compatibility preflight, active-work safety, staged install, migration, post-update health and software rollback. Use The Update Framework as the update-trust design reference (`theupdateframework/specification@7dd5faca4251995063b851c060a12ac915b17ae3`; `python-tuf@aeb6ca76b42c11991c28ee7f0af57106cd9f2b4a` as implementation/test reference) and `sigstore/cosign@0c66ecdff337f647bbcb0259efe61a81e33a76e8` for release-signature/attestation verification patterns. `tauri-apps/tauri-plugin-updater@ca61ba54fa1a806c527b539467f12f57918b16dd` is a desktop transport/install donor candidate only, never the trust root. Support signed offline/air-gapped import bundles; importing a bundle cannot auto-admit contained models/extensions/skills. Software rollback does not reverse external Effects.
+
+- [ ] **T241 — Connector Authentication, Remote Event, Webhook and Sync Lifecycle Contract.** Refine T119/T129/T152/T179/T188/T207. Define connector authorization, token refresh/rotation, refresh failure, scope drift, provider-side revocation, disconnect/reconnect, account switch/deletion, rate limits/outages, provider API/schema version drift, webhook signature/replay/dedup/order semantics, sync cursor/checkpoint state, tombstones/deletions and recovery after partial sync. Provider reconnect/reauth creates a new credential/account generation and cannot silently reauthorize an already prepared Effect. Webhook authenticity proves transport/source claims only; event contents remain untrusted until semantic validation. Preserve at-most-once/UNKNOWN_OUTCOME rules for non-idempotent writes. Use `NangoHQ/nango@f176680bb0a6df4ae8380fa9973a8540f346a56d` as a behavior/operator-lifecycle reference by default; its reviewed Elastic License 2.0 and hosted/runtime assumptions mean no code/runtime admission is inferred.
+
+- [ ] **T242 — OS Permission and Platform Capability Drift Contract.** Refine Spec 006, T115/T116/T169/T196/T217/T223. Define a canonical projection of current platform permission/capability state for Accessibility, Screen Recording, microphone, camera if ever admitted, notifications, global shortcuts, portals/session grants, mobile background execution and other protected OS integrations. Every observation carries platform, source, timestamp and generation. Out-of-band revocation or OS-update semantic change invalidates dependent route applicability and pending protected dispatch before execution. Permission loss is a blocker/remediation state, not justification for silently falling back to a weaker route or cloud provider.
+
+- [ ] **T243 — Deployment Topology, Tenancy and Enterprise-Mode Boundary Contract.** Make the baseline explicit: `PERSONAL_SINGLE_OWNER` with one protected AuthorityHost and any number of bounded agents/workers/devices/execution nodes. Do not claim multi-user/enterprise tenancy merely because several people can access the same host or channel. Any future organization/team mode requires a separate owning lifecycle for tenant/principal separation, delegated admin, organization policy, offboarding, managed identity/SSO/SCIM where used, audit visibility, data residency/retention, tenant-specific keys/secrets, recovery ownership and cross-tenant isolation. `ADMIN` does not automatically equal owner presence or per-Effect authorization. No shared access key or shared workspace is accepted as multi-tenant isolation.
+
+- [ ] **T244 — Operational Health, Diagnostic Bundle and Safe Repair Contract.** Refine T139/T159/T178/T182 into one operator-facing health model. Define `HealthSnapshot` and `RepairPlan` projections for canonical-store integrity, unresolved Effects, AuthorityHost/device state, model/provider readiness, extension/skill status, connector health, browser/computer runtimes, OS permissions, disk/resource pressure, backup freshness/restore-drill status, update metadata freshness, clock anomalies, listener/network exposure and crash-loop state. `golam doctor` and UI diagnostics remain local/redacted by default. A repair plan is a proposal; every state-changing repair uses the ordinary Effect/authority path and produces receipts. No support bundle silently uploads prompts, secrets, raw private artifacts or protected authority state.
+
+### T237–T244 hard invariants
+
+```text
+FIRST_RUN_COMPLETE != OWNER_AUTHORIZED
+RECOVERY_MATERIAL != EFFECT_AUTHORIZATION
+UNINSTALL != REMOTE_DATA_ERASURE
+SECRET_PRESENT != SECRET_RELEASE_AUTHORITY
+ENV_VAR_NAME != SECRET_CAPABILITY
+TOKEN_REFRESH != APPROVAL_REFRESH
+BACKUP_PRESENT != RESTORE_PROVEN
+RESTORE_SUCCESS != EXTERNAL_EFFECT_ROLLBACK
+DATABASE_REPAIR != EFFECT_OUTCOME_REWRITE
+UPDATE_SIGNATURE != UPDATE_POLICY
+UPDATER_AVAILABLE != TRUST_ROOT
+SOFTWARE_ROLLBACK != EXTERNAL_EFFECT_ROLLBACK
+OFFLINE_BUNDLE != ARTIFACT_ADMISSION
+ACCOUNT_REAUTH != PENDING_EFFECT_REAUTHORIZATION
+WEBHOOK_SIGNATURE != EVENT_SEMANTIC_TRUTH
+SYNC_CURSOR != SOURCE_OF_TRUTH
+OS_PERMISSION_GRANTED_ONCE != CURRENT_ROUTE_APPLICABILITY
+SAME_HOST != SAME_TENANT
+TEAM_WORKSPACE != SHARED_OWNER_AUTHORITY
+ADMIN_ROLE != OWNER_PRESENCE
+TRACE != REPAIR_AUTHORITY
+HEALTH_WARNING != AUTOMATIC_MUTATION_AUTHORITY
+```
+
+### T237–T244 acceptance direction
+
+Future owning specs must prove:
+
+- fresh install -> owner bootstrap -> restart -> lock/unlock has no implicit default authority or hidden network dependency;
+- lost-device recovery produces a fresh current AuthorityHost, revokes/quarantines stale copies and preserves unresolved Effect uncertainty;
+- uninstall/decommission removes background privileged residue and distinguishes local erasure from irrevocable external data/Effects;
+- credential rotation/revocation immediately invalidates stale generations and cannot be bypassed by cached provider sessions;
+- a corrupt canonical store enters safe recovery rather than silently dropping events/Effects, and an encrypted backup can be restored and verified on a clean system;
+- a bad but correctly signed software update can fail health checks and roll back software without replaying or rewriting external Effects;
+- stale/frozen/rolled-back update metadata and artifact mix-and-match are rejected;
+- a signed offline bundle cannot bypass model/extension/skill Source/Model Foundry admission;
+- connector token expiry, webhook replay/duplicates/out-of-order events and account rebinding have deterministic recovery/dedup semantics;
+- permission revocation between route preparation and dispatch blocks that route before protected execution;
+- the personal single-owner deployment cannot accidentally become a multi-user security claim;
+- diagnostics can identify the major unhealthy states while repair remains explicitly governed and support bundles stay private by default.
+
 ## Cross-fabric ownership rule
 
-Before T203–T236 implementation, T198's Canonical Shared-Contract Ownership Matrix must name the sole owner/version source/migration authority for at least:
+Before T203–T244 implementation, T198's Canonical Shared-Contract Ownership Matrix must name the sole owner/version source/migration authority for at least:
 
 - TaskContract / Task-Session-Run-Worker identities;
 - ExecutionEnvelope;
@@ -458,7 +524,15 @@ Before T203–T236 implementation, T198's Canonical Shared-Contract Ownership Ma
 - LearningObservation / PreferenceRuleCandidate / ToolKnowledgeCandidate semantics;
 - SkillPackRevision / prerequisite / activation-revocation semantics;
 - LayaDecisionAdapter / workload calibration / cross-provider qualification semantics;
-- OpenMuse donor-port mapping / projection parity semantics.
+- OpenMuse donor-port mapping / projection parity semantics;
+- BootstrapState / recovery / decommission semantics;
+- SecretBinding / credential-generation semantics;
+- BackupManifest / RestorePlan / canonical corruption state;
+- UpdateTrustRoot / UpdateManifest / staged-update semantics;
+- ConnectorBinding / auth generation / sync cursor / webhook receipt semantics;
+- PlatformCapabilityState / permission generation semantics;
+- deployment/tenancy profile semantics;
+- HealthSnapshot / RepairPlan semantics.
 
 No owning package may invent package-local protected truth for one of these concepts.
 
@@ -556,6 +630,18 @@ P1_AUTOCLAW_ADOPTION:
   T232 Governed Preference / Tool-Knowledge / Workflow Evolution
   T233 Skill Pack / Prerequisite / Progressive-Disclosure Lifecycle
 
+P1_PRODUCT_LIFECYCLE_FOUNDATIONS:
+  T237 Owner Bootstrap / Recovery / Device Replacement / Decommission
+  T238 Secret / Credential Lifecycle
+  T239 Canonical State Integrity / Backup / Restore / Repair
+  T240 Secure Update / Offline Bundle / Rollback
+  T241 Connector Auth / Webhook / Sync Lifecycle
+  T242 OS Permission / Capability Drift
+
+P2_OPERATOR_AND_DEPLOYMENT:
+  T243 Deployment / Tenancy / Enterprise Boundary
+  T244 Operational Health / Diagnostics / Safe Repair
+
 P2_EXTERNAL_COMPLETENESS:
   T234 Agent-OS Operator Completeness Parity Harness
   T236 OpenMuse Exact-Component Port Matrix / Parity Qualification
@@ -617,6 +703,16 @@ LAYA_DESKTOP != LAYA_DECISION_MODEL
 LAYA_GUARDRAIL_SCORE != POLICY_DECISION
 OPENMUSE_TASK_STORE != GOLAM_TASK_AUTHORITY
 COPILOTKIT_THREAD != GOLAM_CANONICAL_TASK
+FIRST_RUN_COMPLETE != OWNER_AUTHORIZED
+RECOVERY_MATERIAL != EFFECT_AUTHORIZATION
+BACKUP_PRESENT != RESTORE_PROVEN
+DATABASE_REPAIR != EFFECT_OUTCOME_REWRITE
+UPDATER_AVAILABLE != TRUST_ROOT
+OFFLINE_BUNDLE != ARTIFACT_ADMISSION
+WEBHOOK_SIGNATURE != EVENT_SEMANTIC_TRUTH
+OS_PERMISSION_GRANTED_ONCE != CURRENT_ROUTE_APPLICABILITY
+SAME_HOST != SAME_TENANT
+TRACE != REPAIR_AUTHORITY
 ```
 
 ## End-to-end proving journeys
@@ -672,7 +768,7 @@ Feed an out-of-domain/high-confidence wrong DecisionProvider result. Prove deter
 ## Current safe sequencing
 
 1. Keep active Spec 006 PR #24 unchanged in scope.
-2. Treat T203–T236 as planning-only extension tasks.
+2. Treat T203–T244 as planning-only extension tasks.
 3. Qualify the planning PR on its exact new head after this extension.
 4. Re-run independent architecture/security/governance review because the planning head changed.
 5. Merge planning only after new-head findings and required checks are reconciled.
