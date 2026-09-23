@@ -380,7 +380,7 @@ The source-specific plans are:
 
 These tasks consume the existing T175/T203/T204/T167/T205/T221/T173/T179/T199 contracts. They do not create a second Decision Fabric, Task ledger, approval system, browser authority or computer authority.
 
-- [ ] **T235 — Laya Low-Resource Decision Provider Qualification and OpenJev Tournament.** Treat exactly `convaiinnovations/laya` as an optional, replaceable low-resource T203 `DecisionProvider` target. T175 must freeze exact immutable model/config/tokenizer/safetensors/runtime identities, transitive rights, offline behavior and rollback artifact. Implement only one bounded `LayaDecisionAdapter` that accepts canonical `DecisionRequest` and emits `DecisionReceipt`. Qualify Laya independently for high-frequency bounded workloads such as Attention triage, capability-fit classification, provider/route candidate scoring, retrieval relevance, urgency/risk flagging, duplicate scoring and voice semantic decisions where separately proven. Run a preregistered cross-provider tournament against OpenJev and deterministic/generative baselines on matched held-out workloads, recording calibration, selective risk/abstention, OOD behavior, contradiction rate, perturbation robustness, latency, throughput, RAM/VRAM, quantization/backend drift and strict-local behavior. A Laya guardrail/moderation score may raise scrutiny or request review but cannot lower policy, grant capability, authorize egress/Effect, satisfy approval/owner presence, or emit verified truth.
+- [ ] **T235 — Laya Low-Resource Decision Provider Qualification and OpenJev Tournament.** Treat exactly `convaiinnovations/laya` as an optional, replaceable low-resource T203 `DecisionProvider` target. T175 must freeze exact immutable model/config/tokenizer/safetensors/runtime identities, transitive rights, offline behavior and rollback artifact. Implement only one bounded `LayaDecisionAdapter` that accepts canonical `DecisionRequest` and emits `DecisionReceipt`. Qualify Laya independently for high-frequency bounded workloads such as Attention triage, capability-fit classification, provider/route candidate scoring, retrieval relevance, urgency/risk flagging, duplicate scoring and voice semantic decisions where separately proven. Include `mizorewww/laya-coreml@4619e0483f07adf39068532e85b42ec2347edb83` as an Apple Silicon/Core ML/ANE backend donor candidate under the same adapter rather than a second provider contract. Its qualification must bind exact Core ML package/conversion identity, compute-unit policy, cold-init vs warm latency, calibration/clamp provenance, short-vs-long-context limits, conversion-fidelity drift, workload accuracy, energy/resource evidence and strict-local artifact availability. Run a preregistered cross-provider/backend tournament against OpenJev and deterministic/generative baselines on matched held-out workloads, recording calibration, selective risk/abstention, OOD behavior, contradiction rate, perturbation robustness, latency, throughput, RAM/VRAM, energy where measurable, quantization/backend drift and strict-local behavior. A Laya guardrail/moderation score may raise scrutiny or request review but cannot lower policy, grant capability, authorize egress/Effect, satisfy approval/owner presence, or emit verified truth.
 
 - [ ] **T236 — OpenMuse Exact-Component Port Matrix and Parity Qualification.** Use `CopilotKit/openmuse@bb7ce4e1c6e523bf282a655c63621e3ed9e75150` as a bounded implementation donor, never a wholesale app/runtime fork. Before any reuse, enumerate each selected source path/blob with reuse mode, target Golam owner/package, dependency closure, rights/NOTICE, secret/network behavior, authority ceiling, Effect mapping, TCB delta, tests to port/add and rollback/removal path. Priority candidate areas are: visible follow-up queue/run-failure semantics; rich task/artifact hydration with durable IDs and ephemeral signed URLs; SQL-lease/recovery/uncertain-write test patterns; review invalidation fixtures; persistent Chromium/takeover patterns; isolated Linux-computer hardening and smoke fixtures; Goals/monitors/background update UX. CopilotKit Intelligence remains optional/non-required; OpenMuse's shared access key, task store, review state, worker token, Playwright container and Docker container never become Golam identity/Task/approval/security authority. Ported UI must rebuild from Golam canonical state, and runtime components must be removable without corrupting canonical user state.
 
@@ -496,9 +496,55 @@ Future owning specs must prove:
 - diagnostics can identify the major unhealthy states while repair remains explicitly governed and support bundles stay private by default;
 - concurrent/stale cross-surface configuration writes are rejected deterministically, policy precedence is explicit, and rollback/import cannot bypass authority, privacy, egress or secret rules.
 
+
+
+## Phase AA — Batch semantic narrowing and inbound input integrity
+
+The source-specific review is `source-adoption-laya-coreml-jev-search-unreal-classifier-2026-09-23.md`.
+
+These tasks close two gaps exposed by `jev_search`, `classifier.dev` and `unreal-agent`. They refine the existing Decision/Context/Task/Operation/Effect spine; they do not create a second retrieval authority, session authority or Effect ledger.
+
+- [ ] **T246 — Batch Semantic Narrowing and Decision Cascade Contract.** Extend T192/T195/T203/T204/T229/T235/T179/T201 with one provider-neutral batch contract for context-efficient filtering before expensive context/reasoning. Define `BatchDecisionRequest` with stable request/workload identity, typed criteria graph, per-item source/revision/content digest, taint/data class, bounded payload/features, recall policy, calibration profile, locality/privacy constraints and budget. Emit per-item `BatchDecisionReceipt` objects containing exact provider/model/artifact/backend identity, label/score/probabilities, applicability/abstention/escalation, packing/truncation evidence, latency/resource/cost and egress receipt when remote. Prefer the ladder `exact/metadata -> lexical/FTS priority -> local batch DecisionProvider -> stronger local -> explicitly authorized remote provider -> expensive context/reasoning`. Lexical/file priority is a scheduling hint, never an unreported hard truth filter. Recall-sensitive profiles default to keep-on-uncertainty. Use `caio0452/jev_search@ea073f6db48f5bff73ae4b9f2240d2d302fb9dc1` as a two-phase narrowing behavior/source candidate and `mrmps/classifier-dev@8f2bb2b84a0d51ad1c9ed3436b64155908354f75` as a batch-packing/calibration/escalation/eval/provider-fallback reference/source candidate. Hosted classifier/OpenRouter-style paths are explicit non-strict egress capabilities. Accessibility-tree/candidate ranking may recommend an action candidate but never authorize target selection or an Effect.
+
+- [ ] **T247 — Inbound Input Envelope, Redelivery Idempotency and Pure Tool-Translation Commit Contract.** Extend T167/T169/T183/T199/T205/T214/T241 so duplicate external delivery is handled before it can become duplicate canonical intent. Define a versioned `InputEnvelope` with local input ID, source kind, principal/account/channel binding, provider event ID/delivery attempt where available, source timestamp, observed time, payload digest, taint/data class, ordering/sequence evidence and schema version. Persist provider-stable event identity before accepted input may influence protected work. Same provider event ID + same payload digest is a redelivery; same ID + different digest is an integrity/security anomaly. If the source offers no stable event identity, Golam records that limitation honestly; a locally generated receipt ID does not prove cross-delivery deduplication. Redelivery/dedup state must survive restart for source protocols that claim replay/redelivery semantics and use bounded protocol-appropriate retention. Also define a pure deterministic tool-translation boundary: `ModelToolCallCandidate -> ToolTranslationReceipt + OperationProposal[]`, with no file/network/secret/provider I/O inside translation. Translation outcome plus produced Operation proposals are atomically persisted before any proposal can enter the existing policy/capability/Effect path; failed translation/persistence dispatches nothing. Use `unreallabsai/unreal-agent@df8b0ba560da17fd705d941cbeb75eff86c74a1e` as a high-value donor/reference for stable redelivery IDs, append-only/versioned session evidence, pure translators, atomic tool-call-status/operation recording and context omission receipts, while explicitly rejecting a second Golam session or Operation authority.
+
+### T246–T247 hard invariants
+
+```text
+BATCH_CLASSIFICATION != CONTEXT_TRUTH
+LEXICAL_PRIORITY != EXCLUSION_AUTHORITY
+REMOTE_BATCH_PROVIDER != STRICT_LOCAL_CAPABILITY
+CLASSIFIER_CONFIDENCE != EFFECT_AUTHORIZATION
+ACCESSIBILITY_CANDIDATE_SCORE != TARGET_AUTHORITY
+BATCH_SUCCESS != PER_ITEM_VERIFICATION
+INPUT_REDELIVERY != NEW_USER_INTENT
+LOCAL_RECEIPT_ID != PROVIDER_REDELIVERY_PROOF
+SAME_PROVIDER_EVENT_ID_DIFFERENT_DIGEST != NORMAL_RETRY
+TOOL_TRANSLATION != EFFECT_AUTHORIZATION
+TOOL_TRANSLATOR_IO != ALLOWED_TRANSLATION_BEHAVIOR
+OPERATION_PROPOSAL != AUTHORIZED_EFFECT
+UNREAL_SESSION_STORE != GOLAM_TASK_AUTHORITY
+UNREAL_OPERATION_STATE != GOLAM_EFFECT_LEDGER
+```
+
+### T246–T247 acceptance direction
+
+Future owning specs must prove:
+
+- bulk narrowing reduces context/token/resource cost against a no-prefilter baseline without unacceptable recall loss on held-out workloads;
+- recall-sensitive filters retain uncertain items and expose every omission/rejection with source identity and reason;
+- batch packing/chunk boundaries cannot silently change per-item identity or hide mixed provider/fallback identity;
+- a remote classifier never runs in strict-local mode and every remote item is covered by explicit T179/T201 egress/privacy evidence;
+- accessibility-tree action ranking cannot bypass route applicability, target identity, current permission or Effect authorization;
+- duplicate/redelivered channel/webhook inputs across restart do not create duplicate canonical intent or Effects;
+- same stable provider event ID with a changed payload is surfaced as an integrity anomaly rather than accepted as a retry;
+- sources lacking stable redelivery identity are represented as such and cannot claim exactly-once intake;
+- tool translation is deterministic, schema-bounded and I/O-free, and the translation receipt plus Operation proposals are atomically durable before any dispatch;
+- removing `unreal-agent`, `classifier.dev`, `jev_search` or Laya CoreML donor code/provider availability leaves canonical Golam state readable and an explicit fallback/removal path.
+
 ## Cross-fabric ownership rule
 
-Before T203–T245 implementation, T198's Canonical Shared-Contract Ownership Matrix must name the sole owner/version source/migration authority for at least:
+Before T203–T247 implementation, T198's Canonical Shared-Contract Ownership Matrix must name the sole owner/version source/migration authority for at least:
 
 - TaskContract / Task-Session-Run-Worker identities;
 - ExecutionEnvelope;
@@ -544,7 +590,10 @@ Before T203–T245 implementation, T198's Canonical Shared-Contract Ownership Ma
 - PlatformCapabilityState / permission generation semantics;
 - deployment/tenancy profile semantics;
 - HealthSnapshot / RepairPlan semantics;
-- ConfigurationRevision / policy-precedence / stale-write semantics.
+- ConfigurationRevision / policy-precedence / stale-write semantics;
+- BatchDecisionRequest / BatchDecisionReceipt / semantic-narrowing omission semantics;
+- InputEnvelope / redelivery-dedup semantics;
+- ToolTranslationReceipt / OperationProposal commit semantics.
 
 No owning package may invent package-local protected truth for one of these concepts.
 
@@ -586,6 +635,17 @@ The recovered voice surface is a useful push-to-talk and permission/transcript U
 
 Muse is a behavior/security architecture reference only; no Meta proprietary source-code reuse is inferred. Keep the Muse family separated by role: Muse Agent/Spark behavior is a collaboration/harness reference; Muse Voice Transcribe is a streaming speech benchmark/provider reference; Muse Glimmer is an Apache-2.0 open-weight local agent-model candidate for ordinary T175/T152 qualification, not a speech engine. Retain the product lessons that fit Golam: long-running conversation that accepts new input while work continues, explicit side chats, background goals/work, proactive-but-sparse updates, activity transparency, rich artifacts and deterministic approval controls. Retain the security lessons conceptually: runtime isolation, a permission/egress authority outside the model, credential surrogation/just-in-time insertion and tainted-untrusted external data. Map these onto Golam's existing Authority Kernel, Effect Gate, Secret/Account broker, T179 taint/egress and T173 isolation rather than creating a second Sentinel authority.
 
+
+
+### Laya CoreML / Jev Search / Unreal Agent / classifier.dev
+
+Use the detailed review `source-adoption-laya-coreml-jev-search-unreal-classifier-2026-09-23.md`.
+
+- `mizorewww/laya-coreml` strengthens T235 as a backend donor candidate; it does not create a second Laya source identity or DecisionProvider contract.
+- `caio0452/jev_search` contributes two-phase lexical/semantic narrowing behavior. Its README explicitly says it is AI-generated/non-production; do not copy its OpenRouter/API-key/global-threshold defaults as Golam policy.
+- `mrmps/classifier-dev` contributes batch packing, calibrated/evaluated escalation, actual-provider fallback visibility, privacy-safe metrics patterns and candidate-ranking fixtures. Its hosted service is always explicit egress and separate from repository source rights.
+- `unreallabsai/unreal-agent` contributes harness patterns around redelivery identity, pure translation, atomic operation recording, versioned serialization and context omission evidence. Its session store/operation manager remain donor implementations, not Golam canonical Task/Effect truth.
+
 ## Priority and sequencing
 
 Recommended dependency order after an owning bounded lifecycle is authorized:
@@ -607,6 +667,7 @@ P0_NEW_SHARED_CONTRACTS:
   T214 Disclosure-Bound Agent Proposal / Review Checkpoint Contract
   T215 Canonical Skill / Workflow IR + Replay / Divergence Contract
   T216 Multidimensional Verification / EvidenceBundle Contract
+  T247 Inbound Input Envelope / Redelivery Idempotency / Tool Translation Commit
   T211 Owner Portfolio Reuse Matrix (cross-cutting governance)
   T212 Attention Budget / Proactive Autonomy Policy
 
@@ -616,6 +677,7 @@ P1_NEW:
   T207 Credential-Brokered Tool Relay
   T229 OpenJev First-Class Decision Provider Qualification / Adapter
   T235 Laya Low-Resource Decision Provider Qualification / Tournament
+  T246 Batch Semantic Narrowing / Decision Cascade
 
 P1_PRODUCT_PROJECTION:
   T208 Proactive Attention / Action Proposal
@@ -726,6 +788,11 @@ WEBHOOK_SIGNATURE != EVENT_SEMANTIC_TRUTH
 OS_PERMISSION_GRANTED_ONCE != CURRENT_ROUTE_APPLICABILITY
 SAME_HOST != SAME_TENANT
 TRACE != REPAIR_AUTHORITY
+BATCH_CLASSIFICATION != CONTEXT_TRUTH
+REMOTE_BATCH_PROVIDER != STRICT_LOCAL_CAPABILITY
+INPUT_REDELIVERY != NEW_USER_INTENT
+TOOL_TRANSLATION != EFFECT_AUTHORIZATION
+OPERATION_PROPOSAL != AUTHORIZED_EFFECT
 ```
 
 ## End-to-end proving journeys
@@ -778,10 +845,39 @@ Inject stale/malicious capability metadata and multiple provider accounts. Prove
 
 Feed an out-of-domain/high-confidence wrong DecisionProvider result. Prove deterministic policy and required authoritative verification prevent it from granting protected authority or verified completion.
 
+
+
+### Bulk context narrowing
+
+```text
+large source set
+-> deterministic/lexical prioritization
+-> local batch decisions
+-> uncertainty keeps/escalates
+-> explicit omissions
+-> bounded ContextBundle
+-> stronger reasoning
+```
+
+Prove recall/cost tradeoffs and no hidden remote egress.
+
+### Duplicate inbound delivery
+
+```text
+provider event accepted
+-> crash/reconnect
+-> same provider event redelivered
+-> stable ID + payload digest match
+-> one canonical input
+-> no duplicate downstream Effect
+```
+
+Also prove that same provider event ID with a different payload is an integrity anomaly.
+
 ## Current safe sequencing
 
 1. Keep active Spec 006 PR #24 unchanged in scope.
-2. Treat T203–T245 as planning-only extension tasks.
+2. Treat T203–T247 as planning-only extension tasks.
 3. Qualify the planning PR on its exact new head after this extension.
 4. Re-run independent architecture/security/governance review because the planning head changed.
 5. Merge planning only after new-head findings and required checks are reconciled.
