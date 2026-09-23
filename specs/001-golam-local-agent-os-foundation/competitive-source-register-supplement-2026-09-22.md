@@ -434,6 +434,65 @@ Muse is not an admitted dependency or donor implementation. Its public architect
 
 
 
+
+
+### 2026-09-23 OpenMuse / Laya decision-model follow-up
+
+The founder explicitly granted Golam permission to copy/use the available source/model material for `CopilotKit/openmuse`, `convaiinnovations/laya` and `AlexWortega/openjev`. Permission is recorded as Source Foundry input and does not bypass exact-component/model qualification.
+
+| Source | Reviewed state | Disposition | Golam value / boundary |
+| --- | --- | --- | --- |
+| `CopilotKit/openmuse` | `bb7ce4e1c6e523bf282a655c63621e3ed9e75150`; public repository; MIT observed | `HIGH_VALUE_BOUNDED_IMPLEMENTATION_DONOR` | durable task/lease/recovery patterns, visible follow-up queue, rich task/artifact projection, persistent Chromium/takeover, isolated Linux computer, approval/uncertain-write fixtures; no wholesale fork or donor authority |
+| `convaiinnovations/laya` | Hugging Face state reviewed 2026-09-23; updated 2026-09-23; ~421.3M params; text-classification; System-1/calibrated decision/routing/scoring/guardrail/moderation tags; Apache-2.0 metadata | `FIRST_CLASS_LOW_RESOURCE_DECISION_PROVIDER_TARGET / MODEL_ARTIFACT_CANDIDATE` | optional T203 provider under T235 for high-frequency classification/routing/scoring; benchmark against OpenJev per workload; no policy/authority/verification role |
+| `AlexWortega/openjev` | prior reviewed Hub state retained; founder permission reaffirmed 2026-09-23 | `FIRST_CLASS_BOUNDED_DECISION_PROVIDER_TARGET / MODEL_ARTIFACT_CANDIDATE` | complementary larger NLI/cross-encoder/reranker candidate under T229; no global winner is assumed |
+
+#### Laya source-identity collision rule
+
+Two unrelated reviewed sources use the name "Laya":
+
+```text
+aayushch/laya
+  = desktop/product/experience reference
+
+convaiinnovations/laya
+  = Hugging Face decision model candidate
+```
+
+They MUST have distinct Source Foundry IDs, registry keys, artifact identities and dispositions.
+
+```text
+LAYA_DESKTOP != LAYA_DECISION_MODEL
+SOURCE_DISPLAY_NAME != SOURCE_IDENTITY
+```
+
+#### OpenMuse placement rule
+
+OpenMuse is a donor at the Experience/Harness/Execution boundary. Its strongest reusable components and tests are catalogued in `openmuse-integration-plan-2026-09-23.md`.
+
+CopilotKit Intelligence is a separate configured service and is not made mandatory by this source admission path.
+
+```text
+OPENMUSE_TASK_STORE != GOLAM_TASK_AUTHORITY
+OPENMUSE_REVIEW != GOLAM_APPROVAL_AUTHORITY
+COPILOTKIT_THREAD != GOLAM_CANONICAL_TASK
+OPENMUSE_BOUNDED_DONOR=YES
+OPENMUSE_WHOLESALE_FORK=NO
+```
+
+#### Laya decision-model placement rule
+
+The T235 path is workload-specific:
+
+```text
+exact T175 artifact
+-> T203 LayaDecisionAdapter
+-> T204/T235 calibration/applicability
+-> matched tournament vs OpenJev/baselines
+-> workload-specific admit or reject
+```
+
+A moderation/guardrail score may increase scrutiny; it cannot lower deterministic policy or authorize an Effect.
+
 ### AutoClaw / Z.AI follow-up sources
 
 The founder explicitly states that Z.AI granted permission to copy/use available Z.AI AutoClaw-related source code. This permission is recorded as founder-attested input and does not bypass exact-component Source Foundry, transitive rights/NOTICE closure, T165 security admission or T197 TCB budgeting.
@@ -470,10 +529,11 @@ The combined source universe points to five reusable fabrics, not dozens of embe
 1. Authority + Evidence Core        -> Golam canonical kernel
 2. Execution Fabric                -> Kernux + AX + Desktop Commander + TinyFish
 3. Capability Exchange             -> Treg + Golam connectors/extensions/secrets
-4. Decision Fabric                 -> OpenJev first-class bounded target + SemIf + Decider + Nimble + internal model qualification
-5. Attention / Knowledge Fabric    -> Laya + Morize + Golam Experience/Context
+4. Decision Fabric                 -> OpenJev + convaiinnovations/laya first-class bounded targets + SemIf + Decider + Nimble + internal model qualification
+5. Attention / Knowledge Fabric    -> aayushch/laya desktop + Morize + Golam Experience/Context
 6. Voice / Conversational Presence -> Wispral + Himsat + Golam-research + replaceable speech engines + T203 decision providers
 7. Adaptive Delivery / Channels / Skills -> AutoClaw behavior + OpenClaw + Z.AI GLM-skills + Synapse/ZCode, under T163/T169/T180/T230–T234
+8. Durable Work / Agent Computer UX -> OpenMuse bounded donor patterns under T167/T205/T221/T236
 ```
 
 Ascout/Winds/SpecGrain/Diffcipline/MESC/commandF provide cross-cutting proof, source identity, bounded delivery and independent verification. Kodac/Pluma/Signthos/Ecra/Inercative/Wispral add bounded contracts for workload identity, disclosure-bound proposals, review checkpoints, multidimensional proof, skill replay/repair, failure continuity and immediate human interruption without becoming separate authority systems.
@@ -520,6 +580,11 @@ MUSE_REFERENCE_ONLY_NO_CODE_ADMISSION=YES
 AUTOCLAW_ZAI_DEEP_DIVE_COMPLETED_2026_09_22=YES
 ZAI_AVAILABLE_SOURCE_PERMISSION_ATTESTED=YES
 AUTOCLAW_PUBLIC_DESKTOP_SOURCE_REPO_IDENTIFIED=NO
+OPENMUSE_BOUNDED_DONOR_REVIEWED_2026_09_23=YES
+LAYA_DECISION_MODEL_REVIEWED_2026_09_23=YES
+LAYA_FIRST_CLASS_LOW_RESOURCE_PROVIDER_TARGET=YES
+OPENMUSE_CODE_ADMITTED=NO
+LAYA_MODEL_ADMITTED=NO
 PRIVATE_SOURCE_NAMES_PUBLISHED=NO
 WAIVER_TAKEN=NO
 ```
