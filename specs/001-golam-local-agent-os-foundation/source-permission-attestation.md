@@ -1,7 +1,7 @@
 # Founder Source Permission Attestation
 
 **Recorded**: 2026-08-24  
-**Reaffirmed**: 2026-09-22  
+**Reaffirmed**: 2026-09-23  
 **Scope**: Golam research/source universe recorded in the repository and sources supplied/reviewed during current program research  
 **Status**: `FOUNDER_PERMISSION_ATTESTED_AND_REAFFIRMED`
 
@@ -111,6 +111,41 @@ AUTOCLAW_PRODUCT_ACCESS != AUTOCLAW_SOURCE_REPO_IDENTITY
 PERMISSION_TO_COPY != TECHNICAL_ADMISSION
 ```
 
+
+
+## 2026-09-23 OpenMuse / Laya / OpenJev permission reaffirmation
+
+The founder explicitly states permission to copy, use, modify, port and selectively reuse all available source/model material supplied from:
+
+```text
+CopilotKit/openmuse
+convaiinnovations/laya
+AlexWortega/openjev
+```
+
+The founder also reaffirms the previously recorded Z.AI permission for source code made available under the AutoClaw-related grant.
+
+This permission input makes the named source/model material eligible for exact-component/model Source Foundry / Model Artifact Foundry evaluation. It does not automatically admit code, weights, hosted services, transitive dependencies, datasets, trademarks, provider credentials or external service terms.
+
+Specific boundaries:
+
+- `CopilotKit/openmuse` source may be evaluated for bounded copy/port/adaptation. CopilotKit Intelligence is a separately configured service boundary and is not assumed to be covered merely because the OpenMuse repository source is reusable.
+- `convaiinnovations/laya` and `AlexWortega/openjev` model artifacts still require T175 exact-file/runtime/base-model/transitive-rights qualification.
+- the two unrelated "Laya" sources (`aayushch/laya` and `convaiinnovations/laya`) remain separate legal/technical source identities.
+- Z.AI permission applies to source made available under that permission; a non-public AutoClaw desktop source component must still be pinned and recorded when/if supplied.
+
+```text
+OPENMUSE_PERMISSION_ATTESTED=YES
+LAYA_DECISION_MODEL_PERMISSION_ATTESTED=YES
+OPENJEV_PERMISSION_REAFFIRMED_2026_09_23=YES
+ZAI_AVAILABLE_SOURCE_PERMISSION_REAFFIRMED_2026_09_23=YES
+
+PERMISSION_TO_COPY != TECHNICAL_ADMISSION
+REPOSITORY_LICENSE != HOSTED_SERVICE_RIGHTS
+MODEL_PERMISSION != TRANSITIVE_DATASET_CLEARANCE
+SOURCE_DISPLAY_NAME != SOURCE_IDENTITY
+```
+
 ## What this attestation changes
 
 A source MUST NOT be rejected solely because Golam planning previously lacked evidence that founder permission had been obtained. Such sources are eligible to enter Source Foundry qualification.
@@ -179,6 +214,8 @@ Research, behavioral comparison and clean-room reimplementation may remain avail
 `SOURCE_PERMISSION_REAFFIRMED_2026_09_13=YES`
 
 `SOURCE_PERMISSION_REAFFIRMED_2026_09_22=YES`
+
+`SOURCE_PERMISSION_REAFFIRMED_2026_09_23=YES`
 
 `AUTOMATIC_CODE_ADMISSION=NO`
 
