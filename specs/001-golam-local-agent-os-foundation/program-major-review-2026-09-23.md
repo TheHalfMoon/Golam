@@ -352,7 +352,7 @@ This is T244.
 
 
 
-## 10. Gap I — canonical configuration revision and policy precedence
+## 11. Gap I — canonical configuration revision and policy precedence
 
 Golam has many protected configuration surfaces: privacy profile, model routing, connectors/accounts, agent/workspace settings, skills/extensions, notification/attention behavior, device settings and future managed policy. These cannot rely on ambient "latest settings" or last-write-wins behavior.
 
