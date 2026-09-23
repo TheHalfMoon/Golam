@@ -1825,3 +1825,76 @@ Acceptance explicitly covers permission revocation between route preparation and
 T242_DELAYED_PERMISSION_NOTIFICATION_GAP_CLOSED=YES
 NEW_PERMISSION_AUTHORITY_CREATED=NO
 ```
+
+
+## 26. Laya CoreML, Jev Search, Unreal Agent and classifier.dev review
+
+The founder supplied four additional permission-granted sources and requested they be considered for Golam.
+
+Detailed review:
+
+- `source-adoption-laya-coreml-jev-search-unreal-classifier-2026-09-23.md`
+
+### 26.1 Laya CoreML strengthens T235 rather than creating another provider
+
+`mizorewww/laya-coreml@4619e0483f07adf39068532e85b42ec2347edb83` provides a high-value Apple Silicon/Core ML/ANE backend path for typed decisions.
+
+Golam should preserve one `LayaDecisionAdapter` and qualify the backend separately for exact artifact/conversion identity, calibration behavior, context/shape limits, cold/warm latency, energy/resource use and strict-local artifact availability.
+
+```text
+COREML_BACKEND != DECISION_AUTHORITY
+CONVERSION_FIDELITY != WORKLOAD_ACCURACY
+```
+
+### 26.2 Jev Search + classifier.dev expose a missing batch-narrowing contract
+
+The useful combined lesson is not "use this API." It is that large source sets should be narrowed before expensive context/reasoning while retaining calibrated uncertainty and omission evidence.
+
+This becomes **T246 — Batch Semantic Narrowing and Decision Cascade**.
+
+The ladder is:
+
+```text
+deterministic/metadata
+-> lexical/FTS priority
+-> local batch DecisionProvider
+-> stronger local
+-> explicitly authorized remote provider
+-> expensive context/reasoning
+```
+
+Recall-sensitive workloads keep uncertain items rather than dropping them.
+
+`classifier.dev` is especially valuable as a batch/eval/escalation/provider-observability reference; its hosted service remains non-strict egress. Its computer-use action picker is a useful candidate-ranking fixture but cannot authorize an action.
+
+### 26.3 Unreal Agent exposes inbound-redelivery integrity before the Effect layer
+
+Golam already protects against duplicate Effects. The source review found a distinct pre-Effect concern: the same external message/webhook/control input can be redelivered after reconnect/crash.
+
+`unreallabsai/unreal-agent@df8b0ba560da17fd705d941cbeb75eff86c74a1e` provides strong patterns around stable caller-supplied input IDs, input dedup, append-only/versioned sessions, pure no-I/O tool translation and atomic tool-call-status/operation persistence.
+
+This becomes **T247 — Inbound Input Envelope, Redelivery Idempotency and Pure Tool-Translation Commit**.
+
+Golam strengthens the donor by requiring restart-durable dedup when a source protocol claims redelivery semantics and by mapping every produced Operation proposal into the existing T199/Effect path.
+
+```text
+INPUT_REDELIVERY != NEW_USER_INTENT
+LOCAL_RECEIPT_ID != PROVIDER_REDELIVERY_PROOF
+TOOL_TRANSLATION != EFFECT_AUTHORIZATION
+OPERATION_PROPOSAL != AUTHORIZED_EFFECT
+UNREAL_SESSION_STORE != GOLAM_TASK_AUTHORITY
+```
+
+### 26.4 Result
+
+```text
+T235_STRENGTHENED_WITH_LAYA_COREML=YES
+T246_BATCH_SEMANTIC_NARROWING_ADDED=YES
+T247_INBOUND_REDELIVERY_IDEMPOTENCY_ADDED=YES
+NEW_PARALLEL_EFFECT_LEDGER=NO
+NEW_PARALLEL_SESSION_AUTHORITY=NO
+NEW_RUNTIME_DEPENDENCY_ADMITTED=NO
+NEW_MODEL_ADMITTED=NO
+ACTIVE_SPEC_006_PR_24_WIDENED=NO
+FUTURE_IMPLEMENTATION_AUTHORITY_GRANTED=NO
+```
