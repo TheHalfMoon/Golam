@@ -495,6 +495,42 @@ A moderation/guardrail score may increase scrutiny; it cannot lower deterministi
 
 
 
+
+
+### 2026-09-23 Laya CoreML / Jev Search / Unreal Agent / classifier.dev
+
+| Source | Reviewed state | Disposition | Golam value / boundary |
+| --- | --- | --- | --- |
+| `mizorewww/laya-coreml` | `4619e0483f07adf39068532e85b42ec2347edb83`; Apache-2.0 + NOTICE | `HIGH_VALUE_APPLE_SILICON_DECISION_RUNTIME_DONOR_CANDIDATE` | Core ML / ANE typed-decision backend, offline/local artifact mode, conversion-fidelity fixtures, calibration-clamp evidence, latency/energy benchmarks; maps into T235/T175/T159 rather than a new DecisionProvider |
+| `caio0452/jev_search` | `ea073f6db48f5bff73ae4b9f2240d2d302fb9dc1`; no public license file observed; founder permission asserted | `BEHAVIORAL_REFERENCE / SELECTIVE_COPY_CANDIDATE_AFTER_EXACT_RIGHTS` | deterministic file filtering, lexical priority, chunking, AND/OR criteria AST, two-phase progressive semantic scan; OpenRouter/API-key/global-threshold defaults are not Golam policy |
+| `unreallabsai/unreal-agent` | `df8b0ba560da17fd705d941cbeb75eff86c74a1e`; MIT | `HIGH_VALUE_HARNESS_DONOR_CANDIDATE` | stable input IDs across redelivery, input dedup, append-only/versioned sessions, pure tool translators, atomic tool-call-status + operation persistence, context omission records; donor session/operation stores never become Golam authority |
+| `mrmps/classifier-dev` / `classifier.dev` | `8f2bb2b84a0d51ad1c9ed3436b64155908354f75`; MIT source; hosted terms separate | `HIGH_VALUE_BATCH_DECISION / EVAL / PROVIDER_REFERENCE` | batch classification, calibrated confidence/escalation, multi-label, evals, actual-provider/fallback reporting, privacy/cost/health patterns, accessibility candidate picker; hosted path is explicit egress/non-strict |
+
+Detailed review: `source-adoption-laya-coreml-jev-search-unreal-classifier-2026-09-23.md`.
+
+Placement:
+
+```text
+laya-coreml     -> Decision Fabric runtime/backend under T235
+jev_search      -> Context/Decision narrowing reference under T246
+classifier.dev  -> Decision Fabric batch/eval/provider reference under T246
+unreal-agent    -> Harness/Input integrity donor under T247
+```
+
+Hard placement rules:
+
+```text
+COREML_BACKEND != DECISION_AUTHORITY
+CONVERSION_FIDELITY != WORKLOAD_ACCURACY
+LEXICAL_PRIORITY != EXCLUSION_AUTHORITY
+REMOTE_BATCH_PROVIDER != STRICT_LOCAL_CAPABILITY
+CLASSIFIER_CONFIDENCE != EFFECT_AUTHORIZATION
+INPUT_REDELIVERY != NEW_USER_INTENT
+TOOL_TRANSLATION != EFFECT_AUTHORIZATION
+UNREAL_SESSION_STORE != GOLAM_TASK_AUTHORITY
+UNREAL_OPERATION_STATE != GOLAM_EFFECT_LEDGER
+```
+
 ### 2026-09-23 lifecycle / operability closure sources
 
 The major lifecycle review added only sources that close measured operational gaps.
@@ -558,11 +594,11 @@ The combined source universe points to nine reusable fabrics, not dozens of embe
 1. Authority + Evidence Core        -> Golam canonical kernel
 2. Execution Fabric                -> Kernux + AX + Desktop Commander + TinyFish
 3. Capability Exchange             -> Treg + Golam connectors/extensions/secrets
-4. Decision Fabric                 -> OpenJev + convaiinnovations/laya first-class bounded targets + SemIf + Decider + Nimble + internal model qualification
-5. Attention / Knowledge Fabric    -> aayushch/laya desktop + Morize + Golam Experience/Context
+4. Decision Fabric                 -> OpenJev + convaiinnovations/laya + laya-coreml backend + classifier.dev batch/eval + SemIf + Decider + Nimble + internal model qualification
+5. Attention / Knowledge Fabric    -> aayushch/laya desktop + Morize + Jev Search narrowing patterns + Golam Experience/Context
 6. Voice / Conversational Presence -> Wispral + Himsat + Golam-research + replaceable speech engines + T203 decision providers
 7. Adaptive Delivery / Channels / Skills -> AutoClaw behavior + OpenClaw + Z.AI GLM-skills + Synapse/ZCode, under T163/T169/T180/T230–T234
-8. Durable Work / Agent Computer UX -> OpenMuse bounded donor patterns under T167/T205/T221/T236
+8. Durable Work / Agent Computer UX -> OpenMuse bounded donor patterns + Unreal Agent harness/input-integrity patterns under T167/T205/T221/T236/T247
 9. Product Lifecycle / Operability -> TUF + Sigstore + Tauri updater + restic + keyring-rs + bounded connector-lifecycle references under T237–T245
 ```
 
@@ -620,6 +656,12 @@ LAYA_DECISION_MODEL_PERMISSION_ATTESTED=YES
 LAYA_FIRST_CLASS_LOW_RESOURCE_PROVIDER_TARGET=YES
 OPENMUSE_CODE_ADMITTED=NO
 LAYA_MODEL_ADMITTED=NO
+LAYA_COREML_REVIEWED_2026_09_23=YES
+JEV_SEARCH_REVIEWED_2026_09_23=YES
+UNREAL_AGENT_REVIEWED_2026_09_23=YES
+CLASSIFIER_DEV_REVIEWED_2026_09_23=YES
+BATCH_SEMANTIC_NARROWING_TASK_ADDED=T246
+INBOUND_REDELIVERY_IDEMPOTENCY_TASK_ADDED=T247
 PRIVATE_SOURCE_NAMES_PUBLISHED=NO
 WAIVER_TAKEN=NO
 ```
