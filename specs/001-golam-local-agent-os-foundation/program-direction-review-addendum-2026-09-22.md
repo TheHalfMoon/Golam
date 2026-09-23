@@ -1569,3 +1569,138 @@ NEW_PARALLEL_AUTHORITY_SYSTEM=NO
 ACTIVE_SPEC_006_PR_24_WIDENED=NO
 FUTURE_IMPLEMENTATION_AUTHORITY_GRANTED=NO
 ```
+
+
+## 24. OpenMuse and Laya decision-model follow-up
+
+A 2026-09-23 follow-up reviewed the founder-supplied `CopilotKit/openmuse`, `convaiinnovations/laya` and reaffirmed `AlexWortega/openjev` under explicit reuse permission.
+
+### 24.1 Laya belongs beside OpenJev, not underneath it
+
+The Hugging Face `convaiinnovations/laya` artifact is materially smaller than OpenJev and is tagged for System-1/calibrated decision workloads such as classification, routing, scoring, guardrails and moderation.
+
+This supports a two-tier bounded DecisionProvider strategy:
+
+```text
+small/high-frequency bounded decision
+  -> Laya if qualified
+
+deeper NLI/cross-encoder/reranking
+  -> OpenJev if qualified
+
+ambiguous/high-consequence/out-of-domain
+  -> exact rule / stronger provider / verifier / human
+```
+
+No global model winner is declared. T235 requires matched held-out workload/hardware tournaments and workload-specific admission.
+
+A guardrail/moderation model is not policy authority.
+
+```text
+LAYA_GUARDRAIL_SCORE != POLICY_DECISION
+LAYA_MODERATION_SCORE != EFFECT_PERMISSION
+LAYA_HIGH_SCORE != ALLOW
+```
+
+### 24.2 The two Laya sources must never share identity
+
+Golam already reviewed `aayushch/laya` as a product/experience reference. The newly supplied `convaiinnovations/laya` is a separate Hugging Face model.
+
+The name collision is explicitly closed:
+
+```text
+aayushch/laya
+  = product / experience / harness reference
+
+convaiinnovations/laya
+  = model artifact / DecisionProvider target
+```
+
+Distinct Source Foundry IDs, registry keys and artifact identities are mandatory.
+
+### 24.3 OpenMuse is a bounded donor, not a replacement runtime
+
+The reviewed OpenMuse pin exposes high-value implementation material in five areas:
+
+1. visible follow-up queue + honest run-failure behavior;
+2. rich thread/task/artifact hydration through durable IDs;
+3. durable task worker leases, pause/resume/cancel/retry and uncertain-write handling;
+4. persistent Chromium + manual takeover;
+5. isolated Linux computer and strong smoke/security fixtures.
+
+It also provides useful Goals, monitors, Ideas and background-update UX.
+
+The correct Golam strategy is exact-component selection, not a wholesale fork.
+
+```text
+OpenMuse Experience code
+  -> Golam Experience Plane
+
+OpenMuse worker/recovery patterns
+  -> existing T167/T205 contracts
+
+OpenMuse browser/computer
+  -> existing Capability/Execution contracts
+
+OpenMuse review UI/tests
+  -> canonical Golam approval/effect contracts
+```
+
+The following donor boundaries are mandatory:
+
+```text
+OPENMUSE_TASK_STORE != GOLAM_TASK_AUTHORITY
+OPENMUSE_REVIEW != GOLAM_APPROVAL_AUTHORITY
+COPILOTKIT_THREAD != GOLAM_CANONICAL_TASK
+PLAYWRIGHT_CONTAINER != KERNEL_SECURITY_BOUNDARY
+DOCKER_CONTAINER != HOSTILE_TENANT_VM
+```
+
+### 24.4 OpenMuse test evidence is itself a valuable donor
+
+The strongest reusable material may be its verification fixtures rather than runtime code. High-value examples include:
+
+- lease races and expired-lease recovery;
+- uncertain external writes with no blind replay;
+- cancellation while an already-dispatched provider request may still complete;
+- account/hash/version-bound review invalidation;
+- persistent browser-profile recovery;
+- failed-profile cleanup;
+- browser destination/DNS/egress checks;
+- no host-shell fallback;
+- stale executor fencing;
+- interrupted command recovery without replay;
+- filesystem traversal/special-file rejection.
+
+T236 requires explicit port/reimplementation decisions for these fixtures.
+
+### 24.5 CopilotKit Intelligence is not required for Golam
+
+OpenMuse uses CopilotKit Intelligence for Rich Threads, but the repository itself documents that service as separately configured.
+
+Golam may copy/adapt the thread UI or projection behavior without adopting that external service as canonical storage or a mandatory runtime dependency.
+
+Durable conversation/task truth remains Golam-owned.
+
+### 24.6 Resulting tasks
+
+```text
+T235 Laya Low-Resource Decision Provider Qualification / OpenJev Tournament
+T236 OpenMuse Exact-Component Port Matrix / Parity Qualification
+```
+
+The detailed source plans are:
+
+- `laya-integration-plan-2026-09-23.md`;
+- `openmuse-integration-plan-2026-09-23.md`.
+
+These tasks extend the current planning overlay without widening active Spec 006 or granting implementation authority.
+
+```text
+OPENMUSE_BOUNDED_DONOR=YES
+OPENMUSE_WHOLESALE_FORK=NO
+LAYA_FIRST_CLASS_LOW_RESOURCE_PROVIDER_TARGET=YES
+LAYA_MODEL_ADMITTED=NO
+OPENMUSE_CODE_ADMITTED=NO
+FUTURE_IMPLEMENTATION_AUTHORITY_GRANTED=NO
+```
