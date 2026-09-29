@@ -1,7 +1,7 @@
 # Founder Source Permission Attestation Supplement — 2026-09-29
 
-**Recorded:** 2026-09-29  
-**Scope:** DBX, Paperclip and Synaplan source families supplied for Golam planning  
+**Recorded:** 2026-09-29
+**Scope:** DBX, Paperclip and Synaplan source families supplied for Golam planning
 **Status:** `FOUNDER_PERMISSION_ATTESTED`
 
 ## Attestation
