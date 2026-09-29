@@ -1,6 +1,6 @@
 # Golam Source Adoption Review — DBX, Paperclip and Synaplan — 2026-09-29
 
-**Status:** PROGRAM RESEARCH / PLANNING ONLY  
+**Status:** PROGRAM RESEARCH / PLANNING ONLY
 **Authority:** No implementation, dependency, runtime, model or source admission. No Spec 006 scope expansion.
 
 ## 1. Exact reviewed source states
@@ -13,35 +13,36 @@
 
 The founder explicitly states permission to use, copy, modify and selectively reuse the supplied source. That permission is a Source Foundry input, not automatic technical admission. Exact copied paths, generated/vendored code, dependency closure, assets, model artifacts, service terms and NOTICE obligations remain independently reconciled.
 
+Detailed permission record: `source-permission-attestation-supplement-2026-09-29.md`.
+
 ## 2. DBX — structured data access needs a first-class contract
 
-DBX is useful to Golam primarily because it treats database access as a structured capability rather than an arbitrary shell/MCP call.
+DBX is valuable because it models database access as a typed capability instead of arbitrary shell/MCP text.
 
 ### High-value exact components
 
 - `crates/dbx-core/src/ai/mcp_policy.rs`
-  - hierarchical execution policy over global, group, connection and database scope;
+  - global/group/connection/database policy layers;
   - stable connection/group identity;
-  - current policy versions may opt into scoped overrides while legacy rules remain ceilings and cannot silently widen the global policy;
-  - database-specific scope prevents cross-database writes/queries from bypassing narrower policy;
-  - Salesforce DML requires an explicit per-connection opt-in in addition to ordinary write policy.
+  - versioned narrower-scope override semantics;
+  - legacy rules remain ceilings and cannot silently widen a global restriction;
+  - cross-database SQL and Mongo output scope checks;
+  - explicit per-connection DML opt-in for special providers such as Salesforce.
 - `crates/dbx-sql-core/src/sql_risk.rs`
-  - AST-based SQL classification into read-only, write, DDL and transaction classes;
-  - conservative fallback for unknown statements;
-  - detects dangerous/unbounded write shapes rather than treating every UPDATE/DELETE equally;
-  - dialect-aware parsing and explicit transaction-control classification.
-- `crates/dbx-core/assets/database-drivers.manifest.json` and related capability/trait projections
-  - database-engine behavior is explicit metadata rather than guessed from a display name.
+  - AST classification into read-only, write, DDL and transaction control;
+  - dialect-aware parsing;
+  - conservative unknown-statement handling;
+  - unbounded/high-blast-radius UPDATE/DELETE-style risk detection.
+- `crates/dbx-core/assets/database-drivers.manifest.json` plus capability/trait projections
+  - provider behavior is explicit metadata rather than inferred from display names.
 - `crates/dbx-core/src/query/two_phase_commit.rs`
-  - useful only as an outcome-model/test reference for prepared/committing/committed/rolled-back/mixed/unknown states.
+  - useful as a transaction-outcome and failure-fixture reference only by default.
 
 ### Golam adoption
 
-Golam should add one canonical structured-data capability family under T248 rather than exposing SQL as generic `OPEN_WORLD` text.
+Golam should add one canonical structured-data family under T248 instead of treating SQL/database work as generic `OPEN_WORLD` text.
 
-A provider may still be DBX, a native Golam adapter, a database-specific MCP server, or another qualified connector. The provider is replaceable; the protected semantics are Golam-owned.
-
-Recommended core objects:
+Canonical concepts include:
 
 ```text
 DataSourceBinding
@@ -53,41 +54,23 @@ DataExecutionReceipt
 DataTransactionReceipt
 ```
 
-`DataSourceBinding` binds at minimum:
+A provider may be a bounded DBX-derived adapter, a native Golam adapter, a database-specific MCP server or another qualified connector. The provider is replaceable; protected semantics remain Golam-owned.
 
-```text
-source_id
-provider/revision
-connection/account binding
-engine/dialect
-host/destination identity where applicable
-default database/schema
-credential handle refs
-locality/egress class
-read/write ceiling
-production/sensitivity classification
-current generation
-```
+Key retained patterns:
 
-`DataOperationPlan` binds exact statement/query identity, parsed operation class, database/schema/object targets, parameter identities, row/byte/time limits, transaction semantics, expected schema revision and verification plan.
+- policy precedence is monotonic unless a current explicit rule is permitted to override at a narrower scope;
+- connection identity is separate from display/group labels;
+- cross-database/schema references are evaluated independently;
+- parser failure never becomes read-only;
+- mutation consequence comes from parsed semantics, not model prose or keyword substring alone;
+- sensitive reads still require privacy/egress authorization;
+- transaction/provider state is evidence, not Golam authority.
 
-### DBX patterns to strengthen
+### Explicit DBX non-adoption
 
-- policy precedence is monotonic unless a current explicitly versioned rule is authorized to override at the narrower scope;
-- stable connection identity is separate from display/group labels;
-- cross-database qualified references require explicit scope evaluation;
-- SQL parser failure is never interpreted as read-only;
-- write risk is based on parsed semantics, not keyword substring alone;
-- mutation with an obviously unbounded predicate receives higher consequence classification;
-- database-native transaction state is evidence, not proof that every externally visible consequence was correctly applied.
+Do not import DBX two-phase commit as the generic Golam Effect engine.
 
-### Explicit DBX non-adoptions
-
-Do **not** import DBX two-phase commit as Golam's generic Effect engine.
-
-The reviewed DBX implementation retries participant `commit()` calls. That may be appropriate only for a narrowly qualified participant protocol with proven idempotent commit semantics. It conflicts with Golam's general rule that an ambiguous external Effect cannot be blindly retried.
-
-Use its `Mixed`/`Unknown` ideas as failure/test references only unless a future bounded database transaction spec proves exact safe retry semantics for the selected database/provider.
+The reviewed implementation may retry participant `commit()` calls. Such retries are acceptable only for a future narrowly qualified provider protocol whose commit operation is proven safely repeatable. They must not weaken Golam's general at-most-once / `UNKNOWN_OUTCOME` rules.
 
 ```text
 SQL_PARSE_SUCCESS != QUERY_AUTHORIZATION
@@ -99,11 +82,9 @@ DBX_2PC != GOLAM_EFFECT_ENGINE
 MIXED_TRANSACTION != SAFE_AUTOMATIC_RETRY
 ```
 
-## 3. Paperclip — separate work structure, dependency, ownership and execution
+## 3. Paperclip — separate structure, dependency, ownership and execution
 
-Paperclip's strongest contribution is not its company metaphor. It is its explicit separation of concepts that are often collapsed in agent systems.
-
-The reviewed `doc/execution-semantics.md` separates:
+Paperclip's strongest contribution is its explicit separation of concepts commonly collapsed by agent systems:
 
 ```text
 STRUCTURE
@@ -112,43 +93,41 @@ OWNERSHIP
 EXECUTION
 ```
 
-This closes a real Golam planning gap between T167's canonical Task identity and T205's runtime execution envelope.
+This closes a material gap between T167 canonical Task identity and T205 runtime execution.
 
 ### High-value exact components and patterns
 
 - `doc/execution-semantics.md`
   - parent/sub-item structure is not automatically a blocker dependency;
-  - agent ownership and live execution are distinct;
+  - agent ownership and live execution are separate;
   - blocked/review states require a routable next owner/action rather than prose-only waiting;
   - checkout ownership and active execution use distinct identities;
-  - stale-lock recovery is not a retry loop;
-  - pre-dispatch configuration failures are surfaced as blockers rather than dispatched-then-failed runs;
-  - work can carry goal ancestry without that ancestry becoming authority.
+  - stale-lock recovery is reconciliation, not a retry loop;
+  - known missing configuration becomes a pre-dispatch blocker instead of a doomed dispatched run;
+  - goal ancestry supplies context without becoming authority.
 - `server/src/services/execution-control-reconciliation.ts`
-  - deadline-driven reconciliation is bounded and lock-aware;
-  - recovery does not silently retry uncertain external actions;
-  - current owner/run bindings are rechecked transactionally;
-  - a timed-out finalization produces an explicit recovery action and requires reconciliation of uncertain external work.
-- current rich ACP foundation at `24beb005...`
-  - durable questions/permission requests are persisted before presentation;
-  - a response must match an outstanding exact request and one of the offered actions/typed-answer schemas;
-  - successful settlement is persisted before publication/replay;
-  - failed persistence fences the executor rather than publishing in-memory state;
-  - replacement provider processes do not inherit unresolved approval promises;
-  - bounded plan/question envelopes fail rather than hide an unseen suffix.
-- product-level patterns
-  - atomic task checkout;
+  - bounded, lock-aware reconciliation;
+  - transactionally rechecks current owner/run binding;
+  - explicit recovery action for uncertain external work;
+  - no silent replay of ambiguous external action.
+- rich ACP foundation at the reviewed commit
+  - pending question/permission state becomes durable before presentation;
+  - response must match an exact outstanding request and offered action/schema;
+  - settlement persists before successful publication/replay;
+  - persistence failure fences the executor;
+  - provider replacement does not inherit unresolved approval promises;
+  - lost transport acknowledgment does not prove provider application exactly once;
+  - oversized plans/questions fail rather than hide unseen content.
+- product/runtime patterns
+  - atomic work checkout;
   - hard budget gates;
-  - persistent context across heartbeats/restarts;
-  - goal ancestry;
-  - explicit blocker dependencies;
+  - persistent context across wake/restart;
+  - explicit blockers;
   - portable templates with secret scrubbing and collision handling.
 
 ### Golam adoption
 
-T249 should refine T167/T205 with one canonical work-graph and liveness contract.
-
-Recommended additional objects/projections:
+T249 defines a canonical work/liveness layer over existing T167/T205 semantics:
 
 ```text
 WorkRelation
@@ -158,41 +137,21 @@ GoalRef / GoalPath
 WorkLivenessProjection
 ```
 
-A `WorkRelation` is explicitly one of:
+A relation is explicitly structural, blocking, derivational, review or coordination. Only declared dependency semantics gate execution.
 
-```text
-STRUCTURAL_PARENT
-BLOCKS
-DERIVED_FROM
-REVIEW_OF
-COORDINATES_WITH
-```
+A work claim is separate from assignment, Worker identity, ExecutionEnvelope, capability lease and Effect authorization.
 
-Only relations with dependency semantics can gate execution.
+A wait is healthy only with a routable continuation: blocker, reviewer/approver, monitored recheck or structured owner/action remediation.
 
-`WorkClaimReceipt` identifies who currently owns the right to advance a Task. It is separate from:
+### Existing-task refinements from Paperclip
 
-- Task assignment;
-- Worker identity;
-- ExecutionEnvelope/runtime incarnation;
-- capability lease;
-- Effect authorization.
+T183/T214/T247 should carry durable client/ACP interaction settlement: persist before presentation, exact request correlation, durable settlement before publication, and no unsafe provider-replacement inheritance.
 
-A wait is healthy only when it has a routable continuation such as a blocker, approval/review participant, scheduled recheck or explicit owner/action descriptor.
+Budget/resource exhaustion is a liveness gate consumed from existing resource/cost governance; it is never permission to change target/provider/privacy policy.
 
-### Paperclip patterns to refine existing Golam tasks without a new authority system
-
-- T183/T214/T247 ACP/client interaction should persist pending questions/permission requests before UI presentation and settle them durably before publication;
-- a lost transport acknowledgment is not proof that a provider applied a permission reply;
-- a provider replacement invalidates unresolved interaction promises rather than replaying them;
-- task budget/resource exhaustion is a liveness gate consumed from T132/T207, not permission to change target/provider/privacy policy;
-- portable templates may carry goals/roles/workflows but never secret values, capability leases, approvals or active authority.
-
-### Explicit Paperclip non-adoptions
+### Explicit Paperclip non-adoption
 
 Golam remains personal/local single-owner by default under T243. Paperclip's multi-organization control plane is a future tenancy reference only.
-
-Do not introduce an organization/company database as a prerequisite for ordinary Golam use. Do not equate an agent org-chart role with Golam authority.
 
 ```text
 STRUCTURAL_PARENT != EXECUTION_DEPENDENCY
@@ -210,42 +169,40 @@ PAPERCLIP_COMPANY != GOLAM_TENANT
 
 ## 4. Synaplan — executable workflow DAG, readiness and portability
 
-Synaplan contributes three bounded patterns that should extend, not replace, T206/T215/T244.
+Synaplan contributes bounded patterns that extend T206/T215/T244 without replacing them.
 
 ### High-value exact components
 
 - `backend/src/Service/SavedTask/Graph/SavedTaskGraphValidator.php`
   - versioned graph schema;
   - bounded node count;
-  - unique node IDs;
+  - unique IDs;
   - capability allowlist;
   - explicit dependencies;
-  - self-dependency/cycle rejection;
-  - graph inputs must come from trigger or declared dependencies;
-  - approval controls may tighten behavior but cannot be promised on a node that cannot actually pause;
-  - outbound webhook validation includes HTTPS and SSRF screening.
+  - unknown/self dependency and cycle rejection;
+  - input lineage restricted to trigger or declared dependencies;
+  - approval may tighten only on nodes that can actually pause;
+  - HTTPS/SSRF checks for outbound webhook nodes.
 - `backend/src/Service/SavedTask/Graph/SavedTaskPlanFactory.php`
-  - validated persisted graph becomes an executable task plan;
-  - each node keeps capability, dependency, input and params identity;
-  - reply/output node is explicit rather than inferred from model prose when declared.
+  - validates persisted graph before constructing an executable plan;
+  - preserves capability/dependency/input/parameter identity;
+  - supports explicit reply/output node identity.
 - `backend/src/Service/SavedTask/Graph/SavedTaskGraphPortability.php`
-  - export strips secrets and owner-bound IDs;
-  - logical references are exported by stable semantic names/topics rather than local numeric IDs;
-  - import returns an explicit checklist for missing mailbox/MCP/prompt bindings instead of fabricating replacements;
-  - connection/tool references are rebound only to owned, enabled destination resources.
+  - strips secrets and owner-local IDs;
+  - exports logical prompt/tool references using portable semantic identity;
+  - rebinds only to owned/enabled destination resources;
+  - returns a deterministic checklist for unresolved bindings rather than inventing replacements.
 - `backend/src/Service/SelfAware/PlatformCapabilityInventory.php`
-  - live capability report derives from the same runtime/configuration sources that actually gate behavior;
-  - available, unavailable and deliberately unsupported capabilities are explicit;
-  - remediation/alternative text is surfaced instead of hallucinating a capability;
-  - optional modules can be absent without exposing half-working controls.
+  - derives readiness from state that actually gates behavior;
+  - distinguishes availability and deliberately unsupported capabilities;
+  - gives remediation/alternatives instead of hallucinating capability;
+  - optional modules may remain absent without exposing half-working controls.
 
 ### Golam adoption
 
-T250 should define the execution binding from T215 `WorkflowIR`/`SkillIR` to an actual bounded workflow run.
+T215 remains the canonical owner of portable `WorkflowIR` / `SkillIR` meaning. T250 owns runtime binding of one admitted revision to triggers, nodes, attempts, readiness and checkpoints.
 
-T215 remains the canonical workflow-definition/compiler owner. T250 must not create another workflow language.
-
-Recommended runtime objects:
+Runtime concepts include:
 
 ```text
 WorkflowRunPlan
@@ -257,25 +214,11 @@ WorkflowImportChecklist
 CapabilityReadinessSnapshot
 ```
 
-Required graph semantics:
-
-- immutable workflow revision identity;
-- bounded node/edge count appropriate to the owning profile;
-- acyclic dependency graph;
-- every data input originates from trigger input or an explicitly declared upstream dependency;
-- explicit output/reply/artifact node(s);
-- capability/provider requirements are references only, never captured grants;
-- node-level approval may only tighten the enclosing policy;
-- triggers are explicit and versioned: manual, schedule, webhook/event or other separately admitted source;
-- concurrency, catch-up, timeout and cancellation semantics are explicit;
-- capability/readiness is revalidated at run start and protected node dispatch;
-- pause/resume retains node attempts and Effect uncertainty rather than re-running the graph from scratch;
-- import/export strips secret/account/lease/approval material and returns a deterministic unresolved-binding checklist;
-- missing optional capability yields unavailable/degraded state and a remediation path, never a fabricated successful route.
+Required semantics include bounded acyclic graphs, declared data lineage, explicit outputs, non-authoritative capability references, approval that can only tighten, exact trigger/replay policy, overlap/catch-up/cancellation semantics, readiness revalidation, restart-safe checkpoints and authority-free portability.
 
 ### T206/T244 readiness refinement
 
-Add a provider-neutral `CapabilityReadinessSnapshot` projection with at least:
+A provider-neutral readiness snapshot should distinguish:
 
 ```text
 AVAILABLE
@@ -285,7 +228,7 @@ KNOWN_ABSENT
 UNKNOWN
 ```
 
-A snapshot names the source observations, freshness, exact provider/account/backend dependencies, reason and remediation. It is a projection over actual gating state, not a hand-maintained promise and not authority.
+It records exact observations, freshness, dependencies, reason and remediation. It is a projection, not an authority decision.
 
 ```text
 WORKFLOW_IR != ACTIVE_WORKFLOW_RUN
@@ -302,61 +245,57 @@ WORKFLOW_IMPORT != AUTHORITY_IMPORT
 
 ## 5. Combined architecture placement
 
-These sources fit Golam as three bounded additions around the existing protected spine:
-
 ```text
 DBX
-  -> Structured Data Capability Provider patterns
+  -> Structured Data Capability patterns
   -> T248
 
 Paperclip
   -> Work graph / ownership / liveness / durable interaction patterns
-  -> T249 + refinements to T183/T214/T247
+  -> T249 + T183/T214/T247 refinements
 
 Synaplan
-  -> Workflow DAG runtime / capability readiness / safe portability patterns
-  -> T250 + refinements to T206/T244
+  -> Workflow DAG runtime / readiness / safe portability patterns
+  -> T250 + T206/T244 refinements
 ```
 
-None becomes a new Authority Kernel, Task ledger, Effect ledger, Secret store or policy engine.
+None becomes an Authority Kernel, Task ledger, Effect ledger, Secret store, policy engine or baseline tenancy control plane.
 
 ## 6. Reuse strategy
 
 ### DBX
 
-Preferred order:
+Preferred:
 
 ```text
 PORT_TO_RUST / SELECTIVE_COPY
 ```
 
-Golam is already Rust-first, so exact bounded Rust components/tests around SQL parsing/risk and policy scope are strong donor candidates after Source Foundry qualification. Database-driver breadth should remain an adapter/provider concern; do not copy 100+ drivers into the privileged path.
-
-`two_phase_commit.rs` is `BENCHMARK_OR_METHOD_REFERENCE` by default, not a generic runtime donor.
+Golam is already Rust-first, so exact pure Rust SQL-risk/policy logic and tests are strong donor candidates after Source Foundry qualification. Database-driver breadth remains an adapter concern. `two_phase_commit.rs` is reference/test material by default.
 
 ### Paperclip
 
-Preferred order:
+Preferred:
 
 ```text
 REIMPLEMENT_BEHAVIOR / SELECTIVE_COPY_OF_PURE_BOUNDED_COMPONENTS
 ```
 
-The Node/React/Postgres control plane is not a Golam runtime dependency. Port semantic contracts, tests and small pure helpers where valuable. Keep task/effect/identity authority Golam-owned.
+Do not import the Node/React/Postgres control plane as a Golam runtime dependency. Port semantic contracts/tests and narrowly useful pure components.
 
 ### Synaplan
 
-Preferred order:
+Preferred:
 
 ```text
 REIMPLEMENT_BEHAVIOR / SELECTIVE_PORT
 ```
 
-Port validator, portability and readiness semantics into Golam's typed Rust contracts rather than importing the Symfony/PHP runtime.
+Port validator, portability and readiness semantics into Golam's typed Rust contracts instead of importing Symfony/PHP runtime.
 
-## 7. Implementation-readiness consequences
+## 7. Measured gap disposition
 
-The new source set exposes exactly three material gaps:
+Exactly three material new task gaps were identified:
 
 ```text
 T248 Structured Data Source / Query / Mutation Safety Contract
@@ -364,7 +303,14 @@ T249 Work Graph / Ownership / Dependency / Liveness Contract
 T250 Workflow DAG Runtime / Trigger / Readiness / Portability Contract
 ```
 
-No fourth task is needed. ACP durable interaction settlement fits T183/T214/T247. Capability readiness fits T206/T244. Multi-tenant organization management remains behind T243 future-mode qualification. Database distributed transaction behavior is bounded inside T248 and does not modify the generic Effect FSM.
+No fourth task is needed:
+
+- ACP durable interaction settlement fits T183/T214/T247;
+- capability readiness fits T206/T244;
+- multi-tenant organization management remains behind T243;
+- generic Effect ambiguity remains T199-owned;
+- database distributed transaction behavior stays bounded under T248;
+- workflow definition/compiler/replay remains T215-owned.
 
 ## 8. Planning disposition
 
@@ -373,7 +319,6 @@ DBX_SOURCE_REVIEWED=YES
 PAPERCLIP_SOURCE_REVIEWED=YES
 SYNAPLAN_SOURCE_REVIEWED=YES
 FOUNDER_PERMISSION_ASSERTED_FOR_ALL_THREE=YES
-
 NEW_TASKS=T248,T249,T250
 NEW_PARALLEL_TASK_LEDGER=NO
 NEW_PARALLEL_EFFECT_LEDGER=NO
