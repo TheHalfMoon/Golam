@@ -1,8 +1,8 @@
 # Golam Program Implementation Readiness — 2026-09-29
 
-**Status:** `CONTENT_IMPLEMENTATION_READY / EXECUTION_NOT_YET_AUTHORIZED`  
-**Planning PR:** #28  
-**Active product implementation:** Spec 006 / PR #24  
+**Status:** `CONTENT_IMPLEMENTATION_READY / EXECUTION_NOT_YET_AUTHORIZED`
+**Planning PR:** #28
+**Active product implementation:** Spec 006 / PR #24
 **Reviewed canonical main:** `13a379ac478a3abaff7ed1da3db14ff9c1ac2188`
 
 ## 1. Meaning of readiness
@@ -62,7 +62,7 @@ If any gate fails, implementation remains blocked rather than inferring authorit
 
 ### Package A — Structured Data Capability
 
-**Primary task:** T248  
+**Primary task:** T248
 **Purpose:** database/data-source operations with explicit target identity, parsed semantics, scoped policy, limits, privacy/egress and verifiable outcomes.
 
 #### Scope-in
@@ -120,7 +120,7 @@ provider_removed_receipt_still_readable
 
 ### Package B — Work Graph and Liveness
 
-**Primary task:** T249  
+**Primary task:** T249
 **Purpose:** one durable interpretation of work structure, blockers, ownership/claims, waiting/review, liveness and handoff.
 
 #### Scope-in
@@ -169,8 +169,8 @@ surface_projection_no_local_authority
 
 ### Package C — Workflow DAG Runtime
 
-**Primary task:** T250  
-**Depends on:** canonical T215 definitions + canonical T249 liveness/dependency semantics  
+**Primary task:** T250
+**Depends on:** canonical T215 definitions + canonical T249 liveness/dependency semantics
 **Purpose:** safely bind admitted `WorkflowIR` to actual trigger-driven execution without inventing another workflow language.
 
 #### Scope-in
