@@ -1,11 +1,11 @@
 # Golam Canonical Direction Task Extension — 2026-09-29
 
-**Authority:** PROGRAM ORCHESTRATION / IMPLEMENTATION-READINESS PLANNING ONLY  
-**Extends:** `program-direction-tasks-2026-09-22.md` through T247  
-**Source review:** `source-adoption-dbx-paperclip-synaplan-2026-09-29.md`  
+**Authority:** PROGRAM ORCHESTRATION / IMPLEMENTATION-READINESS PLANNING ONLY
+**Extends:** `program-direction-tasks-2026-09-22.md` through T247
+**Source review:** `source-adoption-dbx-paperclip-synaplan-2026-09-29.md`
 **Permission record:** `source-permission-attestation-supplement-2026-09-29.md`
 
-This extension adds only measured gaps exposed by the exact-pinned DBX, Paperclip and Synaplan review. It does not widen active Spec 006, alter `specs/CURRENT.md`, amend the Constitution, admit source/dependencies/runtimes, or grant successor implementation authority.
+This extension adds only measured gaps exposed by the 2026-09-29 exact-pinned DBX, Paperclip and Synaplan review. It does not widen active Spec 006, alter `specs/CURRENT.md`, amend the Constitution, admit source/dependencies/runtimes, or grant successor implementation authority.
 
 ## Phase AB — Structured data, work liveness and executable workflow closure
 
