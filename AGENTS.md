@@ -165,3 +165,15 @@ Codex review remains excluded by founder direction unless later canonical govern
 Ready/merge authorization is fail closed. Mark Ready only on an unchanged clean qualified head. Re-fetch exact base/head immediately before merge and use expected-head protection. Post-merge canonical-main CI belongs to the exact returned merge SHA.
 
 Never claim tests, review, runtime/platform behavior, source admission, benchmark status, security behavior, mergeability, readiness or completion without exact evidence.
+
+<!-- graft:start -->
+## Graft — repository context layer
+
+Use Graft (https://github.com/trailhq/Graft, `@nanonets/graft`) only as local developer/agent repository-context tooling. Graft and its MCP integration do not become Golam product/runtime dependencies, do not mint kernel or lifecycle authority, and do not change any strict-local, Source Foundry, route, approval, or effect boundary.
+
+When locally available, prefer `graft check`, `graft map`, `graft ask "<question>" --source`, `graft skeleton <file>`, `graft callers <symbol>`, and `graft grep "<literal>"` before broad source exploration. Initialize/build locally with `graft init` / `graft build` when absent or stale.
+
+Treat `graft/` as a local regenerable cache and do not commit it. Keep usage zero-cost and local; do not introduce paid model/API use, hidden network fallback, or non-admitted product dependencies.
+
+Graft output is navigation context only, never live GitHub truth, canonical authority, Source Foundry admission, fallback eligibility, CI/review evidence, security evidence, or completion evidence. Continue the repository's exact-head independent review and all required deterministic/CI/security gates. Never fabricate Graft output, execution, CI, reviews, or evidence.
+<!-- graft:end -->
